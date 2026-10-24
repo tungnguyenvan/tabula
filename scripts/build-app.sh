@@ -5,7 +5,10 @@
 #   VERSION        marketing version (default: contents of ./VERSION)
 #   BUILD_NUMBER   CFBundleVersion (default: UTC timestamp, always increasing)
 #   ARCHS          "arm64 x86_64" (default, universal) or a single architecture
-#   SIGN_IDENTITY  "Developer ID Application: …" to sign for distribution; ad-hoc when unset
+#   SIGN_IDENTITY  "Developer ID Application: …" to sign for distribution. When unset, the
+#                  "Tabula Local Signing" identity (scripts/make-signing-identity.sh) is used if it
+#                  exists, so Keychain access survives rebuilds; otherwise the app is signed ad-hoc.
+#   LOCAL_IDENTITY name of that local identity (default: "Tabula Local Signing")
 #   COPYRIGHT      shown in Finder and the About panel
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -52,10 +55,15 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+LOCAL_IDENTITY="${LOCAL_IDENTITY:-Tabula Local Signing}"
 if [ -n "${SIGN_IDENTITY:-}" ]; then
   # Hardened runtime + secure timestamp are required for notarization.
   codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+elif security find-certificate -c "$LOCAL_IDENTITY" >/dev/null 2>&1; then
+  # A fixed certificate keeps the same code identity across builds, so the Keychain keeps trusting the app.
+  codesign --force --sign "$LOCAL_IDENTITY" "$APP"
 else
+  echo "warning: signing ad-hoc; the Keychain will ask again after every build (run scripts/make-signing-identity.sh)" >&2
   codesign --force --sign - "$APP"
 fi
 echo "Built $APP $VERSION ($BUILD_NUMBER) for: $ARCHS"

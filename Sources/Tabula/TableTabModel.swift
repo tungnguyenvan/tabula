@@ -24,6 +24,9 @@ final class TableTabModel {
     private(set) var rows: [[String?]] = []
     private(set) var totalRows: Int?
     private(set) var loading = false
+    private(set) var committing = false
+    /// Only the newest reload may write its rows; an older one finishing late is dropped.
+    private var reloadGeneration = 0
     var error: String?
 
     var pageSize = 300
@@ -71,16 +74,22 @@ final class TableTabModel {
     // MARK: Loading
 
     func reload() async {
+        reloadGeneration += 1
+        let generation = reloadGeneration
         loading = true
-        defer { loading = false; version += 1 }
+        defer { if generation == reloadGeneration { loading = false; version += 1 } }
         do {
             if columns.isEmpty {
-                columns = try await driver.columns(of: table)
-                indexes = (try? await driver.indexes(of: table)) ?? []
+                let fetched = try await driver.columns(of: table)
+                let fetchedIndexes = (try? await driver.indexes(of: table)) ?? []
+                guard generation == reloadGeneration else { return }
+                columns = fetched
+                indexes = fetchedIndexes
             }
             let request = TablePageRequest(table: table, limit: pageSize, offset: offset, orderBy: orderBy,
                                            ascending: ascending, filter: appliedFilter)
             let page = try await driver.fetchPage(request)
+            guard generation == reloadGeneration else { return }
             resultColumns = page.columns.isEmpty ? columns.map(\.name) : page.columns
             rows = page.rows
             clearPending()
@@ -90,10 +99,18 @@ final class TableTabModel {
                 focusRequest = FocusRequest(row: 0, column: 0, edit: false)
             }
             error = nil
-            totalRows = try? await driver.countRows(table, filter: appliedFilter)
+            let count = try? await driver.countRows(table, filter: appliedFilter)
+            if generation == reloadGeneration { totalRows = count }
         } catch {
-            self.error = error.localizedDescription
+            if generation == reloadGeneration { self.error = error.localizedDescription }
         }
+    }
+
+    /// Asks before something drops the pending edits; true when there are none.
+    func confirmDiscard(action: String = "Discard") -> Bool {
+        guard hasChanges else { return true }
+        return Confirmation.ask("Discard \(changeCount) uncommitted change\(changeCount == 1 ? "" : "s") in “\(table.name)”?",
+                                detail: "Commit them (⌘S) first if you want to keep them.", action: action)
     }
 
     func reloadStructure() async {
@@ -102,12 +119,15 @@ final class TableTabModel {
     }
 
     func applyFilter() async {
+        guard confirmDiscard() else { return }
         appliedFilter = useRawFilter ? filterText : driver.dialect.condition(filterRules)
         offset = 0
         await reload()
     }
 
     func clearFilter() async {
+        guard confirmDiscard() else { return }
+        clearPending()
         filterText = ""
         filterRules = []
         await applyFilter()
@@ -137,7 +157,8 @@ final class TableTabModel {
 
     /// Restricts to rows equal to this cell (context-menu "Filter by value").
     func filter(equalTo value: String?, column: Int) async {
-        guard resultColumns.indices.contains(column) else { return }
+        guard resultColumns.indices.contains(column), confirmDiscard() else { return }
+        clearPending()
         useRawFilter = false
         filterRules = [FilterRule(column: resultColumns[column], op: value == nil ? .isNull : .equals, value: value ?? "")]
         showFilterBar = true
@@ -149,6 +170,7 @@ final class TableTabModel {
     func columnInfo(_ name: String) -> ColumnInfo? { columns.first { $0.name == name } }
 
     func sort(by column: String, ascending: Bool) async {
+        guard confirmDiscard() else { return }
         orderBy = column
         self.ascending = ascending
         offset = 0
@@ -159,12 +181,13 @@ final class TableTabModel {
     var canGoForward: Bool { rows.count == pageSize && (totalRows.map { offset + pageSize < $0 } ?? true) }
 
     func nextPage() async {
-        guard canGoForward else { return }
+        guard canGoForward, confirmDiscard() else { return }
         offset += pageSize
         await reload()
     }
 
     func previousPage() async {
+        guard confirmDiscard() else { return }
         offset = max(0, offset - pageSize)
         await reload()
     }
@@ -349,7 +372,9 @@ final class TableTabModel {
 
     func commit() async {
         let statements = pendingStatements()
-        guard !statements.isEmpty else { return }
+        guard !statements.isEmpty, !committing else { return }
+        committing = true
+        defer { committing = false }
         do {
             try await driver.applyInTransaction(statements)
             await reload()

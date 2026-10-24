@@ -88,7 +88,8 @@ enum PostgresValueFormatter {
         guard let count = buffer.readInteger(as: Int16.self),
               let weight = buffer.readInteger(as: Int16.self),
               let sign = buffer.readInteger(as: UInt16.self),
-              let scale = buffer.readInteger(as: Int16.self) else { return "" }
+              let scale = buffer.readInteger(as: Int16.self),
+              count >= 0, weight < 10_000 else { return "" }
         switch sign {
         case 0xC000: return "NaN"
         case 0xD000: return "Infinity"
@@ -178,9 +179,9 @@ enum PostgresValueFormatter {
               let months = buffer.readInteger(as: Int32.self) else { return "" }
         var parts: [String] = []
         let years = months / 12, remainingMonths = months % 12
-        if years != 0 { parts.append("\(years) year\(abs(years) == 1 ? "" : "s")") }
-        if remainingMonths != 0 { parts.append("\(remainingMonths) mon\(abs(remainingMonths) == 1 ? "" : "s")") }
-        if days != 0 { parts.append("\(days) day\(abs(days) == 1 ? "" : "s")") }
+        if years != 0 { parts.append("\(years) year\(years.magnitude == 1 ? "" : "s")") }
+        if remainingMonths != 0 { parts.append("\(remainingMonths) mon\(remainingMonths.magnitude == 1 ? "" : "s")") }
+        if days != 0 { parts.append("\(days) day\(days.magnitude == 1 ? "" : "s")") }
         if micros != 0 || parts.isEmpty {
             parts.append((micros < 0 ? "-" : "") + timeOfDay(micros.magnitude > UInt64(Int64.max) ? 0 : abs(micros)))
         }
@@ -194,7 +195,7 @@ enum PostgresValueFormatter {
               let length = buffer.readInteger(as: UInt8.self),
               let address = buffer.readBytes(length: Int(length)) else { return "" }
         let text: String
-        if family == 2 || address.count == 4 {
+        if address.count == 4 {
             text = address.map(String.init).joined(separator: ".")
         } else {
             var raw = in6_addr()
@@ -225,7 +226,9 @@ enum PostgresValueFormatter {
             }
             sizes.append(Int(size))
         }
-        let total = sizes.reduce(1, *)
+        // Every element takes at least four bytes, which bounds a corrupt header.
+        let total = sizes.reduce(1) { $0.multipliedReportingOverflow(by: $1).overflow ? Int.max : $0 * $1 }
+        guard total <= buffer.readableBytes / 4 else { buffer.moveReaderIndex(to: start); return nil }
         var elements: [String] = []
         for _ in 0..<total {
             guard let length = buffer.readInteger(as: Int32.self) else { buffer.moveReaderIndex(to: start); return nil }

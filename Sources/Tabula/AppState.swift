@@ -11,6 +11,11 @@ final class AppState {
     }()
     private(set) var connections: [ConnectionConfig] = []
     var lastError: String?
+    /// Keychain calls run here, in order, and off the main thread: macOS may block them while it asks
+    /// the user for access, and a read must see the writes queued before it.
+    private let keychain = DispatchQueue(label: "app.tabula.keychain")
+    /// Passwords already read this launch, so opening a connection again doesn't hit the Keychain (and its prompt).
+    private var passwordCache: [UUID: String?] = [:]
 
     init() {
         do {
@@ -33,13 +38,33 @@ final class AppState {
     }()
     #endif
 
-    /// Reads the Keychain off the main thread: macOS may block the call while it asks the user for access.
     func password(for id: UUID) async -> String? {
         #if DEBUG
         if let passwords = Self.testPasswords { return passwords[id.uuidString] }
         #endif
+        if let cached = passwordCache[id] { return cached }
         let store = store
-        return await Task.detached { store.password(for: id) }.value
+        let password = await withCheckedContinuation { continuation in
+            keychain.async { continuation.resume(returning: store.password(for: id)) }
+        }
+        passwordCache[id] = password
+        return password
+    }
+
+    private func setPassword(_ password: String?, for id: UUID) {
+        passwordCache[id] = password?.isEmpty == false ? password : nil
+        #if DEBUG
+        if Self.testPasswords != nil { return }
+        #endif
+        let store = store
+        keychain.async {
+            do {
+                try store.setPassword(password, for: id)
+            } catch {
+                let message = "Could not save the password: \(error.localizedDescription)"
+                Task { @MainActor [weak self] in self?.lastError = message }
+            }
+        }
     }
 
     func save(_ config: ConnectionConfig, password: String?) {
@@ -48,8 +73,7 @@ final class AppState {
         } else {
             connections.append(config)
         }
-        let store = store
-        Task.detached { store.setPassword(password, for: config.id) }
+        setPassword(password, for: config.id)
         persist()
     }
 
@@ -57,17 +81,15 @@ final class AppState {
         var copy = config
         copy.id = UUID()
         copy.name = config.displayName + " copy"
-        let store = store
         Task {
-            let password = await Task.detached { store.password(for: config.id) }.value
+            let password = await password(for: config.id)
             save(copy, password: password)
         }
     }
 
     func delete(_ id: UUID) {
         connections.removeAll { $0.id == id }
-        let store = store
-        Task.detached { store.setPassword(nil, for: id) }
+        setPassword(nil, for: id)
         persist()
     }
 

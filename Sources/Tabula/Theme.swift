@@ -80,3 +80,11 @@ struct AppMark: View {
         .shadow(color: .black.opacity(0.2), radius: size * 0.06, y: size * 0.03)
     }
 }
+
+extension View {
+    /// Background for the thin filter, tab and status bars. A plain Color background spreads into the
+    /// safe area, so a bar at the top would paint up under the toolbar; this one stays inside the bar.
+    func barBackground() -> some View {
+        background(Color(nsColor: .underPageBackgroundColor), ignoresSafeAreaEdges: [])
+    }
+}

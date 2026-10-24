@@ -76,18 +76,21 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
     public var filePath: String
     public var tls: TLSMode
     public var tag: ConnectionTag
+    /// Seconds to wait while connecting; nil uses `Defaults.connectTimeout`. Optional so older saved files still load.
+    public var connectTimeout: Double?
 
     public init(
         id: UUID = UUID(),
         name: String = "",
         kind: DatabaseKind = .postgres,
-        host: String = "127.0.0.1",
+        host: String = Defaults.host,
         port: Int? = nil,
         user: String = "",
         database: String = "",
         filePath: String = "",
         tls: TLSMode = .disable,
-        tag: ConnectionTag = .none
+        tag: ConnectionTag = .none,
+        connectTimeout: Double? = nil
     ) {
         self.id = id
         self.name = name
@@ -99,11 +102,13 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
         self.filePath = filePath
         self.tls = tls
         self.tag = tag
+        self.connectTimeout = connectTimeout
     }
 
     public var displayName: String {
         if !name.isEmpty { return name }
         if kind.isFileBased { return (filePath as NSString).lastPathComponent }
+        if kind == .redis { return "\(host):\(port)" }
         return database.isEmpty ? "\(host):\(port)" : "\(database) @ \(host)"
     }
 
@@ -176,6 +181,29 @@ public struct IndexInfo: Hashable, Sendable, Identifiable {
 }
 
 /// The result of one statement. `rows` hold display text; `nil` is SQL NULL.
+/// One result row read by column name (case-insensitive; MySQL reports information_schema names in capitals).
+public struct Record: Sendable {
+    private let index: [String: Int]
+    public let values: [String?]
+
+    init(index: [String: Int], values: [String?]) {
+        self.index = index
+        self.values = values
+    }
+
+    static func index(_ columns: [String]) -> [String: Int] {
+        Dictionary(columns.enumerated().map { ($1.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    public subscript(_ column: String) -> String? {
+        guard let position = index[column.lowercased()], position < values.count else { return nil }
+        return values[position]
+    }
+
+    public func number(_ column: String) -> Double { Double(self[column] ?? "") ?? 0 }
+    public func int(_ column: String) -> Int? { self[column].flatMap { Int($0) } }
+}
+
 public struct QueryResult: Sendable {
     public var columns: [String]
     public var rows: [[String?]]
@@ -192,6 +220,12 @@ public struct QueryResult: Sendable {
     }
 
     public var hasResultSet: Bool { !columns.isEmpty }
+
+    /// Rows addressed by column name, so catalog queries never depend on column positions.
+    public var records: [Record] {
+        let index = Record.index(columns)
+        return rows.map { Record(index: index, values: $0) }
+    }
 
     public var summary: String {
         let time = String(format: "%.0f ms", duration * 1000)

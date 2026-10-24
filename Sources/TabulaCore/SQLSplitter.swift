@@ -43,7 +43,7 @@ public enum SQLSplitter {
         func flush() {
             defer { current = ""; segmentStart = i + 1 }
             let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty && !isOnlyComments(trimmed) else { return }
+            guard !trimmed.isEmpty && !isOnlyComments(trimmed, kind: kind) else { return }
             let leading = current.prefix(while: { $0.isWhitespace || $0.isNewline }).count
             let trailing = current.reversed().prefix(while: { $0.isWhitespace || $0.isNewline }).count
             let start = segmentStart + leading
@@ -121,13 +121,14 @@ public enum SQLSplitter {
         return Array(chars[start..<start + tag.count]) == tag
     }
 
-    private static func isOnlyComments(_ text: String) -> Bool {
+    private static func isOnlyComments(_ text: String, kind: DatabaseKind) -> Bool {
         var stripped = text
-        while let range = stripped.range(of: "/\\*[\\s\\S]*?\\*/", options: .regularExpression) {
+        // An unterminated block comment runs to the end, as in the scanner above.
+        while let range = stripped.range(of: "/\\*(?:[\\s\\S]*?\\*/|[\\s\\S]*)", options: .regularExpression) {
             stripped.removeSubrange(range)
         }
         let lines = stripped.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-        return lines.allSatisfy { $0.isEmpty || $0.hasPrefix("--") || $0.hasPrefix("#") }
+        return lines.allSatisfy { $0.isEmpty || $0.hasPrefix("--") || (kind == .mysql && $0.hasPrefix("#")) }
     }
 
     /// Whether a statement produces a result set, judged by its leading keyword.

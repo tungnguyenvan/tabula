@@ -54,8 +54,10 @@ public struct SQLDialect: Sendable {
         "SELECT COUNT(*) FROM \(qualified(table))" + whereClause(filter)
     }
 
+    /// Without a key nothing may match: an empty predicate would touch every row.
     private func matchPrimaryKey(_ key: [(column: String, value: String?)]) -> String {
-        key.map { pair in
+        guard !key.isEmpty else { return "1 = 0" }
+        return key.map { pair in
             pair.value == nil
                 ? "\(quoteIdentifier(pair.column)) IS NULL"
                 : "\(quoteIdentifier(pair.column)) = \(literal(pair.value))"

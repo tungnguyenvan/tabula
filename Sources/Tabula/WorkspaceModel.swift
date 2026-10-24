@@ -51,6 +51,9 @@ final class WorkspaceModel {
     var selectedTabID: UUID?
     var history: [String] = []
     var showInspector = false
+    /// The console log panel under the tabs (⇧⌘C).
+    var showConsole = false
+    let log = QueryLogModel()
     var showPalette = false
     /// Incremented to move keyboard focus to the sidebar's table filter (⌥⌘F).
     var sidebarFilterFocusRequest = 0
@@ -85,7 +88,10 @@ final class WorkspaceModel {
     func connect() async {
         status = .connecting
         do {
-            let driver = try await DriverFactory.connect(config, password: password)
+            let log = log
+            let driver = LoggingDriver(try await DriverFactory.connect(config, password: password)) { entry in
+                Task { @MainActor in log.append(entry) }
+            }
             self.driver = driver
             status = .connected
             connectedAt = Date()
@@ -192,7 +198,9 @@ final class WorkspaceModel {
             return
         }
         let schema = selectedSchema
-        let model = MetricsModel { try await driver.metrics(schema: schema) }
+        // Polling every few seconds would bury the user's own statements in the console log.
+        let source = (driver as? LoggingDriver)?.unlogged ?? driver
+        let model = MetricsModel { try await source.metrics(schema: schema) }
         tabs.append(.metrics(model))
         selectedTabID = model.id
     }

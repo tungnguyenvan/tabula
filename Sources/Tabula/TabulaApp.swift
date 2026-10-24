@@ -37,7 +37,7 @@ struct TabulaApp: App {
             ConnectionListView()
                 .environment(appState)
         }
-        .defaultSize(width: 760, height: 480)
+        .defaultSize(Layout.Window.connections)
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
@@ -45,17 +45,17 @@ struct TabulaApp: App {
             WorkspaceWindow(connectionID: $connectionID)
                 .environment(appState)
         }
-        .defaultSize(width: 1280, height: 800)
+        .defaultSize(Layout.Window.workspace)
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands { WorkspaceCommands() }
 
         Window("Keyboard Shortcuts", id: WindowID.shortcuts) {
-            ShortcutsView()
+            ShortcutsView().closesUnlessRequested(WindowID.shortcuts)
         }
-        .defaultSize(width: 760, height: 620)
+        .defaultSize(Layout.Window.shortcuts)
 
         Window("Software Update", id: WindowID.update) {
-            UpdateView(updater: Updater.shared)
+            UpdateView(updater: Updater.shared).closesUnlessRequested(WindowID.update)
         }
         .windowResizability(.contentSize)
 
@@ -63,6 +63,23 @@ struct TabulaApp: App {
             SettingsView()
         }
     }
+}
+
+/// Auxiliary windows open only when asked for. macOS can bring them back by itself (e.g. after the app was
+/// force-quit with one open); a window that appears without a request closes itself.
+@MainActor
+enum WindowRequests {
+    private static var pending: Set<String> = []
+
+    static func request(_ id: String) { pending.insert(id) }
+
+    /// True once per request.
+    static func consume(_ id: String) -> Bool { pending.remove(id) != nil }
+}
+
+/// Virtual key codes for keys that menus can't bind.
+enum KeyCode {
+    static let tab: UInt16 = 48
 }
 
 enum WindowID {
@@ -77,74 +94,70 @@ enum WindowID {
 @MainActor @Observable
 final class ActiveWorkspace {
     static let shared = ActiveWorkspace()
-    private(set) weak var model: WorkspaceModel?
-    private(set) weak var redis: RedisWorkspaceModel?
+    private(set) weak var session: ConnectionSession?
 
-    fileprivate func update(_ model: WorkspaceModel?, redis: RedisWorkspaceModel? = nil) {
-        if self.model !== model { self.model = model }
-        if self.redis !== redis { self.redis = redis }
+    var model: WorkspaceModel? {
+        if case .sql(let model) = session?.active { return model }
+        return nil
+    }
+
+    var redis: RedisWorkspaceModel? {
+        if case .redis(let model) = session?.active { return model }
+        return nil
+    }
+
+    fileprivate func update(_ session: ConnectionSession?) {
+        if self.session !== session { self.session = session }
     }
 }
 
-/// Maps windows to their workspace so menus and app-wide keys (⌃Tab) reach the right one.
+/// Maps windows to their connection session so menus and app-wide keys (⌃Tab) reach the right one.
 @MainActor
 enum WorkspaceRegistry {
-    private static var models: [Int: WeakWorkspace] = [:]
+    private static var sessions: [Int: WeakSession] = [:]
     private static var observer: Any?
 
-    private struct WeakWorkspace {
-        weak var model: WorkspaceModel?
-        weak var redis: RedisWorkspaceModel?
-        var isAlive: Bool { model != nil || redis != nil }
+    private struct WeakSession {
+        weak var session: ConnectionSession?
     }
 
-    static func register(_ model: WorkspaceModel, window: NSWindow) {
-        register(WeakWorkspace(model: model), window: window)
-    }
-
-    static func register(_ redis: RedisWorkspaceModel, window: NSWindow) {
-        register(WeakWorkspace(redis: redis), window: window)
-    }
-
-    private static func register(_ entry: WeakWorkspace, window: NSWindow) {
-        // Each connection becomes a tab of one window (drag a tab out to get a separate window).
-        let isNew = models[window.windowNumber] == nil
-        window.tabbingIdentifier = "tabula.workspace"
-        window.tabbingMode = .preferred
-        window.title = entry.model?.config.displayName ?? entry.redis?.config.displayName ?? window.title
-        models = models.filter { $0.value.isAlive }
-        if isNew, let host = NSApp.windows.first(where: {
-            $0 !== window && $0.isVisible && $0.tabbingIdentifier == "tabula.workspace" && !($0.tabbedWindows ?? []).contains(window)
-        }) {
-            host.addTabbedWindow(window, ordered: .above)
-            window.makeKeyAndOrderFront(nil)
-        }
-        models[window.windowNumber] = entry
-        if window.isKeyWindow { ActiveWorkspace.shared.update(entry.model, redis: entry.redis) }
+    static func register(_ session: ConnectionSession, window: NSWindow) {
+        window.title = session.active?.config.displayName ?? window.title
+        guard sessions[window.windowNumber]?.session !== session else { return }
+        sessions = sessions.filter { $0.value.session != nil }
+        sessions[window.windowNumber] = WeakSession(session: session)
+        if window.isKeyWindow { ActiveWorkspace.shared.update(session) }
         if observer == nil {
             observer = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
                 let number = (note.object as? NSWindow)?.windowNumber
                 MainActor.assumeIsolated {
                     // Non-workspace windows (Connections, Shortcuts) clear it, so workspace commands disable.
-                    let entry = number.flatMap { models[$0] }
-                    ActiveWorkspace.shared.update(entry?.model, redis: entry?.redis)
+                    ActiveWorkspace.shared.update(number.flatMap { sessions[$0]?.session })
                 }
             }
         }
+    }
+
+    /// The workspace window nearest the front, where newly opened connections go.
+    static var frontmostSession: (ConnectionSession, NSWindow)? {
+        for window in NSApp.orderedWindows where window.isVisible {
+            if let session = sessions[window.windowNumber]?.session { return (session, window) }
+        }
+        return nil
     }
 
     static var key: WorkspaceModel? { ActiveWorkspace.shared.model }
 
     #if DEBUG
     static func makeActiveForTesting(_ window: NSWindow) {
-        ActiveWorkspace.shared.update(models[window.windowNumber]?.model, redis: models[window.windowNumber]?.redis)
+        ActiveWorkspace.shared.update(sessions[window.windowNumber]?.session)
     }
     #endif
 
     /// Shortcuts that menus can't express (⌃Tab / ⌃⇧Tab). Returns true when handled.
     static func handle(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        guard event.keyCode == 48, flags == [.control] || flags == [.control, .shift], let workspace = key else { return false }
+        guard event.keyCode == KeyCode.tab, flags == [.control] || flags == [.control, .shift], let workspace = key else { return false }
         workspace.selectAdjacentTab(flags.contains(.shift) ? -1 : 1)
         return true
     }
@@ -193,6 +206,16 @@ struct WorkspaceCommands: Commands {
             Divider()
             Button("Connections…") { openWindow(id: WindowID.connections) }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
+            Button("Next Connection") { ActiveWorkspace.shared.session?.selectAdjacent(1) }
+                .keyboardShortcut("]", modifiers: [.command, .control])
+                .disabled(noWorkspace)
+            Button("Previous Connection") { ActiveWorkspace.shared.session?.selectAdjacent(-1) }
+                .keyboardShortcut("[", modifiers: [.command, .control])
+                .disabled(noWorkspace)
+            Button("Close Connection") {
+                if let session = ActiveWorkspace.shared.session, let id = session.active?.id { session.close(id) }
+            }
+            .disabled(noWorkspace)
         }
 
         CommandGroup(after: .sidebar) {
@@ -227,6 +250,9 @@ struct WorkspaceCommands: Commands {
             .disabled(noWorkspace)
             Button("Filter Tables") { workspace?.sidebarFilterFocusRequest += 1 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(noWorkspace)
+            Button("Console Log") { workspace?.showConsole.toggle() }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
             Button("Row Details") { workspace?.showInspector.toggle() }
                 .keyboardShortcut("0", modifiers: [.command, .option])
@@ -313,25 +339,33 @@ struct WorkspaceCommands: Commands {
 
         CommandGroup(after: .appInfo) {
             Button("Check for Updates…") {
+                WindowRequests.request(WindowID.update)
                 openWindow(id: WindowID.update)
                 Task { await Updater.shared.check(userInitiated: true) }
             }
         }
 
         CommandGroup(replacing: .help) {
-            Button("Keyboard Shortcuts") { openWindow(id: WindowID.shortcuts) }
+            Button("Keyboard Shortcuts") {
+                WindowRequests.request(WindowID.shortcuts)
+                openWindow(id: WindowID.shortcuts)
+            }
                 .keyboardShortcut("/", modifiers: [.command, .shift])
         }
     }
 }
 
-struct WorkspaceFocusKey: FocusedValueKey {
-    typealias Value = WorkspaceModel
+private struct ClosesUnlessRequested: ViewModifier {
+    let id: String
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    func body(content: Content) -> some View {
+        content.onAppear {
+            if !WindowRequests.consume(id) { DispatchQueue.main.async { dismissWindow(id: id) } }
+        }
+    }
 }
 
-extension FocusedValues {
-    var workspace: WorkspaceModel? {
-        get { self[WorkspaceFocusKey.self] }
-        set { self[WorkspaceFocusKey.self] = newValue }
-    }
+extension View {
+    func closesUnlessRequested(_ id: String) -> some View { modifier(ClosesUnlessRequested(id: id)) }
 }

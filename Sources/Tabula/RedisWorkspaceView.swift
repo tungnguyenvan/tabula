@@ -66,16 +66,13 @@ struct RedisWorkspaceView: View {
             RedisSidebar(model: model)
                 .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 320)
         } detail: {
-            detail
+            WithConnectionRail { detail }
         }
         .navigationTitle(model.config.displayName)
-        .background(WindowAccessor { window in WorkspaceRegistry.register(model, window: window) })
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                ConnectionPill(config: model.config, status: model.status, location: "db\(model.database)",
-                               serverVersion: model.driver?.serverDescription, connectedAt: model.connectedAt,
-                               onReconnect: { Task { await model.reconnect() } })
-            }
+            ConnectionPillItem(pill: ConnectionPill(config: model.config, status: model.status, location: "db\(model.database)",
+                                                    serverVersion: model.driver?.serverDescription, connectedAt: model.connectedAt,
+                                                    onReconnect: { Task { await model.reconnect() } }))
             ToolbarItem(placement: .navigation) {
                 OpenConnectionMenu(current: model.config.id)
             }
@@ -296,7 +293,7 @@ private struct RedisKeysPane: View {
         }
         .padding(.horizontal, 8)
         .frame(height: 30)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .barBackground()
     }
 }
 
@@ -421,7 +418,7 @@ struct RedisKeyView: View {
             .controlSize(.small)
             .padding(.horizontal, 8)
             .frame(height: 30)
-            .background(Color(nsColor: .underPageBackgroundColor))
+            .barBackground()
         }
     }
 
@@ -444,17 +441,13 @@ struct RedisKeyView: View {
         }
         .padding(.horizontal, 8)
         .frame(height: 30)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .barBackground()
     }
 
     private func confirmRemove(_ rows: IndexSet) {
         guard !rows.isEmpty else { return }
-        let alert = NSAlert()
-        alert.messageText = rows.count == 1 ? "Delete this element?" : "Delete \(rows.count) elements?"
-        alert.informativeText = "The change is saved to Redis immediately."
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn {
+        if Confirmation.ask(rows.count == 1 ? "Delete this element?" : "Delete \(rows.count) elements?",
+                            detail: "The change is saved to Redis immediately.", action: "Delete", style: .informational) {
             selection = []
             Task { await model.remove(rows: rows) }
         }
@@ -680,7 +673,7 @@ struct RedisConsoleView: View {
             }
             .padding(.horizontal, 10)
             .frame(height: 32)
-            .background(Color(nsColor: .underPageBackgroundColor))
+            .barBackground()
         }
         .onAppear { focused = true }
     }

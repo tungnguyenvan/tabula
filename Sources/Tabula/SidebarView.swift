@@ -128,8 +128,7 @@ struct SidebarView: View {
                 }
                 Divider()
                 Button("Copy Name") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(table.name, forType: .string)
+                    Clipboard.copy(table.name)
                 }
                 Divider()
                 if table.kind == .table {

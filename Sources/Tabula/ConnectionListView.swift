@@ -19,7 +19,12 @@ struct ConnectionListView: View {
 
     /// Opens the editor once the saved password has been read (off the main thread).
     private func edit(_ config: ConnectionConfig) {
-        Task { editing = EditRequest(config: config, isNew: false, password: await appState.password(for: config.id) ?? "") }
+        Task {
+            let password = await appState.password(for: config.id) ?? ""
+            // The connection may have been deleted while the Keychain was answering.
+            guard let current = appState.connection(config.id) else { return }
+            editing = EditRequest(config: current, isNew: false, password: password)
+        }
     }
 
     private var filtered: [ConnectionConfig] {
@@ -32,8 +37,9 @@ struct ConnectionListView: View {
     var body: some View {
         HStack(spacing: 0) {
             welcomePane
-                .frame(width: 250)
-                .background(Color(nsColor: .underPageBackgroundColor))
+                .frame(width: Layout.Welcome.width)
+                .background(WindowDragArea())
+                .barBackground()
             Divider()
             listPane
         }
@@ -59,13 +65,21 @@ struct ConnectionListView: View {
             Text("The saved connection and its Keychain password are removed. The database itself is not touched.")
         }
         .onAppear { Updater.shared.checkInBackgroundIfDue() }
-        .onChange(of: Updater.shared.showWindow) { _, show in if show { openWindow(id: WindowID.update) } }
+        .onChange(of: Updater.shared.showWindow) { _, show in
+            if show {
+                WindowRequests.request(WindowID.update)
+                openWindow(id: WindowID.update)
+            }
+        }
         #if DEBUG
         .onAppear {
             for (index, id) in DebugHooks.connectionsToOpen.enumerated() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 1.5) { open(id) }
             }
-            if DebugHooks.showShortcuts { openWindow(id: WindowID.shortcuts) }
+            if DebugHooks.showShortcuts {
+                WindowRequests.request(WindowID.shortcuts)
+                openWindow(id: WindowID.shortcuts)
+            }
         }
         #endif
         .onDeleteCommand {
@@ -152,11 +166,16 @@ struct ConnectionListView: View {
         Button("Edit…") { edit(config) }
         Button("Duplicate") { appState.duplicate(config) }
         Divider()
+        Button("Copy URL") { Clipboard.copy(config.url()) }
+        Button("Copy URL with Password") {
+            Task { Clipboard.copy(config.url(password: await appState.password(for: config.id))) }
+        }
+        Divider()
         Button("Delete…", role: .destructive) { pendingDelete = config }
     }
 
     private func open(_ id: UUID) {
-        openWindow(id: WindowID.workspace, value: id)
+        ConnectionRouter.open(id, appState: appState, openWindow: openWindow)
     }
 
     private func openSQLiteFile() {

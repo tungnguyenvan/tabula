@@ -87,38 +87,26 @@ public actor RedisDriver {
     public static func connect(_ config: ConnectionConfig, password: String?) async throws -> RedisDriver {
         var logger = Logger(label: "tabula.redis")
         logger.logLevel = .critical
-        let host = config.host.isEmpty ? "127.0.0.1" : config.host
+        let host = config.resolvedHost
         let port = config.port
         let database = Int(config.database.trimmingCharacters(in: .whitespaces)) ?? 0
         let username = config.user.isEmpty ? nil : config.user
         let password = password?.isEmpty == true ? nil : password
 
-        let sslContext: NIOSSLContext?
-        switch config.tls {
-        case .disable:
-            sslContext = nil
-        case .require:
-            var tls = TLSConfiguration.makeClientConfiguration()
-            tls.certificateVerification = .none
-            sslContext = try NIOSSLContext(configuration: tls)
-        case .verifyFull:
-            sslContext = try NIOSSLContext(configuration: .makeClientConfiguration())
-        }
-        let serverName = sslContext == nil || isIPAddress(host) ? nil : host
+        let sslContext = try config.tlsConfiguration().map { try NIOSSLContext(configuration: $0) }
+        let serverName = config.serverName(usingTLS: sslContext != nil)
 
         do {
-            let address = try await withTimeout(seconds: 15, "Resolving \(host)") {
-                try await Task.detached { try SocketAddress.makeAddressResolvingHost(host, port: port) }.value
-            }
+            let address = try await config.resolveAddress()
             let configuration = try RedisConnection.Configuration(
                 address: address, username: username, password: password,
                 initialDatabase: database == 0 ? nil : database, defaultLogger: logger)
             let eventLoop = MultiThreadedEventLoopGroup.singleton.next()
-            let box = try await withTimeout(seconds: 15, "Connecting to \(host):\(port)", discard: { _ = $0.connection.close() }) {
+            let box = try await withTimeout(seconds: config.timeout, "Connecting to \(host):\(port)", discard: { _ = $0.connection.close() }) {
                 // TLS sits in front of RediStack's RESP handlers when enabled.
                 let bootstrap = ClientBootstrap(group: eventLoop)
                     .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
-                    .connectTimeout(.seconds(15))
+                    .connectTimeout(.milliseconds(Int64(config.timeout * 1000)))
                     .channelInitializer { channel in
                         do {
                             if let sslContext {
@@ -223,7 +211,7 @@ public actor RedisDriver {
             counts[index] = keys
         }
         // CONFIG is often disabled on managed services; fall back to the default of 16.
-        var total = 16
+        var total = Defaults.Redis.databaseCount
         if case .array(let items) = try await send("CONFIG", "GET", "databases"), items.count == 2, let value = items[1].int {
             total = value
         }
@@ -239,7 +227,7 @@ public actor RedisDriver {
     // MARK: Keys
 
     /// One SCAN round-trip. Pass cursor "0" to start; the returned cursor is "0" when done.
-    public func scan(cursor: String, match: String, type: RedisKeyType?, count: Int = 500) async throws -> (cursor: String, keys: [RedisBytes]) {
+    public func scan(cursor: String, match: String, type: RedisKeyType?, count: Int = Defaults.Redis.scanBatch) async throws -> (cursor: String, keys: [RedisBytes]) {
         var arguments: [RedisArgument] = [.text("SCAN"), .text(cursor), .text("MATCH"), .text(match.isEmpty ? "*" : match), .text("COUNT"), .text(String(count))]
         if let type, type != .unknown { arguments += [.text("TYPE"), .text(type.rawValue)] }
         let reply = try await run(arguments).array
@@ -276,7 +264,7 @@ public actor RedisDriver {
 
     /// Type, TTL, length and a value preview for many keys. Commands are pipelined: every request is
     /// written before any reply is awaited, so 500 keys cost a few round trips, not thousands.
-    public func summaries(of keys: [RedisBytes], previewLength: Int = 200) async throws -> [RedisKeySummary] {
+    public func summaries(of keys: [RedisBytes], previewLength: Int = Defaults.Redis.previewLength) async throws -> [RedisKeySummary] {
         guard !keys.isEmpty else { return [] }
         func send(_ arguments: [RedisArgument]) -> EventLoopFuture<RESPValue> {
             connection.send(command: arguments[0].text, with: arguments.dropFirst().map(\.resp))
@@ -302,13 +290,13 @@ public actor RedisDriver {
         }
         var summaries: [RedisKeySummary] = []
         for (index, key) in keys.enumerated() {
-            let pttl = Self.convert(try await ttlFutures[index].get()).int ?? -2
+            let pttl = Self.convert(try await ttlFutures[index].get()).int ?? ProtocolConstants.redisMissingKey
             var length = 0
             var value = RedisReply.null
             if let future = requests[index].length { length = Self.convert(try await future.get()).int ?? 0 }
             if let future = requests[index].value { value = Self.convert(try await future.get()) }
             // Keys that expired or were deleted since the scan (TYPE "none", PTTL -2) are dropped.
-            guard types[index] != .unknown, pttl != -2 else { continue }
+            guard types[index] != .unknown, pttl != ProtocolConstants.redisMissingKey else { continue }
             summaries.append(RedisKeySummary(key: key, type: types[index], ttlMilliseconds: pttl >= 0 ? pttl : nil, length: length,
                                              preview: Self.preview(type: types[index], reply: value, length: length, limit: previewLength)))
         }
@@ -351,7 +339,7 @@ public actor RedisDriver {
     public func info(_ key: RedisBytes) async throws -> RedisKeyInfo {
         let k = RedisArgument.bytes(key.bytes)
         let type = try await run([.text("TYPE"), k]).string.flatMap(RedisKeyType.init(rawValue:)) ?? .unknown
-        let pttl = try await run([.text("PTTL"), k]).int ?? -1
+        let pttl = try await run([.text("PTTL"), k]).int ?? ProtocolConstants.redisNoExpiry
         let lengthCommand: String? = switch type {
         case .string: "STRLEN"
         case .hash: "HLEN"
@@ -384,7 +372,7 @@ public actor RedisDriver {
     }
 
     /// One page of a collection. `next` is the token from the previous page (nil for the first page).
-    public func page(_ key: RedisBytes, type: RedisKeyType, after next: String?, count: Int = 200) async throws -> RedisPage {
+    public func page(_ key: RedisBytes, type: RedisKeyType, after next: String?, count: Int = Defaults.Redis.pageSize) async throws -> RedisPage {
         let k = RedisArgument.bytes(key.bytes)
         switch type {
         case .hash, .set, .zset:
@@ -514,7 +502,7 @@ public actor RedisDriver {
                 [.text("HDEL"), k, .bytes(old.bytes)],
             ])
         case (.list, 1):
-            guard let index = old.text, Int(index) != nil else { return }
+            guard let index = old.text, Int(index) != nil else { throw DatabaseError("Can’t locate this list element.") }
             try await run([.text("LSET"), k, .text(index), .bytes(newValue.bytes)])
         case (.set, 0):
             try await transaction([[.text("SREM"), k, .bytes(old.bytes)], [.text("SADD"), k, .bytes(newValue.bytes)]])
@@ -565,6 +553,7 @@ public actor RedisDriver {
             throw error
         }
         let results = try await run([.text("EXEC")])
+        if results == .null { throw DatabaseError("The transaction was aborted; nothing was changed.") }
         if let failure = results.array.first(where: { if case .error = $0 { return true }; return false }), case .error(let message) = failure {
             throw DatabaseError(message)
         }

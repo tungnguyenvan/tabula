@@ -122,7 +122,8 @@ public enum RedisCommandLine {
         case "BLPOP", "BRPOP", "BZPOPMIN", "BZPOPMAX": return arguments.count - 1
         case "BRPOPLPUSH": return 3
         case "BLMOVE": return 5
-        case "BLMPOP", "BZMPOP", "WAIT": return 1
+        case "BLMPOP", "BZMPOP": return 1
+        case "WAIT": return 2
         case "WAITAOF": return 3
         case "XREAD", "XREADGROUP":
             let upper = arguments.map { String(decoding: $0, as: UTF8.self).uppercased() }

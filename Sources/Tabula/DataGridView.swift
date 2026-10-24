@@ -388,8 +388,7 @@ struct DataGridView: NSViewRepresentable {
             guard !rows.isEmpty else { return }
             var text = parent.source.copyText(rows)
             if withHeader { text = parent.source.columns.joined(separator: "\t") + "\n" + text }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            Clipboard.copy(text)
         }
 
         func copyFocusedCell() {
@@ -399,8 +398,7 @@ struct DataGridView: NSViewRepresentable {
             case .null: "NULL"
             case .defaultValue: ""
             }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            Clipboard.copy(text)
         }
 
         func deleteSelection() {
@@ -460,7 +458,7 @@ struct DataGridView: NSViewRepresentable {
                 menu.addItem(ClosureMenuItem("Copy Cell Value", key: "c", modifiers: [.command, .option]) { [weak self] in self?.copyFocusedCell() })
             }
             menu.addItem(ClosureMenuItem(rows.count > 1 ? "Copy \(rows.count) Rows" : "Copy Row", key: "c") { [weak self] in self?.copySelection() })
-            menu.addItem(ClosureMenuItem("Copy with Column Names", key: "c", modifiers: [.command, .shift]) { [weak self] in
+            menu.addItem(ClosureMenuItem("Copy with Column Names", key: "c", modifiers: [.command, .option, .shift]) { [weak self] in
                 self?.copySelection(withHeader: true)
             })
             if let onFilter = parent.onFilterByValue, let dataColumn, row < parent.source.insertedFrom {
@@ -518,7 +516,7 @@ final class GridTableView: NSTableView {
             return true
         case ("c", [.command, .option]):
             coordinator.copyFocusedCell(); return true
-        case ("c", [.command, .shift]):
+        case ("c", [.command, .option, .shift]):
             coordinator.copySelection(withHeader: true); return true
         default:
             return super.performKeyEquivalent(with: event)
@@ -713,8 +711,7 @@ final class ValuePopoverController: NSViewController {
     }
 
     @objc private func copyValue() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        Clipboard.copy(text)
     }
 }
 

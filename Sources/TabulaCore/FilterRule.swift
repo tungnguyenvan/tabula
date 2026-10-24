@@ -11,15 +11,24 @@ public struct FilterRule: Identifiable, Hashable, Sendable {
         public var needsValue: Bool { self != .isNull && self != .isNotNull }
     }
 
+    /// How a rule joins the rules before it. AND binds tighter than OR, as in SQL.
+    public enum Conjunction: String, CaseIterable, Identifiable, Sendable {
+        case and = "AND", or = "OR"
+        public var id: String { rawValue }
+    }
+
     public var id = UUID()
     public var column: String
     public var op: Operator
     public var value: String
+    /// Ignored on the first rule.
+    public var conjunction: Conjunction
 
-    public init(column: String, op: Operator = .equals, value: String = "") {
+    public init(column: String, op: Operator = .equals, value: String = "", conjunction: Conjunction = .and) {
         self.column = column
         self.op = op
         self.value = value
+        self.conjunction = conjunction
     }
 }
 
@@ -48,13 +57,23 @@ extension SQLDialect {
         case .isNull: return "\(column) IS NULL"
         case .isNotNull: return "\(column) IS NOT NULL"
         case .inList:
-            let items = rule.value.split(separator: ",").map { literal($0.trimmingCharacters(in: .whitespaces)) }
+            let items = rule.value.split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .map(literal)
             return items.isEmpty ? "FALSE" : "\(column) IN (\(items.joined(separator: ", ")))"
         }
     }
 
-    /// Combines rules with AND; rules missing a required value are skipped.
+    /// Combines rules by their conjunctions; rules missing a required value are skipped.
+    /// `a AND b OR c` becomes `(a AND b) OR c`, spelling out SQL's precedence.
     public func condition(_ rules: [FilterRule]) -> String {
-        rules.filter { !$0.op.needsValue || !$0.value.isEmpty }.map(condition).joined(separator: " AND ")
+        var groups: [[String]] = []
+        for rule in rules where !rule.op.needsValue || !rule.value.isEmpty {
+            if groups.isEmpty || rule.conjunction == .or { groups.append([]) }
+            groups[groups.count - 1].append(condition(rule))
+        }
+        guard groups.count > 1 else { return groups.first?.joined(separator: " AND ") ?? "" }
+        return groups.map { $0.count == 1 ? $0[0] : "(\($0.joined(separator: " AND ")))" }.joined(separator: " OR ")
     }
 }

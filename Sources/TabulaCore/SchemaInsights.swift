@@ -59,6 +59,21 @@ public struct MetricsSample: Sendable {
     }
 }
 
+enum Units {
+    static let kibibyte: Double = 1024
+    static let mebibyte: Double = 1024 * 1024
+    static let secondsPerMinute = 60
+    static let secondsPerHour = 60 * 60
+    static let secondsPerDay = 24 * 60 * 60
+}
+
+extension MetricsSample.TableStat {
+    /// From a row with name, row_count, data_bytes and index_bytes columns.
+    init(_ row: Record) {
+        self.init(name: row["name"] ?? "", rows: row.int("row_count"), dataBytes: row.int("data_bytes"), indexBytes: row.int("index_bytes"))
+    }
+}
+
 public enum MetricFormat {
     public static func bytes(_ value: Double?) -> String {
         guard let value else { return "" }
@@ -67,17 +82,17 @@ public enum MetricFormat {
 
     public static func duration(seconds: Double?) -> String {
         guard var seconds = seconds.map({ Int($0) }) else { return "" }
-        let days = seconds / 86_400; seconds %= 86_400
-        let hours = seconds / 3600; seconds %= 3600
-        let minutes = seconds / 60
+        let days = seconds / Units.secondsPerDay; seconds %= Units.secondsPerDay
+        let hours = seconds / Units.secondsPerHour; seconds %= Units.secondsPerHour
+        let minutes = seconds / Units.secondsPerMinute
         if days > 0 { return "\(days)d \(hours)h" }
         if hours > 0 { return "\(hours)h \(minutes)m" }
-        return "\(minutes)m \(seconds % 60)s"
+        return "\(minutes)m \(seconds % Units.secondsPerMinute)s"
     }
 
     public static func percent(_ part: Double, of total: Double) -> String {
         guard total > 0 else { return "—" }
-        return String(format: "%.1f%%", part / total * 100)
+        return (part / total).formatted(.percent.precision(.fractionLength(1)))
     }
 
     public static func number(_ value: Double?) -> String {
@@ -94,12 +109,13 @@ extension DatabaseDriver {
         switch kind {
         case .postgres:
             // Column lists are joined with the unit separator, which can't appear in identifiers in practice.
+            let separator = "\u{1F}"
             let rows = try await execute("""
-                SELECT con.conname, cl.relname, tn.nspname, tcl.relname,
+                SELECT con.conname AS name, cl.relname AS table_name, tn.nspname AS ref_schema, tcl.relname AS ref_table,
                   array_to_string(ARRAY(SELECT a.attname FROM unnest(con.conkey) WITH ORDINALITY AS k(num, ord)
-                    JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.num ORDER BY k.ord), chr(31)),
+                    JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.num ORDER BY k.ord), \(d.literal(separator))) AS columns,
                   array_to_string(ARRAY(SELECT a.attname FROM unnest(con.confkey) WITH ORDINALITY AS k(num, ord)
-                    JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = k.num ORDER BY k.ord), chr(31))
+                    JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = k.num ORDER BY k.ord), \(d.literal(separator))) AS ref_columns
                 FROM pg_constraint con
                 JOIN pg_class cl ON cl.oid = con.conrelid
                 JOIN pg_namespace n ON n.oid = cl.relnamespace
@@ -107,12 +123,12 @@ extension DatabaseDriver {
                 JOIN pg_namespace tn ON tn.oid = tcl.relnamespace
                 WHERE con.contype = 'f' AND n.nspname = \(d.literal(schema))
                 ORDER BY cl.relname, con.conname
-                """).rows
+                """).records
             return rows.map { row in
-                ForeignKeyInfo(name: row[0] ?? "", table: TableRef(schema: schema, name: row[1] ?? ""),
-                               columns: (row[4] ?? "").components(separatedBy: "\u{1F}"),
-                               referencedTable: TableRef(schema: row[2] ?? schema, name: row[3] ?? ""),
-                               referencedColumns: (row[5] ?? "").components(separatedBy: "\u{1F}"))
+                ForeignKeyInfo(name: row["name"] ?? "", table: TableRef(schema: schema, name: row["table_name"] ?? ""),
+                               columns: (row["columns"] ?? "").components(separatedBy: separator),
+                               referencedTable: TableRef(schema: row["ref_schema"] ?? schema, name: row["ref_table"] ?? ""),
+                               referencedColumns: (row["ref_columns"] ?? "").components(separatedBy: separator))
             }
         case .mysql:
             let rows = try await execute("""
@@ -120,36 +136,38 @@ extension DatabaseDriver {
                 FROM information_schema.KEY_COLUMN_USAGE
                 WHERE TABLE_SCHEMA = \(d.literal(schema)) AND REFERENCED_TABLE_NAME IS NOT NULL
                 ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION
-                """).rows
+                """).records
             var keys: [ForeignKeyInfo] = []
             for row in rows {
-                let name = row[0] ?? "", table = row[1] ?? ""
+                let name = row["CONSTRAINT_NAME"] ?? "", table = row["TABLE_NAME"] ?? ""
+                let column = row["COLUMN_NAME"] ?? "", referenced = row["REFERENCED_COLUMN_NAME"] ?? ""
                 if let last = keys.last, last.name == name, last.table.name == table {
-                    keys[keys.count - 1].columns.append(row[2] ?? "")
-                    keys[keys.count - 1].referencedColumns.append(row[5] ?? "")
+                    keys[keys.count - 1].columns.append(column)
+                    keys[keys.count - 1].referencedColumns.append(referenced)
                 } else {
-                    keys.append(ForeignKeyInfo(name: name, table: TableRef(schema: schema, name: table), columns: [row[2] ?? ""],
-                                               referencedTable: TableRef(schema: row[3] ?? schema, name: row[4] ?? ""),
-                                               referencedColumns: [row[5] ?? ""]))
+                    keys.append(ForeignKeyInfo(name: name, table: TableRef(schema: schema, name: table), columns: [column],
+                                               referencedTable: TableRef(schema: row["REFERENCED_TABLE_SCHEMA"] ?? schema,
+                                                                         name: row["REFERENCED_TABLE_NAME"] ?? ""),
+                                               referencedColumns: [referenced]))
                 }
             }
             return keys
         case .sqlite:
             var keys: [ForeignKeyInfo] = []
             for table in try await tables(in: schema) where table.kind == .table {
-                // id, seq, table, from, to, on_update, on_delete, match
-                let rows = try await execute("PRAGMA \(d.quoteIdentifier(schema)).foreign_key_list(\(d.literal(table.name)))").rows
+                let rows = try await execute("PRAGMA \(d.quoteIdentifier(schema)).foreign_key_list(\(d.literal(table.name)))").records
                 var byID: [String: ForeignKeyInfo] = [:]
                 var order: [String] = []
                 for row in rows {
-                    let id = row[0] ?? "0"
+                    let id = row["id"] ?? ""
                     if byID[id] == nil {
                         order.append(id)
                         byID[id] = ForeignKeyInfo(name: "fk_\(table.name)_\(id)", table: table, columns: [],
-                                                  referencedTable: TableRef(schema: schema, name: row[2] ?? ""), referencedColumns: [])
+                                                  referencedTable: TableRef(schema: schema, name: row["table"] ?? ""), referencedColumns: [])
                     }
-                    byID[id]?.columns.append(row[3] ?? "")
-                    if let to = row[4] { byID[id]?.referencedColumns.append(to) }
+                    byID[id]?.columns.append(row["from"] ?? "")
+                    // "to" is NULL when the key references the other table's primary key implicitly.
+                    if let to = row["to"] { byID[id]?.referencedColumns.append(to) }
                 }
                 keys += order.compactMap { byID[$0] }
             }
@@ -175,83 +193,83 @@ extension DatabaseDriver {
     }
 
     private func postgresMetrics() async throws -> MetricsSample {
-        let overview = try await execute("""
-            SELECT current_database(), version(), EXTRACT(EPOCH FROM now() - pg_postmaster_start_time()),
-                   pg_database_size(current_database()), current_setting('max_connections'),
-                   (SELECT count(*) FROM pg_stat_activity),
-                   (SELECT count(*) FROM pg_stat_activity WHERE state = 'active'),
-                   (SELECT count(*) FROM pg_stat_activity WHERE state LIKE 'idle in transaction%'),
+        guard let overview = try await execute("""
+            SELECT current_database() AS database, version() AS version,
+                   EXTRACT(EPOCH FROM now() - pg_postmaster_start_time()) AS uptime,
+                   pg_database_size(current_database()) AS size, current_setting('max_connections') AS max_connections,
+                   (SELECT count(*) FROM pg_stat_activity) AS connections,
+                   (SELECT count(*) FROM pg_stat_activity WHERE state = 'active') AS active,
+                   (SELECT count(*) FROM pg_stat_activity WHERE state LIKE 'idle in transaction%') AS idle_in_transaction,
                    (SELECT COALESCE(EXTRACT(EPOCH FROM max(now() - query_start)), 0) FROM pg_stat_activity
-                     WHERE state = 'active' AND pid <> pg_backend_pid()),
-                   (SELECT count(*) FROM pg_locks WHERE NOT granted)
-            """).rows.first ?? []
-        let stats = try await execute("""
+                     WHERE state = 'active' AND pid <> pg_backend_pid()) AS longest_query,
+                   (SELECT count(*) FROM pg_locks WHERE NOT granted) AS waiting_locks
+            """).records.first,
+            let stats = try await execute("""
             SELECT xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated,
                    tup_deleted, deadlocks, temp_bytes
             FROM pg_stat_database WHERE datname = current_database()
-            """).rows.first ?? []
-        func number(_ row: [String?], _ index: Int) -> Double { index < row.count ? Double(row[index] ?? "") ?? 0 : 0 }
-        let reads = number(stats, 2), hits = number(stats, 3)
-        let connections = number(overview, 5), maxConnections = number(overview, 4)
+            """).records.first else { throw DatabaseError("The server returned no statistics.") }
+        let reads = stats.number("blks_read"), hits = stats.number("blks_hit")
+        let connections = overview.number("connections"), maxConnections = overview.number("max_connections")
+        let inserted = stats.number("tup_inserted"), updated = stats.number("tup_updated"), deleted = stats.number("tup_deleted")
 
         let tables = try await execute("""
-            SELECT s.schemaname || '.' || s.relname, s.n_live_tup, pg_table_size(s.relid), pg_indexes_size(s.relid)
-            FROM pg_stat_user_tables s ORDER BY pg_total_relation_size(s.relid) DESC LIMIT 25
-            """).rows.map { row in
-            MetricsSample.TableStat(name: row[0] ?? "", rows: Int(row[1] ?? ""), dataBytes: Int(row[2] ?? ""), indexBytes: Int(row[3] ?? ""))
-        }
+            SELECT s.schemaname || '.' || s.relname AS name, s.n_live_tup AS row_count,
+                   pg_table_size(s.relid) AS data_bytes, pg_indexes_size(s.relid) AS index_bytes
+            FROM pg_stat_user_tables s ORDER BY pg_total_relation_size(s.relid) DESC LIMIT \(Defaults.Metrics.tableLimit)
+            """).records.map(MetricsSample.TableStat.init)
 
         return MetricsSample(
             groups: [
                 .init("Server", [
-                    .init("Version", (overview.count > 1 ? overview[1] : nil)?.components(separatedBy: " on ").first ?? ""),
-                    .init("Uptime", MetricFormat.duration(seconds: number(overview, 2))),
-                    .init("Database", overview.first.flatMap { $0 } ?? ""),
-                    .init("Database size", MetricFormat.bytes(number(overview, 3))),
+                    .init("Version", overview["version"]?.components(separatedBy: " on ").first ?? ""),
+                    .init("Uptime", MetricFormat.duration(seconds: overview.number("uptime"))),
+                    .init("Database", overview["database"] ?? ""),
+                    .init("Database size", MetricFormat.bytes(overview.number("size"))),
                 ]),
                 .init("Connections", [
                     .init("Open", "\(Int(connections)) of \(Int(maxConnections))"),
-                    .init("Active", MetricFormat.number(number(overview, 6))),
-                    .init("Idle in transaction", MetricFormat.number(number(overview, 7))),
-                    .init("Longest running query", MetricFormat.duration(seconds: number(overview, 8))),
-                    .init("Waiting for locks", MetricFormat.number(number(overview, 9))),
+                    .init("Active", MetricFormat.number(overview.number("active"))),
+                    .init("Idle in transaction", MetricFormat.number(overview.number("idle_in_transaction"))),
+                    .init("Longest running query", MetricFormat.duration(seconds: overview.number("longest_query"))),
+                    .init("Waiting for locks", MetricFormat.number(overview.number("waiting_locks"))),
                 ]),
                 .init("Activity (since stats reset)", [
                     .init("Cache hit ratio", MetricFormat.percent(hits, of: hits + reads)),
-                    .init("Commits", MetricFormat.number(number(stats, 0))),
-                    .init("Rollbacks", MetricFormat.number(number(stats, 1))),
+                    .init("Commits", MetricFormat.number(stats.number("xact_commit"))),
+                    .init("Rollbacks", MetricFormat.number(stats.number("xact_rollback"))),
                     .init("Rows inserted / updated / deleted",
-                          "\(MetricFormat.number(number(stats, 6))) / \(MetricFormat.number(number(stats, 7))) / \(MetricFormat.number(number(stats, 8)))"),
-                    .init("Deadlocks", MetricFormat.number(number(stats, 9))),
-                    .init("Temp files written", MetricFormat.bytes(number(stats, 10))),
+                          [inserted, updated, deleted].map { MetricFormat.number($0) }.joined(separator: " / ")),
+                    .init("Deadlocks", MetricFormat.number(stats.number("deadlocks"))),
+                    .init("Temp files written", MetricFormat.bytes(stats.number("temp_bytes"))),
                 ]),
             ],
-            counters: ["Transactions/s": number(stats, 0) + number(stats, 1), "Rows read/s": number(stats, 4) + number(stats, 5),
-                       "Rows written/s": number(stats, 6) + number(stats, 7) + number(stats, 8)],
-            gauges: ["Connections": connections, "Active queries": number(overview, 6)],
+            counters: ["Transactions/s": stats.number("xact_commit") + stats.number("xact_rollback"),
+                       "Rows read/s": stats.number("tup_returned") + stats.number("tup_fetched"),
+                       "Rows written/s": inserted + updated + deleted],
+            gauges: ["Connections": connections, "Active queries": overview.number("active")],
             tables: tables)
     }
 
     private func mysqlMetrics(schema: String) async throws -> MetricsSample {
         var status: [String: Double] = [:]
-        for row in try await execute("SHOW GLOBAL STATUS").rows {
-            if let name = row[0], let value = row[1].flatMap(Double.init) { status[name] = value }
+        for row in try await execute("SHOW GLOBAL STATUS").records {
+            if let name = row["Variable_name"], let value = row["Value"].flatMap(Double.init) { status[name] = value }
         }
         var variables: [String: String] = [:]
-        for row in try await execute("SHOW GLOBAL VARIABLES WHERE Variable_name IN ('max_connections', 'version', 'version_comment', 'innodb_buffer_pool_size')").rows {
-            if let name = row[0] { variables[name] = row[1] ?? "" }
+        for row in try await execute("SHOW GLOBAL VARIABLES WHERE Variable_name IN ('max_connections', 'version', 'version_comment', 'innodb_buffer_pool_size')").records {
+            if let name = row["Variable_name"] { variables[name] = row["Value"] ?? "" }
         }
         let s = { (name: String) in status[name] ?? 0 }
         let size = try await value("SELECT SUM(DATA_LENGTH + INDEX_LENGTH) FROM information_schema.TABLES WHERE TABLE_SCHEMA = \(dialect.literal(schema))")
         let requests = s("Innodb_buffer_pool_read_requests"), diskReads = s("Innodb_buffer_pool_reads")
 
         let tables = try await execute("""
-            SELECT TABLE_NAME, TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH FROM information_schema.TABLES
+            SELECT TABLE_NAME AS name, TABLE_ROWS AS row_count, DATA_LENGTH AS data_bytes, INDEX_LENGTH AS index_bytes
+            FROM information_schema.TABLES
             WHERE TABLE_SCHEMA = \(dialect.literal(schema)) AND TABLE_TYPE = 'BASE TABLE'
-            ORDER BY DATA_LENGTH + INDEX_LENGTH DESC LIMIT 25
-            """).rows.map { row in
-            MetricsSample.TableStat(name: row[0] ?? "", rows: Int(row[1] ?? ""), dataBytes: Int(row[2] ?? ""), indexBytes: Int(row[3] ?? ""))
-        }
+            ORDER BY DATA_LENGTH + INDEX_LENGTH DESC LIMIT \(Defaults.Metrics.tableLimit)
+            """).records.map(MetricsSample.TableStat.init)
 
         return MetricsSample(
             groups: [
@@ -278,7 +296,7 @@ extension DatabaseDriver {
                 ]),
             ],
             counters: ["Queries/s": s("Questions"), "Writes/s": s("Com_insert") + s("Com_update") + s("Com_delete"),
-                       "Network in KB/s": s("Bytes_received") / 1024, "Network out KB/s": s("Bytes_sent") / 1024],
+                       "Network in KB/s": s("Bytes_received") / Units.kibibyte, "Network out KB/s": s("Bytes_sent") / Units.kibibyte],
             gauges: ["Connections": s("Threads_connected"), "Running threads": s("Threads_running")],
             tables: tables)
     }
@@ -292,13 +310,14 @@ extension DatabaseDriver {
         let journal = try await value("PRAGMA \(d.quoteIdentifier(schema)).journal_mode") ?? ""
         let version = try await value("SELECT sqlite_version()") ?? ""
         var tables: [MetricsSample.TableStat] = []
-        for table in try await self.tables(in: schema).filter({ $0.kind == .table }).prefix(50) {
+        for table in try await self.tables(in: schema).filter({ $0.kind == .table }).prefix(Defaults.Metrics.tableLimit) {
             let rows = try await value("SELECT COUNT(*) FROM \(d.qualified(table))").flatMap { Int($0) }
             tables.append(.init(name: table.name, rows: rows, dataBytes: nil, indexBytes: nil))
         }
         // Per-table sizes need the optional dbstat virtual table.
-        if let sizes = try? await execute("SELECT name, SUM(pgsize) FROM dbstat WHERE aggregate = TRUE GROUP BY name").rows {
-            let byName = Dictionary(sizes.compactMap { row in row[0].map { ($0, Int(row[1] ?? "") ?? 0) } }, uniquingKeysWith: +)
+        let sizeQuery = "SELECT name, SUM(pgsize) AS size FROM dbstat(\(d.literal(schema))) WHERE aggregate = TRUE GROUP BY name"
+        if let sizes = try? await execute(sizeQuery).records {
+            let byName = Dictionary(sizes.compactMap { row in row["name"].map { ($0, row.int("size") ?? 0) } }, uniquingKeysWith: +)
             for index in tables.indices { tables[index].dataBytes = byName[tables[index].name] }
         }
         tables.sort { ($0.rows ?? 0) > ($1.rows ?? 0) }
@@ -365,8 +384,8 @@ extension RedisDriver {
                 ]),
                 .init("Keyspace", keyspace.isEmpty ? [.init("Keys", "none")] : keyspace),
             ],
-            counters: ["Commands/s": n("total_commands_processed"), "Network in KB/s": n("total_net_input_bytes") / 1024,
-                       "Network out KB/s": n("total_net_output_bytes") / 1024],
-            gauges: ["Memory MB": n("used_memory") / 1_048_576, "Clients": n("connected_clients")])
+            counters: ["Commands/s": n("total_commands_processed"), "Network in KB/s": n("total_net_input_bytes") / Units.kibibyte,
+                       "Network out KB/s": n("total_net_output_bytes") / Units.kibibyte],
+            gauges: ["Memory MB": n("used_memory") / Units.mebibyte, "Clients": n("connected_clients")])
     }
 }

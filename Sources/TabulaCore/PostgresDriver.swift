@@ -15,29 +15,20 @@ public actor PostgresDriver: DatabaseDriver {
     public static func connect(_ config: ConnectionConfig, password: String?) async throws -> PostgresDriver {
         var logger = Logger(label: "tabula.postgres")
         logger.logLevel = .error
-        let tls: PostgresConnection.Configuration.TLS
-        switch config.tls {
-        case .disable:
-            tls = .disable
-        case .require:
-            var tlsConfig = TLSConfiguration.makeClientConfiguration()
-            tlsConfig.certificateVerification = .none
-            tls = .require(try NIOSSLContext(configuration: tlsConfig))
-        case .verifyFull:
-            tls = .require(try NIOSSLContext(configuration: .makeClientConfiguration()))
-        }
+        let tls: PostgresConnection.Configuration.TLS = try config.tlsConfiguration()
+            .map { .require(try NIOSSLContext(configuration: $0)) } ?? .disable
         var configuration = PostgresConnection.Configuration(
-            host: config.host.isEmpty ? "127.0.0.1" : config.host,
+            host: config.resolvedHost,
             port: config.port,
             username: config.user,
             password: password?.isEmpty == true ? nil : password,
             database: config.database.isEmpty ? nil : config.database,
             tls: tls
         )
-        configuration.options.connectTimeout = .seconds(10)
-        configuration.options.additionalStartupParameters = [("application_name", "Tabula")]
+        configuration.options.connectTimeout = .milliseconds(Int64(config.timeout * 1000))
+        configuration.options.additionalStartupParameters = [("application_name", Defaults.applicationName)]
         do {
-            let connection = try await withTimeout(seconds: 15, "Connecting to \(config.host):\(config.port)",
+            let connection = try await withTimeout(seconds: config.timeout, "Connecting to \(config.host):\(config.port)",
                                                    discard: { _ = $0.close() as EventLoopFuture<Void> }) { [configuration, logger] in
                 try await PostgresConnection.connect(configuration: configuration, id: 1, logger: logger)
             }
@@ -99,6 +90,10 @@ public actor PostgresDriver: DatabaseDriver {
         try await execute(sql).rows
     }
 
+    private func records(_ sql: String) async throws -> [Record] {
+        try await execute(sql).records
+    }
+
     public func schemas() async throws -> [String] {
         try await strings("""
             SELECT nspname FROM pg_namespace
@@ -114,51 +109,52 @@ public actor PostgresDriver: DatabaseDriver {
 
     public func tables(in schema: String) async throws -> [TableRef] {
         let d = dialect
-        return try await strings("""
-            SELECT c.relname, c.relkind FROM pg_class c
+        return try await records("""
+            SELECT c.relname AS name, c.relkind AS kind FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = \(d.literal(schema)) AND c.relkind IN ('r','p','v','m','f')
             ORDER BY c.relname
             """).compactMap { row in
-            guard let name = row[0] else { return nil }
-            let kind: TableKind = (row[1] == "v" || row[1] == "m") ? .view : .table
+            guard let name = row["name"] else { return nil }
+            let kind: TableKind = (row["kind"] == "v" || row["kind"] == "m") ? .view : .table
             return TableRef(schema: schema, name: name, kind: kind)
         }
     }
 
     public func columns(of table: TableRef) async throws -> [ColumnInfo] {
         let d = dialect
-        return try await strings("""
-            SELECT a.attname,
-                   format_type(a.atttypid, a.atttypmod),
-                   NOT a.attnotnull,
-                   pg_get_expr(ad.adbin, ad.adrelid),
-                   EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.attrelid AND i.indisprimary AND a.attnum = ANY(i.indkey)),
-                   col_description(a.attrelid, a.attnum)
+        return try await records("""
+            SELECT a.attname AS name,
+                   format_type(a.atttypid, a.atttypmod) AS data_type,
+                   NOT a.attnotnull AS nullable,
+                   pg_get_expr(ad.adbin, ad.adrelid) AS default_value,
+                   EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.attrelid AND i.indisprimary AND a.attnum = ANY(i.indkey)) AS primary_key,
+                   col_description(a.attrelid, a.attnum) AS comment
             FROM pg_attribute a
             LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
             WHERE a.attrelid = \(d.literal(d.qualified(table)))::regclass AND a.attnum > 0 AND NOT a.attisdropped
             ORDER BY a.attnum
             """).map { row in
-            ColumnInfo(name: row[0] ?? "", dataType: row[1] ?? "", isNullable: row[2] == "true",
-                       defaultValue: row[3], isPrimaryKey: row[4] == "true", comment: row[5])
+            ColumnInfo(name: row["name"] ?? "", dataType: row["data_type"] ?? "", isNullable: row["nullable"] == "true",
+                       defaultValue: row["default_value"], isPrimaryKey: row["primary_key"] == "true", comment: row["comment"])
         }
     }
 
     public func indexes(of table: TableRef) async throws -> [IndexInfo] {
         let d = dialect
-        return try await strings("""
-            SELECT ic.relname, i.indisunique, i.indisprimary, pg_get_indexdef(i.indexrelid),
+        return try await records("""
+            SELECT ic.relname AS name, i.indisunique AS is_unique, i.indisprimary AS is_primary,
+                   pg_get_indexdef(i.indexrelid) AS definition,
                    array_to_string(ARRAY(
                        SELECT pg_get_indexdef(i.indexrelid, k + 1, true)
-                       FROM generate_subscripts(i.indkey, 1) AS k ORDER BY k), ', ')
+                       FROM generate_subscripts(i.indkey, 1) AS k ORDER BY k), ', ') AS columns
             FROM pg_index i
             JOIN pg_class ic ON ic.oid = i.indexrelid
             WHERE i.indrelid = \(d.literal(d.qualified(table)))::regclass
             ORDER BY i.indisprimary DESC, ic.relname
             """).map { row in
-            IndexInfo(name: row[0] ?? "", columns: (row[4] ?? "").components(separatedBy: ", ").filter { !$0.isEmpty },
-                      isUnique: row[1] == "true", isPrimary: row[2] == "true", definition: row[3])
+            IndexInfo(name: row["name"] ?? "", columns: (row["columns"] ?? "").components(separatedBy: ", ").filter { !$0.isEmpty },
+                      isUnique: row["is_unique"] == "true", isPrimary: row["is_primary"] == "true", definition: row["definition"])
         }
     }
 }

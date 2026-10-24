@@ -86,7 +86,7 @@ public struct TablePageRequest: Sendable, Hashable {
     /// Raw SQL condition placed after WHERE, typed by the user.
     public var filter: String?
 
-    public init(table: TableRef, limit: Int = 300, offset: Int = 0, orderBy: String? = nil, ascending: Bool = true, filter: String? = nil) {
+    public init(table: TableRef, limit: Int = Defaults.pageSize, offset: Int = 0, orderBy: String? = nil, ascending: Bool = true, filter: String? = nil) {
         self.table = table
         self.limit = limit
         self.offset = offset
@@ -108,18 +108,19 @@ public func withTimeout<T: Sendable>(
     let gate = ResumeOnce<T>()
     return try await withCheckedThrowingContinuation { continuation in
         gate.continuation = continuation
+        let watchdog = Task {
+            try await Task.sleep(for: .seconds(seconds))
+            return gate.resume(.failure(DatabaseError("\(what) timed out after \(Int(seconds)) seconds.")))
+        }
         let work = Task {
             do {
                 let value = try await operation()
-                if !gate.resume(.success(value)) { discard(value) }
+                if gate.resume(.success(value)) { watchdog.cancel() } else { discard(value) }
             } catch {
-                gate.resume(.failure(error))
+                if gate.resume(.failure(error)) { watchdog.cancel() }
             }
         }
-        Task {
-            try? await Task.sleep(for: .seconds(seconds))
-            if gate.resume(.failure(DatabaseError("\(what) timed out after \(Int(seconds)) seconds."))) { work.cancel() }
-        }
+        Task { if (try? await watchdog.value) == true { work.cancel() } }
     }
 }
 

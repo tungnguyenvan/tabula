@@ -44,12 +44,22 @@ public struct ConnectionStore: Sendable {
         return String(data: data, encoding: .utf8)
     }
 
-    public func setPassword(_ password: String?, for id: UUID) {
-        SecItemDelete(query(for: id) as CFDictionary)
+    public func setPassword(_ password: String?, for id: UUID) throws {
+        let removed = SecItemDelete(query(for: id) as CFDictionary)
+        guard removed == errSecSuccess || removed == errSecItemNotFound else { throw KeychainError(status: removed) }
         guard let password, !password.isEmpty else { return }
         var item = query(for: id)
         item[kSecValueData as String] = Data(password.utf8)
         item[kSecAttrLabel as String] = "Tabula database connection"
-        SecItemAdd(item as CFDictionary, nil)
+        let added = SecItemAdd(item as CFDictionary, nil)
+        guard added == errSecSuccess else { throw KeychainError(status: added) }
+    }
+}
+
+public struct KeychainError: LocalizedError {
+    public let status: OSStatus
+    public var errorDescription: String? {
+        let reason = SecCopyErrorMessageString(status, nil) as String? ?? "error \(status)"
+        return "Keychain: \(reason)"
     }
 }

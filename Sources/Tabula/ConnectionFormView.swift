@@ -111,7 +111,13 @@ struct ConnectionFormView: View {
         do {
             if config.kind == .redis {
                 let redis = try await RedisDriver.connect(config, password: password)
-                let pong = try await redis.send("PING")
+                let pong: RedisReply
+                do {
+                    pong = try await redis.send("PING")
+                } catch {
+                    await redis.close()
+                    throw error
+                }
                 await redis.close()
                 if case .error(let message) = pong { throw DatabaseError(message) }
                 testState = .success(redis.serverDescription)

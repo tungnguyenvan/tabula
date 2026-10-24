@@ -35,13 +35,18 @@ final class MetricsModel {
 
     func start() {
         guard loop == nil else { return }
+        // Holds the model only while ticking, so a model whose view never sent onDisappear still goes away.
         loop = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self else { return }
-                if !self.paused { await self.refresh() }
-                try? await Task.sleep(for: .seconds(self.interval))
+                guard let interval = await self?.tick() else { return }
+                try? await Task.sleep(for: .seconds(interval))
             }
         }
+    }
+
+    private func tick() async -> Double {
+        if !paused { await refresh() }
+        return interval
     }
 
     func stop() {
@@ -55,13 +60,15 @@ final class MetricsModel {
             if let previous {
                 let elapsed = sample.time.timeIntervalSince(previous.time)
                 if elapsed > 0 {
+                    var current: [String: Double] = [:]
                     for (name, value) in sample.counters {
                         // Counters reset on server restart; skip negative deltas.
                         guard let old = previous.counters[name], value >= old else { continue }
                         let rate = (value - old) / elapsed
-                        rates[name] = rate
+                        current[name] = rate
                         points.append(Point(time: sample.time, series: name, value: rate))
                     }
+                    rates = current
                 }
             }
             for (name, value) in sample.gauges { points.append(Point(time: sample.time, series: name, value: value)) }
@@ -126,9 +133,10 @@ struct MetricsView: View {
     private var charts: some View {
         let names = model.seriesNames
         if !names.isEmpty {
+            let bySeries = Dictionary(grouping: model.points, by: \.series)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 12)], spacing: 12) {
                 ForEach(names, id: \.self) { name in
-                    let points = model.points.filter { $0.series == name }
+                    let points = bySeries[name] ?? []
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(name).font(.caption).foregroundStyle(.secondary)

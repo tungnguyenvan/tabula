@@ -16,30 +16,15 @@ public actor MySQLDriver: DatabaseDriver {
     public static func connect(_ config: ConnectionConfig, password: String?) async throws -> MySQLDriver {
         var logger = Logger(label: "tabula.mysql")
         logger.logLevel = .error
-        let host = config.host.isEmpty ? "127.0.0.1" : config.host
-        let port = config.port
-
-        let tls: TLSConfiguration?
-        switch config.tls {
-        case .disable:
-            tls = nil
-        case .require:
-            var tlsConfig = TLSConfiguration.makeClientConfiguration()
-            tlsConfig.certificateVerification = .none
-            tls = tlsConfig
-        case .verifyFull:
-            tls = .makeClientConfiguration()
-        }
+        let host = config.resolvedHost, port = config.port
+        let tls = config.tlsConfiguration()
 
         do {
-            // Name resolution blocks, so keep it off the caller's executor.
-            let address = try await withTimeout(seconds: 15, "Resolving \(host)") {
-                try await Task.detached { try SocketAddress.makeAddressResolvingHost(host, port: port) }.value
-            }
+            let address = try await config.resolveAddress()
             let user = config.user, database = config.database
             let password = password?.isEmpty == true ? nil : password
-            let serverHostname = tls == nil || isIPAddress(host) ? nil : host
-            let connection = try await withTimeout(seconds: 15, "Connecting to \(host):\(port)", discard: { _ = $0.close() }) { [logger] in
+            let serverHostname = config.serverName(usingTLS: tls != nil)
+            let connection = try await withTimeout(seconds: config.timeout, "Connecting to \(host):\(port)", discard: { _ = $0.close() }) { [logger] in
                 try await MySQLConnection.connect(
                     to: address,
                     username: user,
@@ -89,7 +74,7 @@ public actor MySQLDriver: DatabaseDriver {
                                        duration: Date().timeIntervalSince(started), statement: sql)
                 }
                 return QueryResult(affectedRows: affected.value, duration: Date().timeIntervalSince(started), statement: sql)
-            } catch MySQLError.server(let packet) where packet.errorCode.rawValue == 1295 {
+            } catch MySQLError.server(let packet) where packet.errorCode.rawValue == ProtocolConstants.mysqlUnsupportedPreparedStatement {
                 // ER_UNSUPPORTED_PS: statement not allowed as a prepared statement; use the text protocol.
                 return try await textQuery(sql, started: started)
             }
@@ -131,6 +116,10 @@ public actor MySQLDriver: DatabaseDriver {
         try await execute(sql).rows
     }
 
+    private func records(_ sql: String) async throws -> [Record] {
+        try await execute(sql).records
+    }
+
     public func schemas() async throws -> [String] {
         try await strings("SHOW DATABASES").compactMap { $0.first ?? nil }
     }
@@ -142,32 +131,32 @@ public actor MySQLDriver: DatabaseDriver {
     }
 
     public func tables(in schema: String) async throws -> [TableRef] {
-        try await strings("""
+        try await records("""
             SELECT TABLE_NAME, TABLE_TYPE FROM information_schema.TABLES
             WHERE TABLE_SCHEMA = \(dialect.literal(schema)) ORDER BY TABLE_NAME
             """).compactMap { row in
-            guard let name = row[0] else { return nil }
-            return TableRef(schema: schema, name: name, kind: row[1] == "VIEW" ? .view : .table)
+            guard let name = row["TABLE_NAME"] else { return nil }
+            return TableRef(schema: schema, name: name, kind: row["TABLE_TYPE"] == "VIEW" ? .view : .table)
         }
     }
 
     public func columns(of table: TableRef) async throws -> [ColumnInfo] {
         let d = dialect
-        return try await strings("""
+        return try await records("""
             SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, COLUMN_COMMENT
             FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = \(d.literal(table.schema)) AND TABLE_NAME = \(d.literal(table.name))
             ORDER BY ORDINAL_POSITION
             """).map { row in
-            ColumnInfo(name: row[0] ?? "", dataType: row[1] ?? "", isNullable: row[2] == "YES",
-                       defaultValue: row[3], isPrimaryKey: row[4] == "PRI",
-                       comment: (row[5]?.isEmpty ?? true) ? nil : row[5])
+            ColumnInfo(name: row["COLUMN_NAME"] ?? "", dataType: row["COLUMN_TYPE"] ?? "", isNullable: row["IS_NULLABLE"] == "YES",
+                       defaultValue: row["COLUMN_DEFAULT"], isPrimaryKey: row["COLUMN_KEY"] == "PRI",
+                       comment: (row["COLUMN_COMMENT"]?.isEmpty ?? true) ? nil : row["COLUMN_COMMENT"])
         }
     }
 
     public func indexes(of table: TableRef) async throws -> [IndexInfo] {
         let d = dialect
-        let rows = try await strings("""
+        let rows = try await records("""
             SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS
             WHERE TABLE_SCHEMA = \(d.literal(table.schema)) AND TABLE_NAME = \(d.literal(table.name))
             ORDER BY INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX
@@ -175,24 +164,24 @@ public actor MySQLDriver: DatabaseDriver {
         var order: [String] = []
         var byName: [String: IndexInfo] = [:]
         for row in rows {
-            guard let name = row[0] else { continue }
+            guard let name = row["INDEX_NAME"] else { continue }
             if byName[name] == nil {
                 order.append(name)
-                byName[name] = IndexInfo(name: name, columns: [], isUnique: row[1] == "0", isPrimary: name == "PRIMARY")
+                byName[name] = IndexInfo(name: name, columns: [], isUnique: row["NON_UNIQUE"] == "0", isPrimary: name == "PRIMARY")
             }
-            if let column = row[2] { byName[name]?.columns.append(column) }
+            if let column = row["COLUMN_NAME"] { byName[name]?.columns.append(column) }
         }
         return order.compactMap { byName[$0] }
     }
 }
 
 /// SNI must be a hostname; TLS libraries reject literal IP addresses.
-func isIPAddress(_ host: String) -> Bool {
-    var v4 = in_addr(), v6 = in6_addr()
-    return inet_pton(AF_INET, host, &v4) == 1 || inet_pton(AF_INET6, host, &v6) == 1
-}
-
 /// Collects the affected-row count from MySQLNIO's metadata callback.
 private final class AffectedRowsBox: @unchecked Sendable {
-    var value: Int?
+    private let lock = NSLock()
+    private var stored: Int?
+    var value: Int? {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
 }

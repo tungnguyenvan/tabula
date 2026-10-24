@@ -23,6 +23,7 @@ enum DebugHooks {
 
     static func workspaceConnected(_ model: WorkspaceModel) {
         if environment["TABULA_DEBUG_PALETTE"] != nil { model.showPalette = true }
+        if environment["TABULA_DEBUG_CONSOLE"] != nil { model.showConsole = true }
         if environment["TABULA_DEBUG_DIAGRAM"] != nil { model.openDiagram() }
         if environment["TABULA_DEBUG_METRICS"] != nil { model.openMetrics() }
         if let count = environment["TABULA_DEBUG_TABS"].flatMap(Int.init) {

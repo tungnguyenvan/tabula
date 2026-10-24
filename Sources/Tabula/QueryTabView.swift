@@ -61,7 +61,7 @@ struct QueryTabView: View {
         .controlSize(.small)
         .padding(.horizontal, 8)
         .frame(height: 30)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .barBackground()
     }
 
     @ViewBuilder
@@ -138,7 +138,7 @@ struct QueryTabView: View {
         .controlSize(.small)
         .padding(.horizontal, 8)
         .frame(height: 30)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .barBackground()
     }
 
     private func run(all: Bool) {

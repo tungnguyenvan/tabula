@@ -96,12 +96,13 @@ public enum UpdateFeed {
 
     /// Fetches the feed. GitHub answers 404 when no release has been published yet; that means "no update".
     public static func check(feed: URL = defaultURL, current: SemanticVersion, session: URLSession = .shared) async throws -> AvailableUpdate? {
-        var request = URLRequest(url: feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
+        var request = URLRequest(url: feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Defaults.Updates.requestTimeout)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("Tabula/\(current)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 404 { return nil }
+        if status == 403 || status == 429 { throw DatabaseError("GitHub is limiting update checks right now. Try again later.") }
         guard status == 200 else { throw DatabaseError("Update check failed (HTTP \(status)).") }
         return try update(from: data, current: current)
     }

@@ -1,7 +1,6 @@
 import Foundation
 import SQLite3
 
-private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 public actor SQLiteDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind = .sqlite
@@ -18,7 +17,7 @@ public actor SQLiteDriver: DatabaseDriver {
             sqlite3_close(handle)
             throw DatabaseError(message)
         }
-        sqlite3_busy_timeout(handle, 5000)
+        sqlite3_busy_timeout(handle, Defaults.sqliteBusyTimeoutMilliseconds)
         db = handle
     }
 
@@ -80,31 +79,35 @@ public actor SQLiteDriver: DatabaseDriver {
         try execute(sql).rows
     }
 
+    private func records(_ sql: String) throws -> [Record] {
+        try execute(sql).records
+    }
+
     public func schemas() throws -> [String] {
-        try strings("PRAGMA database_list").compactMap { $0.count > 1 ? $0[1] : nil }
+        try records("PRAGMA database_list").compactMap { $0["name"] }
     }
 
     public func defaultSchema() -> String { "main" }
 
     public func tables(in schema: String) throws -> [TableRef] {
         let master = schema == "temp" ? "sqlite_temp_master" : "\(SQLDialect(kind: .sqlite).quoteIdentifier(schema)).sqlite_master"
-        return try strings("SELECT name, type FROM \(master) WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        return try records("SELECT name, type FROM \(master) WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name")
             .compactMap { row in
-                guard let name = row[0] else { return nil }
-                return TableRef(schema: schema, name: name, kind: row[1] == "view" ? .view : .table)
+                guard let name = row["name"] else { return nil }
+                return TableRef(schema: schema, name: name, kind: row["type"] == "view" ? .view : .table)
             }
     }
 
     public func columns(of table: TableRef) throws -> [ColumnInfo] {
         let d = SQLDialect(kind: .sqlite)
-        // cid, name, type, notnull, dflt_value, pk
-        return try strings("PRAGMA \(d.quoteIdentifier(table.schema)).table_info(\(d.literal(table.name)))").map { row in
+        return try records("PRAGMA \(d.quoteIdentifier(table.schema)).table_info(\(d.literal(table.name)))").map { row in
             ColumnInfo(
-                name: row[1] ?? "",
-                dataType: row[2] ?? "",
-                isNullable: row[3] == "0",
-                defaultValue: row[4],
-                isPrimaryKey: (Int(row[5] ?? "0") ?? 0) > 0
+                name: row["name"] ?? "",
+                dataType: row["type"] ?? "",
+                isNullable: row["notnull"] == "0",
+                defaultValue: row["dflt_value"],
+                // pk is the column's position in the primary key, 0 when it isn't part of it.
+                isPrimaryKey: (row.int("pk") ?? 0) > 0
             )
         }
     }
@@ -112,13 +115,12 @@ public actor SQLiteDriver: DatabaseDriver {
     public func indexes(of table: TableRef) throws -> [IndexInfo] {
         let d = SQLDialect(kind: .sqlite)
         let schema = d.quoteIdentifier(table.schema)
-        // seq, name, unique, origin, partial
-        return try strings("PRAGMA \(schema).index_list(\(d.literal(table.name)))").compactMap { row in
-            guard let name = row[1] else { return nil }
-            let columns = try strings("PRAGMA \(schema).index_info(\(d.literal(name)))").compactMap { $0[2] }
+        return try records("PRAGMA \(schema).index_list(\(d.literal(table.name)))").compactMap { row in
+            guard let name = row["name"] else { return nil }
+            let columns = try records("PRAGMA \(schema).index_info(\(d.literal(name)))").map { $0["name"] ?? "(expression)" }
             let master = table.schema == "temp" ? "sqlite_temp_master" : "\(schema).sqlite_master"
             let definition = try strings("SELECT sql FROM \(master) WHERE type = 'index' AND name = \(d.literal(name))").first?.first ?? nil
-            return IndexInfo(name: name, columns: columns, isUnique: row[2] == "1", isPrimary: row[3] == "pk", definition: definition)
+            return IndexInfo(name: name, columns: columns, isUnique: row["unique"] == "1", isPrimary: row["origin"] == "pk", definition: definition)
         }
     }
 }

@@ -265,14 +265,10 @@ final class RedisWorkspaceModel {
 
     func confirmDelete(_ keysToDelete: [RedisBytes]) {
         guard !keysToDelete.isEmpty else { return }
-        let alert = NSAlert()
-        alert.messageText = keysToDelete.count == 1
+        let message = keysToDelete.count == 1
             ? "Delete key “\(keysToDelete[0].display)”?" : "Delete \(keysToDelete.count) keys?"
-        alert.informativeText = config.tag == .production ? "This is a PRODUCTION connection. This cannot be undone." : "This cannot be undone."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn { Task { await delete(keysToDelete) } }
+        let detail = config.tag == .production ? "This is a PRODUCTION connection. This cannot be undone." : "This cannot be undone."
+        if Confirmation.ask(message, detail: detail, action: "Delete") { Task { await delete(keysToDelete) } }
     }
 }
 
@@ -504,13 +500,9 @@ final class RedisConsoleModel {
     }
 
     private func confirm(_ line: String) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = "Run “\(line.prefix(120))”?"
-        alert.informativeText = config.tag == .production ? "This is a PRODUCTION connection." : "This command can delete or change a lot of data."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Run")
-        alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn
+        Confirmation.ask("Run “\(line.prefix(120))”?",
+                         detail: config.tag == .production ? "This is a PRODUCTION connection." : "This command can delete or change a lot of data.",
+                         action: "Run")
     }
 
     func historyUp() {

@@ -102,6 +102,7 @@ struct TableTabView: View {
                         .help("Preview SQL (⇧⌘S)")
                     Button("Discard") { model.discardChanges() }
                     Button("Commit") { Task { await model.commit() } }
+                        .disabled(model.committing)
                         .buttonStyle(.borderedProminent)
                         .tint(.orange)
                         .help("Commit changes (⌘S)")
@@ -124,6 +125,7 @@ struct TableTabView: View {
                 Menu {
                     ForEach([100, 300, 1000, 5000], id: \.self) { size in
                         Button("\(size) rows per page") {
+                            guard model.confirmDiscard() else { return }
                             model.pageSize = size
                             Task { await model.reload() }
                         }
@@ -146,7 +148,7 @@ struct TableTabView: View {
         .controlSize(.small)
         .padding(.horizontal, 8)
         .frame(height: 30)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .barBackground()
     }
 }
 
@@ -192,16 +194,27 @@ struct FilterBarView: View {
             } else {
                 ForEach($model.filterRules) { $rule in
                     HStack(spacing: 6) {
+                        if rule.id == model.filterRules.first?.id {
+                            Text("WHERE").font(Layout.Font.smallBold.monospaced()).foregroundStyle(.secondary)
+                                .frame(width: Layout.Filter.conjunctionWidth, alignment: .leading)
+                        } else {
+                            Picker("Join", selection: $rule.conjunction) {
+                                ForEach(FilterRule.Conjunction.allCases) { Text($0.rawValue).tag($0) }
+                            }
+                            .labelsHidden()
+                            .frame(width: Layout.Filter.conjunctionWidth)
+                            .help("AND binds tighter than OR: a AND b OR c means (a AND b) OR c")
+                        }
                         Picker("Column", selection: $rule.column) {
                             ForEach(model.resultColumns, id: \.self) { Text($0).tag($0) }
                         }
                         .labelsHidden()
-                        .frame(width: 170)
+                        .frame(width: Layout.Filter.columnWidth)
                         Picker("Operator", selection: $rule.op) {
                             ForEach(FilterRule.Operator.allCases) { Text($0.rawValue).tag($0) }
                         }
                         .labelsHidden()
-                        .frame(width: 120)
+                        .frame(width: Layout.Filter.operatorWidth)
                         TextField(rule.op == .inList ? "a, b, c" : "Value", text: $rule.value)
                             .focused($focusedRule, equals: rule.id)
                             .textFieldStyle(.roundedBorder)
@@ -211,7 +224,7 @@ struct FilterBarView: View {
                         BarButton(symbol: "minus.circle", help: "Remove condition") {
                             model.filterRules.removeAll { $0.id == rule.id }
                         }
-                        BarButton(symbol: "plus.circle", help: "Add condition (AND)") { model.addFilterRule() }
+                        BarButton(symbol: "plus.circle", help: "Add condition") { model.addFilterRule() }
                         if rule.id == model.filterRules.first?.id { controls }
                     }
                 }
@@ -311,8 +324,7 @@ struct SQLPreviewSheet: View {
             .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
             HStack {
                 Button("Copy SQL") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(script, forType: .string)
+                    Clipboard.copy(script)
                 }
                 Spacer()
                 Button("Cancel", role: .cancel, action: onCancel).keyboardShortcut(.cancelAction)
@@ -353,8 +365,7 @@ struct ExportMenu: View {
             Section("Copy to clipboard") {
                 ForEach(ExportFormat.allCases) { format in
                     Button("Copy as \(format.displayName)") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(text(format), forType: .string)
+                        Clipboard.copy(text(format))
                     }
                 }
             }

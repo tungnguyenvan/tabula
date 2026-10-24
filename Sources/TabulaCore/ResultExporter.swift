@@ -25,6 +25,16 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
 }
 
 public enum ResultExporter {
+    /// JSON keys must be unique, but joins often repeat a column name: "id", "id_2", ...
+    static func uniqueNames(_ columns: [String]) -> [String] {
+        var seen: [String: Int] = [:]
+        return columns.map { name in
+            let count = (seen[name] ?? 0) + 1
+            seen[name] = count
+            return count == 1 ? name : "\(name)_\(count)"
+        }
+    }
+
     public static func export(columns: [String], rows: [[String?]], format: ExportFormat,
                               table: TableRef? = nil, dialect: SQLDialect = SQLDialect(kind: .postgres)) -> String {
         switch format {
@@ -33,9 +43,10 @@ public enum ResultExporter {
         case .tsv:
             return delimited(columns: columns, rows: rows, separator: "\t")
         case .json:
+            let keys = uniqueNames(columns)
             let objects: [[String: Any]] = rows.map { row in
                 var object: [String: Any] = [:]
-                for (column, value) in zip(columns, row) { object[column] = value ?? NSNull() }
+                for (column, value) in zip(keys, row) { object[column] = value ?? NSNull() }
                 return object
             }
             let data = (try? JSONSerialization.data(withJSONObject: objects, options: [.prettyPrinted, .sortedKeys])) ?? Data()

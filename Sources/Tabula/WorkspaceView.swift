@@ -3,47 +3,43 @@ import SwiftUI
 import TabulaCore
 
 struct WorkspaceWindow: View {
-    /// Nil for a new empty tab (the tab bar's + button): the tab then offers a connection to open.
+    /// The connection the window was opened for; nil for an empty window, which offers one to open.
     @Binding var connectionID: UUID?
     @Environment(AppState.self) private var appState
-    @State private var model: WorkspaceModel?
-    @State private var redis: RedisWorkspaceModel?
+    @State private var session = ConnectionSession()
+    @State private var openedInitial = false
 
     var body: some View {
         Group {
-            if let model {
-                WorkspaceView(model: model)
-            } else if let redis {
-                RedisWorkspaceView(model: redis)
-            } else if connectionID == nil {
-                ConnectionPicker { connectionID = $0 }
-            } else if appState.connection(connectionID) == nil {
-                ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
-                                       description: Text("It may have been deleted."))
-            } else {
-                ProgressView()
+            switch session.active {
+            case .sql(let model):
+                WorkspaceView(model: model).id(model.config.id)
+            case .redis(let model):
+                RedisWorkspaceView(model: model).id(model.config.id)
+            case nil:
+                if let connectionID, !openedInitial {
+                    if appState.connection(connectionID) == nil {
+                        ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
+                                               description: Text("It may have been deleted."))
+                    } else {
+                        ProgressView()
+                    }
+                } else {
+                    ConnectionPicker { id in
+                        guard let config = appState.connection(id) else { return }
+                        Task { await session.open(config, appState: appState) }
+                    }
+                }
             }
         }
+        .environment(session)
+        .background(WindowAccessor { window in WorkspaceRegistry.register(session, window: window) })
         .task(id: connectionID) {
-            guard model == nil, redis == nil, let id = connectionID, let config = appState.connection(id) else { return }
-            let password = await appState.password(for: id)
-            if config.kind == .redis {
-                let workspace = RedisWorkspaceModel(config: config, password: password)
-                redis = workspace
-                await workspace.connect()
-            } else {
-                let workspace = WorkspaceModel(config: config, password: password)
-                model = workspace
-                await workspace.connect()
-            }
+            guard !openedInitial, let id = connectionID, let config = appState.connection(id) else { return }
+            openedInitial = true
+            await session.open(config, appState: appState)
         }
-        .onDisappear {
-            let workspace = model, redisWorkspace = redis
-            Task {
-                await workspace?.disconnect()
-                await redisWorkspace?.disconnect()
-            }
-        }
+        .onDisappear { session.closeAll() }
     }
 }
 
@@ -54,17 +50,17 @@ struct WorkspaceView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(model: model)
-                .navigationSplitViewColumnWidth(min: 180, ideal: 230, max: 400)
+                .navigationSplitViewColumnWidth(min: Layout.Sidebar.minWidth, ideal: Layout.Sidebar.idealWidth, max: Layout.Sidebar.maxWidth)
         } detail: {
-            detail
-                .inspector(isPresented: $model.showInspector) {
-                    RowInspectorView(model: model)
-                        .inspectorColumnWidth(min: 240, ideal: 300, max: 520)
-                }
+            WithConnectionRail {
+                detail
+                    .inspector(isPresented: $model.showInspector) {
+                        RowInspectorView(model: model)
+                            .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
+                    }
+            }
         }
         .navigationTitle(model.config.displayName)
-        .focusedSceneValue(\.workspace, model)
-        .background(WindowAccessor { window in WorkspaceRegistry.register(model, window: window) })
         .overlay(alignment: .top) {
             if model.showPalette {
                 ZStack(alignment: .top) {
@@ -74,12 +70,10 @@ struct WorkspaceView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                ConnectionPill(config: model.config, status: model.status,
-                               location: model.selectedSchema.isEmpty ? nil : model.selectedSchema,
-                               serverVersion: model.serverVersion, connectedAt: model.connectedAt,
-                               onReconnect: { Task { await model.reconnect() } })
-            }
+            ConnectionPillItem(pill: ConnectionPill(config: model.config, status: model.status,
+                                                    location: model.selectedSchema.isEmpty ? nil : model.selectedSchema,
+                                                    serverVersion: model.serverVersion, connectedAt: model.connectedAt,
+                                                    onReconnect: { Task { await model.reconnect() } }))
             ToolbarItem(placement: .navigation) {
                 OpenConnectionMenu(current: model.config.id)
             }
@@ -96,6 +90,8 @@ struct WorkspaceView: View {
                 Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                     .help("Refresh (⌘R)")
                     .disabled(model.driver == nil)
+                Button { model.showConsole.toggle() } label: { Label("Console", systemImage: "rectangle.bottomthird.inset.filled") }
+                    .help("Console log (⇧⌘C)")
                 Button { model.showInspector.toggle() } label: { Label("Row Details", systemImage: "sidebar.right") }
                     .help("Show row details (⌥⌘0)")
                     .keyboardShortcut("0", modifiers: [.command, .option])
@@ -123,20 +119,32 @@ struct WorkspaceView: View {
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .connected:
-            VStack(spacing: 0) {
-                if !model.tabs.isEmpty {
-                    TabStrip(model: model)
+            if model.showConsole {
+                VSplitView {
+                    tabContent
+                    ConsoleLogView(log: model.log) { model.showConsole = false }
+                        .frame(minHeight: Layout.Console.minHeight, idealHeight: Layout.Console.idealHeight)
                 }
-                if let tab = model.selectedTab {
-                    switch tab {
-                    case .table(let table): TableTabView(model: table, workspace: model).id(table.id)
-                    case .query(let query): QueryTabView(model: query, workspace: model).id(query.id)
-                    case .diagram(let diagram): DiagramView(model: diagram) { model.open($0) }.id(diagram.id)
-                    case .metrics(let metrics): MetricsView(model: metrics).id(metrics.id)
-                    }
-                } else {
-                    EmptyWorkspaceView(model: model)
+            } else {
+                tabContent
+            }
+        }
+    }
+
+    private var tabContent: some View {
+        VStack(spacing: 0) {
+            if !model.tabs.isEmpty {
+                TabStrip(model: model)
+            }
+            if let tab = model.selectedTab {
+                switch tab {
+                case .table(let table): TableTabView(model: table, workspace: model).id(table.id)
+                case .query(let query): QueryTabView(model: query, workspace: model).id(query.id)
+                case .diagram(let diagram): DiagramView(model: diagram) { model.open($0) }.id(diagram.id)
+                case .metrics(let metrics): MetricsView(model: metrics).id(metrics.id)
                 }
+            } else {
+                EmptyWorkspaceView(model: model)
             }
         }
     }
@@ -248,8 +256,9 @@ private struct TabStrip: View {
             .help("New query tab (⌘T)")
         }
         .frame(height: 28)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .barBackground()
         .overlay(alignment: .bottom) { Divider() }
+        .clipped()
     }
 }
 
@@ -298,7 +307,8 @@ private struct TabButton: View {
             .padding(.leading, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(selected ? Color(nsColor: .windowBackgroundColor) : (hovering ? Color.primary.opacity(0.04) : .clear))
+        .background(selected ? Color(nsColor: .windowBackgroundColor) : (hovering ? Color.primary.opacity(0.04) : .clear),
+                    ignoresSafeAreaEdges: [])
         .overlay(alignment: .top) {
             if selected { Rectangle().fill(Color.accentColor).frame(height: 2) }
         }
@@ -391,6 +401,20 @@ private struct ConnectionPicker: View {
     }
 }
 
+/// The connection pill in the toolbar's center. On macOS 26 the pill draws its own capsule,
+/// so the toolbar's glass background around it is turned off.
+struct ConnectionPillItem: ToolbarContent {
+    let pill: ConnectionPill
+
+    var body: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .principal) { pill }.sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .principal) { pill }
+        }
+    }
+}
+
 /// Details of the current connection, plus quick access to the others.
 struct ConnectionInfoPopover: View {
     let config: ConnectionConfig
@@ -454,7 +478,7 @@ struct ConnectionInfoPopover: View {
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(others) { other in
-                            Button { openWindow(id: WindowID.workspace, value: other.id) } label: {
+                            Button { ConnectionRouter.open(other.id, appState: appState, openWindow: openWindow) } label: {
                                 HStack(spacing: 8) {
                                     KindBadge(kind: other.kind, size: 18)
                                     Text(other.displayName).lineLimit(1)
@@ -487,7 +511,7 @@ struct OpenConnectionMenu: View {
         Menu {
             ForEach(appState.connections) { connection in
                 Button {
-                    openWindow(id: WindowID.workspace, value: connection.id)
+                    ConnectionRouter.open(connection.id, appState: appState, openWindow: openWindow)
                 } label: {
                     if connection.id == current {
                         Label(connection.displayName, systemImage: "checkmark")
@@ -502,6 +526,19 @@ struct OpenConnectionMenu: View {
             Label("Connections", systemImage: "cylinder.split.1x2")
         }
         .help("Open another connection (⇧⌘K for all)")
+    }
+}
+
+/// Puts the window's connection rail at the leading edge of a workspace's content, right of the sidebar.
+struct WithConnectionRail<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(ConnectionSession.self) private var session: ConnectionSession?
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if let session { ConnectionRail(session: session) }
+            content
+        }
     }
 }
 
