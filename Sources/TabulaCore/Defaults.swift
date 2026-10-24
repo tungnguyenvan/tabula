@@ -57,6 +57,8 @@ public enum Defaults {
         public static let generateTimeout: Double = 120
         /// Characters before the caret sent with an inline request.
         public static let inlineContextLength = 2000
+        /// Foreign keys described to the model.
+        public static let schemaForeignKeyLimit = 300
         /// Tables described to the model; larger schemas are cut off.
         public static let schemaTableLimit = 150
         public static let anthropicVersion = "2026-10-21"
@@ -68,15 +70,19 @@ public enum Defaults {
         public struct LocalModel: Sendable, Identifiable {
             public let name: String
             public let summary: String
+            /// Small enough to answer while the user types.
+            public let forTyping: Bool
             public var id: String { name }
         }
 
-        /// Small models that run well on a Mac and are good at SQL, offered for download.
+        /// Light models that run well on a Mac, offered for download in Settings, smallest first.
         public static let recommendedLocalModels = [
-            LocalModel(name: "qwen2.5-coder:1.5b", summary: "Fastest; good for inline suggestions (about 1 GB)"),
-            LocalModel(name: "qwen2.5-coder:7b", summary: "Better queries; needs 8 GB of memory or more (about 5 GB)"),
-            LocalModel(name: "sqlcoder:7b", summary: "Tuned for writing SQL from a question (about 4 GB)"),
-            LocalModel(name: "duckdb-nsql:7b", summary: "Text-to-SQL model (about 4 GB)"),
+            LocalModel(name: "qwen2.5-coder:0.5b", summary: "Fastest, about 0.4 GB. Good for suggestions while typing.", forTyping: true),
+            LocalModel(name: "qwen2.5-coder:1.5b", summary: "About 1 GB. Fast suggestions that know SQL better.", forTyping: true),
+            LocalModel(name: "deepseek-coder:1.3b", summary: "About 0.8 GB. Another fast code model.", forTyping: true),
+            LocalModel(name: "qwen2.5-coder:3b", summary: "About 2 GB. Writes whole queries well on most Macs.", forTyping: false),
+            LocalModel(name: "qwen2.5-coder:7b", summary: "About 5 GB, 16 GB of memory recommended. Best local queries.", forTyping: false),
+            LocalModel(name: "sqlcoder:7b", summary: "About 4 GB. Tuned for SQL from a question.", forTyping: false),
         ]
     }
 

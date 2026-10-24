@@ -27,6 +27,22 @@ final class SQLPromptsTests: XCTestCase {
         XCTAssertLessThanOrEqual(inline.prompt.count, schema.text.count + Defaults.AI.inlineContextLength + 40)
     }
 
+    func testSchemaDescribesQualifiedNamesTypesAndKeys() {
+        let schema = SQLPrompts.Schema(tables: [
+            .init(name: "dev.transactions", columns: [.init(name: "id", type: "uuid", isPrimaryKey: true), .init(name: "amount", type: "numeric")]),
+            .init(name: "dev.merchants", columns: []),
+        ], foreignKeys: ["dev.transactions.merchant_id -> dev.merchants.id"], defaultSchema: "dev")
+        XCTAssertEqual(schema.text, """
+            Default schema: dev
+            dev.transactions(id uuid PK, amount numeric)
+            dev.merchants
+            Foreign keys:
+            dev.transactions.merchant_id -> dev.merchants.id
+            """)
+        let request = SQLPrompts.generate(description: "today's total", current: nil, schema: schema, kind: .postgres)
+        XCTAssertTrue(request.instructions.contains("keeping any schema prefix"))
+    }
+
     func testErrorsAreRedactedBeforeTheyGoToAModel() {
         XCTAssertEqual(SQLPrompts.redacted(#"duplicate key value violates unique constraint "users_email_key" DETAIL: Key (email)=(an@example.com) already exists."#),
                        #"duplicate key value violates unique constraint "users_email_key" DETAIL: Key (email)=(…) already exists."#)
@@ -37,16 +53,33 @@ final class SQLPromptsTests: XCTestCase {
         XCTAssertFalse(fix.prompt.contains("Key (id)=(1)"))
     }
 
-    func testSettingsDefaults() throws {
+    func testSettingsPerProviderAndPurpose() throws {
         var settings = AISettings()
         XCTAssertFalse(settings.enabled)
         settings.provider = .anthropic
-        XCTAssertEqual(settings.resolvedModel, "claude-opus-5-5")
-        XCTAssertEqual(settings.modelName(for: .inline), "claude-opus-5-5")
-        settings.inlineModel = "claude-haiku-5-5"
-        XCTAssertEqual(settings.modelName(for: .inline), "claude-haiku-5-5")
+        XCTAssertEqual(settings.model(.anthropic, for: .generate), "claude-opus-5-5")
+        XCTAssertEqual(settings.model(.anthropic, for: .inline), "claude-opus-5-5")
+        settings.inlineModels["anthropic"] = "claude-haiku-5-5"
+        XCTAssertEqual(settings.endpoint(for: .inline, apiKey: "k").model, "claude-haiku-5-5")
+
+        // Ask AI through Claude Code, suggestions from a small local model.
+        settings.provider = .claudeCode
+        settings.inlineProvider = .ollama
+        XCTAssertEqual(settings.provider(for: .generate), .claudeCode)
+        XCTAssertEqual(settings.endpoint(for: .inline, apiKey: "").kind, .ollama)
+        XCTAssertEqual(settings.endpoint(for: .inline, apiKey: "").model, "qwen2.5-coder:0.5b")
+        XCTAssertEqual(settings.endpoint(for: .inline, apiKey: "").baseURL, "http://localhost:11434")
+        // Switching providers keeps each one's settings.
+        settings.provider = .anthropic
+        XCTAssertEqual(settings.model(.anthropic, for: .inline), "claude-haiku-5-5")
+
         let decoded = try JSONDecoder().decode(AISettings.self, from: JSONEncoder().encode(settings))
         XCTAssertEqual(decoded, settings)
+        // Settings saved before these fields existed still load.
+        let old = try JSONDecoder().decode(AISettings.self, from: Data(#"{"enabled":true,"provider":"ollama"}"#.utf8))
+        XCTAssertTrue(old.enabled)
+        XCTAssertEqual(old.provider, .ollama)
+        XCTAssertNil(old.inlineProvider)
         XCTAssertFalse(AIProviderKind.codex.supportsInline)
     }
 }
@@ -92,10 +125,9 @@ final class AIProviderTests: XCTestCase {
     private let request = AIRequest(purpose: .generate, instructions: "Be brief.", prompt: "SELECT?")
 
     func testAnthropicRequestAndReply() async throws {
-        var settings = AISettings()
-        settings.provider = .anthropic
+        let endpoint = AISettings().endpoint(for: .generate, apiKey: "sk-test")
         StubProtocol.response = (200, #"{"stop_reason":"end_turn","content":[{"type":"text","text":"SELECT 1"}]}"#)
-        let reply = try await AnthropicProvider(settings: settings, apiKey: "sk-test").complete(request)
+        let reply = try await AnthropicProvider(AIEndpoint(kind: .anthropic, model: "claude-opus-5-5", apiKey: endpoint.apiKey)).complete(request)
         XCTAssertEqual(reply, "SELECT 1")
         let sent = try XCTUnwrap(StubProtocol.lastRequest)
         XCTAssertEqual(sent.url?.absoluteString, "https://api.anthropic.com/v1/messages")
@@ -108,36 +140,29 @@ final class AIProviderTests: XCTestCase {
     }
 
     func testAnthropicRefusalAndErrors() async {
-        var settings = AISettings()
-        settings.provider = .anthropic
+        let anthropic = AIEndpoint(kind: .anthropic, model: "claude-opus-5-5", apiKey: "k")
         StubProtocol.response = (200, #"{"stop_reason":"refusal","content":[]}"#)
-        await assertThrows(AIError.refused) { try await AnthropicProvider(settings: settings, apiKey: "k").complete(self.request) }
+        await assertThrows(AIError.refused) { try await AnthropicProvider(anthropic).complete(self.request) }
         StubProtocol.response = (401, #"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#)
         await assertThrows(AIError.server("Claude API: invalid x-api-key")) {
-            try await AnthropicProvider(settings: settings, apiKey: "k").complete(self.request)
+            try await AnthropicProvider(anthropic).complete(self.request)
         }
         await assertThrows(AIError.notConfigured("Add a Claude API key in Settings → AI.")) {
-            try await AnthropicProvider(settings: settings, apiKey: "").complete(self.request)
+            try await AnthropicProvider(AIEndpoint(kind: .anthropic, model: "claude-opus-5-5")).complete(self.request)
         }
     }
 
     func testOpenAICompatibleAndOllama() async throws {
-        var settings = AISettings()
-        settings.provider = .openAICompatible
-        settings.baseURL = "http://litellm.local:4000/v1"
-        settings.model = "gpt-test"
         StubProtocol.response = (200, #"{"choices":[{"message":{"role":"assistant","content":"SELECT 2"}}]}"#)
-        let reply = try await OpenAICompatibleProvider(settings: settings, apiKey: "key").complete(request)
+        let reply = try await OpenAICompatibleProvider(AIEndpoint(kind: .openAICompatible, baseURL: "http://litellm.local:4000/v1",
+                                                                  model: "gpt-test", apiKey: "key")).complete(request)
         XCTAssertEqual(reply, "SELECT 2")
         XCTAssertEqual(StubProtocol.lastRequest?.url?.absoluteString, "http://litellm.local:4000/v1/chat/completions")
         XCTAssertEqual(StubProtocol.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer key")
         let messages = try XCTUnwrap(StubProtocol.lastBody?["messages"] as? [[String: String]])
         XCTAssertEqual(messages.map { $0["role"] }, ["system", "user"])
 
-        settings.provider = .ollama
-        settings.baseURL = ""
-        settings.model = "qwen2.5-coder:1.5b"
-        _ = try await OllamaProvider(settings: settings).complete(request)
+        _ = try await OllamaProvider(AIEndpoint(kind: .ollama, baseURL: "http://localhost:11434/", model: "qwen2.5-coder:1.5b")).complete(request)
         XCTAssertEqual(StubProtocol.lastRequest?.url?.absoluteString, "http://localhost:11434/v1/chat/completions")
         XCTAssertNil(StubProtocol.lastRequest?.value(forHTTPHeaderField: "Authorization"))
     }
@@ -185,7 +210,7 @@ final class ShellCommandTests: XCTestCase {
         }
         guard await CLIProvider.locate(tool) != nil else { throw XCTSkip("\(name) is not installed") }
         let schema = SQLPrompts.Schema(tables: [("orders", ["id", "customer_id", "total"])])
-        let reply = try await CLIProvider(tool: tool, settings: AISettings())
+        let reply = try await CLIProvider(tool: tool)
             .complete(SQLPrompts.generate(description: "count the orders", current: nil, schema: schema, kind: .postgres))
         let sql = SQLPrompts.cleanSQL(reply)
         XCTAssertTrue(sql.uppercased().contains("COUNT"), sql)

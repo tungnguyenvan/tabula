@@ -45,11 +45,13 @@ final class WorkspaceModel {
     private(set) var tables: [TableRef] = [] {
         // Reloading tables (refresh, schema switch, DDL) drops what completion knew; loads still in flight
         // for the old list see the generation change and throw their results away.
-        didSet { columnCache = [:]; loadingColumns = []; cacheGeneration += 1 }
+        didSet { columnCache = [:]; foreignKeyCache = nil; loadingColumns = []; cacheGeneration += 1 }
     }
     /// Column names per table, filled on demand for SQL completion.
-    /// "schema.table" (lower-cased) → column names.
-    private var columnCache: [String: [String]] = [:]
+    /// "schema.table" (lower-cased) → columns.
+    private var columnCache: [String: [ColumnInfo]] = [:]
+    /// Foreign keys of the selected schema, loaded for the AI the first time it is asked.
+    private var foreignKeyCache: [ForeignKeyInfo]?
     private var cacheGeneration = 0
     private var loadingColumns: Set<String> = []
     private var prefetchingColumns = false
@@ -113,6 +115,7 @@ final class WorkspaceModel {
             schemas = (try? await driver.schemas()) ?? []
             let preferred = (try? await driver.defaultSchema()) ?? ""
             selectedSchema = schemas.contains(preferred) ? preferred : (schemas.first ?? preferred)
+            await applySchema()
             await loadTables()
             if tabs.isEmpty { newQueryTab() }
             #if DEBUG
@@ -138,7 +141,17 @@ final class WorkspaceModel {
     func selectSchema(_ schema: String) async {
         guard schema != selectedSchema else { return }
         selectedSchema = schema
+        await applySchema()
         await loadTables()
+    }
+
+    /// Unqualified names in queries resolve to the schema picked in the sidebar, as in other clients.
+    private func applySchema() async {
+        do {
+            try await driver?.useSchema(selectedSchema)
+        } catch {
+            tablesError = "Couldn't switch to \(selectedSchema): \(error.localizedDescription)"
+        }
     }
 
     func loadTables() async {
@@ -244,10 +257,10 @@ final class WorkspaceModel {
                 guard generation == cacheGeneration else { return }
                 guard columnCache[key] == nil, !loadingColumns.contains(key) else { continue }
                 loadingColumns.insert(key)
-                let names = (try? await driver.columns(of: table).map(\.name)) ?? []
+                let columns = (try? await driver.columns(of: table)) ?? []
                 guard generation == cacheGeneration else { return }
                 loadingColumns.remove(key)
-                columnCache[key] = names
+                columnCache[key] = columns
                 completionVersion += 1
             }
         }
@@ -269,29 +282,64 @@ final class WorkspaceModel {
         return nil
     }
 
-    /// The schema for Ask AI and Fix with AI: waits for columns still loading (up to the prefetch
-    /// limit), so the model isn't told that tables have none.
-    func loadedAISchema() async -> SQLPrompts.Schema {
-        if let driver {
-            let generation = cacheGeneration
-            for table in tables.prefix(Defaults.completionPrefetchLimit) where columnCache[Self.columnKey(table)] == nil {
-                let names = (try? await driver.columns(of: table).map(\.name)) ?? []
-                guard generation == cacheGeneration else { break }
-                columnCache[Self.columnKey(table)] = names
-            }
+    /// The schema for Ask AI and Fix with AI: waits for columns still loading (up to the prefetch limit)
+    /// and for foreign keys, and adds tables of other schemas that `sql` names.
+    func loadedAISchema(for sql: String) async -> SQLPrompts.Schema {
+        guard let driver else { return aiSchema() }
+        let generation = cacheGeneration
+        var wanted = Array(tables.prefix(Defaults.completionPrefetchLimit))
+        for named in SQLCompletion.tables(in: sql, kind: driver.kind) {
+            guard let schemaName = named.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame,
+                  let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame }) else { continue }
+            wanted.append(TableRef(schema: schema, name: named.name))
         }
-        return aiSchema()
+        for table in wanted where columnCache[Self.columnKey(table)] == nil {
+            let columns = (try? await driver.columns(of: table)) ?? []
+            guard generation == cacheGeneration else { return aiSchema() }
+            columnCache[Self.columnKey(table)] = columns
+        }
+        if foreignKeyCache == nil {
+            let keys = (try? await driver.foreignKeys(in: selectedSchema)) ?? []
+            if generation == cacheGeneration { foreignKeyCache = keys }
+        }
+        return aiSchema(extra: wanted.filter { $0.schema != selectedSchema })
     }
 
-    /// The schema as the AI sees it: table names and the columns loaded so far, never rows.
-    func aiSchema() -> SQLPrompts.Schema {
-        SQLPrompts.Schema(tables: tables.map { ($0.name, columnCache[Self.columnKey($0)] ?? []) })
+    /// The schema as the AI sees it: names written as SQL needs them (schema-qualified), column types,
+    /// primary and foreign keys. Never rows. With `focus`, only those tables get their columns, which keeps
+    /// requests made while typing small.
+    func aiSchema(focus: Set<String>? = nil, extra: [TableRef] = []) -> SQLPrompts.Schema {
+        let kind = driver?.kind ?? config.kind
+        func described(_ table: TableRef) -> SQLPrompts.Schema.Table {
+            let name = aiName(table, kind: kind)
+            let inFocus = focus.map { $0.contains(table.name.lowercased()) || $0.contains(name.lowercased()) } ?? true
+            let columns = inFocus ? (columnCache[Self.columnKey(table)] ?? []).map {
+                SQLPrompts.Schema.Column(name: $0.name, type: $0.dataType, isPrimaryKey: $0.isPrimaryKey)
+            } : []
+            return SQLPrompts.Schema.Table(name: name, columns: columns)
+        }
+        let keys = (foreignKeyCache ?? []).compactMap { key -> String? in
+            guard let target = key.referencedColumns.first, let column = key.columns.first else { return nil }
+            return "\(aiName(key.table, kind: kind)).\(column) -> \(aiName(key.referencedTable, kind: kind)).\(target)"
+        }
+        let defaultSchema = kind == .sqlite ? nil : selectedSchema
+        return SQLPrompts.Schema(tables: (tables + extra).map(described), foreignKeys: focus == nil ? keys : [], defaultSchema: defaultSchema)
+    }
+
+    /// `schema.table`, quoting names that need it; SQLite's main database needs no prefix.
+    private func aiName(_ table: TableRef, kind: DatabaseKind) -> String {
+        let d = SQLDialect(kind: kind)
+        func part(_ name: String) -> String {
+            name.range(of: "^[a-z_][a-z0-9_]*$", options: .regularExpression) != nil ? name : d.quoteIdentifier(name)
+        }
+        if kind == .sqlite && table.schema == "main" { return part(table.name) }
+        return "\(part(table.schema)).\(part(table.name))"
     }
 
     /// Every column name loaded so far, for completion before a table is named.
     var knownColumnNames: [String] {
         let prefix = selectedSchema.lowercased() + "."
-        return Array(Set(columnCache.filter { $0.key.hasPrefix(prefix) }.values.joined())).sorted()
+        return Array(Set(columnCache.filter { $0.key.hasPrefix(prefix) }.values.joined().map(\.name))).sorted()
     }
 
     private static func columnKey(_ table: TableRef) -> String {
@@ -373,15 +421,15 @@ final class WorkspaceModel {
             return nil
         }
         let key = Self.columnKey(ref)
-        if let cached = columnCache[key] { return cached }
+        if let cached = columnCache[key] { return cached.map(\.name) }
         guard let driver, !loadingColumns.contains(key) else { return nil }
         loadingColumns.insert(key)
         let generation = cacheGeneration
         Task {
-            let names = (try? await driver.columns(of: ref).map(\.name)) ?? []
+            let columns = (try? await driver.columns(of: ref)) ?? []
             guard generation == cacheGeneration else { return }
             loadingColumns.remove(key)
-            columnCache[key] = names
+            columnCache[key] = columns
             completionVersion += 1
         }
         return nil

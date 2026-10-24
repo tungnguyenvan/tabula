@@ -43,7 +43,7 @@ Free, no usage limits, keyboard-first.</p>
 - With two or more open, a column at the left edge of the window lists them. Hover for the name and address, click to switch, or use ⌃⌘] / ⌃⌘[. Each connection keeps its own tabs and state.
 
 **Browsing**
-- A schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter.
+- A schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter. Picking a schema also makes it the default for queries (`search_path` on Postgres, `USE` on MySQL), so `SELECT * FROM transactions` finds `dev.transactions`.
 - Equal-width tabs. Browsing the sidebar with the arrow keys reuses a single preview tab; press Return or double-click to keep a table open in its own tab.
 - Command palette (⌘P) to jump to any table, open tab, schema or action.
 
@@ -201,14 +201,16 @@ AI is off until you turn it on in **Settings › AI** (⌘,). Then, in a query t
 
 - **Ask AI** (⌘K, or the Ask AI button) opens a bar above the editor. Describe what you want ("top 5 customers by order value, with their email") and the SQL is inserted at the cursor. With SQL selected, describe the change instead ("only last month", "add the product name"); the selection is replaced. ⌘Z undoes it.
 - **Fix with AI** appears under an error. It sends the failing statement and the server's message, and replaces the statement with the corrected one.
-- **Suggestions while typing:** when no table, column or keyword fits and you pause, the model's continuation appears in grey. Tab accepts it; any key or caret move dismisses it.
+- **Suggestions while typing:** when no table, column or keyword fits and you pause, the model's continuation appears in grey. Tab accepts it; any key or caret move dismisses it. Suggestions can use a different provider from Ask AI: command-line agents and large hosted models are too slow to keep up with typing, so a small local model (such as `qwen2.5-coder:0.5b`) is the usual choice, with Claude Code or the Claude API for Ask AI.
+
+The model sees table names written as SQL needs them (`dev.transactions`), column types, primary and foreign keys, and the default schema, so it qualifies names and joins on the real keys.
 
 Choose where the model runs:
 
 | Provider | Runs | Setup |
 | --- | --- | --- |
 | Apple Intelligence | On the Mac, offline | macOS 26 with Apple Intelligence turned on in System Settings |
-| Local model (Ollama) | On the Mac | Install [Ollama](https://ollama.com/download), then download a model from the list in Settings: `qwen2.5-coder:1.5b` (fast, good for suggestions), `qwen2.5-coder:7b`, `sqlcoder:7b` or `duckdb-nsql:7b`. Progress shows in Settings; models can be switched or deleted there. |
+| Local model (Ollama) | On the Mac | Install [Ollama](https://ollama.com/download) (it runs the models), then download one from the list in Settings › AI. Light models for suggestions while typing: `qwen2.5-coder:0.5b` (about 0.4 GB), `deepseek-coder:1.3b`, `qwen2.5-coder:1.5b`. For whole queries: `qwen2.5-coder:3b`, `qwen2.5-coder:7b`, `sqlcoder:7b`. Progress shows in Settings; a downloaded model can be used for Ask AI, for suggestions, or deleted. |
 | OpenAI-compatible API | Your server or a provider | Base URL, API key and model: LiteLLM, LM Studio, llama.cpp, vLLM, OpenAI and others |
 | Claude API | Anthropic | API key; the model defaults to `claude-opus-5-5`, and a faster one (such as `claude-haiku-5-5`) can be set for suggestions |
 | Claude Code, Codex | Your installed command-line agent, with its own sign-in | Installed and signed in once in Terminal. Tabula finds them on your shell's PATH or the usual install locations, and runs them without tools (Claude Code) or in a read-only sandbox (Codex). Too slow for suggestions while typing. |

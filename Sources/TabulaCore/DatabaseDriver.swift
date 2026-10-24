@@ -43,6 +43,22 @@ extension DatabaseDriver {
         return results
     }
 
+    /// Makes `schema` the one unqualified names refer to, as the sidebar's schema picker promises:
+    /// `SET search_path` on PostgreSQL (keeping public for extensions and shared tables), `USE` on MySQL.
+    public func useSchema(_ schema: String) async throws {
+        guard !schema.isEmpty else { return }
+        let d = dialect
+        switch kind {
+        case .postgres:
+            let path = schema == "public" ? [schema] : [schema, "public"]
+            _ = try await execute("SET search_path TO " + path.map(d.quoteIdentifier).joined(separator: ", "))
+        case .mysql:
+            _ = try await execute("USE \(d.quoteIdentifier(schema))")
+        case .sqlite, .redis:
+            break
+        }
+    }
+
     /// Server version as reported by the database, e.g. "PostgreSQL 16.11 on aarch64…".
     public func serverVersion() async -> String? {
         let sql = kind == .sqlite ? "SELECT 'SQLite ' || sqlite_version()" : "SELECT version()"

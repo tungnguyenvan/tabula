@@ -352,7 +352,8 @@ struct WorkspaceCommands: Commands {
                 .disabled(noWorkspace)
         }
 
-        CommandGroup(after: .appInfo) {
+        CommandGroup(replacing: .appInfo) {
+            Button("About Tabula") { AboutPanel.show() }
             Button("Check for Updates…") {
                 WindowRequests.request(WindowID.update)
                 openWindow(id: WindowID.update)

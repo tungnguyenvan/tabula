@@ -81,6 +81,7 @@ struct ConnectionListView: View {
                 WindowRequests.request(WindowID.shortcuts)
                 openWindow(id: WindowID.shortcuts)
             }
+            if DebugHooks.showAbout { AboutPanel.show() }
             if DebugHooks.showSettings {
                 UserDefaults.standard.set(ProcessInfo.processInfo.environment["TABULA_DEBUG_SETTINGS"], forKey: "TabulaSettingsTab")
                 openSettings()

@@ -26,9 +26,11 @@ final class AIService {
         let environment = ProcessInfo.processInfo.environment
         if let provider = environment["TABULA_DEBUG_AI_PROVIDER"].flatMap(AIProviderKind.init) {
             loaded.provider = provider
+            loaded.inlineProvider = environment["TABULA_DEBUG_AI_INLINE_PROVIDER"].flatMap(AIProviderKind.init)
             loaded.enabled = true
-            loaded.baseURL = environment["TABULA_DEBUG_AI_URL"] ?? ""
-            loaded.model = environment["TABULA_DEBUG_AI_MODEL"] ?? ""
+            loaded.baseURLs[provider.rawValue] = environment["TABULA_DEBUG_AI_URL"]
+            loaded.models[provider.rawValue] = environment["TABULA_DEBUG_AI_MODEL"]
+            loaded.inlineModels[provider.rawValue] = environment["TABULA_DEBUG_AI_MODEL"]
         }
         #endif
         settings = loaded
@@ -78,18 +80,20 @@ final class AIService {
 
     /// Whether to ask the model for suggestions while typing.
     func suggestsInline(for connection: ConnectionConfig) -> Bool {
-        refusal(for: connection) == nil && settings.inlineSuggestions && settings.provider.supportsInline
+        refusal(for: connection) == nil && settings.inlineSuggestions && settings.provider(for: .inline).supportsInline
     }
 
+    /// Sends the request to the provider configured for its purpose (Ask AI or suggestions while typing).
     func complete(_ request: AIRequest) async throws -> String {
         let settings = settings
-        let provider = AIProviders.make(settings, apiKey: await apiKey(for: settings.provider))
-        return try await provider.complete(request)
+        let kind = settings.provider(for: request.purpose)
+        let endpoint = settings.endpoint(for: request.purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : "")
+        return try await AIProviders.make(endpoint).complete(request)
     }
 
-    /// A tiny round trip, for the Test button in Settings.
-    func test() async throws -> String {
-        let reply = try await complete(AIRequest(purpose: .generate, instructions: "Reply with the single word OK.", prompt: "Say OK."))
+    /// A tiny round trip, for the Test buttons in Settings.
+    func test(_ purpose: AIRequest.Purpose) async throws -> String {
+        let reply = try await complete(AIRequest(purpose: purpose, instructions: "Reply with the single word OK.", prompt: "Say OK."))
         return reply.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

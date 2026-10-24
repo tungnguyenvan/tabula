@@ -86,7 +86,7 @@ final class EditorHandle {
         guard let textView, textView.shouldChangeText(in: range, replacementString: text) else { return }
         textView.replaceCharacters(in: range, with: text)
         textView.didChangeText()
-        SQLHighlighter.highlight(textView)
+        SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
     }
 
     /// Beautifies the selection, or the whole editor when nothing is selected. Undoable.
@@ -106,6 +106,8 @@ final class EditorHandle {
 struct SQLEditorView: NSViewRepresentable {
     @Binding var text: String
     var handle: EditorHandle
+    /// Decides comment and quoting rules for highlighting (`#` comments on MySQL, `$$` strings on Postgres).
+    var kind: DatabaseKind
     /// Completions for the word at a caret (UTF-16 offset): the range they replace and the candidates, best first.
     var suggest: (_ text: String, _ caret: Int) -> (range: NSRange, items: [String])
     typealias AISuggest = @MainActor (_ before: String, _ after: String) async -> String?
@@ -124,6 +126,7 @@ struct SQLEditorView: NSViewRepresentable {
         let scrollView = SQLTextView.scrollableTextView()
         let textView = SQLTextView(frame: .zero)
         textView.coordinator = context.coordinator
+        textView.kind = kind
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -147,7 +150,7 @@ struct SQLEditorView: NSViewRepresentable {
         textView.isIncrementalSearchingEnabled = true
         textView.delegate = context.coordinator
         textView.string = text
-        SQLHighlighter.highlight(textView)
+        SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
 
         // Since macOS 14 views don't clip by default; the line-number gutter would draw over the bar above.
         scrollView.clipsToBounds = true
@@ -170,7 +173,7 @@ struct SQLEditorView: NSViewRepresentable {
         handle.textView = textView
         if textView.string != text {
             textView.string = text
-            SQLHighlighter.highlight(textView)
+            SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
         }
         if context.coordinator.completionVersion != completionVersion {
             context.coordinator.completionVersion = completionVersion
@@ -186,7 +189,7 @@ struct SQLEditorView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? SQLTextView else { return }
-            SQLHighlighter.highlight(textView)
+            SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
             textView.enclosingScrollView?.verticalRulerView?.needsDisplay = true
             parent.text = textView.string
             textView.updateInlineSuggestion()
@@ -206,6 +209,7 @@ struct SQLEditorView: NSViewRepresentable {
 
 final class SQLTextView: NSTextView {
     weak var coordinator: SQLEditorView.Coordinator?
+    var kind: DatabaseKind = .postgres
 
     /// Grey text after the caret completing the current word; Tab accepts it.
     private var inlineSuggestion: (location: Int, text: String)? {
@@ -454,22 +458,21 @@ enum SQLHighlighter {
 
     static let keywords = SQLKeywords.all
 
-    private static let patterns: [(NSRegularExpression, NSColor)] = {
-        let keywordPattern = "\\b(" + keywords.joined(separator: "|") + ")\\b"
-        let rules: [(String, NSRegularExpression.Options, NSColor)] = [
-            (keywordPattern, [.caseInsensitive], .systemPink),
-            ("\\b\\d+(\\.\\d+)?\\b", [], .systemBlue),
-            ("'(?:[^']|'')*'?", [], .systemOrange),
-            ("\"(?:[^\"]|\"\")*\"?|`[^`]*`?", [], .systemTeal),
-            ("--[^\n]*|#[^\n]*|/\\*[\\s\\S]*?(\\*/|$)", [], .systemGray),
-        ]
-        return rules.compactMap { pattern, options, color in
-            (try? NSRegularExpression(pattern: pattern, options: options)).map { ($0, color) }
+    /// Colors by token kind, from the same lexer the formatter and completion use, so an apostrophe
+    /// in a comment can't start a "string" that runs on through the next lines.
+    private static func color(for token: SQLToken) -> NSColor? {
+        switch token.kind {
+        case .word: return SQLKeywords.set.contains(token.keyword) ? .systemPink : nil
+        case .number: return .systemBlue
+        case .string: return .systemOrange
+        case .quotedIdentifier: return .systemTeal
+        case .comment: return .systemGray
+        case .whitespace, .punctuation: return nil
         }
-    }()
+    }
 
-    /// Recolors the whole document; later rules (strings, comments) win over earlier ones.
-    static func highlight(_ textView: NSTextView) {
+    /// Recolors the whole document.
+    static func highlight(_ textView: NSTextView, kind: DatabaseKind) {
         guard let storage = textView.textStorage else { return }
         let text = storage.string
         let full = NSRange(location: 0, length: (text as NSString).length)
@@ -480,10 +483,8 @@ enum SQLHighlighter {
         }
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
-        for (regex, color) in patterns {
-            regex.enumerateMatches(in: text, range: full) { match, _, _ in
-                if let range = match?.range { storage.addAttribute(.foregroundColor, value: color, range: range) }
-            }
+        for token in SQLLexer.tokens(text, kind: kind) {
+            if let color = color(for: token) { storage.addAttribute(.foregroundColor, value: color, range: token.range) }
         }
         storage.endEditing()
         textView.typingAttributes = [.font: font, .foregroundColor: NSColor.textColor]

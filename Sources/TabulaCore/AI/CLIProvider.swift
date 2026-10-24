@@ -11,9 +11,9 @@ public struct CLIProvider: AIProvider {
     let tool: Tool
     let model: String
 
-    public init(tool: Tool, settings: AISettings) {
+    public init(tool: Tool, model: String = "") {
         self.tool = tool
-        self.model = settings.model
+        self.model = model
     }
 
     /// The tool's path: as the login shell resolves it, else from the usual install locations (an npm

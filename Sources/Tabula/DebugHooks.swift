@@ -15,6 +15,7 @@ enum DebugHooks {
 
     static var showShortcuts: Bool { environment["TABULA_DEBUG_SHORTCUTS"] != nil }
     static var showSettings: Bool { environment["TABULA_DEBUG_SETTINGS"] != nil }
+    static var showAbout: Bool { environment["TABULA_DEBUG_ABOUT"] != nil }
 
     static var connectionToOpen: UUID? { connectionsToOpen.first }
 

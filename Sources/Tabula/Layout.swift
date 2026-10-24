@@ -62,6 +62,10 @@ enum Layout {
         static let rowHeight: CGFloat = 20
     }
 
+    enum About {
+        static let paragraphSpacing: CGFloat = 6
+    }
+
     enum Settings {
         static let width: CGFloat = 520
         /// The AI tab scrolls when a provider has more settings than fit.

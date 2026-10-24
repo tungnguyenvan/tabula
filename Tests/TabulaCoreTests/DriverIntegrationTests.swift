@@ -150,3 +150,50 @@ final class DriverIntegrationTests: XCTestCase {
         XCTAssertEqual(update.affectedRows, 1, file: file, line: line)
     }
 }
+
+/// Picking a schema in the sidebar makes unqualified names resolve there ("relation does not exist" otherwise).
+final class UseSchemaTests: XCTestCase {
+    func testPostgresSearchPath() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_PG_PORT not set")
+        }
+        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"), password: "tabula")
+        _ = try await driver.executeScript("""
+            DROP SCHEMA IF EXISTS tabula_use CASCADE;
+            CREATE SCHEMA tabula_use;
+            CREATE TABLE tabula_use.transactions (id int);
+            INSERT INTO tabula_use.transactions VALUES (7);
+            """)
+        do {
+            _ = try await driver.execute("SELECT id FROM transactions")
+            XCTFail("expected the table to be invisible before useSchema")
+        } catch {}
+        try await driver.useSchema("tabula_use")
+        let rows = try await driver.execute("SELECT id FROM transactions").rows
+        XCTAssertEqual(rows, [["7"]])
+        // public stays on the path for extensions and shared tables.
+        let path = try await driver.execute("SHOW search_path").rows.first?.first
+        XCTAssertEqual(path, "tabula_use, public")
+        _ = try await driver.execute("DROP SCHEMA tabula_use CASCADE")
+        await driver.close()
+    }
+
+    func testMySQLUse() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MYSQL_PORT not set")
+        }
+        let config = ConnectionConfig(kind: .mysql, port: port, user: "root", database: "tabula", tls: .require)
+        let driver = try await DriverFactory.connect(config, password: "tabula")
+        _ = try await driver.executeScript("""
+            DROP DATABASE IF EXISTS tabula_use;
+            CREATE DATABASE tabula_use;
+            CREATE TABLE tabula_use.transactions (id int);
+            INSERT INTO tabula_use.transactions VALUES (8);
+            """)
+        try await driver.useSchema("tabula_use")
+        let rows = try await driver.execute("SELECT id FROM transactions").rows
+        XCTAssertEqual(rows, [["8"]])
+        _ = try await driver.execute("DROP DATABASE tabula_use")
+        await driver.close()
+    }
+}

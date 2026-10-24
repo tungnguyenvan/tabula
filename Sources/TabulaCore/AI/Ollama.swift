@@ -5,8 +5,11 @@ import Foundation
 public struct OllamaProvider: AIProvider {
     let inner: OpenAICompatibleProvider
 
-    public init(settings: AISettings) {
-        inner = OpenAICompatibleProvider(settings: settings, apiKey: "", baseURL: OllamaLibrary.normalized(settings.resolvedBaseURL) + "/v1")
+    public init(_ endpoint: AIEndpoint) {
+        var openAI = endpoint
+        openAI.baseURL = OllamaLibrary.normalized(endpoint.baseURL) + "/v1"
+        openAI.apiKey = ""
+        inner = OpenAICompatibleProvider(openAI)
     }
 
     public func complete(_ request: AIRequest) async throws -> String {
@@ -14,6 +17,8 @@ public struct OllamaProvider: AIProvider {
             return try await inner.complete(request)
         } catch let error as URLError where error.code == .cannotConnectToHost || error.code == .cannotFindHost {
             throw AIError.unavailable("Ollama isn't running. Open Ollama, or install it from ollama.com.")
+        } catch AIError.server(let message) where message.contains("not found") {
+            throw AIError.notConfigured("The model isn't downloaded yet. Download it in Settings › AI.")
         }
     }
 }

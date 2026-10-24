@@ -17,7 +17,7 @@ struct QueryTabView: View {
                     AIPromptBar(assistant: model.assistant, hasSelection: handle.selectedText != nil, submit: askAI)
                     Divider()
                 }
-                SQLEditorView(text: $model.sql, handle: handle, suggest: suggest, aiSuggest: aiSuggest,
+                SQLEditorView(text: $model.sql, handle: handle, kind: model.driver.kind, suggest: suggest, aiSuggest: aiSuggest,
                               completionVersion: workspace.completionVersion, undoManager: model.undoManager) { all in run(all: all) }
             }
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.editorMinHeight, idealHeight: Layout.Query.editorIdealHeight)
@@ -201,7 +201,7 @@ struct QueryTabView: View {
         let kind = model.driver.kind
         model.assistant.run(for: workspace.config, request: {
             SQLPrompts.generate(description: description, current: target.selectedText,
-                                schema: await workspace.loadedAISchema(), kind: kind)
+                                schema: await workspace.loadedAISchema(for: target.text), kind: kind)
         }) { sql in handle.insert(sql, at: target) }
     }
 
@@ -209,7 +209,7 @@ struct QueryTabView: View {
         guard let statement = model.failedStatement, let error = model.error else { return }
         let kind = model.driver.kind
         model.assistant.run(for: workspace.config, request: {
-            SQLPrompts.fix(sql: statement, error: error, schema: await workspace.loadedAISchema(), kind: kind)
+            SQLPrompts.fix(sql: statement, error: error, schema: await workspace.loadedAISchema(for: statement), kind: kind)
         }) { sql in
             handle.replace(statement, with: sql)
             model.clearFailure()
@@ -221,7 +221,9 @@ struct QueryTabView: View {
         guard AIService.shared.suggestsInline(for: workspace.config) else { return nil }
         let kind = model.driver.kind
         return { [workspace] before, after in
-            let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(), kind: kind)
+            // Columns only for the tables this statement uses; the rest by name, to keep typing fast.
+            let used = Set(SQLCompletion.tables(in: before + after, kind: kind).map { $0.name.lowercased() })
+            let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(focus: used), kind: kind)
             guard let reply = try? await AIService.shared.complete(request) else { return nil }
             let continuation = SQLPrompts.cleanContinuation(reply, before: before)
             return continuation.isEmpty ? nil : continuation

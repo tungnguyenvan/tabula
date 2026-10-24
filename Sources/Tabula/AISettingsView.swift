@@ -11,7 +11,7 @@ final class OllamaModels {
     private(set) var downloads: [String: OllamaLibrary.PullProgress] = [:]
     private(set) var checked = false
     var error: String?
-    private var library: OllamaLibrary { OllamaLibrary(baseURL: AIService.shared.settings.resolvedBaseURL) }
+    private var library: OllamaLibrary { OllamaLibrary(baseURL: AIEndpoint(kind: .ollama, baseURL: AIService.shared.settings.baseURL(.ollama)).baseURL) }
 
     func refresh() async {
         version = await library.version()
@@ -23,7 +23,8 @@ final class OllamaModels {
         installed.contains { $0.name == name || $0.name == name + ":latest" }
     }
 
-    func download(_ name: String) {
+    /// Downloads a model; `then` runs once it is installed (e.g. to start using it).
+    func download(_ name: String, then: @escaping @MainActor () -> Void = {}) {
         guard downloads[name] == nil else { return }
         downloads[name] = OllamaLibrary.PullProgress(status: "Starting…", fraction: nil)
         let library = library
@@ -33,7 +34,7 @@ final class OllamaModels {
                     Task { @MainActor in self.downloads[name] = progress }
                 }
                 error = nil
-                if AIService.shared.settings.model.isEmpty { AIService.shared.settings.model = name }
+                then()
             } catch {
                 self.error = error.localizedDescription
             }
@@ -58,152 +59,245 @@ final class OllamaModels {
 
 struct AISettingsView: View {
     @Bindable private var ai = AIService.shared
-    @State private var apiKey = ""
-    /// The provider `apiKey` belongs to. Switching providers tears the field down before the new key loads,
-    /// so saving must not assume the current provider.
-    @State private var keyProvider: AIProviderKind?
     @State private var ollama = OllamaModels()
-    @State private var cliPath: String?
-    @State private var lookingForCLI = false
-    @State private var testResult: Result<String, Error>?
-    @State private var testing = false
 
-    private var provider: AIProviderKind { ai.settings.provider }
+    private var assistant: AIProviderKind { ai.settings.provider }
+    private var typing: AIProviderKind { ai.settings.provider(for: .inline) }
+    private var usesOllama: Bool { assistant == .ollama || (ai.settings.inlineSuggestions && typing == .ollama) }
 
     var body: some View {
         Form {
             Section {
                 Toggle("Use AI to write and complete SQL", isOn: $ai.settings.enabled)
-                Picker("Provider", selection: $ai.settings.provider) {
-                    ForEach(AIProviderKind.allCases) { Text($0.displayName).tag($0) }
-                }
-                .disabled(!ai.settings.enabled)
             } footer: {
-                Text("Ask AI with ⌘K in a query tab, or fix a failed statement. Only table and column names and the SQL in the editor are sent, never rows from your tables.")
+                Text("Only table and column names, keys and the SQL in the editor are sent, never rows from your tables.")
             }
 
             if ai.settings.enabled {
-                providerSection
-                if provider == .ollama { localModelsSection }
                 Section {
-                    // Shown off (and locked) for providers that can't suggest while typing.
-                    Toggle("Suggest SQL while I type", isOn: Binding(
-                        get: { ai.settings.inlineSuggestions && provider.supportsInline },
-                        set: { ai.settings.inlineSuggestions = $0 }))
-                        .disabled(!provider.supportsInline)
-                    Toggle("Allow on Production connections", isOn: $ai.settings.allowProduction)
+                    Picker("Provider", selection: $ai.settings.provider) {
+                        ForEach(AIProviderKind.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    ProviderFields(kind: assistant, purpose: .generate, ollama: ollama)
+                    TestRow(purpose: .generate)
+                } header: {
+                    Text("Ask AI and Fix with AI")
                 } footer: {
-                    Text(provider.supportsInline
-                         ? "A suggestion appears in grey when you pause; Tab accepts it."
-                         : "Command-line agents are too slow to suggest while typing; use Ask AI (⌘K) instead.")
+                    Text("⌘K in a query tab, or the button under a failed statement.")
                 }
+
                 Section {
-                    HStack {
-                        Button("Test") { runTest() }.disabled(testing)
-                        if testing { ProgressView().controlSize(.small) }
-                        Spacer()
-                        switch testResult {
-                        case .success(let reply): Label("Answered “\(reply.prefix(40))”", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        case .failure(let error): Text(error.localizedDescription).foregroundStyle(.red).lineLimit(3)
-                        case nil: EmptyView()
+                    Toggle("Suggest SQL while I type", isOn: $ai.settings.inlineSuggestions)
+                    if ai.settings.inlineSuggestions {
+                        Picker("Provider", selection: $ai.settings.inlineProvider) {
+                            Text(assistant.supportsInline ? "Same as above" : "Same as above (too slow)").tag(AIProviderKind?.none)
+                            Divider()
+                            ForEach(AIProviderKind.allCases.filter(\.supportsInline)) { Text($0.displayName).tag(AIProviderKind?.some($0)) }
+                        }
+                        if ai.settings.inlineProvider != nil || typing.supportsInline {
+                            ProviderFields(kind: typing, purpose: .inline, ollama: ollama, showsShared: ai.settings.inlineProvider != nil)
+                            TestRow(purpose: .inline)
                         }
                     }
+                } header: {
+                    Text("Suggestions while typing")
+                } footer: {
+                    Text(typing.supportsInline
+                         ? "A suggestion appears in grey when you pause; Tab accepts it. A small local model (Ollama) keeps up best."
+                         : "Command-line agents are too slow to suggest while typing. Choose a local model or an API here.")
+                }
+
+                if usesOllama { LocalModelsSection(ollama: ollama) }
+
+                Section {
+                    Toggle("Allow on Production connections", isOn: $ai.settings.allowProduction)
                 }
             }
         }
         .formStyle(.grouped)
         .frame(width: Layout.Settings.width, height: Layout.Settings.aiHeight)
-        .task(id: provider) { await providerChanged() }
+        .task(id: usesOllama) { if usesOllama { await ollama.refresh() } }
+    }
+}
+
+/// Address, key and model of one provider, for one purpose.
+private struct ProviderFields: View {
+    let kind: AIProviderKind
+    let purpose: AIRequest.Purpose
+    let ollama: OllamaModels
+    /// Whether to show settings shared with the other purpose (address, key). They appear once, under
+    /// Ask AI, unless suggestions use a different provider.
+    var showsShared = true
+    @Bindable private var ai = AIService.shared
+    @State private var cliPath: String?
+    @State private var lookingForCLI = false
+
+    private var modelBinding: Binding<String> {
+        let store: WritableKeyPath<AISettings, [String: String]> = purpose == .inline ? \.inlineModels : \.models
+        return Binding(get: { ai.settings[keyPath: store][kind.rawValue] ?? "" },
+                       set: { ai.settings[keyPath: store][kind.rawValue] = $0 })
     }
 
-    @ViewBuilder
-    private var providerSection: some View {
-        Section(provider.displayName) {
-            switch provider {
-            case .appleIntelligence:
-                if let reason = AppleIntelligenceProvider.unavailableReason {
-                    Label(reason, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-                } else {
-                    Label("Ready. Runs on this Mac; nothing is sent over the network.", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+    private var baseURLBinding: Binding<String> {
+        Binding(get: { ai.settings.baseURLs[kind.rawValue] ?? "" }, set: { ai.settings.baseURLs[kind.rawValue] = $0 })
+    }
+
+    var body: some View {
+        switch kind {
+        case .appleIntelligence:
+            if let reason = AppleIntelligenceProvider.unavailableReason {
+                Label(reason, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+            } else {
+                Label("Ready. Runs on this Mac; nothing is sent over the network.", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+        case .ollama:
+            if showsShared { TextField("Server", text: baseURLBinding, prompt: Text(kind.defaultBaseURL)) }
+            Picker("Model", selection: modelBinding) {
+                let current = ai.settings.model(kind, for: purpose)
+                if !ollama.installed.contains(where: { $0.name == current }) {
+                    Text(current.isEmpty ? "None" : "\(current) (not downloaded)").tag(modelBinding.wrappedValue)
                 }
-            case .ollama:
-                TextField("Server", text: $ai.settings.baseURL, prompt: Text(provider.defaultBaseURL))
-                Picker("Model", selection: $ai.settings.model) {
-                    if !ollama.installed.contains(where: { $0.name == ai.settings.model }) {
-                        Text(ai.settings.model.isEmpty ? "None" : ai.settings.model).tag(ai.settings.model)
-                    }
-                    ForEach(ollama.installed) { Text($0.name).tag($0.name) }
-                }
-            case .openAICompatible:
-                TextField("Base URL", text: $ai.settings.baseURL, prompt: Text(provider.defaultBaseURL))
-                apiKeyField
-                TextField("Model", text: $ai.settings.model, prompt: Text("e.g. gpt-4.1, or a LiteLLM model name"))
-                TextField("Model for suggestions", text: $ai.settings.inlineModel, prompt: Text("Same as Model"))
-            case .anthropic:
-                apiKeyField
-                TextField("Model", text: $ai.settings.model, prompt: Text(provider.defaultModel))
-                TextField("Model for suggestions", text: $ai.settings.inlineModel, prompt: Text("Same as Model; claude-haiku-5-5 is faster"))
-            case .claudeCode, .codex:
+                ForEach(ollama.installed) { Text($0.name).tag($0.name) }
+            }
+        case .openAICompatible:
+            if showsShared {
+                TextField("Base URL", text: baseURLBinding, prompt: Text(kind.defaultBaseURL))
+                APIKeyField(kind: kind)
+            }
+            TextField("Model", text: modelBinding, prompt: Text(purpose == .inline ? "Same as Ask AI" : "e.g. gpt-4.1, or a LiteLLM model name"))
+        case .anthropic:
+            if showsShared { APIKeyField(kind: kind) }
+            TextField("Model", text: modelBinding,
+                      prompt: Text(purpose == .inline ? "Same as Ask AI; claude-haiku-5-5 is faster" : kind.defaultModel))
+        case .claudeCode, .codex:
+            Group {
                 if lookingForCLI {
                     ProgressView().controlSize(.small)
                 } else if let cliPath {
                     LabeledContent("Found", value: cliPath)
                 } else {
-                    Label("Not found on your shell's PATH. Install it, sign in once in Terminal, then reopen Settings.",
-                          systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    Label("Not found. Install it, sign in once in Terminal, then reopen Settings.", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
                 }
-                TextField("Model", text: $ai.settings.model, prompt: Text("The tool's default"))
+            }
+            .task(id: kind) {
+                lookingForCLI = true
+                cliPath = await CLIProvider.locate(kind == .claudeCode ? .claude : .codex)
+                lookingForCLI = false
+            }
+            TextField("Model", text: modelBinding, prompt: Text("The tool's default"))
+        }
+    }
+}
+
+/// An API key field bound to one provider: it loads that provider's key and saves to it, whatever the
+/// pickers do meanwhile.
+private struct APIKeyField: View {
+    let kind: AIProviderKind
+    @State private var key = ""
+    @State private var loaded = false
+    @State private var error: String?
+
+    var body: some View {
+        SecureField("API key", text: $key)
+            .onSubmit(save)
+            .onDisappear(perform: save)
+            .task(id: kind) {
+                key = await AIService.shared.apiKey(for: kind)
+                loaded = true
+            }
+        if let error { Text(error).font(.caption).foregroundStyle(.red) }
+    }
+
+    private func save() {
+        guard loaded else { return }
+        let key = key, kind = kind
+        Task {
+            do {
+                try await AIService.shared.setAPIKey(key, for: kind)
+                error = nil
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+}
+
+private struct TestRow: View {
+    let purpose: AIRequest.Purpose
+    @State private var result: Result<String, Error>?
+    @State private var testing = false
+
+    var body: some View {
+        HStack {
+            Button("Test") { run() }.disabled(testing)
+            if testing { ProgressView().controlSize(.small) }
+            Spacer()
+            switch result {
+            case .success(let reply): Label("Answered “\(reply.prefix(40))”", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            case .failure(let error): Text(error.localizedDescription).foregroundStyle(.red).lineLimit(3)
+            case nil: EmptyView()
             }
         }
     }
 
-    private var apiKeyField: some View {
-        // Saved on Return, on Test and when Settings closes, not on every keystroke.
-        SecureField("API key", text: $apiKey)
-            .onSubmit { Task { await saveKey() } }
-            .onDisappear { Task { await saveKey() } }
+    private func run() {
+        testing = true
+        result = nil
+        // Let the key field's save (on Return / leaving it) land first.
+        Task {
+            defer { testing = false }
+            do { result = .success(try await AIService.shared.test(purpose)) } catch { result = .failure(error) }
+        }
     }
+}
 
-    @ViewBuilder
-    private var localModelsSection: some View {
+private struct LocalModelsSection: View {
+    let ollama: OllamaModels
+    @Bindable private var ai = AIService.shared
+
+    var body: some View {
         Section {
             if !ollama.checked {
                 ProgressView().controlSize(.small)
             } else if ollama.version == nil {
-                Label("Ollama isn't running. Install it, open it, then come back here.", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                Link("Download Ollama", destination: URL(string: "https://ollama.com/download")!)
+                Label("Ollama runs the models on this Mac. Install it, open it, then come back here to download one.",
+                      systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                HStack {
+                    Link("Download Ollama", destination: URL(string: "https://ollama.com/download")!)
+                    Spacer()
+                    Button("Check Again") { Task { await ollama.refresh() } }
+                }
             } else {
                 ForEach(Defaults.AI.recommendedLocalModels) { model in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(model.name)
-                            Text(model.summary).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        localModelControl(model.name)
-                    }
+                    row(name: model.name, summary: model.summary, forTyping: model.forTyping)
                 }
-                ForEach(ollama.installed.filter { model in !Defaults.AI.recommendedLocalModels.contains { $0.name == model.name } }) { model in
-                    HStack {
-                        Text(model.name)
-                        Spacer()
-                        Text(ByteCountFormatter.string(fromByteCount: model.size, countStyle: .file)).foregroundStyle(.secondary)
-                        localModelControl(model.name)
-                    }
+                ForEach(ollama.installed.filter { installed in !Defaults.AI.recommendedLocalModels.contains { $0.name == installed.name } }) { model in
+                    row(name: model.name, summary: ByteCountFormatter.string(fromByteCount: model.size, countStyle: .file), forTyping: false)
                 }
             }
             if let error = ollama.error { Text(error).foregroundStyle(.red) }
         } header: {
             Text("Local models")
         } footer: {
-            if let version = ollama.version { Text("Ollama \(version). Models are stored and run by Ollama on this Mac.") }
+            if let version = ollama.version { Text("Ollama \(version). Models are downloaded to and run on this Mac.") }
+        }
+    }
+
+    private func row(name: String, summary: String, forTyping: Bool) -> some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(name)
+                Text(summary).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            control(name, forTyping: forTyping)
         }
     }
 
     @ViewBuilder
-    private func localModelControl(_ name: String) -> some View {
+    private func control(_ name: String, forTyping: Bool) -> some View {
         if let progress = ollama.downloads[name] {
             if let fraction = progress.fraction {
                 ProgressView(value: fraction).frame(width: Layout.Settings.progressWidth)
@@ -211,60 +305,42 @@ struct AISettingsView: View {
                 Text(progress.status).font(.caption).foregroundStyle(.secondary)
             }
         } else if ollama.isInstalled(name) {
-            if ai.settings.model == name {
-                Label("In use", systemImage: "checkmark").foregroundStyle(.secondary)
-            } else {
-                Button("Use") { ai.settings.model = name }
-            }
             Menu {
+                Button("Use for Ask AI") { useForAskAI(name) }
+                Button("Use for Suggestions") { useForTyping(name) }
+                Divider()
                 Button("Delete", role: .destructive) { ollama.delete(name) }
-            } label: { Image(systemName: "ellipsis") }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
+            } label: {
+                Text(usage(name))
+            }
             .fixedSize()
         } else {
-            Button("Download") { ollama.download(name) }
+            Button("Download") {
+                // Once downloaded, start using it for what it's suited to.
+                ollama.download(name) { forTyping ? useForTyping(name) : useForAskAI(name) }
+            }
         }
     }
 
-    private func providerChanged() async {
-        testResult = nil
-        await saveKey()
-        keyProvider = nil
-        apiKey = provider.needsAPIKey ? await ai.apiKey(for: provider) : ""
-        keyProvider = provider.needsAPIKey ? provider : nil
-        switch provider {
-        case .ollama:
-            await ollama.refresh()
-        case .claudeCode, .codex:
-            lookingForCLI = true
-            cliPath = await CLIProvider.locate(provider == .claudeCode ? .claude : .codex)
-            lookingForCLI = false
-        case .appleIntelligence, .openAICompatible, .anthropic:
-            break
+    private func usage(_ name: String) -> String {
+        let assistant = ai.settings.provider == .ollama && ai.settings.model(.ollama, for: .generate) == name
+        let typing = ai.settings.provider(for: .inline) == .ollama && ai.settings.model(.ollama, for: .inline) == name
+        switch (assistant, typing) {
+        case (true, true): return "Used for both"
+        case (true, false): return "Used for Ask AI"
+        case (false, true): return "Used for suggestions"
+        case (false, false): return "Installed"
         }
     }
 
-    /// Saves the key shown in the field for the provider it was loaded for.
-    @discardableResult
-    private func saveKey() async -> Bool {
-        guard let owner = keyProvider else { return true }
-        do {
-            try await ai.setAPIKey(apiKey, for: owner)
-            return true
-        } catch {
-            testResult = .failure(error)
-            return false
-        }
+    private func useForAskAI(_ name: String) {
+        ai.settings.provider = .ollama
+        ai.settings.models[AIProviderKind.ollama.rawValue] = name
     }
 
-    private func runTest() {
-        testing = true
-        testResult = nil
-        Task {
-            defer { testing = false }
-            guard await saveKey() else { return }
-            do { testResult = .success(try await ai.test()) } catch { testResult = .failure(error) }
-        }
+    private func useForTyping(_ name: String) {
+        ai.settings.inlineSuggestions = true
+        if ai.settings.provider != .ollama { ai.settings.inlineProvider = .ollama }
+        ai.settings.inlineModels[AIProviderKind.ollama.rawValue] = name
     }
 }

@@ -80,6 +80,11 @@ public enum SQLCompletion {
         return Context(partialRange: partialRange, partial: partial, scope: scope, tables: statementTables)
     }
 
+    /// Every table a statement names after FROM / JOIN / UPDATE / INTO.
+    public static func tables(in sql: String, kind: DatabaseKind) -> [TableName] {
+        Array(Set(referencedTables(SQLLexer.tokens(sql, kind: kind)).values)).sorted()
+    }
+
     /// Tables named after FROM / JOIN / UPDATE / INTO, keyed by alias and by name.
     static func referencedTables(_ tokens: [SQLToken]) -> [String: TableName] {
         let words = tokens.filter { $0.kind != .whitespace && $0.kind != .comment }
