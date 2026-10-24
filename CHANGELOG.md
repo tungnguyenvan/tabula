@@ -22,7 +22,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **Console log** (⇧⌘C): every statement sent to the server, with time, rows and duration; copy as SQL.
 - **Relationship diagram** (⌥⌘3) from foreign keys, with dragging, zoom and PNG export.
 - **Server metrics** (⌥⌘4) for PostgreSQL, MySQL, SQLite and Redis, with live charts.
-- SQL editor: suggestions as you type (tables after `FROM`/`JOIN`, columns after `alias.`, keywords), shown inline (Tab accepts) and in the completion list (⎋ or ⌃Space); **Beautify** (⇧⌘I); a row **Limit** for SELECTs without one; one Run button (selection or current statement) with Run All in its menu.
+- SQL editor: suggestions as you type (tables after `FROM`/`JOIN` and `schema.`, columns after `alias.`, keywords), shown inline (Tab accepts) and in the completion list (⎋ or ⌃Space); **Beautify** (⇧⌘I); a row **Limit** for SELECTs without one; one Run button (selection or current statement) with Run All in its menu.
 - Filters: AND or OR between conditions.
 - Copy a connection as a URL, with or without the password.
 - The Connections window can be moved by dragging its left pane.

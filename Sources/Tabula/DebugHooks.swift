@@ -215,12 +215,6 @@ enum DebugHooks {
         guard let directory = environment["TABULA_DEBUG_SNAPSHOT"], let window = targetWindow ?? NSApp.keyWindow,
               let rep = windowServerImage(window) ?? cachedImage(window) else { return }
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("step-\(name).png"))
-        // Popups (completion list, menus) are separate windows above the key window.
-        for (index, popup) in NSApp.windows.filter({ $0.isVisible && $0 !== window && $0.frame.width < window.frame.width }).enumerated() {
-            if let image = windowServerImage(popup) ?? cachedImage(popup) {
-                try? image.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("step-\(name)-popup\(index).png"))
-            }
-        }
         print("SNAP", name)
     }
 

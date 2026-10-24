@@ -170,9 +170,10 @@ struct QueryTabView: View {
     }
 
     private func suggest(_ text: String, caret: Int) -> (range: NSRange, items: [String]) {
-        let context = SQLCompletion.context(in: text, caret: caret, kind: model.driver.kind)
+        let context = SQLCompletion.context(in: text, caret: caret, kind: model.driver.kind, schemas: workspace.schemas)
         let items = SQLCompletion.suggestions(for: context, tables: workspace.tables.map(\.name),
-                                              columns: { workspace.columnNames(of: $0) }, allColumns: workspace.knownColumnNames)
+                                              columns: { workspace.columnNames(of: $0) }, allColumns: workspace.knownColumnNames,
+                                              tablesInSchema: { workspace.tableNames(inSchema: $0) })
         return (context.partialRange, items)
     }
 

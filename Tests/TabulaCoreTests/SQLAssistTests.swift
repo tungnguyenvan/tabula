@@ -101,6 +101,23 @@ final class SQLCompletionTests: XCTestCase {
         XCTAssertEqual(suggest("SEL|"), ["SELECT"])
     }
 
+    func testTablesAfterSchemaName() {
+        let schemaTables = ["dev": ["payment_orders", "payment_order_batches", "banks"]]
+        func suggest(_ sql: String, schemas: [String] = []) -> [String] {
+            let caret = (sql as NSString).range(of: "|").location
+            let text = sql.replacingOccurrences(of: "|", with: "")
+            let context = SQLCompletion.context(in: text, caret: caret, kind: .postgres, schemas: schemas)
+            return SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0] },
+                                             tablesInSchema: { schemaTables[$0] })
+        }
+        XCTAssertEqual(suggest("SELECT * FROM dev.pay|"), ["payment_orders", "payment_order_batches"])
+        XCTAssertEqual(suggest("SELECT * FROM orders o JOIN dev.|").count, 3)
+        // A known schema name is a schema anywhere, e.g. in the select list.
+        XCTAssertEqual(suggest("SELECT dev.b|", schemas: ["dev"]), ["banks"])
+        // An alias still means columns.
+        XCTAssertEqual(suggest("SELECT o.| FROM orders o", schemas: ["dev"]), ["id", "total", "user_id"])
+    }
+
     func testAllColumnsBeforeATableIsNamed() {
         let context = SQLCompletion.context(in: "SELECT tot", caret: 10, kind: .postgres)
         XCTAssertEqual(SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0] },

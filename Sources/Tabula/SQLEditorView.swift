@@ -161,19 +161,15 @@ final class SQLTextView: NSTextView {
     func updateInlineSuggestion() {
         let caret = selectedRange()
         guard typedCharacter, caret.length == 0, let coordinator else { inlineSuggestion = nil; return }
-        // After "alias." there is no word to complete inline yet: open the column list, as other SQL clients do.
-        if caret.location > 0, (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: ".")),
-           !coordinator.parent.suggest(string, caret.location).items.isEmpty {
-            inlineSuggestion = nil
-            DispatchQueue.main.async { [weak self] in self?.complete(nil) }
-            return
-        }
         let (range, items) = coordinator.parent.suggest(string, caret.location)
         let partial = (string as NSString).substring(with: range)
         // Only complete at the end of a word, never in the middle of one.
         let nextIsWord = caret.location < (string as NSString).length
             && (string as NSString).substring(with: NSRange(location: caret.location, length: 1)).rangeOfCharacter(from: .alphanumerics) != nil
-        guard !partial.isEmpty, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
+        // Right after "schema." or "alias." there is no word yet; the first table or column is offered as is.
+        // (Not the completion list: NSTextView runs it modally, which would stall the app while it's open.)
+        let afterDot = caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
+        guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
         inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
     }
 

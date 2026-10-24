@@ -4,7 +4,8 @@ import Foundation
 /// `alias.`, and otherwise keywords plus the tables and columns the statement already uses.
 public enum SQLCompletion {
     public enum Scope: Equatable, Sendable {
-        case tables
+        /// Table names; `schema` is set when the user typed `schema.`.
+        case tables(schema: String?)
         /// Columns of the table behind `qualifier` (a table name or alias).
         case columns(qualifier: String)
         case anything
@@ -24,7 +25,8 @@ public enum SQLCompletion {
     /// Words that can't be an alias after a table name.
     private static let notAliases: Set<String> = SQLKeywords.set
 
-    public static func context(in text: String, caret: Int, kind: DatabaseKind) -> Context {
+    /// `schemas` are the database's schema names, so `sales.` is read as a schema rather than an alias.
+    public static func context(in text: String, caret: Int, kind: DatabaseKind, schemas: [String] = []) -> Context {
         let statement = SQLSplitter.statement(at: caret, in: text, kind: kind)
         let base = statement?.range.location ?? 0
         let tokens = SQLLexer.tokens(text, kind: kind)
@@ -42,9 +44,13 @@ public enum SQLCompletion {
         let scope: Scope
         if let dot = significant.last, dot.text == ".", significant.count >= 2,
            NSMaxRange(dot.range) == partialRange.location {
-            scope = .columns(qualifier: unquoted(significant[significant.count - 2].text))
+            let qualifier = unquoted(significant[significant.count - 2].text)
+            // `FROM sales.` (or any known schema name) names a schema; otherwise `x.` is a table or alias.
+            let afterTableKeyword = significant.count >= 3 && tableKeywords.contains(significant[significant.count - 3].keyword)
+            let isSchema = afterTableKeyword || schemas.contains { $0.caseInsensitiveCompare(qualifier) == .orderedSame }
+            scope = isSchema ? .tables(schema: qualifier) : .columns(qualifier: qualifier)
         } else if let previous = significant.last, tableKeywords.contains(previous.keyword) {
-            scope = .tables
+            scope = .tables(schema: nil)
         } else {
             scope = .anything
         }
@@ -80,13 +86,14 @@ public enum SQLCompletion {
     /// Ranked suggestions for `context`. `columns` returns a table's columns when they are known.
     /// `allColumns` are columns of every known table, offered when the statement names no table yet
     /// (for example `SELECT na` before the FROM clause is written).
+    /// `tablesInSchema` returns another schema's tables when known (nil while they load).
     public static func suggestions(for context: Context, tables: [String], columns: (String) -> [String]?,
-                                   allColumns: [String] = []) -> [String] {
+                                   allColumns: [String] = [], tablesInSchema: (String) -> [String]? = { _ in nil }) -> [String] {
         // Groups in priority order: what the statement uses comes before everything else.
         let groups: [[String]]
         switch context.scope {
-        case .tables:
-            groups = [tables]
+        case .tables(let schema):
+            groups = [schema.map { tablesInSchema($0) ?? [] } ?? tables]
         case .columns(let qualifier):
             let table = context.tables[qualifier.lowercased()] ?? qualifier
             groups = [columns(table) ?? []]

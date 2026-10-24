@@ -49,6 +49,8 @@ final class WorkspaceModel {
     private var columnCache: [String: [String]] = [:]
     private var loadingColumns: Set<String> = []
     private var prefetchingColumns = false
+    private var schemaTableCache: [String: [String]] = [:]
+    private var loadingSchemaTables: Set<String> = []
     var tableSearch = ""
     var tablesError: String?
     private(set) var loadingTables = false
@@ -236,6 +238,21 @@ final class WorkspaceModel {
                 columnCache[key] = (try? await driver.columns(of: table).map(\.name)) ?? []
             }
         }
+    }
+
+    /// Table names of another schema, for completing `schema.`; nil while they load.
+    func tableNames(inSchema schema: String) -> [String]? {
+        if schema.caseInsensitiveCompare(selectedSchema) == .orderedSame { return tables.map(\.name) }
+        let key = schema.lowercased()
+        if let cached = schemaTableCache[key] { return cached }
+        guard let driver, !loadingSchemaTables.contains(key),
+              let name = schemas.first(where: { $0.caseInsensitiveCompare(schema) == .orderedSame }) else { return nil }
+        loadingSchemaTables.insert(key)
+        Task {
+            schemaTableCache[key] = (try? await driver.tables(in: name).map(\.name)) ?? []
+            loadingSchemaTables.remove(key)
+        }
+        return nil
     }
 
     /// Every column name loaded so far, for completion before a table is named.
