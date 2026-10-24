@@ -29,6 +29,11 @@ public struct OllamaLibrary: Sendable {
     public struct PullProgress: Sendable, Equatable {
         public let status: String
         public let fraction: Double?
+
+        public init(status: String, fraction: Double?) {
+            self.status = status
+            self.fraction = fraction
+        }
     }
 
     let baseURL: String

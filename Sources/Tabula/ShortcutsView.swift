@@ -69,6 +69,7 @@ struct ShortcutsView: View {
             ("⇥", "Accept the inline suggestion"),
             ("⎋ or ⌃Space", "Show suggestions: tables, columns, keywords"),
             ("⇧⌘I", "Beautify the selection or the whole query"),
+            ("⌘K", "Ask AI: write SQL, or change the selection"),
             ("⌘F", "Find (when editor is focused)"),
             ("⌘Z / ⇧⌘Z", "Undo / redo (per tab)"),
         ]),

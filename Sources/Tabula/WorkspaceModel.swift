@@ -43,10 +43,14 @@ final class WorkspaceModel {
     var schemas: [String] = []
     var selectedSchema: String = ""
     private(set) var tables: [TableRef] = [] {
-        didSet { columnCache = [:] }
+        // Reloading tables (refresh, schema switch, DDL) drops what completion knew; loads still in flight
+        // for the old list see the generation change and throw their results away.
+        didSet { columnCache = [:]; loadingColumns = []; cacheGeneration += 1 }
     }
     /// Column names per table, filled on demand for SQL completion.
+    /// "schema.table" (lower-cased) → column names.
     private var columnCache: [String: [String]] = [:]
+    private var cacheGeneration = 0
     private var loadingColumns: Set<String> = []
     private var prefetchingColumns = false
     private var schemaTableCache: [String: [String]] = [:]
@@ -229,15 +233,21 @@ final class WorkspaceModel {
     /// statement names a table.
     func prefetchColumns() {
         guard let driver, !prefetchingColumns else { return }
-        let pending = tables.prefix(Defaults.completionPrefetchLimit).filter { columnCache[$0.name.lowercased()] == nil }
+        let pending = tables.prefix(Defaults.completionPrefetchLimit).filter { columnCache[Self.columnKey($0)] == nil }
         guard !pending.isEmpty else { return }
         prefetchingColumns = true
+        let generation = cacheGeneration
         Task {
             defer { prefetchingColumns = false }
             for table in pending {
-                let key = table.name.lowercased()
-                guard columnCache[key] == nil else { continue }
-                columnCache[key] = (try? await driver.columns(of: table).map(\.name)) ?? []
+                let key = Self.columnKey(table)
+                guard generation == cacheGeneration else { return }
+                guard columnCache[key] == nil, !loadingColumns.contains(key) else { continue }
+                loadingColumns.insert(key)
+                let names = (try? await driver.columns(of: table).map(\.name)) ?? []
+                guard generation == cacheGeneration else { return }
+                loadingColumns.remove(key)
+                columnCache[key] = names
                 completionVersion += 1
             }
         }
@@ -259,9 +269,19 @@ final class WorkspaceModel {
         return nil
     }
 
+    /// The schema as the AI sees it: table names and the columns loaded so far, never rows.
+    func aiSchema() -> SQLPrompts.Schema {
+        SQLPrompts.Schema(tables: tables.map { ($0.name, columnCache[Self.columnKey($0)] ?? []) })
+    }
+
     /// Every column name loaded so far, for completion before a table is named.
     var knownColumnNames: [String] {
-        Array(Set(columnCache.values.joined())).sorted()
+        let prefix = selectedSchema.lowercased() + "."
+        return Array(Set(columnCache.filter { $0.key.hasPrefix(prefix) }.values.joined())).sorted()
+    }
+
+    private static func columnKey(_ table: TableRef) -> String {
+        "\(table.schema.lowercased()).\(table.name.lowercased())"
     }
 
     func close(_ id: UUID) {
@@ -326,23 +346,25 @@ final class WorkspaceModel {
     /// A table's column names if already loaded; otherwise starts loading them and returns nil,
     /// so completion offers them from the next keystroke on.
     func columnNames(of table: SQLCompletion.TableName) -> [String]? {
-        // Tables of another schema are cached as "schema.table"; the selected schema's by name alone.
-        let inOtherSchema = table.schema.map { $0.caseInsensitiveCompare(selectedSchema) != .orderedSame } ?? false
-        let key = inOtherSchema ? "\(table.schema!.lowercased()).\(table.name.lowercased())" : table.name.lowercased()
-        if let cached = columnCache[key] { return cached }
-        guard let driver, !loadingColumns.contains(key) else { return nil }
         let ref: TableRef
-        if inOtherSchema, let schema = schemas.first(where: { $0.caseInsensitiveCompare(table.schema!) == .orderedSame }) {
+        if let schemaName = table.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame {
+            // Another schema: only one the database has. A mistyped one gets no columns rather than a
+            // same-named table's from the selected schema.
+            guard let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame }) else { return nil }
             ref = TableRef(schema: schema, name: table.name)
-        } else if let known = tables.first(where: { $0.name.lowercased() == table.name.lowercased() }) {
+        } else if let known = tables.first(where: { $0.name.caseInsensitiveCompare(table.name) == .orderedSame }) {
             ref = known
         } else {
             return nil
         }
-        let table = ref
+        let key = Self.columnKey(ref)
+        if let cached = columnCache[key] { return cached }
+        guard let driver, !loadingColumns.contains(key) else { return nil }
         loadingColumns.insert(key)
+        let generation = cacheGeneration
         Task {
-            let names = (try? await driver.columns(of: table).map(\.name)) ?? []
+            let names = (try? await driver.columns(of: ref).map(\.name)) ?? []
+            guard generation == cacheGeneration else { return }
             loadingColumns.remove(key)
             columnCache[key] = names
             completionVersion += 1

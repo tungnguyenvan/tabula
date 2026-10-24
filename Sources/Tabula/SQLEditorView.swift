@@ -36,6 +36,42 @@ final class EditorHandle {
         }
     }
 
+    /// Replaces the selection with `text`, or inserts it on its own line at the caret. Undoable.
+    func insertReplacingSelection(_ text: String) {
+        guard let textView else { return }
+        var range = textView.selectedRange()
+        var insertion = text
+        let string = textView.string as NSString
+        if range.length == 0, string.length > 0 {
+            // Put generated SQL on a line of its own rather than in the middle of the current one.
+            let line = string.lineRange(for: NSRange(location: range.location, length: 0))
+            let lineText = string.substring(with: line).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !lineText.isEmpty {
+                range = NSRange(location: NSMaxRange(line), length: 0)
+                insertion = (string.substring(with: line).hasSuffix("\n") ? "" : "\n") + text + "\n"
+            }
+        }
+        replace(range, with: insertion)
+        textView.setSelectedRange(NSRange(location: range.location, length: (insertion as NSString).length))
+    }
+
+    /// Replaces the first occurrence of `original` (e.g. the statement that failed) with `text`;
+    /// inserts `text` when `original` is no longer in the editor. Undoable.
+    func replace(_ original: String, with text: String) {
+        guard let textView else { return }
+        let range = (textView.string as NSString).range(of: original)
+        guard range.location != NSNotFound else { return insertReplacingSelection(text) }
+        replace(range, with: text)
+        textView.setSelectedRange(NSRange(location: range.location, length: (text as NSString).length))
+    }
+
+    private func replace(_ range: NSRange, with text: String) {
+        guard let textView, textView.shouldChangeText(in: range, replacementString: text) else { return }
+        textView.replaceCharacters(in: range, with: text)
+        textView.didChangeText()
+        SQLHighlighter.highlight(textView)
+    }
+
     /// Beautifies the selection, or the whole editor when nothing is selected. Undoable.
     func beautify(kind: DatabaseKind) {
         guard let textView else { return }
@@ -55,6 +91,9 @@ struct SQLEditorView: NSViewRepresentable {
     var handle: EditorHandle
     /// Completions for the word at a caret (UTF-16 offset): the range they replace and the candidates, best first.
     var suggest: (_ text: String, _ caret: Int) -> (range: NSRange, items: [String])
+    typealias AISuggest = @MainActor (_ before: String, _ after: String) async -> String?
+    /// Asks a model for a continuation when the user pauses typing; nil when AI suggestions are off.
+    var aiSuggest: AISuggest?
     /// Changes when completion has learned new names; the editor then refreshes its suggestion.
     var completionVersion = 0
     /// Each query tab keeps its own undo history.
@@ -169,6 +208,7 @@ final class SQLTextView: NSTextView {
     }
 
     func updateInlineSuggestion() {
+        aiTask?.cancel()
         let caret = selectedRange()
         guard typedCharacter, caret.length == 0, let coordinator else { inlineSuggestion = nil; return }
         let (range, items) = coordinator.parent.suggest(string, caret.location)
@@ -179,8 +219,31 @@ final class SQLTextView: NSTextView {
         // Right after "schema." or "alias." there is no word yet; the first table or column is offered as is.
         // (Not the completion list: NSTextView runs it modally, which would stall the app while it's open.)
         let afterDot = caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
-        guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
+        guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else {
+            inlineSuggestion = nil
+            if !nextIsWord { scheduleAISuggestion() }
+            return
+        }
         inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
+    }
+
+    private var aiTask: Task<Void, Never>?
+
+    /// When nothing local fits, asks the model once typing pauses. Any keystroke or caret move cancels it,
+    /// and the answer is only shown if the text and caret are exactly as they were.
+    private func scheduleAISuggestion() {
+        guard let ai = coordinator?.parent.aiSuggest else { return }
+        let location = selectedRange().location
+        let text = string
+        aiTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Defaults.AI.inlineDelay))
+            guard !Task.isCancelled else { return }
+            let full = text as NSString
+            let suggestion = await ai(full.substring(to: location), full.substring(from: location))
+            guard let self, !Task.isCancelled, let suggestion, self.string == text,
+                  self.selectedRange() == NSRange(location: location, length: 0) else { return }
+            self.inlineSuggestion = (location, suggestion)
+        }
     }
 
     override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
@@ -198,6 +261,8 @@ final class SQLTextView: NSTextView {
     }
 
     func dropInlineSuggestionIfMoved() {
+        // Moving the caret away from where the user typed cancels a pending AI request.
+        if selectedRange() != NSRange(location: lastTypedLocation ?? -1, length: 0) { aiTask?.cancel() }
         if let suggestion = inlineSuggestion, selectedRange() != NSRange(location: suggestion.location, length: 0) { inlineSuggestion = nil }
     }
 

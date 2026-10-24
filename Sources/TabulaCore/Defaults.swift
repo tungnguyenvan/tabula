@@ -55,6 +55,8 @@ public enum Defaults {
         public static let generateMaxTokens = 16000
         public static let inlineTimeout: Double = 15
         public static let generateTimeout: Double = 120
+        /// Characters before the caret sent with an inline request.
+        public static let inlineContextLength = 2000
         /// Tables described to the model; larger schemas are cut off.
         public static let schemaTableLimit = 150
         public static let anthropicVersion = "2026-10-21"

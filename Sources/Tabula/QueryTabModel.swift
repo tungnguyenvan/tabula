@@ -22,6 +22,11 @@ final class QueryTabModel {
     var runRequest: (all: Bool, id: Int) = (false, 0)
     /// Incremented by the menu bar to beautify the editor (⇧⌘I).
     var beautifyRequest = 0
+    /// Incremented by the menu bar to open the Ask AI bar (⌘K).
+    var askAIRequest = 0
+    /// The statement that failed in the last run, for Fix with AI.
+    private(set) var failedStatement: String?
+    let assistant = QueryAssistant()
 
     init(title: String, sql: String, driver: any DatabaseDriver, workspace: WorkspaceModel) {
         self.title = title
@@ -40,6 +45,7 @@ final class QueryTabModel {
         guard !script.isEmpty, !running else { return }
         running = true
         error = nil
+        failedStatement = nil
         results = []
         defer { running = false; version += 1 }
 
@@ -52,6 +58,7 @@ final class QueryTabModel {
                 let limited = rowLimit.map { driver.dialect.applyingRowLimit(statement, limit: $0) } ?? statement
                 results.append(try await driver.execute(limited))
             } catch {
+                failedStatement = statement
                 let prefix = statements.count > 1 ? "Statement \(index + 1) of \(statements.count) failed:\n" : ""
                 self.error = prefix + error.localizedDescription
                 break

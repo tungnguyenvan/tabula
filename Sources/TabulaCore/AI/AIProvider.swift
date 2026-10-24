@@ -137,9 +137,11 @@ public enum SQLPrompts {
             """, prompt: "Schema:\n\(schema.text)\n\nSQL:\n\(sql)\n\nThe server answered:\n\(error)")
     }
 
-    /// Asks for the text that continues `before`, placed before `after`.
+    /// Asks for the text that continues `before`, placed before `after`. Only the text near the caret is
+    /// sent, which keeps the request small and fast.
     public static func inline(before: String, after: String, schema: Schema, kind: DatabaseKind) -> AIRequest {
-        AIRequest(purpose: .inline, instructions: """
+        let before = String(before.suffix(Defaults.AI.inlineContextLength)), after = String(after.prefix(Defaults.AI.inlineContextLength / 4))
+        return AIRequest(purpose: .inline, instructions: """
             You complete \(kind.displayName) SQL as the user types. Reply with only the characters to insert at \
             <cursor>, at most one line, nothing else. Reply with an empty message if nothing fits.
             """, prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)")
@@ -164,7 +166,25 @@ public enum SQLPrompts {
         line = line.replacingOccurrences(of: "<cursor>", with: "")
         // Models sometimes repeat the word being completed; keep only what is new.
         let tail = before.split(whereSeparator: { $0.isWhitespace }).last.map(String.init) ?? ""
-        if !tail.isEmpty, line.lowercased().hasPrefix(tail.lowercased()) { line = String(line.dropFirst(tail.count)) }
+        if !tail.isEmpty, before.last?.isWhitespace == false, line.lowercased().hasPrefix(tail.lowercased()) {
+            line = String(line.dropFirst(tail.count))
+        }
+        // Don't double the space the user already typed.
+        if before.last?.isWhitespace == true { line = String(line.drop(while: { $0 == " " })) }
         return line
+    }
+}
+
+/// Builds the backend the settings name.
+public enum AIProviders {
+    public static func make(_ settings: AISettings, apiKey: String) -> any AIProvider {
+        switch settings.provider {
+        case .appleIntelligence: AppleIntelligenceProvider()
+        case .ollama: OllamaProvider(settings: settings)
+        case .openAICompatible: OpenAICompatibleProvider(settings: settings, apiKey: apiKey)
+        case .anthropic: AnthropicProvider(settings: settings, apiKey: apiKey)
+        case .claudeCode: CLIProvider(tool: .claude, settings: settings)
+        case .codex: CLIProvider(tool: .codex, settings: settings)
+        }
     }
 }

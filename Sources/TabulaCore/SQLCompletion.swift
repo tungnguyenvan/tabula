@@ -63,7 +63,9 @@ public enum SQLCompletion {
             let qualifier = unquoted(significant[significant.count - 2].text)
             // `FROM sales.` (or any known schema name) names a schema; otherwise `x.` is a table or alias.
             let afterTableKeyword = significant.count >= 3 && tableKeywords.contains(significant[significant.count - 3].keyword)
-            let isSchema = afterTableKeyword || schemas.contains { $0.caseInsensitiveCompare(qualifier) == .orderedSame }
+            // An alias defined in the statement wins over a schema of the same name.
+            let isAlias = referencedTables(tokens).keys.contains(qualifier.lowercased())
+            let isSchema = afterTableKeyword || (!isAlias && schemas.contains { $0.caseInsensitiveCompare(qualifier) == .orderedSame })
             // schema.table. - the word before the qualifier is itself followed by a dot.
             let schema = significant.count >= 4 && significant[significant.count - 3].text == "."
                 ? unquoted(significant[significant.count - 4].text) : nil

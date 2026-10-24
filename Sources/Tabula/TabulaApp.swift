@@ -347,6 +347,9 @@ struct WorkspaceCommands: Commands {
             Button("Beautify SQL") { query?.beautifyRequest += 1 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
+            Button("Ask AI…") { query?.askAIRequest += 1 }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(noWorkspace)
         }
 
         CommandGroup(after: .appInfo) {

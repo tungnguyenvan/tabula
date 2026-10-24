@@ -5,6 +5,7 @@ import TabulaCore
 struct ConnectionListView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @State private var search = ""
     @State private var selection: UUID?
     @State private var editing: EditRequest?
@@ -79,6 +80,10 @@ struct ConnectionListView: View {
             if DebugHooks.showShortcuts {
                 WindowRequests.request(WindowID.shortcuts)
                 openWindow(id: WindowID.shortcuts)
+            }
+            if DebugHooks.showSettings {
+                UserDefaults.standard.set(ProcessInfo.processInfo.environment["TABULA_DEBUG_SETTINGS"], forKey: "TabulaSettingsTab")
+                openSettings()
             }
         }
         #endif

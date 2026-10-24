@@ -14,6 +14,26 @@ cd "$(dirname "$0")/.."
 
 REPOSITORY="$(cat RELEASES_REPOSITORY)"
 VERSION="$(cat VERSION)"
+OUT="dist/release"
+
+# Replacing the public history can't be undone; make the second confirmation explicit.
+if [ "${FRESH:-}" = "1" ] && [ "${CONFIRM_REPLACE_HISTORY:-}" != "$REPOSITORY" ]; then
+  echo "FRESH=1 replaces all history of $REPOSITORY. Re-run with CONFIRM_REPLACE_HISTORY=$REPOSITORY to proceed." >&2
+  exit 1
+fi
+# Check the release before publishing anything, so a missing file can't leave the docs half-updated.
+if [ "${1:-}" = "--release" ]; then
+  for file in RELEASE_NOTES.md "Tabula-$VERSION.dmg" "Tabula-$VERSION.zip" SHA256SUMS.txt; do
+    [ -f "$OUT/$file" ] || { echo "Missing $OUT/$file; run scripts/release.sh first." >&2; exit 1; }
+  done
+fi
+# Every source-only section must be closed, or the private part would be published.
+opened=$(grep -c '<!-- source-only -->' README.md || true)
+closed=$(grep -c '<!-- /source-only -->' README.md || true)
+if [ "$opened" != "$closed" ]; then
+  echo "README.md has $opened <!-- source-only --> but $closed <!-- /source-only --> markers." >&2
+  exit 1
+fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -46,7 +66,6 @@ else
 fi
 
 if [ "${1:-}" = "--release" ]; then
-  OUT="dist/release"
   gh release create "v$VERSION" -R "$REPOSITORY" --target main --title "Tabula $VERSION" \
     --notes-file "$OUT/RELEASE_NOTES.md" --latest \
     "$OUT/Tabula-$VERSION.dmg" "$OUT/Tabula-$VERSION.zip" "$OUT/SHA256SUMS.txt"
