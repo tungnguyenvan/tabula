@@ -183,6 +183,12 @@ final class SQLTextView: NSTextView {
         inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
     }
 
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        // Any edit other than typing (delete, paste, undo) cancels a pending late refresh.
+        if !typedCharacter { lastTypedLocation = nil }
+        return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+    }
+
     /// Recomputes the suggestion after table or column names arrive, if the caret is still where the user typed.
     func refreshInlineSuggestion() {
         guard inlineSuggestion == nil, let location = lastTypedLocation, selectedRange() == NSRange(location: location, length: 0) else { return }
