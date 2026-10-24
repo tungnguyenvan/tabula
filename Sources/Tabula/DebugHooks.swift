@@ -182,12 +182,14 @@ enum DebugHooks {
         }
     }
 
-    /// TABULA_DEBUG_WIDTH: shrink the window to check that nothing forces a minimum width; logs the result.
+    /// TABULA_DEBUG_WIDTH (and optionally TABULA_DEBUG_HEIGHT): resize the window, e.g. to check that nothing
+    /// forces a minimum width or to take screenshots at a set size; logs the result.
     private static func checkMinimumWidth() {
         guard let width = environment["TABULA_DEBUG_WIDTH"].flatMap(Double.init) else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             guard let window = targetWindow else { return }
-            window.setContentSize(NSSize(width: width, height: window.contentLayoutRect.height))
+            let height = environment["TABULA_DEBUG_HEIGHT"].flatMap(Double.init) ?? window.contentLayoutRect.height
+            window.setContentSize(NSSize(width: width, height: height))
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 print("WIDTH requested", width, "got", window.frame.width, "min", window.minSize.width)
                 fflush(stdout)
