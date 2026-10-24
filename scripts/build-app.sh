@@ -10,16 +10,17 @@
 #                  exists, so Keychain access survives rebuilds; otherwise the app is signed ad-hoc.
 #   LOCAL_IDENTITY name of that local identity (default: "Tabula Local Signing")
 #   COPYRIGHT      shown in Finder and the About panel
-#   REPOSITORY     GitHub owner/name checked for updates (default: the origin remote)
+#   REPOSITORY     GitHub owner/name checked for updates (default: the RELEASES_REPOSITORY file)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="${VERSION:-$(cat VERSION)}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
 ARCHS="${ARCHS:-arm64 x86_64}"
-COPYRIGHT="${COPYRIGHT:-Copyright © 2026 Nguyen Van Tung. MIT License.}"
-# owner/name of the GitHub repository whose releases the app checks for updates (from the origin remote).
-REPOSITORY="${REPOSITORY:-$(git remote get-url origin 2>/dev/null | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')}"
+COPYRIGHT="${COPYRIGHT:-Copyright © 2026 Nguyen Van Tung. Freeware.}"
+# owner/name of the public GitHub repository whose releases the app checks for updates. The source
+# lives in a separate private repository, so this comes from RELEASES_REPOSITORY, not the git remote.
+REPOSITORY="${REPOSITORY:-$(cat RELEASES_REPOSITORY)}"
 
 ARCH_FLAGS=()
 for arch in $ARCHS; do ARCH_FLAGS+=(--arch "$arch"); done

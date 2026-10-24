@@ -2,10 +2,10 @@
 
 <h1 align="center">Tabula</h1>
 
-<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">License</a></p>
 
 <p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b> and <b>Redis</b>.<br>
-Free, no usage limits, keyboard-first.</p>
+Free to use, no usage limits, keyboard-first.</p>
 
 <p align="center"><img src="docs/screenshots/data.png" width="820" alt="Browsing and filtering a table, with the row details panel open"></p>
 
@@ -20,9 +20,11 @@ Free, no usage limits, keyboard-first.</p>
 - [Updates](#updates)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
+<!-- source-only -->
 - [Building from source](#building-from-source)
 - [Making a release](#making-a-release)
 - [Development](#development)
+<!-- /source-only -->
 - [Roadmap and known limitations](#roadmap-and-known-limitations)
 - [License](#license)
 
@@ -240,6 +242,7 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 - **Network:** Tabula connects to the databases you configure, and to `api.github.com` / `github.com` to check for and download updates. There is no telemetry and no account.
 - **Windows:** workspace windows are not restored at launch, so Tabula never reconnects to a database, such as Production, unless you choose to.
 
+<!-- source-only -->
 ## Building from source
 
 You need macOS 14 or later and Xcode 16 or later (the Swift 6 toolchain).
@@ -280,7 +283,11 @@ The update checker reads the GitHub repository from the `origin` remote (overrid
    SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=tabula ./scripts/release.sh
    ```
    The app is signed with the hardened runtime, submitted to Apple, stapled and checked with `spctl`. The DMG is signed as well.
-4. Tag the release (`git tag v<version>`) and upload the contents of `dist/release/`, using `RELEASE_NOTES.md` as the description.
+4. Tag the source (`git tag v<version> && git push origin v<version>`), then publish:
+   ```bash
+   ./scripts/publish-public.sh --release
+   ```
+   The source code lives in this private repository. The public repository named in `RELEASES_REPOSITORY` holds only the README (without the sections marked `source-only`), changelog, license, screenshots and the releases. The app checks that repository for updates.
 
 Other options: `SKIP_TESTS=1`, `BUILD_NUMBER=…` (defaults to a UTC timestamp) and `COPYRIGHT=…`.
 
@@ -329,6 +336,8 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 
 **Icon.** `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`.
 
+<!-- /source-only -->
+
 ## Roadmap and known limitations
 
 Planned:
@@ -346,6 +355,6 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
-Tabula is released under the [MIT License](LICENSE). Copyright © 2026 Nguyen Van Tung.
+Tabula is freeware: free to download and use, for personal or commercial work, with no time or feature limits. Redistribution and modification are not permitted; see [LICENSE](LICENSE). Versions 0.1.0 and 0.2.0 were released under the MIT License. Copyright © 2026 Nguyen Van Tung.
 
-Tabula bundles open-source components: PostgresNIO and MySQLNIO (MIT), RediStack, SwiftNIO, swift-nio-ssl, swift-crypto and related Apple packages (Apache 2.0, some of which include BoringSSL). Their full license texts and NOTICE files are in [`Resources/THIRD_PARTY_NOTICES.txt`](Resources/THIRD_PARTY_NOTICES.txt). The same file ships inside the app, at `Tabula.app/Contents/Resources`, and is linked from **Tabula › About Tabula**.
+Tabula bundles open-source components: PostgresNIO and MySQLNIO (MIT), RediStack, SwiftNIO, swift-nio-ssl, swift-crypto and related Apple packages (Apache 2.0, some of which include BoringSSL). Their full license texts and NOTICE files are in [`THIRD_PARTY_NOTICES.txt`](Resources/THIRD_PARTY_NOTICES.txt). The same file ships inside the app, at `Tabula.app/Contents/Resources`, and is linked from **Tabula › About Tabula**.
