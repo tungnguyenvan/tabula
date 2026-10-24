@@ -7,7 +7,7 @@
 <p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b> and <b>Redis</b>.<br>
 Free, no usage limits, keyboard-first.</p>
 
-<p align="center"><img src="docs/screenshots/data.png" width="820" alt="Browsing and filtering a table, with the row details panel open"></p>
+<p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a Redis and a PostgreSQL connection open, browsing a table with the row details panel"></p>
 
 ## Contents
 
@@ -20,9 +20,11 @@ Free, no usage limits, keyboard-first.</p>
 - [Updates](#updates)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
+<!-- source-only -->
 - [Building from source](#building-from-source)
 - [Making a release](#making-a-release)
 - [Development](#development)
+<!-- /source-only -->
 - [Roadmap and known limitations](#roadmap-and-known-limitations)
 - [License](#license)
 
@@ -44,6 +46,8 @@ Free, no usage limits, keyboard-first.</p>
 - Equal-width tabs. Browsing the sidebar with the arrow keys reuses a single preview tab; press Return or double-click to keep a table open in its own tab.
 - Command palette (⌘P) to jump to any table, open tab, schema or action.
 
+<p align="center"><img src="docs/screenshots/data.png" width="820" alt="Filtering a table, with the row details panel open"></p>
+
 **Data grid**
 - Paged results (100 to 5,000 rows per page) with a total row count, row numbers and server-side sorting.
 - Filter builder (column, operator, value), with AND or OR between conditions (AND binds tighter, as in SQL), or a hand-written `WHERE` clause. "Filter by This Value" is in the cell context menu.
@@ -61,8 +65,8 @@ Free, no usage limits, keyboard-first.</p>
 
 **SQL editor**
 - Syntax highlighting and line numbers.
-- **Run Current** (⌘↩) runs only the selected text when there is a selection, otherwise the statement under the cursor (briefly highlighted). **Run All** (⇧⌘↩) runs everything. Scripts with several statements show one result per statement.
-- **Suggestions as you type:** table names after `FROM` / `JOIN`, a table's columns after `alias.`, and keywords plus the columns of the tables the statement uses. The best match appears in grey after the cursor; press Tab to accept it. ⎋ (or ⌃Space) shows the full list.
+- **Run** (⌘↩) runs only the selected text when there is a selection, otherwise the statement under the cursor (briefly highlighted). Its menu, or ⇧⌘↩, runs every statement. Scripts with several statements show one result per statement.
+- **Suggestions as you type:** table names after `FROM` / `JOIN` and after `schema.`, a table's columns after `alias.`, and keywords plus columns (of the tables the statement uses, or of every table before one is named). The best match appears in grey after the cursor; press Tab to accept it. ⎋ (or ⌃Space) shows the full list.
 - **Limit:** SELECTs without a `LIMIT` get one (300 rows by default, or 100 to 5,000, or none), so an accidental full-table query stays small. Statements that already limit themselves, writes and `FOR UPDATE` are left alone.
 - **Beautify** (⇧⌘I) formats the selection or the whole editor: one clause per line, select items and conditions on their own lines, subqueries indented. Strings and comments are kept as written.
 - Comment toggling (⌘/), query history, and opening or saving `.sql` files.
@@ -168,8 +172,8 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 ## Things to know
 
 - **macOS version.** Tabula needs macOS 14 Sonoma or later. On older systems Finder refuses to open it. Version 0.1.0 was built and tested on macOS 26 Tahoe; macOS 14 and 15 meet the minimum requirement but have not been tested yet, so please report any problems.
-- **Not notarized yet.** Releases are ad-hoc signed and not notarized by Apple, so each new version needs one confirmation at first launch. See [First launch](#3-first-launch).
-- **Keychain prompt after updates.** Ad-hoc signatures change with every build. After installing a new version, macOS asks once whether Tabula may use the saved passwords. Choose **Always Allow**. Within one launch, each connection's password is read only once. If you choose Deny, Tabula can't read the password and the connection fails to authenticate; edit the connection and enter the password again.
+- **Not notarized yet.** Releases are signed with the developer's own certificate, not an Apple Developer ID, and are not notarized by Apple, so each new version needs one confirmation at first launch. See [First launch](#3-first-launch).
+- **Keychain prompt.** The first time a version signed differently opens your saved passwords, macOS asks whether Tabula may use them. Choose **Always Allow**. Since 0.2.1 every release is signed with the same certificate, so this happens once (when you update from 0.2.0 or earlier) and not again after later updates. Within one launch, each connection's password is read only once. If you choose Deny, Tabula can't read the password and the connection fails to authenticate; edit the connection and enter the password again.
 - **Local network permission (macOS 15 and later).** The first time you connect to a server on your local network, such as `192.168.x.x` or `10.x.x.x`, macOS asks whether Tabula may access it. If you deny it, those connections fail with "No route to host". Turn it back on in **System Settings › Privacy & Security › Local Network**. `localhost`, Docker port forwards and internet hosts are not affected.
 - **TLS certificates.** "Verify certificate" checks the server against the trust store in macOS Keychain Access. Managed databases with a private CA (for example AWS RDS, or self-signed certificates) fail verification until that CA is added to Keychain Access and marked trusted. "Required" encrypts the connection without checking the certificate.
 - **Updates** come from this repository's GitHub releases. See [Updates](#updates).
@@ -240,6 +244,7 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 - **Network:** Tabula connects to the databases you configure, and to `api.github.com` / `github.com` to check for and download updates. There is no telemetry and no account.
 - **Windows:** workspace windows are not restored at launch, so Tabula never reconnects to a database, such as Production, unless you choose to.
 
+<!-- source-only -->
 ## Building from source
 
 You need macOS 14 or later and Xcode 16 or later (the Swift 6 toolchain).
@@ -280,7 +285,8 @@ The update checker reads the GitHub repository from the `origin` remote (overrid
    SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=tabula ./scripts/release.sh
    ```
    The app is signed with the hardened runtime, submitted to Apple, stapled and checked with `spctl`. The DMG is signed as well.
-4. Tag the release (`git tag v<version>`) and upload the contents of `dist/release/`, using `RELEASE_NOTES.md` as the description.
+4. Tag the release (`git tag v<version>`) and upload the contents of `dist/release/`, using `RELEASE_NOTES.md` as the description. The app checks the repository named in `RELEASES_REPOSITORY` for updates.
+   (`scripts/publish-public.sh` can instead publish only the documentation and releases to that repository, for when the source moves to a private one.)
 
 Other options: `SKIP_TESTS=1`, `BUILD_NUMBER=…` (defaults to a UTC timestamp) and `COPYRIGHT=…`.
 
@@ -328,6 +334,10 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 **Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_TABLE`, `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_KEY` and `TABULA_DEBUG_REDIS_CONSOLE` (Redis), `TABULA_DEBUG_DIAGRAM`, `TABULA_DEBUG_METRICS`, `TABULA_DEBUG_CONSOLE`, `TABULA_UPDATE_FEED=<url>` with `TABULA_DEBUG_AUTOINSTALL=1` (test the updater against a local feed), `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
 
 **Icon.** `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`.
+
+**Hero image.** `swift scripts/make-hero.swift <window.png> docs/screenshots/hero.png` puts a window screenshot (taken with `TABULA_DEBUG_SNAPSHOT`, sized with `TABULA_DEBUG_WIDTH` / `TABULA_DEBUG_HEIGHT`) on the gradient background.
+
+<!-- /source-only -->
 
 ## Roadmap and known limitations
 

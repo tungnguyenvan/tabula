@@ -53,6 +53,7 @@ struct ConsoleLogView: View {
                 BarButton(symbol: "xmark", help: "Hide console (⇧⌘C)", action: close)
             }
             .padding(.horizontal, Layout.barPadding)
+            .frame(minWidth: 0, maxWidth: .infinity)
             .frame(height: Layout.barHeight)
             .barBackground()
             Divider()
@@ -86,16 +87,19 @@ private struct ConsoleLogRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Layout.barPadding) {
             Text(QueryLogModel.time(entry.date)).font(Layout.Font.monoSmall).foregroundStyle(.tertiary)
-            Text(entry.statement)
+            // One line per statement, cut to the panel's width; the full text is in the tooltip and Copy.
+            Text(entry.statement.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression))
                 .font(Layout.Font.monoSmall)
                 .foregroundStyle(entry.isMeta ? .secondary : .primary)
-                .lineLimit(Layout.Console.statementLines)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .help(entry.statement)
             Text(QueryLogModel.describe(entry))
                 .font(Layout.Font.small)
                 .foregroundStyle(failed ? Color.red : .secondary)
                 .lineLimit(1)
+                .fixedSize()
                 .help(QueryLogModel.describe(entry))
         }
         .contextMenu {

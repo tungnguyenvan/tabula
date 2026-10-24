@@ -211,7 +211,7 @@ private struct RedisKeysPane: View {
                 Divider()
                 bottomBar
             }
-            .frame(minHeight: 180, idealHeight: 380)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Redis.keysMinHeight, idealHeight: Layout.Redis.keysIdealHeight)
 
             Group {
                 if let key = model.keyModel {
@@ -222,7 +222,7 @@ private struct RedisKeysPane: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minHeight: 160, idealHeight: 320)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Redis.valueMinHeight, idealHeight: Layout.Redis.valueIdealHeight)
         }
         .onChange(of: model.patternFocusRequest) { _, _ in model.mode = .keys; patternFocused = true }
     }

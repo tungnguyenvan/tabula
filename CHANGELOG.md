@@ -9,6 +9,26 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - SSH tunnels
 - Cancelling a running query
 
+## [0.2.1] - 2026-10-25
+
+### Added
+- SQL suggestions after a schema name: `FROM sales.` offers that schema's tables (loaded in the background if it isn't the one selected in the sidebar), and `alias.` offers the columns of tables in any schema, including `schema.table.`.
+- Columns of every table are suggested before the statement names one (`SELECT na…` before the `FROM`).
+- Right after `alias.` or `schema.`, the first column or table is offered in grey; Tab accepts it.
+
+### Changed
+- One **Run** button (the selection, or the statement at the cursor) with **Run All Statements** in its menu, instead of two buttons.
+- Release builds can be signed with a fixed local certificate (`scripts/make-signing-identity.sh`), so macOS stops asking for Keychain access after every update.
+
+### Fixed
+- macOS's own word suggestions and grey predictions no longer appear in the SQL editor on top of Tabula's.
+- Windows can be made narrow again: a long row in the console or a result no longer forces a minimum width larger than the screen. Console rows are a single line, cut to fit, with the full statement in the tooltip.
+- The line-number column of the SQL editor no longer draws a line through the toolbar above it.
+- Suggestions appear as soon as table or column names finish loading, without another keystroke.
+
+### Notes
+- 0.2.1 is the first release signed with a fixed certificate. Updating from 0.2.0, macOS asks once more whether Tabula may use the saved passwords; choose **Always Allow**. Later updates won't ask again.
+
 ## [0.2.0] - 2026-10-25
 
 ### Added
@@ -71,6 +91,7 @@ First public release.
 - Release builds are ad-hoc signed and not notarized; macOS asks for confirmation on first launch (see the README).
 - Connecting to a database on the local network asks for Local Network permission on macOS 15 and later.
 
-[Unreleased]: https://github.com/tungnguyenvan/tabula/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tungnguyenvan/tabula/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.2.1
 [0.2.0]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.2.0
 [0.1.0]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.1.0

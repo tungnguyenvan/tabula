@@ -55,6 +55,8 @@ struct SQLEditorView: NSViewRepresentable {
     var handle: EditorHandle
     /// Completions for the word at a caret (UTF-16 offset): the range they replace and the candidates, best first.
     var suggest: (_ text: String, _ caret: Int) -> (range: NSRange, items: [String])
+    /// Changes when completion has learned new names; the editor then refreshes its suggestion.
+    var completionVersion = 0
     /// Each query tab keeps its own undo history.
     var undoManager: UndoManager
     /// ⌘↩ runs the selection or current statement; ⇧⌘↩ runs everything.
@@ -75,6 +77,10 @@ struct SQLEditorView: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = false
         textView.isGrammarCheckingEnabled = false
         textView.smartInsertDeleteEnabled = false
+        // macOS's own word completion and grey inline predictions are for prose; they would hide
+        // (and fight with) the SQL suggestions.
+        textView.isAutomaticTextCompletionEnabled = false
+        if #available(macOS 14.0, *) { textView.inlinePredictionType = .no }
         textView.font = SQLHighlighter.font
         textView.textContainerInset = NSSize(width: 6, height: 8)
         textView.isVerticallyResizable = true
@@ -87,11 +93,14 @@ struct SQLEditorView: NSViewRepresentable {
         textView.string = text
         SQLHighlighter.highlight(textView)
 
+        // Since macOS 14 views don't clip by default; the line-number gutter would draw over the bar above.
+        scrollView.clipsToBounds = true
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = true
         textView.backgroundColor = .textBackgroundColor
         let ruler = LineNumberRuler(textView: textView)
+        ruler.clipsToBounds = true
         scrollView.verticalRulerView = ruler
         scrollView.hasVerticalRuler = true
         scrollView.rulersVisible = true
@@ -107,11 +116,16 @@ struct SQLEditorView: NSViewRepresentable {
             textView.string = text
             SQLHighlighter.highlight(textView)
         }
+        if context.coordinator.completionVersion != completionVersion {
+            context.coordinator.completionVersion = completionVersion
+            (textView as? SQLTextView)?.refreshInlineSuggestion()
+        }
     }
 
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: SQLEditorView
+        var completionVersion = 0
         init(_ parent: SQLEditorView) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
@@ -143,11 +157,14 @@ final class SQLTextView: NSTextView {
     }
     /// Set while text is being typed, so only typing (not deleting or pasting) offers a suggestion.
     private var typedCharacter = false
+    /// Where the last typed character went; a late refresh (names finished loading) only applies there.
+    private var lastTypedLocation: Int?
 
     override func insertText(_ string: Any, replacementRange: NSRange) {
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
         typedCharacter = text.count == 1
         super.insertText(string, replacementRange: replacementRange)
+        lastTypedLocation = typedCharacter ? selectedRange().location : nil
         typedCharacter = false
     }
 
@@ -159,8 +176,19 @@ final class SQLTextView: NSTextView {
         // Only complete at the end of a word, never in the middle of one.
         let nextIsWord = caret.location < (string as NSString).length
             && (string as NSString).substring(with: NSRange(location: caret.location, length: 1)).rangeOfCharacter(from: .alphanumerics) != nil
-        guard !partial.isEmpty, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
+        // Right after "schema." or "alias." there is no word yet; the first table or column is offered as is.
+        // (Not the completion list: NSTextView runs it modally, which would stall the app while it's open.)
+        let afterDot = caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
+        guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
         inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
+    }
+
+    /// Recomputes the suggestion after table or column names arrive, if the caret is still where the user typed.
+    func refreshInlineSuggestion() {
+        guard inlineSuggestion == nil, let location = lastTypedLocation, selectedRange() == NSRange(location: location, length: 0) else { return }
+        typedCharacter = true
+        updateInlineSuggestion()
+        typedCharacter = false
     }
 
     func dropInlineSuggestionIfMoved() {
@@ -176,6 +204,12 @@ final class SQLTextView: NSTextView {
     override func cancelOperation(_ sender: Any?) {
         // ⎋ first dismisses the inline suggestion, then opens the completion list as usual.
         if inlineSuggestion != nil { inlineSuggestion = nil } else { super.cancelOperation(sender) }
+    }
+
+    /// The word the completion list replaces: what the SQL lexer considers the word at the caret, which
+    /// is empty right after a dot (NSTextView's default would take the whole `alias.` text).
+    override var rangeForUserCompletion: NSRange {
+        coordinator?.parent.suggest(string, selectedRange().location).range ?? super.rangeForUserCompletion
     }
 
     override func complete(_ sender: Any?) {
