@@ -101,6 +101,12 @@ final class SQLCompletionTests: XCTestCase {
         XCTAssertEqual(suggest("SEL|"), ["SELECT"])
     }
 
+    func testAllColumnsBeforeATableIsNamed() {
+        let context = SQLCompletion.context(in: "SELECT tot", caret: 10, kind: .postgres)
+        XCTAssertEqual(SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0] },
+                                                 allColumns: ["id", "name", "total"]).first, "total")
+    }
+
     func testNothingToCompleteWithoutAWord() {
         XCTAssertEqual(suggest("SELECT |"), [])
         XCTAssertEqual(suggest("SELECT 'na|"), [])

@@ -78,7 +78,10 @@ public enum SQLCompletion {
     }
 
     /// Ranked suggestions for `context`. `columns` returns a table's columns when they are known.
-    public static func suggestions(for context: Context, tables: [String], columns: (String) -> [String]?) -> [String] {
+    /// `allColumns` are columns of every known table, offered when the statement names no table yet
+    /// (for example `SELECT na` before the FROM clause is written).
+    public static func suggestions(for context: Context, tables: [String], columns: (String) -> [String]?,
+                                   allColumns: [String] = []) -> [String] {
         // Groups in priority order: what the statement uses comes before everything else.
         let groups: [[String]]
         switch context.scope {
@@ -89,7 +92,7 @@ public enum SQLCompletion {
             groups = [columns(table) ?? []]
         case .anything:
             guard !context.partial.isEmpty else { return [] }
-            let usedColumns = Set(context.tables.values).sorted().flatMap { columns($0) ?? [] }
+            let usedColumns = context.tables.isEmpty ? allColumns : Set(context.tables.values).sorted().flatMap { columns($0) ?? [] }
             // Match the user's case for keywords.
             let keywords = context.partial.first?.isLowercase == true ? SQLKeywords.all.map { $0.lowercased() } : SQLKeywords.all
             groups = [usedColumns, tables, keywords]

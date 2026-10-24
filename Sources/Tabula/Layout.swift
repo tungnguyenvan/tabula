@@ -42,11 +42,24 @@ enum Layout {
         static let operatorWidth: CGFloat = 120
     }
 
+    /// Split views take a pane's ideal width as its minimum, so every pane says `minWidth: 0`.
+    enum Query {
+        static let editorMinHeight: CGFloat = 120
+        static let editorIdealHeight: CGFloat = 260
+        static let resultsMinHeight: CGFloat = 140
+    }
+
+    enum Redis {
+        static let keysMinHeight: CGFloat = 180
+        static let keysIdealHeight: CGFloat = 380
+        static let valueMinHeight: CGFloat = 160
+        static let valueIdealHeight: CGFloat = 320
+    }
+
     enum Console {
         static let minHeight: CGFloat = 90
         static let idealHeight: CGFloat = 180
         static let rowHeight: CGFloat = 20
-        static let statementLines = 3
     }
 
     enum Welcome {

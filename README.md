@@ -61,7 +61,7 @@ Free, no usage limits, keyboard-first.</p>
 
 **SQL editor**
 - Syntax highlighting and line numbers.
-- **Run Current** (⌘↩) runs only the selected text when there is a selection, otherwise the statement under the cursor (briefly highlighted). **Run All** (⇧⌘↩) runs everything. Scripts with several statements show one result per statement.
+- **Run** (⌘↩) runs only the selected text when there is a selection, otherwise the statement under the cursor (briefly highlighted). Its menu, or ⇧⌘↩, runs every statement. Scripts with several statements show one result per statement.
 - **Suggestions as you type:** table names after `FROM` / `JOIN`, a table's columns after `alias.`, and keywords plus the columns of the tables the statement uses. The best match appears in grey after the cursor; press Tab to accept it. ⎋ (or ⌃Space) shows the full list.
 - **Limit:** SELECTs without a `LIMIT` get one (300 rows by default, or 100 to 5,000, or none), so an accidental full-table query stays small. Statements that already limit themselves, writes and `FOR UPDATE` are left alone.
 - **Beautify** (⇧⌘I) formats the selection or the whole editor: one clause per line, select items and conditions on their own lines, subqueries indented. Strings and comments are kept as written.

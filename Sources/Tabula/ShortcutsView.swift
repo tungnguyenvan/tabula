@@ -63,7 +63,7 @@ struct ShortcutsView: View {
             ("⌥⌘Z", "Discard all changes"),
         ]),
         Group(title: "SQL editor", items: [
-            ("⌘↩", "Run selection, or statement at cursor"),
+            ("⌘↩", "Run: the selection, or the statement at the cursor"),
             ("⇧⌘↩", "Run everything"),
             ("⌘/", "Comment / uncomment lines"),
             ("⇥", "Accept the inline suggestion"),

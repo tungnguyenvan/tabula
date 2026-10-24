@@ -24,6 +24,7 @@ enum DebugHooks {
     static func workspaceConnected(_ model: WorkspaceModel) {
         if environment["TABULA_DEBUG_PALETTE"] != nil { model.showPalette = true }
         if environment["TABULA_DEBUG_CONSOLE"] != nil { model.showConsole = true }
+        checkMinimumWidth()
         if environment["TABULA_DEBUG_DIAGRAM"] != nil { model.openDiagram() }
         if environment["TABULA_DEBUG_METRICS"] != nil { model.openMetrics() }
         if let count = environment["TABULA_DEBUG_TABS"].flatMap(Int.init) {
@@ -165,6 +166,7 @@ enum DebugHooks {
     }
 
     static func redisConnected(_ model: RedisWorkspaceModel) {
+        checkMinimumWidth()
         if let key = environment["TABULA_DEBUG_KEY"], let entry = model.keys.first(where: { $0.key.display == key }) {
             model.select(entry.key)
         }
@@ -176,6 +178,19 @@ enum DebugHooks {
                     model.console.input = command
                     await model.console.run()
                 }
+            }
+        }
+    }
+
+    /// TABULA_DEBUG_WIDTH: shrink the window to check that nothing forces a minimum width; logs the result.
+    private static func checkMinimumWidth() {
+        guard let width = environment["TABULA_DEBUG_WIDTH"].flatMap(Double.init) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            guard let window = targetWindow else { return }
+            window.setContentSize(NSSize(width: width, height: window.contentLayoutRect.height))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                print("WIDTH requested", width, "got", window.frame.width, "min", window.minSize.width)
+                fflush(stdout)
             }
         }
     }
@@ -200,6 +215,12 @@ enum DebugHooks {
         guard let directory = environment["TABULA_DEBUG_SNAPSHOT"], let window = targetWindow ?? NSApp.keyWindow,
               let rep = windowServerImage(window) ?? cachedImage(window) else { return }
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("step-\(name).png"))
+        // Popups (completion list, menus) are separate windows above the key window.
+        for (index, popup) in NSApp.windows.filter({ $0.isVisible && $0 !== window && $0.frame.width < window.frame.width }).enumerated() {
+            if let image = windowServerImage(popup) ?? cachedImage(popup) {
+                try? image.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("step-\(name)-popup\(index).png"))
+            }
+        }
         print("SNAP", name)
     }
 

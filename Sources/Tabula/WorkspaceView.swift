@@ -128,7 +128,7 @@ struct WorkspaceView: View {
                 VSplitView {
                     tabContent
                     ConsoleLogView(log: model.log) { model.showConsole = false }
-                        .frame(minHeight: Layout.Console.minHeight, idealHeight: Layout.Console.idealHeight)
+                        .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Console.minHeight, idealHeight: Layout.Console.idealHeight)
                 }
             } else {
                 tabContent
@@ -152,6 +152,9 @@ struct WorkspaceView: View {
                 EmptyWorkspaceView(model: model)
             }
         }
+        // Content must not dictate a minimum width: split views take a child's ideal width as its
+        // minimum, which would stop the window from getting narrower than the widest row.
+        .frame(minWidth: 0, maxWidth: .infinity)
     }
 }
 

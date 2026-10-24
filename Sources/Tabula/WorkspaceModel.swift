@@ -48,6 +48,7 @@ final class WorkspaceModel {
     /// Column names per table, filled on demand for SQL completion.
     private var columnCache: [String: [String]] = [:]
     private var loadingColumns: Set<String> = []
+    private var prefetchingColumns = false
     var tableSearch = ""
     var tablesError: String?
     private(set) var loadingTables = false
@@ -138,6 +139,7 @@ final class WorkspaceModel {
         defer { loadingTables = false }
         do {
             tables = try await driver.tables(in: selectedSchema)
+            if tabs.contains(where: { if case .query = $0 { return true }; return false }) { prefetchColumns() }
             tablesError = nil
         } catch {
             tables = []
@@ -216,6 +218,29 @@ final class WorkspaceModel {
         let model = QueryTabModel(title: "Query \(queryCounter)", sql: sql, driver: driver, workspace: self)
         tabs.append(.query(model))
         selectedTabID = model.id
+        prefetchColumns()
+    }
+
+    /// Loads the columns of the schema's tables in the background, so completion knows them before the
+    /// statement names a table.
+    func prefetchColumns() {
+        guard let driver, !prefetchingColumns else { return }
+        let pending = tables.prefix(Defaults.completionPrefetchLimit).filter { columnCache[$0.name.lowercased()] == nil }
+        guard !pending.isEmpty else { return }
+        prefetchingColumns = true
+        Task {
+            defer { prefetchingColumns = false }
+            for table in pending {
+                let key = table.name.lowercased()
+                guard columnCache[key] == nil else { continue }
+                columnCache[key] = (try? await driver.columns(of: table).map(\.name)) ?? []
+            }
+        }
+    }
+
+    /// Every column name loaded so far, for completion before a table is named.
+    var knownColumnNames: [String] {
+        Array(Set(columnCache.values.joined())).sorted()
     }
 
     func close(_ id: UUID) {

@@ -16,10 +16,10 @@ struct QueryTabView: View {
                 SQLEditorView(text: $model.sql, handle: handle, suggest: suggest,
                               undoManager: model.undoManager) { all in run(all: all) }
             }
-            .frame(minHeight: 120, idealHeight: 260)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.editorMinHeight, idealHeight: Layout.Query.editorIdealHeight)
 
             results
-                .frame(minHeight: 140)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.resultsMinHeight)
         }
         .onAppear { DispatchQueue.main.async { handle.focus() } }
         .onChange(of: model.runRequest.id) { _, _ in run(all: model.runRequest.all) }
@@ -30,17 +30,19 @@ struct QueryTabView: View {
 
     private var editorBar: some View {
         HStack(spacing: 6) {
-            Button { run(all: false) } label: {
-                Label("Run Current", systemImage: "play.fill")
+            // One Run button, as in other SQL clients; Run All is in its menu (and on ⇧⌘↩).
+            Menu {
+                Button("Run All Statements") { run(all: true) }
+            } label: {
+                Label("Run", systemImage: "play.fill")
+            } primaryAction: {
+                run(all: false)
             }
+            .menuStyle(.button)
             .buttonStyle(.borderedProminent)
+            .fixedSize()
             .disabled(model.running)
-            .help("Run the selected text only, or the statement at the cursor when nothing is selected (⌘↩)")
-            Button { run(all: true) } label: {
-                Label("Run All", systemImage: "forward.fill")
-            }
-            .disabled(model.running)
-            .help("Run every statement in the editor (⇧⌘↩)")
+            .help("Run the selected text, or the statement at the cursor when nothing is selected (⌘↩). Run all: ⇧⌘↩")
             Picker("Limit", selection: $model.rowLimit) {
                 Text("No Limit").tag(Int?.none)
                 Divider()
@@ -71,8 +73,12 @@ struct QueryTabView: View {
             BarButton(symbol: "square.and.arrow.down", help: "Save as .sql file") { saveSQL() }
 
             if model.running { ProgressView().controlSize(.mini) }
-            Spacer()
-            Text("⇥ Accept suggestion   ⎋ Suggestions   ⌘/ Comment").font(Layout.Font.icon).foregroundStyle(.tertiary)
+            Spacer(minLength: 0)
+            // A hint, not a control: it disappears when the bar is too narrow for it.
+            ViewThatFits(in: .horizontal) {
+                Text("⇥ Accept suggestion   ⎋ Suggestions   ⌘/ Comment").font(Layout.Font.icon).foregroundStyle(.tertiary).fixedSize()
+                Color.clear.frame(width: 0, height: 0)
+            }
         }
         .controlSize(.small)
         .padding(.horizontal, 8)
@@ -165,7 +171,8 @@ struct QueryTabView: View {
 
     private func suggest(_ text: String, caret: Int) -> (range: NSRange, items: [String]) {
         let context = SQLCompletion.context(in: text, caret: caret, kind: model.driver.kind)
-        let items = SQLCompletion.suggestions(for: context, tables: workspace.tables.map(\.name)) { workspace.columnNames(of: $0) }
+        let items = SQLCompletion.suggestions(for: context, tables: workspace.tables.map(\.name),
+                                              columns: { workspace.columnNames(of: $0) }, allColumns: workspace.knownColumnNames)
         return (context.partialRange, items)
     }
 

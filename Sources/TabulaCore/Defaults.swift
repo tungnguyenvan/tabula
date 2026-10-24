@@ -16,6 +16,8 @@ public enum Defaults {
     /// Rows a query tab's SELECT returns unless it sets its own LIMIT; nil runs it as written.
     public static let queryRowLimit: Int? = 300
     public static let queryRowLimitChoices = [100, 300, 1000, 5000]
+    /// Tables whose columns are loaded up front for SQL completion; larger schemas load on demand.
+    public static let completionPrefetchLimit = 300
     /// Queries remembered in a workspace's history.
     public static let historyLimit = 200
     /// Entries kept in the console log; older ones are dropped.

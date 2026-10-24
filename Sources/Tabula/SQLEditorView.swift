@@ -75,6 +75,10 @@ struct SQLEditorView: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = false
         textView.isGrammarCheckingEnabled = false
         textView.smartInsertDeleteEnabled = false
+        // macOS's own word completion and grey inline predictions are for prose; they would hide
+        // (and fight with) the SQL suggestions.
+        textView.isAutomaticTextCompletionEnabled = false
+        if #available(macOS 14.0, *) { textView.inlinePredictionType = .no }
         textView.font = SQLHighlighter.font
         textView.textContainerInset = NSSize(width: 6, height: 8)
         textView.isVerticallyResizable = true
@@ -87,11 +91,14 @@ struct SQLEditorView: NSViewRepresentable {
         textView.string = text
         SQLHighlighter.highlight(textView)
 
+        // Since macOS 14 views don't clip by default; the line-number gutter would draw over the bar above.
+        scrollView.clipsToBounds = true
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = true
         textView.backgroundColor = .textBackgroundColor
         let ruler = LineNumberRuler(textView: textView)
+        ruler.clipsToBounds = true
         scrollView.verticalRulerView = ruler
         scrollView.hasVerticalRuler = true
         scrollView.rulersVisible = true
@@ -154,6 +161,13 @@ final class SQLTextView: NSTextView {
     func updateInlineSuggestion() {
         let caret = selectedRange()
         guard typedCharacter, caret.length == 0, let coordinator else { inlineSuggestion = nil; return }
+        // After "alias." there is no word to complete inline yet: open the column list, as other SQL clients do.
+        if caret.location > 0, (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: ".")),
+           !coordinator.parent.suggest(string, caret.location).items.isEmpty {
+            inlineSuggestion = nil
+            DispatchQueue.main.async { [weak self] in self?.complete(nil) }
+            return
+        }
         let (range, items) = coordinator.parent.suggest(string, caret.location)
         let partial = (string as NSString).substring(with: range)
         // Only complete at the end of a word, never in the middle of one.
@@ -176,6 +190,12 @@ final class SQLTextView: NSTextView {
     override func cancelOperation(_ sender: Any?) {
         // ⎋ first dismisses the inline suggestion, then opens the completion list as usual.
         if inlineSuggestion != nil { inlineSuggestion = nil } else { super.cancelOperation(sender) }
+    }
+
+    /// The word the completion list replaces: what the SQL lexer considers the word at the caret, which
+    /// is empty right after a dot (NSTextView's default would take the whole `alias.` text).
+    override var rangeForUserCompletion: NSRange {
+        coordinator?.parent.suggest(string, selectedRange().location).range ?? super.rangeForUserCompletion
     }
 
     override func complete(_ sender: Any?) {
