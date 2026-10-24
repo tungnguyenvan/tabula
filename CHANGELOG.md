@@ -5,6 +5,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Planned
+- AI assistant: write and fix queries, AI suggestions as you type; Apple Intelligence, local models via Ollama, OpenAI-compatible APIs (LiteLLM), the Claude API, Claude Code and Codex
 - SSH tunnels
 - Cancelling a running query
 
@@ -17,10 +18,33 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - Key details: size, memory usage, encoding and TTL; set or remove expiry, rename (never overwrites), create and delete keys.
   - Console that works like `redis-cli`: quoting and escapes, formatted replies, history, follows `SELECT`. It refuses commands that would hang the connection (`SUBSCRIBE`, `MONITOR`, blocking calls without a timeout) and asks before `FLUSHALL`/`FLUSHDB`/`SHUTDOWN`, and before any write on Production connections.
 - **Software updates**: Tabula checks GitHub for a new release at most once a day (can be turned off in Settings) and from **Tabula › Check for Updates…**. With one click it downloads the release, verifies its SHA-256 checksum, bundle identifier, version and code signature, replaces itself and relaunches. If anything fails, the current version is kept.
+- **Several connections in one window**: opening another connection adds it to the current window; with two or more, a column left of the sidebar lists them (hover for details, click or ⌃⌘] / ⌃⌘[ to switch). The connection pill in the toolbar shows details on click.
+- **Console log** (⇧⌘C): every statement sent to the server, with time, rows and duration; copy as SQL.
+- **Relationship diagram** (⌥⌘3) from foreign keys, with dragging, zoom and PNG export.
+- **Server metrics** (⌥⌘4) for PostgreSQL, MySQL, SQLite and Redis, with live charts.
+- SQL editor: suggestions as you type (tables after `FROM`/`JOIN`, columns after `alias.`, keywords), shown inline (Tab accepts) and in the completion list (⎋ or ⌃Space); **Beautify** (⇧⌘I); a row **Limit** for SELECTs without one; Run Current / Run All buttons.
+- Filters: AND or OR between conditions.
+- Copy a connection as a URL, with or without the password.
+- The Connections window can be moved by dragging its left pane.
 - Settings window (⌘,).
 
 ### Changed
-- Keychain access no longer blocks the interface while macOS shows a permission prompt.
+- Redis: databases are in the sidebar and keys, with type, TTL, size and value, are in the main table.
+- Keychain access no longer blocks the interface while macOS shows a permission prompt, and each password is read once per launch.
+- Tabs share the width of the bar (120–220 points each) and scroll when there are many.
+- "Copy with Column Names" in the grid moved to ⌥⇧⌘C (⇧⌘C is the console log).
+
+### Fixed
+- Sorting, filtering, paging or changing the page size no longer silently discards uncommitted edits; Tabula asks first.
+- The Commit button is disabled while a commit runs, so changes can't be applied twice.
+- A slow page load can no longer overwrite the result of a newer one (tables and Redis key scans).
+- The tab bar and other bars no longer paint up under the toolbar.
+- The Software Update window no longer reopens by itself at launch.
+- Keychain writes run in order and report failures instead of failing silently.
+- Postgres: malformed binary values (numeric, interval, arrays) can no longer crash the app.
+- Redis: an aborted `MULTI`/`EXEC` is reported; `WAIT` with a timeout is no longer refused; on Production, writes missing from the old list (`SETEX`, `HINCRBY`, …) now ask for confirmation.
+- JSON export keeps every column when a query returns two columns with the same name.
+- The updater can no longer hang on a tool that writes a lot to its error output.
 
 ### Notes
 - Version 0.1.0 has no updater. Install 0.2.0 manually once; later versions can be installed from inside the app.

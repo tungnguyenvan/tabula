@@ -12,6 +12,7 @@ Free, no usage limits, keyboard-first.</p>
 ## Contents
 
 - [Features](#features)
+- [Size and resource use](#size-and-resource-use)
 - [Install](#install)
 - [Things to know](#things-to-know)
 - [Getting started](#getting-started)
@@ -32,15 +33,21 @@ Free, no usage limits, keyboard-first.</p>
 - Tag each connection Local, Development, Staging or Production. The tag colors the sidebar strip and the toolbar pill, and Production gets an extra warning before destructive actions.
 - Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
 - Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
+- Copy a connection as a URL (`postgresql://user@host:5432/db?sslmode=require`), with or without the password, from the connection's context menu.
+
+**Several connections in one window**
+- Open another connection from the database button in the toolbar, or from the Connections window: it joins the current window instead of replacing it.
+- With two or more open, a column at the left edge of the window lists them. Hover for the name and address, click to switch, or use ⌃⌘] / ⌃⌘[. Each connection keeps its own tabs and state.
 
 **Browsing**
-- One window per connection, with a schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter.
+- A schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter.
 - Equal-width tabs. Browsing the sidebar with the arrow keys reuses a single preview tab; press Return or double-click to keep a table open in its own tab.
 - Command palette (⌘P) to jump to any table, open tab, schema or action.
 
 **Data grid**
 - Paged results (100 to 5,000 rows per page) with a total row count, row numbers and server-side sorting.
-- Filter builder (column, operator, value, combined with AND), or a hand-written `WHERE` clause. "Filter by This Value" is in the cell context menu.
+- Filter builder (column, operator, value), with AND or OR between conditions (AND binds tighter, as in SQL), or a hand-written `WHERE` clause. "Filter by This Value" is in the cell context menu.
+- Sorting, filtering or paging asks first if it would throw away uncommitted edits.
 - Spreadsheet-style keyboard control: arrow keys and Tab move between cells, Return edits, typing replaces the value, Space shows the full value (JSON is pretty-printed).
 - Copy rows as TSV, with or without headers, or copy a single cell. Export CSV, TSV, JSON or SQL `INSERT`.
 
@@ -50,18 +57,50 @@ Free, no usage limits, keyboard-first.</p>
 - Commit (⌘S) runs every change in one transaction and rolls back if any statement fails. Preview the exact SQL first with ⇧⌘S.
 - Closing a tab with uncommitted changes asks you first.
 
-<p align="center"><img src="docs/screenshots/query.png" width="820" alt="SQL editor with results"></p>
+<p align="center"><img src="docs/screenshots/query.png" width="820" alt="SQL editor with results and the console log"></p>
 
 **SQL editor**
 - Syntax highlighting and line numbers.
-- ⌘↩ runs the selection, or the statement under the cursor (briefly highlighted). ⇧⌘↩ runs everything.
-- Scripts with several statements show one result per statement.
-- Comment toggling (⌘/), completion of tables and keywords (⎋), query history, and opening or saving `.sql` files.
+- **Run Current** (⌘↩) runs only the selected text when there is a selection, otherwise the statement under the cursor (briefly highlighted). **Run All** (⇧⌘↩) runs everything. Scripts with several statements show one result per statement.
+- **Suggestions as you type:** table names after `FROM` / `JOIN`, a table's columns after `alias.`, and keywords plus the columns of the tables the statement uses. The best match appears in grey after the cursor; press Tab to accept it. ⎋ (or ⌃Space) shows the full list.
+- **Limit:** SELECTs without a `LIMIT` get one (300 rows by default, or 100 to 5,000, or none), so an accidental full-table query stays small. Statements that already limit themselves, writes and `FOR UPDATE` are left alone.
+- **Beautify** (⇧⌘I) formats the selection or the whole editor: one clause per line, select items and conditions on their own lines, subqueries indented. Strings and comments are kept as written.
+- Comment toggling (⌘/), query history, and opening or saving `.sql` files.
+
+**Console log**
+- ⇧⌘C (or the console button in the toolbar) opens a panel under the tabs listing every statement Tabula sent to the server: time, SQL, rows returned or affected, duration and errors. The app's own catalog queries are hidden unless you ask for them. Copy the log as a SQL script, or clear it.
+
+<p align="center"><img src="docs/screenshots/diagram.png" width="820" alt="Relationship diagram"></p>
+
+**Relationship diagram** (⌥⌘3)
+- Every table in the schema with its columns, keys and foreign-key lines between them, laid out by dependency. Drag tables, zoom with the buttons or a pinch, show key columns only, and export the diagram as PNG. Double-click a table to open it.
+
+<p align="center"><img src="docs/screenshots/metrics.png" width="820" alt="Server metrics"></p>
+
+**Server metrics** (⌥⌘4)
+- Live charts of reads, writes, transactions, connections and active queries, refreshed every 1 to 30 seconds (pause any time), plus server details, connection counts, cache hit ratio and the largest tables.
+- PostgreSQL uses `pg_stat_database` and `pg_stat_activity`, MySQL `SHOW GLOBAL STATUS`, SQLite its pragmas, Redis `INFO`. Polling is not written to the console log.
 
 **Structure**
 - Columns with type, nullability, default, comment and primary key, plus indexes with their definitions.
 
 <p align="center"><img src="docs/screenshots/structure.png" width="820" alt="Structure view"></p>
+
+## Size and resource use
+
+Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0:
+
+| | |
+| --- | --- |
+| Download | 18 MB (ZIP) |
+| Installed | 62 MB: one universal app for Apple silicon and Intel, about 30 MB per architecture |
+| Memory, Connections window only | 26 MB |
+| Memory, one Postgres table open (300 rows) | 78 MB |
+| Memory, three connections open (Postgres, MySQL, Redis) | 92 MB |
+| CPU when idle | 0% |
+| CPU with the metrics tab refreshing every 3 s | about 1% |
+
+Memory is the process footprint reported by macOS (`footprint`), which is also what Activity Monitor shows as Memory. It grows with the number of rows on screen: a 5,000-row page takes more than a 300-row one.
 
 ## Install
 
@@ -130,7 +169,7 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 
 - **macOS version.** Tabula needs macOS 14 Sonoma or later. On older systems Finder refuses to open it. Version 0.1.0 was built and tested on macOS 26 Tahoe; macOS 14 and 15 meet the minimum requirement but have not been tested yet, so please report any problems.
 - **Not notarized yet.** Releases are ad-hoc signed and not notarized by Apple, so each new version needs one confirmation at first launch. See [First launch](#3-first-launch).
-- **Keychain prompt after updates.** Ad-hoc signatures change with every build. After installing a new version, macOS asks once whether Tabula may use the saved passwords. Choose **Always Allow**. If you choose Deny, Tabula can't read the password and the connection fails to authenticate; edit the connection and enter the password again.
+- **Keychain prompt after updates.** Ad-hoc signatures change with every build. After installing a new version, macOS asks once whether Tabula may use the saved passwords. Choose **Always Allow**. Within one launch, each connection's password is read only once. If you choose Deny, Tabula can't read the password and the connection fails to authenticate; edit the connection and enter the password again.
 - **Local network permission (macOS 15 and later).** The first time you connect to a server on your local network, such as `192.168.x.x` or `10.x.x.x`, macOS asks whether Tabula may access it. If you deny it, those connections fail with "No route to host". Turn it back on in **System Settings › Privacy & Security › Local Network**. `localhost`, Docker port forwards and internet hosts are not affected.
 - **TLS certificates.** "Verify certificate" checks the server against the trust store in macOS Keychain Access. Managed databases with a private CA (for example AWS RDS, or self-signed certificates) fail verification until that CA is added to Keychain Access and marked trusted. "Required" encrypts the connection without checking the certificate.
 - **Updates** come from this repository's GitHub releases. See [Updates](#updates).
@@ -153,12 +192,16 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 
 ## Redis
 
+<p align="center"><img src="docs/screenshots/redis.png" width="820" alt="Redis keys and a hash value"></p>
+
 Add a connection of type **Redis**. User is optional (an ACL user on Redis 6 and later; leave it empty for password-only `requirepass`), Database is the index (default 0), and TLS works as for SQL databases.
 
-- **Keys:** the sidebar lists keys with `SCAN`, never `KEYS`, so it is safe on large production instances. Type a pattern such as `user:*` and press Return, filter by type, and load more keys as you scroll. The database menu shows key counts per database.
-- **Values:** strings open in an editor (Format JSON, Save with ⌘S, the TTL is kept); hashes, lists, sets, sorted sets and streams open in the grid, with *Load more* for big collections. Double-click a cell to edit, ⌫ to delete, ⌘I to add. Changes are written to Redis immediately.
+- **Databases** are listed in the sidebar with their key counts; click one to switch.
+- **Keys** fill the main table with their type, TTL, size and a preview of the value. Keys are listed with `SCAN`, never `KEYS`, so this is safe on large production instances. Type a pattern such as `user:*` and press Return, filter by type, and load more keys as you scroll. Double-click a key, TTL or short string value to edit it in place.
+- **Values:** the selected key opens below the table. Strings open in an editor (Format JSON, Save with ⌘S, the TTL is kept); hashes, lists, sets, sorted sets and streams open in a grid, with *Load more* for big collections. Double-click a cell to edit, ⌫ to delete, ⌘I to add. Changes are written to Redis immediately.
 - **Key details:** type, size, memory usage, encoding and TTL. Click the TTL to set or remove an expiry; the pencil renames (it never overwrites another key).
-- **Console (⌘T):** commands as in `redis-cli`, with quotes and escapes, ↑↓ history and `clear`. `SELECT` switches the sidebar too. The console refuses `SUBSCRIBE`, `MONITOR` and blocking commands with no timeout, because they would freeze the connection. It asks before `FLUSHALL`, `FLUSHDB` and `SHUTDOWN`, and before any write on a Production connection.
+- **Console (⌘T):** commands as in `redis-cli`, with quotes and escapes, ↑↓ history and `clear`. `SELECT` switches the sidebar too. The console refuses `SUBSCRIBE`, `MONITOR` and blocking commands with no timeout, because they would freeze the connection. It asks before `FLUSHALL`, `FLUSHDB` and `SHUTDOWN`, and on a Production connection before any command that isn't known to only read.
+- **Metrics:** memory, clients, throughput, hit rate, persistence and keyspace from `INFO`, with live charts.
 - Strings larger than 1 MB and binary values are shown read-only; use the console to change them.
 
 ## Updates
@@ -182,12 +225,12 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 
 | Area | Shortcuts |
 | --- | --- |
-| Tabs and windows | ⌘T new query · ⌘W close tab (or the window if no tabs are open) · ⇧⌘T reopen closed tab · ⌘1…⌘8 go to tab, ⌘9 last tab · ⌃Tab or ⇧⌘] next tab · ⌃⇧Tab or ⇧⌘[ previous tab · ⌘P open anything · ⇧⌘K connections |
-| Browsing | ⌥⌘F filter tables · ↑↓ preview a table, ↩ or double-click to keep it open · ⌥⌘1 / ⌥⌘2 Data / Structure · ⌘F filter rows (press again to focus the filter) · ⌘R refresh · ⌘[ / ⌘] previous / next page · ⌥⌘0 row details |
-| Data grid | ← → ↑ ↓ move between cells · Tab / ⇧Tab next / previous cell · ⌘← ⌘→ ⌘↑ ⌘↓ first / last column or row · ↩ or F2 edit · type any key to replace the value · Space quick look · ⌥⌫ set NULL · ⌫ delete rows · ⌘C copy rows · ⇧⌘C copy rows with headers · ⌥⌘C copy cell |
+| Tabs and windows | ⌘T new query · ⌘W close tab (or the window if no tabs are open) · ⇧⌘T reopen closed tab · ⌘1…⌘8 go to tab, ⌘9 last tab · ⌃Tab or ⇧⌘] next tab · ⌃⇧Tab or ⇧⌘[ previous tab · ⌘P open anything · ⇧⌘K connections · ⌃⌘] / ⌃⌘[ next / previous connection |
+| Browsing | ⌥⌘F filter tables · ↑↓ preview a table, ↩ or double-click to keep it open · ⌥⌘1 / ⌥⌘2 Data / Structure · ⌥⌘3 diagram · ⌥⌘4 metrics · ⌘F filter rows (press again to focus the filter) · ⌘R refresh · ⌘[ / ⌘] previous / next page · ⌥⌘0 row details · ⇧⌘C console log |
+| Data grid | ← → ↑ ↓ move between cells · Tab / ⇧Tab next / previous cell · ⌘← ⌘→ ⌘↑ ⌘↓ first / last column or row · ↩ or F2 edit · type any key to replace the value · Space quick look · ⌥⌫ set NULL · ⌫ delete rows · ⌘C copy rows · ⌥⇧⌘C copy rows with headers · ⌥⌘C copy cell |
 | Editing a cell | ↩ save and move down · Tab / ⇧Tab save and edit the next / previous cell · ⌥↩ new line · ⎋ cancel |
 | Changes | ⌘I add row · ⌘D duplicate row · ⌘Z / ⇧⌘Z undo / redo · ⌘S commit · ⇧⌘S preview SQL · ⌥⌘Z discard all changes |
-| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · ⌘/ toggle comment · ⎋ complete · ⌘F find |
+| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · Tab accept the grey suggestion · ⎋ or ⌃Space suggestions · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find |
 | Redis | ⌘T console · ⌘F key pattern · ⌘R refresh · ⌘N new key · ⌘I add element · ⌘S save string · ⌫ delete |
 
 ## Your data
@@ -204,9 +247,17 @@ You need macOS 14 or later and Xcode 16 or later (the Swift 6 toolchain).
 ```bash
 git clone https://github.com/tungnguyenvan/tabula.git && cd tabula
 swift run Tabula                 # debug build, launched directly
-./scripts/build-app.sh           # release build → dist/Tabula.app (universal, ad-hoc signed)
+./scripts/build-app.sh           # release build → dist/Tabula.app (universal)
 ARCHS=arm64 ./scripts/build-app.sh   # faster, Apple silicon only
 ```
+
+Builds are signed ad-hoc unless a signing identity exists. Ad-hoc signatures change on every build, so macOS asks for Keychain access again after each one. To avoid that while developing, create a local self-signed identity once; `build-app.sh` then uses it automatically:
+
+```bash
+./scripts/make-signing-identity.sh   # adds "Tabula Local Signing" to your login keychain
+```
+
+The update checker reads the GitHub repository from the `origin` remote (override with `REPOSITORY=owner/name`).
 
 ## Making a release
 
@@ -237,10 +288,13 @@ Other options: `SKIP_TESTS=1`, `BUILD_NUMBER=…` (defaults to a UTC timestamp) 
 
 ```
 Sources/TabulaCore   Drivers and SQL: PostgresDriver (PostgresNIO), MySQLDriver (MySQLNIO), SQLiteDriver
-                     (system SQLite), RedisDriver (RediStack) and RedisCommandLine, SQLDialect, SQLSplitter,
-                     FilterRule, ConnectionStore (JSON + Keychain), ResultExporter, UpdateFeed
-Sources/Tabula       SwiftUI app. DataGridView (NSTableView) and SQLEditorView (NSTextView) wrap AppKit
-                     for speed and keyboard control.
+                     (system SQLite), RedisDriver (RediStack) and RedisCommandLine, LoggingDriver (console log),
+                     SQLLexer, SQLSplitter, SQLFormatter, SQLCompletion, SQLDialect, FilterRule, SchemaInsights
+                     (foreign keys, metrics), ConnectionStore (JSON + Keychain), ResultExporter, UpdateFeed,
+                     Defaults (every tunable value in one place)
+Sources/Tabula       SwiftUI app. ConnectionSession holds a window's connections; DataGridView (NSTableView)
+                     and SQLEditorView (NSTextView) wrap AppKit for speed and keyboard control; Layout holds the
+                     design tokens.
 Tests/TabulaCoreTests
 scripts/             build-app.sh, release.sh, seed-dev.sh, make-icon.swift, third-party-notices.sh
 ```
@@ -271,13 +325,14 @@ TABULA_TEST_NETWORK=1 swift test
 TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 ```
 
-**Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_TABLE`, `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_KEY` and `TABULA_DEBUG_REDIS_CONSOLE` (Redis), `TABULA_UPDATE_FEED=<url>` with `TABULA_DEBUG_AUTOINSTALL=1` (test the updater against a local feed), `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
+**Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_TABLE`, `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_KEY` and `TABULA_DEBUG_REDIS_CONSOLE` (Redis), `TABULA_DEBUG_DIAGRAM`, `TABULA_DEBUG_METRICS`, `TABULA_DEBUG_CONSOLE`, `TABULA_UPDATE_FEED=<url>` with `TABULA_DEBUG_AUTOINSTALL=1` (test the updater against a local feed), `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
 
 **Icon.** `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`.
 
 ## Roadmap and known limitations
 
 Planned:
+- AI assistant (0.3.0): write and fix queries from a description, and AI suggestions as you type, with a choice of Apple Intelligence on the Mac, small local models downloaded through Ollama, any OpenAI-compatible API (LiteLLM, LM Studio, OpenAI), the Claude API, or the Claude Code and Codex command-line tools already installed. Only table and column names and the query are sent, never row data.
 - SSH tunnels
 - Cancelling a running query
 
