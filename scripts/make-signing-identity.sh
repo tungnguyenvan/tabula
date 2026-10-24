@@ -15,7 +15,7 @@ KEYCHAIN="${KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
 VALID_DAYS="${VALID_DAYS:-3650}"
 
 if security find-certificate -c "$IDENTITY_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
-  echo "“$IDENTITY_NAME” already exists in $KEYCHAIN."
+  echo "“${IDENTITY_NAME}” already exists in $KEYCHAIN."
   exit 0
 fi
 
@@ -42,4 +42,4 @@ openssl pkcs12 -export -legacy -inkey "$work/key.pem" -in "$work/cert.pem" -name
        -out "$work/identity.p12" -passout "pass:$pass"
 # -T lets codesign use the key without a prompt on every build.
 security import "$work/identity.p12" -k "$KEYCHAIN" -P "$pass" -T /usr/bin/codesign
-echo "Created “$IDENTITY_NAME”. scripts/build-app.sh signs with it automatically."
+echo "Created “${IDENTITY_NAME}”. scripts/build-app.sh signs with it automatically."

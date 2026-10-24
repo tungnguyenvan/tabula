@@ -13,7 +13,7 @@ struct QueryTabView: View {
             VStack(spacing: 0) {
                 editorBar
                 Divider()
-                SQLEditorView(text: $model.sql, handle: handle, suggest: suggest,
+                SQLEditorView(text: $model.sql, handle: handle, suggest: suggest, completionVersion: workspace.completionVersion,
                               undoManager: model.undoManager) { all in run(all: all) }
             }
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.editorMinHeight, idealHeight: Layout.Query.editorIdealHeight)

@@ -80,7 +80,7 @@ final class SQLCompletionTests: XCTestCase {
         let caret = (sql as NSString).range(of: "|").location
         let text = sql.replacingOccurrences(of: "|", with: "")
         let context = SQLCompletion.context(in: text, caret: caret, kind: .postgres)
-        return SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0] })
+        return SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0.name] })
     }
 
     func testTablesAfterFrom() {
@@ -107,7 +107,7 @@ final class SQLCompletionTests: XCTestCase {
             let caret = (sql as NSString).range(of: "|").location
             let text = sql.replacingOccurrences(of: "|", with: "")
             let context = SQLCompletion.context(in: text, caret: caret, kind: .postgres, schemas: schemas)
-            return SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0] },
+            return SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0.name] },
                                              tablesInSchema: { schemaTables[$0] })
         }
         XCTAssertEqual(suggest("SELECT * FROM dev.pay|"), ["payment_orders", "payment_order_batches"])
@@ -118,9 +118,26 @@ final class SQLCompletionTests: XCTestCase {
         XCTAssertEqual(suggest("SELECT o.| FROM orders o", schemas: ["dev"]), ["id", "total", "user_id"])
     }
 
+    func testColumnsOfTablesInOtherSchemas() {
+        let devColumns = ["payments": ["id", "amount", "status"]]
+        func suggest(_ sql: String) -> [String] {
+            let caret = (sql as NSString).range(of: "|").location
+            let text = sql.replacingOccurrences(of: "|", with: "")
+            let context = SQLCompletion.context(in: text, caret: caret, kind: .postgres, schemas: ["dev", "public"])
+            return SQLCompletion.suggestions(for: context, tables: tables) { table in
+                table.schema == "dev" ? devColumns[table.name] : self.columns[table.name]
+            }
+        }
+        XCTAssertEqual(suggest("SELECT p.| FROM dev.payments p"), ["id", "amount", "status"])
+        XCTAssertEqual(suggest("SELECT p.am| FROM dev.payments AS p"), ["amount"])
+        XCTAssertEqual(suggest("SELECT dev.payments.st| FROM dev.payments"), ["status"])
+        // Columns of every table in the statement, schema included.
+        XCTAssertEqual(suggest("SELECT amo| FROM dev.payments"), ["amount"])
+    }
+
     func testAllColumnsBeforeATableIsNamed() {
         let context = SQLCompletion.context(in: "SELECT tot", caret: 10, kind: .postgres)
-        XCTAssertEqual(SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0] },
+        XCTAssertEqual(SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0.name] },
                                                  allColumns: ["id", "name", "total"]).first, "total")
     }
 

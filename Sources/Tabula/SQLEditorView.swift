@@ -55,6 +55,8 @@ struct SQLEditorView: NSViewRepresentable {
     var handle: EditorHandle
     /// Completions for the word at a caret (UTF-16 offset): the range they replace and the candidates, best first.
     var suggest: (_ text: String, _ caret: Int) -> (range: NSRange, items: [String])
+    /// Changes when completion has learned new names; the editor then refreshes its suggestion.
+    var completionVersion = 0
     /// Each query tab keeps its own undo history.
     var undoManager: UndoManager
     /// ⌘↩ runs the selection or current statement; ⇧⌘↩ runs everything.
@@ -114,11 +116,16 @@ struct SQLEditorView: NSViewRepresentable {
             textView.string = text
             SQLHighlighter.highlight(textView)
         }
+        if context.coordinator.completionVersion != completionVersion {
+            context.coordinator.completionVersion = completionVersion
+            (textView as? SQLTextView)?.refreshInlineSuggestion()
+        }
     }
 
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: SQLEditorView
+        var completionVersion = 0
         init(_ parent: SQLEditorView) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
@@ -150,11 +157,14 @@ final class SQLTextView: NSTextView {
     }
     /// Set while text is being typed, so only typing (not deleting or pasting) offers a suggestion.
     private var typedCharacter = false
+    /// Where the last typed character went; a late refresh (names finished loading) only applies there.
+    private var lastTypedLocation: Int?
 
     override func insertText(_ string: Any, replacementRange: NSRange) {
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
         typedCharacter = text.count == 1
         super.insertText(string, replacementRange: replacementRange)
+        lastTypedLocation = typedCharacter ? selectedRange().location : nil
         typedCharacter = false
     }
 
@@ -171,6 +181,14 @@ final class SQLTextView: NSTextView {
         let afterDot = caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
         guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
         inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
+    }
+
+    /// Recomputes the suggestion after table or column names arrive, if the caret is still where the user typed.
+    func refreshInlineSuggestion() {
+        guard inlineSuggestion == nil, let location = lastTypedLocation, selectedRange() == NSRange(location: location, length: 0) else { return }
+        typedCharacter = true
+        updateInlineSuggestion()
+        typedCharacter = false
     }
 
     func dropInlineSuggestionIfMoved() {
