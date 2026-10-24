@@ -1,0 +1,209 @@
+<p align="center"><img src="docs/icon.png" width="96" alt="Tabula icon"></p>
+
+<h1 align="center">Tabula</h1>
+
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
+
+<p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b> and <b>SQLite</b>.<br>
+Free, no usage limits, keyboard-first.</p>
+
+<p align="center"><img src="docs/screenshots/data.png" width="820" alt="Browsing and filtering a table, with the row details panel open"></p>
+
+## Contents
+
+- [Features](#features)
+- [Install](#install)
+- [Things to know](#things-to-know)
+- [Getting started](#getting-started)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Your data](#your-data)
+- [Building from source](#building-from-source)
+- [Making a release](#making-a-release)
+- [Development](#development)
+- [Roadmap and known limitations](#roadmap-and-known-limitations)
+- [License](#license)
+
+## Features
+
+**Connections**
+- PostgreSQL, MySQL / MariaDB and SQLite files.
+- Tag each connection Local, Development, Staging or Production. The tag colors the sidebar strip and the toolbar pill, and Production gets an extra warning before destructive actions.
+- Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
+- Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
+
+**Browsing**
+- One window per connection, with a schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter.
+- Equal-width tabs. Browsing the sidebar with the arrow keys reuses a single preview tab; press Return or double-click to keep a table open in its own tab.
+- Command palette (⌘P) to jump to any table, open tab, schema or action.
+
+**Data grid**
+- Paged results (100 to 5,000 rows per page) with a total row count, row numbers and server-side sorting.
+- Filter builder (column, operator, value, combined with AND), or a hand-written `WHERE` clause. "Filter by This Value" is in the cell context menu.
+- Spreadsheet-style keyboard control: arrow keys and Tab move between cells, Return edits, typing replaces the value, Space shows the full value (JSON is pretty-printed).
+- Copy rows as TSV, with or without headers, or copy a single cell. Export CSV, TSV, JSON or SQL `INSERT`.
+
+**Editing**
+- Edit in the grid or in the row details panel (⌥⌘0). You can set NULL or an empty string, and add, duplicate or delete rows.
+- Pending changes are highlighted. Undo and redo work per tab.
+- Commit (⌘S) runs every change in one transaction and rolls back if any statement fails. Preview the exact SQL first with ⇧⌘S.
+- Closing a tab with uncommitted changes asks you first.
+
+<p align="center"><img src="docs/screenshots/query.png" width="820" alt="SQL editor with results"></p>
+
+**SQL editor**
+- Syntax highlighting and line numbers.
+- ⌘↩ runs the selection, or the statement under the cursor (briefly highlighted). ⇧⌘↩ runs everything.
+- Scripts with several statements show one result per statement.
+- Comment toggling (⌘/), completion of tables and keywords (⎋), query history, and opening or saving `.sql` files.
+
+**Structure**
+- Columns with type, nullability, default, comment and primary key, plus indexes with their definitions.
+
+<p align="center"><img src="docs/screenshots/structure.png" width="820" alt="Structure view"></p>
+
+## Install
+
+1. Download `Tabula-<version>.dmg` from the [releases page](https://github.com/tungnguyenvan/tabula/releases) and check it against `SHA256SUMS.txt`:
+   ```bash
+   shasum -a 256 -c SHA256SUMS.txt
+   ```
+2. Open the DMG and drag **Tabula** to **Applications**.
+3. **First launch.** If the build is not notarized, macOS blocks it. Control-click Tabula in Applications and choose **Open**, then **Open** again. On macOS 15 and later, if there is no Open button, go to **System Settings › Privacy & Security** and choose **Open Anyway**. You only need to do this once.
+
+Requires macOS 14 Sonoma or later. The app is a universal binary for Apple silicon and Intel Macs.
+
+## Things to know
+
+- **macOS version.** Tabula needs macOS 14 Sonoma or later. On older systems Finder refuses to open it. Version 0.1.0 was built and tested on macOS 26 Tahoe; macOS 14 and 15 meet the minimum requirement but have not been tested yet, so please report any problems.
+- **Not notarized yet.** Releases are ad-hoc signed and not notarized by Apple, so the first launch needs one confirmation (see [Install](#install)). If you prefer the command line, this removes the download quarantine flag:
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/Tabula.app
+  ```
+  Only do this for a DMG you downloaded from this repository and verified with `SHA256SUMS.txt`.
+- **Keychain prompt after updates.** Ad-hoc signatures change with every build. After installing a new version, macOS asks once whether Tabula may use the saved passwords. Choose **Always Allow**. If you choose Deny, Tabula can't read the password and the connection fails to authenticate; edit the connection and enter the password again.
+- **Local network permission (macOS 15 and later).** The first time you connect to a server on your local network, such as `192.168.x.x` or `10.x.x.x`, macOS asks whether Tabula may access it. If you deny it, those connections fail with "No route to host". Turn it back on in **System Settings › Privacy & Security › Local Network**. `localhost`, Docker port forwards and internet hosts are not affected.
+- **TLS certificates.** "Verify certificate" checks the server against the trust store in macOS Keychain Access. Managed databases with a private CA (for example AWS RDS, or self-signed certificates) fail verification until that CA is added to Keychain Access and marked trusted. "Required" encrypts the connection without checking the certificate.
+- **No auto-update.** Watch the releases page for new versions. Replacing the app keeps your saved connections.
+
+<p align="center"><img src="docs/screenshots/connections.png" width="560" alt="Connections window"></p>
+
+## Getting started
+
+1. Click **New Connection** (⌘N) and pick a type.
+   - **PostgreSQL:** if Database is empty, the user name is used.
+   - **MySQL / MariaDB:** the database is optional, and you can switch databases from the sidebar.
+   - **SQLite:** choose an existing file, or create a new one.
+2. Choose a **tag**, so a Production connection is obvious at a glance.
+3. Click **Test**, then **Connect**. You can also double-click a saved connection or press Return.
+
+> **MySQL 8 and TLS:** accounts that use `caching_sha2_password`, the MySQL 8 default, can only authenticate over an encrypted connection. New MySQL connections therefore default to TLS **Required**. If the server has no TLS, either switch the account to `mysql_native_password` or enable TLS on the server.
+
+> **SSH:** tunnels are not built in yet. Forward a local port and connect to it:
+> `ssh -N -L 15432:db.internal:5432 user@bastion`, then connect to `127.0.0.1:15432`.
+
+## Keyboard shortcuts
+
+Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
+
+| Area | Shortcuts |
+| --- | --- |
+| Tabs and windows | ⌘T new query · ⌘W close tab (or the window if no tabs are open) · ⇧⌘T reopen closed tab · ⌘1…⌘8 go to tab, ⌘9 last tab · ⌃Tab or ⇧⌘] next tab · ⌃⇧Tab or ⇧⌘[ previous tab · ⌘P open anything · ⇧⌘K connections |
+| Browsing | ⌥⌘F filter tables · ↑↓ preview a table, ↩ or double-click to keep it open · ⌥⌘1 / ⌥⌘2 Data / Structure · ⌘F filter rows (press again to focus the filter) · ⌘R refresh · ⌘[ / ⌘] previous / next page · ⌥⌘0 row details |
+| Data grid | ← → ↑ ↓ move between cells · Tab / ⇧Tab next / previous cell · ⌘← ⌘→ ⌘↑ ⌘↓ first / last column or row · ↩ or F2 edit · type any key to replace the value · Space quick look · ⌥⌫ set NULL · ⌫ delete rows · ⌘C copy rows · ⇧⌘C copy rows with headers · ⌥⌘C copy cell |
+| Editing a cell | ↩ save and move down · Tab / ⇧Tab save and edit the next / previous cell · ⌥↩ new line · ⎋ cancel |
+| Changes | ⌘I add row · ⌘D duplicate row · ⌘Z / ⇧⌘Z undo / redo · ⌘S commit · ⇧⌘S preview SQL · ⌥⌘Z discard all changes |
+| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · ⌘/ toggle comment · ⎋ complete · ⌘F find |
+
+## Your data
+
+- **Connection settings** are stored in `~/Library/Application Support/Tabula/connections.json`. This file never contains passwords.
+- **Passwords** are stored in the login Keychain, under the service `app.tabula.connections`. Deleting a connection also deletes its password.
+- **Network:** Tabula only connects to the databases you configure. It has no telemetry, update checks or accounts.
+- **Windows:** workspace windows are not restored at launch, so Tabula never reconnects to a database, such as Production, unless you choose to.
+
+## Building from source
+
+You need macOS 14 or later and Xcode 16 or later (the Swift 6 toolchain).
+
+```bash
+git clone https://github.com/tungnguyenvan/tabula.git && cd tabula
+swift run Tabula                 # debug build, launched directly
+./scripts/build-app.sh           # release build → dist/Tabula.app (universal, ad-hoc signed)
+ARCHS=arm64 ./scripts/build-app.sh   # faster, Apple silicon only
+```
+
+## Making a release
+
+1. Set the version in `VERSION` and add a matching `## [x.y.z]` section to `CHANGELOG.md`.
+2. Run the release script:
+   ```bash
+   ./scripts/release.sh
+   ```
+   The script:
+   - runs the tests;
+   - regenerates `Resources/THIRD_PARTY_NOTICES.txt` from the resolved packages;
+   - builds the universal app;
+   - checks the architectures, the code signature, the Info.plist version, and that the binary contains no debug code;
+   - writes `Tabula-<version>.dmg`, `Tabula-<version>.zip`, `SHA256SUMS.txt` and `RELEASE_NOTES.md` to `dist/release/`.
+3. **Optional, recommended: sign and notarize** so users don't get a Gatekeeper warning. This needs an Apple Developer account.
+   ```bash
+   # one-time: store notarization credentials in the keychain
+   xcrun notarytool store-credentials tabula --apple-id you@example.com --team-id TEAMID --password <app-specific-password>
+
+   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=tabula ./scripts/release.sh
+   ```
+   The app is signed with the hardened runtime, submitted to Apple, stapled and checked with `spctl`. The DMG is signed as well.
+4. Tag the release (`git tag v<version>`) and upload the contents of `dist/release/`, using `RELEASE_NOTES.md` as the description.
+
+Other options: `SKIP_TESTS=1`, `BUILD_NUMBER=…` (defaults to a UTC timestamp) and `COPYRIGHT=…`.
+
+## Development
+
+```
+Sources/TabulaCore   Drivers and SQL: PostgresDriver (PostgresNIO), MySQLDriver (MySQLNIO), SQLiteDriver
+                     (system SQLite), SQLDialect (quoting, generated SQL), SQLSplitter (statements and
+                     ranges), FilterRule, ConnectionStore (JSON + Keychain), ResultExporter
+Sources/Tabula       SwiftUI app. DataGridView (NSTableView) and SQLEditorView (NSTextView) wrap AppKit
+                     for speed and keyboard control.
+Tests/TabulaCoreTests
+scripts/             build-app.sh, release.sh, seed-dev.sh, make-icon.swift, third-party-notices.sh
+```
+
+**Tests.** Unit tests and SQLite tests always run. The Postgres and MySQL tests run against real servers when ports are set:
+
+```bash
+docker run -d --name tabula-test-pg -e POSTGRES_USER=tabula -e POSTGRES_PASSWORD=tabula -e POSTGRES_DB=tabula -p 55432:5432 postgres:16
+docker run -d --name tabula-test-mysql -e MYSQL_ROOT_PASSWORD=tabula -e MYSQL_DATABASE=tabula -e MYSQL_USER=tabula -e MYSQL_PASSWORD=tabula -p 53306:3306 mysql:8.4
+TABULA_TEST_PG_PORT=55432 TABULA_TEST_MYSQL_PORT=53306 swift test
+```
+
+**Sample data.** This creates a SQLite file, plus Postgres and MySQL tables if the containers above are running, in a separate store that leaves your real connections alone:
+
+```bash
+./scripts/seed-dev.sh /tmp/tabula-dev-data
+TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
+```
+
+**Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_TABLE`, `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
+
+**Icon.** `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`.
+
+## Roadmap and known limitations
+
+Planned:
+- Redis support: key browser by pattern, per-type viewers and editors, TTL, command console
+- SSH tunnels
+- Cancelling a running query
+
+Known limitations:
+- On MySQL, a `SELECT` that returns zero rows shows no column headers.
+- A running query cannot be cancelled.
+- Editing existing rows needs a primary key. Tables without one are read-only, apart from inserting rows.
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+## License
+
+Tabula is released under the [MIT License](LICENSE). Copyright © 2026 Nguyen Van Tung.
+
+Tabula bundles open-source components: PostgresNIO and MySQLNIO (MIT), SwiftNIO, swift-nio-ssl, swift-crypto and related Apple packages (Apache 2.0, some of which include BoringSSL). Their full license texts and NOTICE files are in [`Resources/THIRD_PARTY_NOTICES.txt`](Resources/THIRD_PARTY_NOTICES.txt). The same file ships inside the app, at `Tabula.app/Contents/Resources`, and is linked from **Tabula › About Tabula**.

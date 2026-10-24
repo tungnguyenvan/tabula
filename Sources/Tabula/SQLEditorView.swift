@@ -1,0 +1,285 @@
+import AppKit
+import SwiftUI
+import TabulaCore
+
+/// Gives toolbar buttons access to the editor's current selection.
+@MainActor
+final class EditorHandle {
+    weak var textView: NSTextView?
+
+    var selectedText: String? {
+        guard let textView else { return nil }
+        let range = textView.selectedRange()
+        guard range.length > 0 else { return nil }
+        return (textView.string as NSString).substring(with: range)
+    }
+
+    func focus() {
+        textView?.window?.makeFirstResponder(textView)
+    }
+
+    /// The selection if there is one, otherwise the statement under the caret (briefly highlighted).
+    func textToRun(kind: DatabaseKind) -> String? {
+        if let selectedText { return selectedText }
+        guard let textView else { return nil }
+        let caret = textView.selectedRange().location
+        guard let statement = SQLSplitter.statement(at: caret, in: textView.string, kind: kind) else { return nil }
+        flash(statement.range)
+        return statement.text
+    }
+
+    private func flash(_ range: NSRange) {
+        guard let layoutManager = textView?.layoutManager else { return }
+        layoutManager.addTemporaryAttribute(.backgroundColor, value: NSColor.controlAccentColor.withAlphaComponent(0.22), forCharacterRange: range)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
+        }
+    }
+}
+
+struct SQLEditorView: NSViewRepresentable {
+    @Binding var text: String
+    var handle: EditorHandle
+    /// Identifiers offered by completion (⎋ or ⌥⎋): tables, columns, etc.
+    var completionWords: () -> [String]
+    /// Each query tab keeps its own undo history.
+    var undoManager: UndoManager
+    /// ⌘↩ runs the selection or current statement; ⇧⌘↩ runs everything.
+    var onRun: (_ all: Bool) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = SQLTextView.scrollableTextView()
+        let textView = SQLTextView(frame: .zero)
+        textView.coordinator = context.coordinator
+        textView.isRichText = false
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isContinuousSpellCheckingEnabled = false
+        textView.isGrammarCheckingEnabled = false
+        textView.smartInsertDeleteEnabled = false
+        textView.font = SQLHighlighter.font
+        textView.textContainerInset = NSSize(width: 6, height: 8)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
+        textView.delegate = context.coordinator
+        textView.string = text
+        SQLHighlighter.highlight(textView)
+
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = true
+        textView.backgroundColor = .textBackgroundColor
+        let ruler = LineNumberRuler(textView: textView)
+        scrollView.verticalRulerView = ruler
+        scrollView.hasVerticalRuler = true
+        scrollView.rulersVisible = true
+        handle.textView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        handle.textView = textView
+        if textView.string != text {
+            textView.string = text
+            SQLHighlighter.highlight(textView)
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: SQLEditorView
+        init(_ parent: SQLEditorView) { self.parent = parent }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            SQLHighlighter.highlight(textView)
+            textView.enclosingScrollView?.verticalRulerView?.needsDisplay = true
+            parent.text = textView.string
+        }
+
+        func textView(_ textView: NSTextView, completions words: [String], forPartialWordRange charRange: NSRange,
+                      indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String] {
+            let partial = (textView.string as NSString).substring(with: charRange)
+            guard !partial.isEmpty else { return [] }
+            let candidates = Set(parent.completionWords() + SQLHighlighter.keywords)
+            return candidates.filter { $0.lowercased().hasPrefix(partial.lowercased()) && $0.count > partial.count }.sorted()
+        }
+    }
+}
+
+final class SQLTextView: NSTextView {
+    weak var coordinator: SQLEditorView.Coordinator?
+
+    override var undoManager: UndoManager? {
+        coordinator?.parent.undoManager ?? super.undoManager
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard window?.firstResponder === self else { return super.performKeyEquivalent(with: event) }
+        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        if event.keyCode == 36 || event.keyCode == 76, flags == [.command] || flags == [.command, .shift] {
+            coordinator?.parent.onRun(flags.contains(.shift))
+            return true
+        }
+        if event.charactersIgnoringModifiers?.lowercased() == "z", flags == [.command] || flags == [.command, .shift], let undo = undoManager {
+            if flags.contains(.shift) { if undo.canRedo { undo.redo() } } else if undo.canUndo { undo.undo() }
+            return true
+        }
+        if event.charactersIgnoringModifiers == "/" && flags == [.command] {
+            toggleLineComments()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// ⌘/: comment or uncomment every line touched by the selection.
+    func toggleLineComments() {
+        let text = string as NSString
+        let lines = text.lineRange(for: selectedRange())
+        let block = text.substring(with: lines)
+        var parts = block.components(separatedBy: "\n")
+        let hasTrailingNewline = parts.last == ""
+        if hasTrailingNewline { parts.removeLast() }
+        let nonEmpty = parts.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let allCommented = !nonEmpty.isEmpty && nonEmpty.allSatisfy { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
+        let updated = parts.map { line -> String in
+            guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return line }
+            if allCommented, let range = line.range(of: "--") {
+                var result = line
+                let after = result.index(range.upperBound, offsetBy: 0)
+                result.removeSubrange(range.lowerBound..<(result[after...].hasPrefix(" ") ? result.index(after: after) : after))
+                return result
+            }
+            let indent = line.prefix(while: { $0 == " " || $0 == "\t" })
+            return indent + "-- " + line.dropFirst(indent.count)
+        }
+        let replacement = updated.joined(separator: "\n") + (hasTrailingNewline ? "\n" : "")
+        if shouldChangeText(in: lines, replacementString: replacement) {
+            replaceCharacters(in: lines, with: replacement)
+            didChangeText()
+            setSelectedRange(NSRange(location: lines.location, length: (replacement as NSString).length - (hasTrailingNewline ? 1 : 0)))
+        }
+    }
+
+    // Keep the caret's indentation on newline.
+    override func insertNewline(_ sender: Any?) {
+        let text = string as NSString
+        let lineRange = text.lineRange(for: NSRange(location: selectedRange().location, length: 0))
+        let line = text.substring(with: lineRange)
+        let indent = String(line.prefix(while: { $0 == " " || $0 == "\t" }))
+        super.insertNewline(sender)
+        if !indent.isEmpty { insertText(indent, replacementRange: selectedRange()) }
+    }
+}
+
+/// Gutter with line numbers for the SQL editor.
+final class LineNumberRuler: NSRulerView {
+    private weak var textView: NSTextView?
+    private let font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+
+    init(textView: NSTextView) {
+        self.textView = textView
+        super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
+        clientView = textView
+        ruleThickness = 36
+        NotificationCenter.default.addObserver(self, selector: #selector(redraw), name: NSView.boundsDidChangeNotification,
+                                               object: textView.enclosingScrollView?.contentView)
+        textView.enclosingScrollView?.contentView.postsBoundsChangedNotifications = true
+    }
+
+    required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    @objc private func redraw() { needsDisplay = true }
+
+    override func drawHashMarksAndLabels(in rect: NSRect) {
+        guard let textView, let layoutManager = textView.layoutManager, let container = textView.textContainer else { return }
+        NSColor.textBackgroundColor.setFill()
+        bounds.fill()
+        let text = textView.string as NSString
+        let visible = textView.visibleRect
+        let glyphs = layoutManager.glyphRange(forBoundingRect: visible, in: container)
+        let characters = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        var lineNumber = text.substring(to: characters.location).reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        let caretLine = text.substring(to: min(textView.selectedRange().location, text.length)).reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        let inset = textView.textContainerInset.height
+        let relativeY = convert(NSPoint.zero, from: textView).y
+
+        var index = characters.location
+        func draw(_ number: Int, y: CGFloat) {
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: number == caretLine ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor,
+            ]
+            let label = "\(number)" as NSString
+            let size = label.size(withAttributes: attributes)
+            label.draw(at: NSPoint(x: ruleThickness - size.width - 8, y: y), withAttributes: attributes)
+        }
+        while index < NSMaxRange(characters) {
+            let lineRange = text.lineRange(for: NSRange(location: index, length: 0))
+            let glyphIndex = layoutManager.glyphIndexForCharacter(at: lineRange.location)
+            let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+            draw(lineNumber, y: relativeY + lineRect.minY + inset + (lineRect.height - font.capHeight - 6) / 2)
+            lineNumber += 1
+            index = NSMaxRange(lineRange)
+        }
+        // Empty last line after a trailing newline (or an empty document).
+        if text.length == 0 || text.hasSuffix("\n"), NSMaxRange(characters) >= text.length {
+            let extra = layoutManager.extraLineFragmentRect
+            draw(lineNumber, y: relativeY + extra.minY + inset + (max(extra.height, 15) - font.capHeight - 6) / 2)
+        }
+    }
+}
+
+enum SQLHighlighter {
+    static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+
+    static let keywords: [String] = """
+        SELECT FROM WHERE AND OR NOT IN IS NULL LIKE ILIKE BETWEEN EXISTS AS ON JOIN LEFT RIGHT INNER OUTER FULL CROSS
+        GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL DISTINCT INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE VIEW INDEX
+        DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CHECK CONSTRAINT IF CASE WHEN THEN ELSE END
+        BEGIN COMMIT ROLLBACK TRANSACTION WITH RECURSIVE RETURNING ASC DESC TRUE FALSE CAST TRUNCATE SCHEMA DATABASE USE
+        SHOW EXPLAIN ANALYZE GRANT REVOKE CASCADE COUNT SUM AVG MIN MAX COALESCE NULLIF LATERAL OVER PARTITION WINDOW
+        """.split(whereSeparator: \.isWhitespace).map(String.init)
+
+    private static let patterns: [(NSRegularExpression, NSColor)] = {
+        let keywordPattern = "\\b(" + keywords.joined(separator: "|") + ")\\b"
+        let rules: [(String, NSRegularExpression.Options, NSColor)] = [
+            (keywordPattern, [.caseInsensitive], .systemPink),
+            ("\\b\\d+(\\.\\d+)?\\b", [], .systemBlue),
+            ("'(?:[^']|'')*'?", [], .systemOrange),
+            ("\"(?:[^\"]|\"\")*\"?|`[^`]*`?", [], .systemTeal),
+            ("--[^\n]*|#[^\n]*|/\\*[\\s\\S]*?(\\*/|$)", [], .systemGray),
+        ]
+        return rules.compactMap { pattern, options, color in
+            (try? NSRegularExpression(pattern: pattern, options: options)).map { ($0, color) }
+        }
+    }()
+
+    /// Recolors the whole document; later rules (strings, comments) win over earlier ones.
+    static func highlight(_ textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let text = storage.string
+        let full = NSRange(location: 0, length: (text as NSString).length)
+        guard full.length < 300_000 else { return }
+        storage.beginEditing()
+        storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
+        for (regex, color) in patterns {
+            regex.enumerateMatches(in: text, range: full) { match, _, _ in
+                if let range = match?.range { storage.addAttribute(.foregroundColor, value: color, range: range) }
+            }
+        }
+        storage.endEditing()
+        textView.typingAttributes = [.font: font, .foregroundColor: NSColor.textColor]
+    }
+}
