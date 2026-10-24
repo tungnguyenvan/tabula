@@ -48,6 +48,34 @@ public enum Defaults {
         public static let tableLimit = 200
     }
 
+    public enum AI {
+        /// Pause after the last keystroke before asking a model for an inline suggestion.
+        public static let inlineDelay: Double = 0.6
+        public static let inlineMaxTokens = 1024
+        public static let generateMaxTokens = 16000
+        public static let inlineTimeout: Double = 15
+        public static let generateTimeout: Double = 120
+        /// Tables described to the model; larger schemas are cut off.
+        public static let schemaTableLimit = 150
+        public static let anthropicVersion = "2026-10-21"
+        /// Characters of a failing tool's output shown in an error.
+        public static let errorLength = 400
+
+        public struct LocalModel: Sendable, Identifiable {
+            public let name: String
+            public let summary: String
+            public var id: String { name }
+        }
+
+        /// Small models that run well on a Mac and are good at SQL, offered for download.
+        public static let recommendedLocalModels = [
+            LocalModel(name: "qwen2.5-coder:1.5b", summary: "Fastest; good for inline suggestions (about 1 GB)"),
+            LocalModel(name: "qwen2.5-coder:7b", summary: "Better queries; needs 8 GB of memory or more (about 5 GB)"),
+            LocalModel(name: "sqlcoder:7b", summary: "Tuned for writing SQL from a question (about 4 GB)"),
+            LocalModel(name: "duckdb-nsql:7b", summary: "Text-to-SQL model (about 4 GB)"),
+        ]
+    }
+
     public enum Updates {
         public static let requestTimeout: Double = 20
         public static let checkInterval: TimeInterval = 24 * 60 * 60
