@@ -4,7 +4,7 @@
 
 <p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
-<p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b> and <b>SQLite</b>.<br>
+<p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b> and <b>Redis</b>.<br>
 Free, no usage limits, keyboard-first.</p>
 
 <p align="center"><img src="docs/screenshots/data.png" width="820" alt="Browsing and filtering a table, with the row details panel open"></p>
@@ -15,6 +15,8 @@ Free, no usage limits, keyboard-first.</p>
 - [Install](#install)
 - [Things to know](#things-to-know)
 - [Getting started](#getting-started)
+- [Redis](#redis)
+- [Updates](#updates)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [Building from source](#building-from-source)
@@ -26,7 +28,7 @@ Free, no usage limits, keyboard-first.</p>
 ## Features
 
 **Connections**
-- PostgreSQL, MySQL / MariaDB and SQLite files.
+- PostgreSQL, MySQL / MariaDB, SQLite files and Redis.
 - Tag each connection Local, Development, Staging or Production. The tag colors the sidebar strip and the toolbar pill, and Production gets an extra warning before destructive actions.
 - Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
 - Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
@@ -116,7 +118,9 @@ Only do this for a copy you downloaded from this repository and verified in step
 
 ### Updating
 
-Download the new DMG and drag Tabula to Applications again, replacing the old copy. Your saved connections are kept. Because the app isn't notarized, you repeat step 3 once for the new version.
+From version 0.2.0, Tabula updates itself: see [Updates](#updates). To update by hand, download the new DMG and drag Tabula to Applications again, replacing the old copy. Your saved connections are kept.
+
+Coming from **0.1.0**: that version has no updater, so install 0.2.0 by hand once.
 
 ### Uninstalling
 
@@ -129,7 +133,7 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 - **Keychain prompt after updates.** Ad-hoc signatures change with every build. After installing a new version, macOS asks once whether Tabula may use the saved passwords. Choose **Always Allow**. If you choose Deny, Tabula can't read the password and the connection fails to authenticate; edit the connection and enter the password again.
 - **Local network permission (macOS 15 and later).** The first time you connect to a server on your local network, such as `192.168.x.x` or `10.x.x.x`, macOS asks whether Tabula may access it. If you deny it, those connections fail with "No route to host". Turn it back on in **System Settings › Privacy & Security › Local Network**. `localhost`, Docker port forwards and internet hosts are not affected.
 - **TLS certificates.** "Verify certificate" checks the server against the trust store in macOS Keychain Access. Managed databases with a private CA (for example AWS RDS, or self-signed certificates) fail verification until that CA is added to Keychain Access and marked trusted. "Required" encrypts the connection without checking the certificate.
-- **No auto-update.** Watch the releases page for new versions. Replacing the app keeps your saved connections.
+- **Updates** come from this repository's GitHub releases. See [Updates](#updates).
 
 <p align="center"><img src="docs/screenshots/connections.png" width="560" alt="Connections window"></p>
 
@@ -147,6 +151,31 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 > **SSH:** tunnels are not built in yet. Forward a local port and connect to it:
 > `ssh -N -L 15432:db.internal:5432 user@bastion`, then connect to `127.0.0.1:15432`.
 
+## Redis
+
+Add a connection of type **Redis**. User is optional (an ACL user on Redis 6 and later; leave it empty for password-only `requirepass`), Database is the index (default 0), and TLS works as for SQL databases.
+
+- **Keys:** the sidebar lists keys with `SCAN`, never `KEYS`, so it is safe on large production instances. Type a pattern such as `user:*` and press Return, filter by type, and load more keys as you scroll. The database menu shows key counts per database.
+- **Values:** strings open in an editor (Format JSON, Save with ⌘S, the TTL is kept); hashes, lists, sets, sorted sets and streams open in the grid, with *Load more* for big collections. Double-click a cell to edit, ⌫ to delete, ⌘I to add. Changes are written to Redis immediately.
+- **Key details:** type, size, memory usage, encoding and TTL. Click the TTL to set or remove an expiry; the pencil renames (it never overwrites another key).
+- **Console (⌘T):** commands as in `redis-cli`, with quotes and escapes, ↑↓ history and `clear`. `SELECT` switches the sidebar too. The console refuses `SUBSCRIBE`, `MONITOR` and blocking commands with no timeout, because they would freeze the connection. It asks before `FLUSHALL`, `FLUSHDB` and `SHUTDOWN`, and before any write on a Production connection.
+- Strings larger than 1 MB and binary values are shown read-only; use the console to change them.
+
+## Updates
+
+Tabula checks this repository's [latest release](https://github.com/tungnguyenvan/tabula/releases/latest) when it starts, at most once a day, and when you choose **Tabula › Check for Updates…**. When a newer version exists it shows the release notes, and you can **Install and Relaunch**, open the release page, or skip that version.
+
+Installing:
+1. downloads `Tabula-<version>.zip` and `SHA256SUMS.txt` from the release;
+2. refuses the download unless its SHA-256 matches, the bundle identifier and version are right, and the code signature is valid;
+3. replaces the app where it is, then relaunches the new version. If copying fails, the previous version is put back.
+
+The checksum and the archive come from the same GitHub release, so this protects against corrupted or tampered downloads in transit, not against a compromised repository.
+
+Automatic checks can be turned off in **Settings** (⌘,). Tabula needs write access to the folder it runs from; it can't update itself while running from the DMG, or from a location macOS has moved it to ("App Translocation"). Move it to Applications first.
+
+After an update, macOS may ask again whether Tabula may use its saved passwords; choose **Always Allow**.
+
 ## Keyboard shortcuts
 
 Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
@@ -159,12 +188,13 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 | Editing a cell | ↩ save and move down · Tab / ⇧Tab save and edit the next / previous cell · ⌥↩ new line · ⎋ cancel |
 | Changes | ⌘I add row · ⌘D duplicate row · ⌘Z / ⇧⌘Z undo / redo · ⌘S commit · ⇧⌘S preview SQL · ⌥⌘Z discard all changes |
 | SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · ⌘/ toggle comment · ⎋ complete · ⌘F find |
+| Redis | ⌘T console · ⌘F key pattern · ⌘R refresh · ⌘N new key · ⌘I add element · ⌘S save string · ⌫ delete |
 
 ## Your data
 
 - **Connection settings** are stored in `~/Library/Application Support/Tabula/connections.json`. This file never contains passwords.
 - **Passwords** are stored in the login Keychain, under the service `app.tabula.connections`. Deleting a connection also deletes its password.
-- **Network:** Tabula only connects to the databases you configure. It has no telemetry, update checks or accounts.
+- **Network:** Tabula connects to the databases you configure, and to `api.github.com` / `github.com` to check for and download updates. There is no telemetry and no account.
 - **Windows:** workspace windows are not restored at launch, so Tabula never reconnects to a database, such as Production, unless you choose to.
 
 ## Building from source
@@ -207,37 +237,47 @@ Other options: `SKIP_TESTS=1`, `BUILD_NUMBER=…` (defaults to a UTC timestamp) 
 
 ```
 Sources/TabulaCore   Drivers and SQL: PostgresDriver (PostgresNIO), MySQLDriver (MySQLNIO), SQLiteDriver
-                     (system SQLite), SQLDialect (quoting, generated SQL), SQLSplitter (statements and
-                     ranges), FilterRule, ConnectionStore (JSON + Keychain), ResultExporter
+                     (system SQLite), RedisDriver (RediStack) and RedisCommandLine, SQLDialect, SQLSplitter,
+                     FilterRule, ConnectionStore (JSON + Keychain), ResultExporter, UpdateFeed
 Sources/Tabula       SwiftUI app. DataGridView (NSTableView) and SQLEditorView (NSTextView) wrap AppKit
                      for speed and keyboard control.
 Tests/TabulaCoreTests
 scripts/             build-app.sh, release.sh, seed-dev.sh, make-icon.swift, third-party-notices.sh
 ```
 
-**Tests.** Unit tests and SQLite tests always run. The Postgres and MySQL tests run against real servers when ports are set:
+**Tests.** Unit tests and SQLite tests always run. The Postgres, MySQL and Redis tests run against real servers when ports are set:
 
 ```bash
 docker run -d --name tabula-test-pg -e POSTGRES_USER=tabula -e POSTGRES_PASSWORD=tabula -e POSTGRES_DB=tabula -p 55432:5432 postgres:16
 docker run -d --name tabula-test-mysql -e MYSQL_ROOT_PASSWORD=tabula -e MYSQL_DATABASE=tabula -e MYSQL_USER=tabula -e MYSQL_PASSWORD=tabula -p 53306:3306 mysql:8.4
-TABULA_TEST_PG_PORT=55432 TABULA_TEST_MYSQL_PORT=53306 swift test
+docker run -d --name tabula-test-redis -p 56379:6379 redis:7.4 redis-server --requirepass tabula --user tabula on '>tabula' '~*' '&*' '+@all'
+
+# optional: Redis over TLS with a throwaway self-signed certificate
+mkdir -p /tmp/redis-tls && openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=localhost \
+  -keyout /tmp/redis-tls/redis.key -out /tmp/redis-tls/redis.crt && chmod 644 /tmp/redis-tls/*
+docker run -d --name tabula-test-redis-tls -p 56380:6380 -v /tmp/redis-tls:/tls:ro redis:7.4 redis-server --port 0 \
+  --tls-port 6380 --tls-cert-file /tls/redis.crt --tls-key-file /tls/redis.key --tls-auth-clients no --requirepass tabula
+
+TABULA_TEST_PG_PORT=55432 TABULA_TEST_MYSQL_PORT=53306 TABULA_TEST_REDIS_PORT=56379 TABULA_TEST_REDIS_TLS_PORT=56380 \
+TABULA_TEST_NETWORK=1 swift test
 ```
 
-**Sample data.** This creates a SQLite file, plus Postgres and MySQL tables if the containers above are running, in a separate store that leaves your real connections alone:
+`TABULA_TEST_NETWORK=1` also checks the live GitHub release feed.
+
+**Sample data.** This creates a SQLite file, plus Postgres, MySQL and Redis data if the containers above are running, in a separate store that leaves your real connections alone. Debug builds read that store's passwords from `passwords.json`, so test runs never touch your Keychain:
 
 ```bash
 ./scripts/seed-dev.sh /tmp/tabula-dev-data
 TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 ```
 
-**Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_TABLE`, `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
+**Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_TABLE`, `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_KEY` and `TABULA_DEBUG_REDIS_CONSOLE` (Redis), `TABULA_UPDATE_FEED=<url>` with `TABULA_DEBUG_AUTOINSTALL=1` (test the updater against a local feed), `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
 
 **Icon.** `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`.
 
 ## Roadmap and known limitations
 
 Planned:
-- Redis support: key browser by pattern, per-type viewers and editors, TTL, command console
 - SSH tunnels
 - Cancelling a running query
 
@@ -245,6 +285,7 @@ Known limitations:
 - On MySQL, a `SELECT` that returns zero rows shows no column headers.
 - A running query cannot be cancelled.
 - Editing existing rows needs a primary key. Tables without one are read-only, apart from inserting rows.
+- Redis Cluster and Sentinel aren't supported yet; connect to a single node. Pub/Sub and `MONITOR` are not available in the console.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 
@@ -252,4 +293,4 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Tabula is released under the [MIT License](LICENSE). Copyright © 2026 Nguyen Van Tung.
 
-Tabula bundles open-source components: PostgresNIO and MySQLNIO (MIT), SwiftNIO, swift-nio-ssl, swift-crypto and related Apple packages (Apache 2.0, some of which include BoringSSL). Their full license texts and NOTICE files are in [`Resources/THIRD_PARTY_NOTICES.txt`](Resources/THIRD_PARTY_NOTICES.txt). The same file ships inside the app, at `Tabula.app/Contents/Resources`, and is linked from **Tabula › About Tabula**.
+Tabula bundles open-source components: PostgresNIO and MySQLNIO (MIT), RediStack, SwiftNIO, swift-nio-ssl, swift-crypto and related Apple packages (Apache 2.0, some of which include BoringSSL). Their full license texts and NOTICE files are in [`Resources/THIRD_PARTY_NOTICES.txt`](Resources/THIRD_PARTY_NOTICES.txt). The same file ships inside the app, at `Tabula.app/Contents/Resources`, and is linked from **Tabula › About Tabula**.

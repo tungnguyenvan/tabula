@@ -11,11 +11,15 @@ final class WorkspaceModel {
     enum Tab: Identifiable {
         case table(TableTabModel)
         case query(QueryTabModel)
+        case diagram(DiagramModel)
+        case metrics(MetricsModel)
 
         var id: UUID {
             switch self {
             case .table(let model): model.id
             case .query(let model): model.id
+            case .diagram(let model): model.id
+            case .metrics(let model): model.id
             }
         }
 
@@ -23,6 +27,8 @@ final class WorkspaceModel {
             switch self {
             case .table(let model): model.table.name
             case .query(let model): model.title
+            case .diagram(let model): model.title
+            case .metrics: "Metrics"
             }
         }
     }
@@ -31,6 +37,8 @@ final class WorkspaceModel {
     private let password: String?
     private(set) var driver: (any DatabaseDriver)?
     private(set) var status: Status = .connecting
+    private(set) var serverVersion: String?
+    private(set) var connectedAt: Date?
 
     var schemas: [String] = []
     var selectedSchema: String = ""
@@ -80,6 +88,8 @@ final class WorkspaceModel {
             let driver = try await DriverFactory.connect(config, password: password)
             self.driver = driver
             status = .connected
+            connectedAt = Date()
+            serverVersion = await driver.serverVersion()
             schemas = (try? await driver.schemas()) ?? []
             let preferred = (try? await driver.defaultSchema()) ?? ""
             selectedSchema = schemas.contains(preferred) ? preferred : (schemas.first ?? preferred)
@@ -163,6 +173,30 @@ final class WorkspaceModel {
         if previewTabID == id { previewTabID = nil }
     }
 
+    /// Opens (or switches to) the relationship diagram of the current schema.
+    func openDiagram() {
+        guard let driver else { return }
+        if let existing = tabs.first(where: { if case .diagram(let model) = $0 { return model.schema == selectedSchema }; return false }) {
+            selectedTabID = existing.id
+            return
+        }
+        let model = DiagramModel(schema: selectedSchema, driver: driver)
+        tabs.append(.diagram(model))
+        selectedTabID = model.id
+    }
+
+    func openMetrics() {
+        guard let driver else { return }
+        if let existing = tabs.first(where: { if case .metrics = $0 { return true }; return false }) {
+            selectedTabID = existing.id
+            return
+        }
+        let schema = selectedSchema
+        let model = MetricsModel { try await driver.metrics(schema: schema) }
+        tabs.append(.metrics(model))
+        selectedTabID = model.id
+    }
+
     func newQueryTab(sql: String = "") {
         guard let driver else { return }
         queryCounter += 1
@@ -179,6 +213,8 @@ final class WorkspaceModel {
             if !model.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 closedTabs.append(.query(title: model.title, sql: model.sql))
             }
+        case .diagram, .metrics:
+            break
         }
         if closedTabs.count > 20 { closedTabs.removeFirst() }
         tabs.remove(at: index)

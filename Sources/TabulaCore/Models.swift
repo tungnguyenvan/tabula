@@ -1,7 +1,7 @@
 import Foundation
 
 public enum DatabaseKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case postgres, mysql, sqlite
+    case postgres, mysql, sqlite, redis
 
     public var id: String { rawValue }
 
@@ -10,6 +10,7 @@ public enum DatabaseKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .postgres: "PostgreSQL"
         case .mysql: "MySQL / MariaDB"
         case .sqlite: "SQLite"
+        case .redis: "Redis"
         }
     }
 
@@ -18,10 +19,14 @@ public enum DatabaseKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .postgres: 5432
         case .mysql: 3306
         case .sqlite: 0
+        case .redis: 6379
         }
     }
 
     public var isFileBased: Bool { self == .sqlite }
+
+    /// SQL databases share the table workspace; Redis has its own key browser.
+    public var isSQL: Bool { self != .redis }
 }
 
 public enum TLSMode: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -105,6 +110,9 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
     public var subtitle: String {
         if kind.isFileBased { return filePath }
         let userPart = user.isEmpty ? "" : "\(user)@"
+        if kind == .redis {
+            return "\(userPart)\(host):\(port) · db\(database.isEmpty ? "0" : database)"
+        }
         let dbPart = database.isEmpty ? "" : "/\(database)"
         return "\(userPart)\(host):\(port)\(dbPart)"
     }

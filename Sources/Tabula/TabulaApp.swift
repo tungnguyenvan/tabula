@@ -42,7 +42,7 @@ struct TabulaApp: App {
         .windowResizability(.contentSize)
 
         WindowGroup("Workspace", id: WindowID.workspace, for: UUID.self) { $connectionID in
-            WorkspaceWindow(connectionID: connectionID)
+            WorkspaceWindow(connectionID: $connectionID)
                 .environment(appState)
         }
         .defaultSize(width: 1280, height: 800)
@@ -53,6 +53,15 @@ struct TabulaApp: App {
             ShortcutsView()
         }
         .defaultSize(width: 760, height: 620)
+
+        Window("Software Update", id: WindowID.update) {
+            UpdateView(updater: Updater.shared)
+        }
+        .windowResizability(.contentSize)
+
+        Settings {
+            SettingsView()
+        }
     }
 }
 
@@ -60,6 +69,7 @@ enum WindowID {
     static let connections = "connections"
     static let workspace = "workspace"
     static let shortcuts = "shortcuts"
+    static let update = "update"
 }
 
 /// The workspace of the key window. Menu commands use this instead of SwiftUI's focused values,
@@ -68,9 +78,11 @@ enum WindowID {
 final class ActiveWorkspace {
     static let shared = ActiveWorkspace()
     private(set) weak var model: WorkspaceModel?
+    private(set) weak var redis: RedisWorkspaceModel?
 
-    fileprivate func update(_ model: WorkspaceModel?) {
+    fileprivate func update(_ model: WorkspaceModel?, redis: RedisWorkspaceModel? = nil) {
         if self.model !== model { self.model = model }
+        if self.redis !== redis { self.redis = redis }
     }
 }
 
@@ -80,18 +92,42 @@ enum WorkspaceRegistry {
     private static var models: [Int: WeakWorkspace] = [:]
     private static var observer: Any?
 
-    private struct WeakWorkspace { weak var model: WorkspaceModel? }
+    private struct WeakWorkspace {
+        weak var model: WorkspaceModel?
+        weak var redis: RedisWorkspaceModel?
+        var isAlive: Bool { model != nil || redis != nil }
+    }
 
     static func register(_ model: WorkspaceModel, window: NSWindow) {
-        models = models.filter { $0.value.model != nil }
-        models[window.windowNumber] = WeakWorkspace(model: model)
-        if window.isKeyWindow { ActiveWorkspace.shared.update(model) }
+        register(WeakWorkspace(model: model), window: window)
+    }
+
+    static func register(_ redis: RedisWorkspaceModel, window: NSWindow) {
+        register(WeakWorkspace(redis: redis), window: window)
+    }
+
+    private static func register(_ entry: WeakWorkspace, window: NSWindow) {
+        // Each connection becomes a tab of one window (drag a tab out to get a separate window).
+        let isNew = models[window.windowNumber] == nil
+        window.tabbingIdentifier = "tabula.workspace"
+        window.tabbingMode = .preferred
+        window.title = entry.model?.config.displayName ?? entry.redis?.config.displayName ?? window.title
+        models = models.filter { $0.value.isAlive }
+        if isNew, let host = NSApp.windows.first(where: {
+            $0 !== window && $0.isVisible && $0.tabbingIdentifier == "tabula.workspace" && !($0.tabbedWindows ?? []).contains(window)
+        }) {
+            host.addTabbedWindow(window, ordered: .above)
+            window.makeKeyAndOrderFront(nil)
+        }
+        models[window.windowNumber] = entry
+        if window.isKeyWindow { ActiveWorkspace.shared.update(entry.model, redis: entry.redis) }
         if observer == nil {
             observer = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
                 let number = (note.object as? NSWindow)?.windowNumber
                 MainActor.assumeIsolated {
                     // Non-workspace windows (Connections, Shortcuts) clear it, so workspace commands disable.
-                    ActiveWorkspace.shared.update(number.flatMap { models[$0]?.model })
+                    let entry = number.flatMap { models[$0] }
+                    ActiveWorkspace.shared.update(entry?.model, redis: entry?.redis)
                 }
             }
         }
@@ -101,7 +137,7 @@ enum WorkspaceRegistry {
 
     #if DEBUG
     static func makeActiveForTesting(_ window: NSWindow) {
-        ActiveWorkspace.shared.update(models[window.windowNumber]?.model)
+        ActiveWorkspace.shared.update(models[window.windowNumber]?.model, redis: models[window.windowNumber]?.redis)
     }
     #endif
 
@@ -118,6 +154,7 @@ struct WorkspaceCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     private var workspace: WorkspaceModel? { ActiveWorkspace.shared.model }
+    private var redis: RedisWorkspaceModel? { ActiveWorkspace.shared.redis }
 
     private var table: TableTabModel? { workspace?.selectedTableTab }
 
@@ -129,10 +166,12 @@ struct WorkspaceCommands: Commands {
     // SwiftUI doesn't re-evaluate menus when model state changes, so items only disable when there is
     // no workspace; each action checks its own preconditions when it runs.
     var body: some Commands {
-        let noWorkspace = workspace == nil
+        let noWorkspace = workspace == nil && redis == nil
 
         CommandGroup(after: .newItem) {
-            Button("New Query Tab") { workspace?.newQueryTab() }
+            Button(redis != nil ? "Console" : "New Query Tab") {
+                if let redis { redis.mode = .console } else { workspace?.newQueryTab() }
+            }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(noWorkspace)
             Button("Reopen Closed Tab") { workspace?.reopenClosedTab() }
@@ -166,7 +205,9 @@ struct WorkspaceCommands: Commands {
                 .disabled(noWorkspace)
             // ⌘F filters rows in a table tab and opens the find bar in the SQL editor.
             Button("Find / Filter Rows") {
-                if let table {
+                if let redis {
+                    redis.patternFocusRequest += 1
+                } else if let table {
                     table.focusFilter()
                 } else {
                     let sender = NSMenuItem()
@@ -175,6 +216,14 @@ struct WorkspaceCommands: Commands {
                 }
             }
             .keyboardShortcut("f", modifiers: .command)
+            .disabled(noWorkspace)
+            Button("Relationship Diagram") { workspace?.openDiagram() }
+                .keyboardShortcut("3", modifiers: [.command, .option])
+                .disabled(noWorkspace)
+            Button("Server Metrics") {
+                if let redis { redis.mode = .metrics } else { workspace?.openMetrics() }
+            }
+            .keyboardShortcut("4", modifiers: [.command, .option])
             .disabled(noWorkspace)
             Button("Filter Tables") { workspace?.sidebarFilterFocusRequest += 1 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
@@ -199,7 +248,12 @@ struct WorkspaceCommands: Commands {
         }
 
         CommandMenu("Database") {
-            Button("Refresh") { Task { await workspace?.refresh() } }
+            Button("Refresh") {
+                Task {
+                    await workspace?.refresh()
+                    await redis?.refresh()
+                }
+            }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(noWorkspace)
             Divider()
@@ -235,7 +289,12 @@ struct WorkspaceCommands: Commands {
             .keyboardShortcut("]", modifiers: .command)
             .disabled(noWorkspace)
             Divider()
-            Button("Reconnect") { Task { await workspace?.reconnect() } }
+            Button("Reconnect") {
+                Task {
+                    await workspace?.reconnect()
+                    await redis?.reconnect()
+                }
+            }
                 .disabled(noWorkspace)
         }
 
@@ -250,6 +309,13 @@ struct WorkspaceCommands: Commands {
             }
             .keyboardShortcut(.return, modifiers: [.command, .shift])
             .disabled(noWorkspace)
+        }
+
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") {
+                openWindow(id: WindowID.update)
+                Task { await Updater.shared.check(userInitiated: true) }
+            }
         }
 
         CommandGroup(replacing: .help) {

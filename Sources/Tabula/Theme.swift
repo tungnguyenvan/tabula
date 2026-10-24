@@ -19,6 +19,7 @@ extension DatabaseKind {
         case .postgres: "cylinder.split.1x2"
         case .mysql: "cylinder"
         case .sqlite: "doc.text"
+        case .redis: "square.stack.3d.up"
         }
     }
 
@@ -27,6 +28,7 @@ extension DatabaseKind {
         case .postgres: "Pg"
         case .mysql: "My"
         case .sqlite: "Sl"
+        case .redis: "Re"
         }
     }
 
@@ -35,6 +37,7 @@ extension DatabaseKind {
         case .postgres: Color(red: 0.2, green: 0.4, blue: 0.7)
         case .mysql: Color(red: 0.0, green: 0.46, blue: 0.56)
         case .sqlite: Color(red: 0.3, green: 0.55, blue: 0.85)
+        case .redis: Color(red: 0.84, green: 0.2, blue: 0.16)
         }
     }
 }

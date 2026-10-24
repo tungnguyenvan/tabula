@@ -11,6 +11,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/vapor/postgres-nio.git", from: "1.21.0"),
         .package(url: "https://github.com/vapor/mysql-nio.git", from: "1.7.0"),
+        .package(url: "https://github.com/swift-server/RediStack.git", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.27.0"),
     ],
     targets: [
         .target(
@@ -18,6 +20,8 @@ let package = Package(
             dependencies: [
                 .product(name: "PostgresNIO", package: "postgres-nio"),
                 .product(name: "MySQLNIO", package: "mysql-nio"),
+                .product(name: "RediStack", package: "RediStack"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
             ],
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),

@@ -18,6 +18,8 @@ struct GridSource {
     var cell: (_ row: Int, _ column: Int) -> GridCell
     var state: (_ row: Int, _ column: Int) -> GridCellState = { _, _ in .normal }
     var isEditable: (_ row: Int) -> Bool = { _ in false }
+    /// Columns that can never be edited (e.g. computed ones) return false.
+    var isColumnEditable: (_ column: Int) -> Bool = { _ in true }
     var copyText: (IndexSet) -> String
     /// Added to the row index for the row-number gutter (the page offset).
     var rowNumberOffset = 0
@@ -91,14 +93,17 @@ struct DataGridView: NSViewRepresentable {
         private var popover: NSPopover?
         /// The binding value seen last; a different value means SwiftUI changed the selection itself.
         private var lastParentSelection = IndexSet()
+        private var sizedWithRows = false
 
         init(_ parent: DataGridView) { self.parent = parent }
 
         func apply(_ parent: DataGridView) {
             self.parent = parent
             guard let tableView else { return }
-            if parent.source.columns != columns {
+            // Rebuild when columns change, and once more when the first rows arrive so widths fit the data.
+            if parent.source.columns != columns || (!sizedWithRows && parent.source.rowCount > 0) {
                 columns = parent.source.columns
+                sizedWithRows = parent.source.rowCount > 0
                 rebuildColumns(tableView)
                 focusedColumn = min(max(focusedColumn, 1), max(1, tableView.numberOfColumns - 1))
                 version = -1
@@ -119,6 +124,7 @@ struct DataGridView: NSViewRepresentable {
                 lastParentSelection = parent.selection
                 if tableView.selectedRowIndexes != parent.selection, parent.selection.allSatisfy({ $0 < parent.source.rowCount }) {
                     tableView.selectRowIndexes(parent.selection, byExtendingSelection: false)
+                    if let first = parent.selection.first { tableView.scrollRowToVisible(first) }
                 }
             }
             if let request = parent.focusRequest, request.id != handledFocusRequest, request.row < parent.source.rowCount {
@@ -162,12 +168,14 @@ struct DataGridView: NSViewRepresentable {
                 column.minWidth = 40
                 column.headerCell.font = .systemFont(ofSize: 11, weight: .medium)
                 var widest = (name as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium)]).width + 28
-                for row in 0..<min(parent.source.rowCount, 200) {
+                // Sample up to ~200 rows spread over the whole result, not just the top.
+                let count = parent.source.rowCount
+                for row in stride(from: 0, to: count, by: max(1, count / 200)) {
                     if case .value(let text) = parent.source.cell(row, index) {
                         widest = max(widest, (String(text.prefix(80)) as NSString).size(withAttributes: [.font: font]).width + 16)
                     }
                 }
-                column.width = min(max(widest, 64), 380)
+                column.width = min(max(widest, 64), index == columns.count - 1 ? 640 : 380)
                 tableView.addTableColumn(column)
             }
         }
@@ -276,7 +284,8 @@ struct DataGridView: NSViewRepresentable {
         @objc func doubleClicked(_ sender: Any?) {
             guard let tableView, tableView.clickedRow >= 0 else { return }
             if tableView.clickedColumn >= 1 { focusedColumn = tableView.clickedColumn }
-            if parent.onEdit != nil && parent.source.isEditable(tableView.clickedRow) {
+            if parent.onEdit != nil && parent.source.isEditable(tableView.clickedRow),
+               dataColumn(focusedColumn).map(parent.source.isColumnEditable) == true {
                 beginEditing(row: tableView.clickedRow, column: focusedColumn)
             } else {
                 showQuickLook()
@@ -285,12 +294,14 @@ struct DataGridView: NSViewRepresentable {
 
         var canEditFocusedCell: Bool {
             guard let tableView, parent.onEdit != nil, tableView.selectedRow >= 0 else { return false }
-            return parent.source.isEditable(tableView.selectedRow) && dataColumn(focusedColumn) != nil
+            guard let column = dataColumn(focusedColumn) else { return false }
+            return parent.source.isEditable(tableView.selectedRow) && parent.source.isColumnEditable(column)
         }
 
         /// Starts editing; `replacingWith` begins with typed text instead of the current value.
         func beginEditing(row: Int, column: Int, replacingWith initial: String? = nil) {
             guard let tableView, parent.onEdit != nil, row >= 0, let dataColumn = dataColumn(column), parent.source.isEditable(row),
+                  parent.source.isColumnEditable(dataColumn),
                   let view = tableView.view(atColumn: column, row: row, makeIfNecessary: true) as? GridCellView,
                   let field = view.textField else { return }
             if let initial {
@@ -456,7 +467,7 @@ struct DataGridView: NSViewRepresentable {
                 menu.addItem(.separator())
                 menu.addItem(ClosureMenuItem("Filter by This Value") { onFilter(row, dataColumn) })
             }
-            if let onEdit = parent.onEdit, let dataColumn, parent.source.isEditable(row) {
+            if let onEdit = parent.onEdit, let dataColumn, parent.source.isEditable(row), parent.source.isColumnEditable(dataColumn) {
                 menu.addItem(.separator())
                 menu.addItem(ClosureMenuItem("Edit Cell", key: "\r", modifiers: []) { [weak self] in
                     self?.beginEditing(row: row, column: column)

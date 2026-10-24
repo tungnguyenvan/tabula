@@ -44,9 +44,15 @@ struct ConnectionFormView: View {
                     Section("Server") {
                         TextField("Host", text: $config.host, prompt: Text("127.0.0.1"))
                         TextField("Port", value: $config.port, format: .number.grouping(.never))
-                        TextField("User", text: $config.user)
-                        SecureField("Password", text: $password)
-                        TextField("Database", text: $config.database, prompt: Text(config.kind == .postgres ? "defaults to the user name" : "optional"))
+                        if config.kind == .redis {
+                            TextField("User", text: $config.user, prompt: Text("optional (ACL user, Redis 6+)"))
+                            SecureField("Password", text: $password, prompt: Text("optional"))
+                            TextField("Database", text: $config.database, prompt: Text("0"))
+                        } else {
+                            TextField("User", text: $config.user)
+                            SecureField("Password", text: $password)
+                            TextField("Database", text: $config.database, prompt: Text(config.kind == .postgres ? "defaults to the user name" : "optional"))
+                        }
                         Picker("TLS", selection: $config.tls) {
                             ForEach(TLSMode.allCases) { Text($0.displayName).tag($0) }
                         }
@@ -76,7 +82,13 @@ struct ConnectionFormView: View {
     }
 
     private var isValid: Bool {
-        config.kind.isFileBased ? !config.filePath.isEmpty : !config.user.isEmpty && (1...65535).contains(config.port)
+        switch config.kind {
+        case .sqlite: return !config.filePath.isEmpty
+        case .redis:
+            let database = config.database.trimmingCharacters(in: .whitespaces)
+            return (1...65535).contains(config.port) && (database.isEmpty || (Int(database).map { $0 >= 0 } ?? false))
+        case .postgres, .mysql: return !config.user.isEmpty && (1...65535).contains(config.port)
+        }
     }
 
     @ViewBuilder
@@ -97,6 +109,14 @@ struct ConnectionFormView: View {
     private func test() async {
         testState = .testing
         do {
+            if config.kind == .redis {
+                let redis = try await RedisDriver.connect(config, password: password)
+                let pong = try await redis.send("PING")
+                await redis.close()
+                if case .error(let message) = pong { throw DatabaseError(message) }
+                testState = .success(redis.serverDescription)
+                return
+            }
             let driver = try await DriverFactory.connect(config, password: password)
             let version = try? await driver.execute(config.kind == .sqlite ? "SELECT 'SQLite ' || sqlite_version()" : "SELECT version()")
             await driver.close()

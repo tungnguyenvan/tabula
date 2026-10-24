@@ -25,6 +25,8 @@ public enum DriverFactory {
             return try await PostgresDriver.connect(config, password: password)
         case .mysql:
             return try await MySQLDriver.connect(config, password: password)
+        case .redis:
+            throw DatabaseError("Redis connections use RedisDriver, not the SQL driver interface.")
         }
     }
 }
@@ -39,6 +41,14 @@ extension DatabaseDriver {
             results.append(try await execute(statement))
         }
         return results
+    }
+
+    /// Server version as reported by the database, e.g. "PostgreSQL 16.11 on aarch64…".
+    public func serverVersion() async -> String? {
+        let sql = kind == .sqlite ? "SELECT 'SQLite ' || sqlite_version()" : "SELECT version()"
+        guard let result = try? await execute(sql), let value = result.rows.first?.first ?? nil else { return nil }
+        if kind == .mysql { return "MySQL " + value }
+        return value
     }
 
     public func fetchPage(_ request: TablePageRequest) async throws -> QueryResult {
@@ -89,7 +99,7 @@ public struct TablePageRequest: Sendable, Hashable {
 /// Fails with a readable error if `operation` does not finish in time (used for connecting).
 /// The operation may not be cancellable (NIO futures aren't), so on timeout this returns at once
 /// and hands any late result to `discard`, e.g. to close a connection that arrived too late.
-func withTimeout<T: Sendable>(
+public func withTimeout<T: Sendable>(
     seconds: Double,
     _ what: String,
     discard: @escaping @Sendable (T) -> Void = { _ in },

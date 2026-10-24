@@ -24,8 +24,20 @@ final class AppState {
         connections.first { $0.id == id }
     }
 
+    #if DEBUG
+    /// With TABULA_DATA_DIR, debug builds read passwords from passwords.json there, so test runs never touch the Keychain.
+    static let testPasswords: [String: String]? = {
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"],
+              let data = try? Data(contentsOf: URL(fileURLWithPath: directory).appendingPathComponent("passwords.json")) else { return nil }
+        return try? JSONDecoder().decode([String: String].self, from: data)
+    }()
+    #endif
+
     /// Reads the Keychain off the main thread: macOS may block the call while it asks the user for access.
     func password(for id: UUID) async -> String? {
+        #if DEBUG
+        if let passwords = Self.testPasswords { return passwords[id.uuidString] }
+        #endif
         let store = store
         return await Task.detached { store.password(for: id) }.value
     }

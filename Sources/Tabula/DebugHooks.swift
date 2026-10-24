@@ -14,10 +14,21 @@ enum DebugHooks {
 
     static var showShortcuts: Bool { environment["TABULA_DEBUG_SHORTCUTS"] != nil }
 
-    static var connectionToOpen: UUID? { environment["TABULA_DEBUG_OPEN"].flatMap(UUID.init(uuidString:)) }
+    static var connectionToOpen: UUID? { connectionsToOpen.first }
+
+    /// TABULA_DEBUG_OPEN may list several ids separated by commas.
+    static var connectionsToOpen: [UUID] {
+        (environment["TABULA_DEBUG_OPEN"] ?? "").split(separator: ",").compactMap { UUID(uuidString: String($0)) }
+    }
 
     static func workspaceConnected(_ model: WorkspaceModel) {
         if environment["TABULA_DEBUG_PALETTE"] != nil { model.showPalette = true }
+        if environment["TABULA_DEBUG_DIAGRAM"] != nil { model.openDiagram() }
+        if environment["TABULA_DEBUG_METRICS"] != nil { model.openMetrics() }
+        if let count = environment["TABULA_DEBUG_TABS"].flatMap(Int.init) {
+            for table in model.tables { model.open(table) }
+            for _ in 0..<count { model.newQueryTab() }
+        }
         if let sql = environment["TABULA_DEBUG_QUERY"], case .query(let query) = model.tabs.first {
             query.sql = sql
             Task { await query.run() }
@@ -136,6 +147,22 @@ enum DebugHooks {
             }
             if let main = NSApp.mainMenu { walk(main, "") }
             fflush(stdout)
+        }
+    }
+
+    static func redisConnected(_ model: RedisWorkspaceModel) {
+        if let key = environment["TABULA_DEBUG_KEY"], let entry = model.keys.first(where: { $0.key.display == key }) {
+            model.select(entry.key)
+        }
+        if environment["TABULA_DEBUG_METRICS"] != nil { model.mode = .metrics }
+        if let commands = environment["TABULA_DEBUG_REDIS_CONSOLE"] {
+            model.mode = .console
+            Task {
+                for command in commands.components(separatedBy: ";;") {
+                    model.console.input = command
+                    await model.console.run()
+                }
+            }
         }
     }
 

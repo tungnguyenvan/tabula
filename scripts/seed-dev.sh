@@ -54,15 +54,37 @@ else
 echo "MySQL container not reachable; skipping MySQL sample data" >&2
 fi
 
+if with_timeout 5 docker exec tabula-test-redis true 2>/dev/null; then
+docker exec -i tabula-test-redis redis-cli --user tabula --pass tabula --no-auth-warning -n 1 >/dev/null <<'REDIS'
+FLUSHDB
+SET greeting "Xin chào, Tabula!"
+SET config:app "{\"theme\":\"dark\",\"features\":[\"redis\",\"sql\"],\"limits\":{\"rows\":300}}"
+SET session:abc123 "user=42" EX 3600
+HSET user:42 name "Nguyễn An" email "an@example.com" city "Hà Nội" plan "pro"
+HSET user:43 name "Trần Bình" email "binh@example.com" city "Đà Nẵng"
+RPUSH queue:emails "welcome:42" "reset:43" "digest:42" "welcome:44"
+SADD tags:popular redis postgres mysql sqlite swift
+ZADD leaderboard 1520 an 1340 binh 990 chi 1875 dung
+XADD events * type signup user 42
+XADD events * type login user 42
+XADD events * type purchase user 43 amount 19.99
+INCR counter:visits
+REDIS
+docker exec tabula-test-redis redis-cli --user tabula --pass tabula --no-auth-warning -n 1 eval "for i=1,250 do redis.call('SET','cache:item:'..i, 'v'..i) end return 1" 0 >/dev/null
+else
+echo "Redis container not reachable; skipping Redis sample data" >&2
+fi
+
 cat > "$D/connections.json" <<JSON
 [
   {"id": "00000000-0000-0000-0000-000000000001", "name": "Shop (SQLite)", "kind": "sqlite", "host": "", "port": 0, "user": "", "database": "", "filePath": "$D/shop.sqlite", "tls": "disable", "tag": "local"},
   {"id": "00000000-0000-0000-0000-000000000002", "name": "Test Postgres", "kind": "postgres", "host": "127.0.0.1", "port": 55432, "user": "tabula", "database": "tabula", "filePath": "", "tls": "disable", "tag": "development"},
-  {"id": "00000000-0000-0000-0000-000000000003", "name": "Test MySQL", "kind": "mysql", "host": "127.0.0.1", "port": 53306, "user": "tabula", "database": "tabula", "filePath": "", "tls": "require", "tag": "production"}
+  {"id": "00000000-0000-0000-0000-000000000003", "name": "Test MySQL", "kind": "mysql", "host": "127.0.0.1", "port": 53306, "user": "tabula", "database": "tabula", "filePath": "", "tls": "require", "tag": "production"},
+  {"id": "00000000-0000-0000-0000-000000000004", "name": "Test Redis", "kind": "redis", "host": "127.0.0.1", "port": 56379, "user": "tabula", "database": "1", "filePath": "", "tls": "disable", "tag": "staging"}
 ]
 JSON
-# Test-store passwords (service used when TABULA_DATA_DIR is set).
-for n in 2 3; do
-  security add-generic-password -U -A -s app.tabula.connections.test -a "00000000-0000-0000-0000-00000000000$n" -w tabula
-done
+# Test passwords: debug builds read these instead of the Keychain when TABULA_DATA_DIR is set.
+cat > "$D/passwords.json" <<'JSON'
+{"00000000-0000-0000-0000-000000000002": "tabula", "00000000-0000-0000-0000-000000000003": "tabula", "00000000-0000-0000-0000-000000000004": "tabula"}
+JSON
 echo "Seeded $D"

@@ -3,14 +3,20 @@ import SwiftUI
 import TabulaCore
 
 struct WorkspaceWindow: View {
-    let connectionID: UUID?
+    /// Nil for a new empty tab (the tab bar's + button): the tab then offers a connection to open.
+    @Binding var connectionID: UUID?
     @Environment(AppState.self) private var appState
     @State private var model: WorkspaceModel?
+    @State private var redis: RedisWorkspaceModel?
 
     var body: some View {
         Group {
             if let model {
                 WorkspaceView(model: model)
+            } else if let redis {
+                RedisWorkspaceView(model: redis)
+            } else if connectionID == nil {
+                ConnectionPicker { connectionID = $0 }
             } else if appState.connection(connectionID) == nil {
                 ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
                                        description: Text("It may have been deleted."))
@@ -19,14 +25,24 @@ struct WorkspaceWindow: View {
             }
         }
         .task(id: connectionID) {
-            guard model == nil, let id = connectionID, let config = appState.connection(id) else { return }
-            let workspace = WorkspaceModel(config: config, password: await appState.password(for: id))
-            model = workspace
-            await workspace.connect()
+            guard model == nil, redis == nil, let id = connectionID, let config = appState.connection(id) else { return }
+            let password = await appState.password(for: id)
+            if config.kind == .redis {
+                let workspace = RedisWorkspaceModel(config: config, password: password)
+                redis = workspace
+                await workspace.connect()
+            } else {
+                let workspace = WorkspaceModel(config: config, password: password)
+                model = workspace
+                await workspace.connect()
+            }
         }
         .onDisappear {
-            let workspace = model
-            Task { await workspace?.disconnect() }
+            let workspace = model, redisWorkspace = redis
+            Task {
+                await workspace?.disconnect()
+                await redisWorkspace?.disconnect()
+            }
         }
     }
 }
@@ -59,11 +75,23 @@ struct WorkspaceView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                ConnectionPill(model: model)
+                ConnectionPill(config: model.config, status: model.status,
+                               location: model.selectedSchema.isEmpty ? nil : model.selectedSchema,
+                               serverVersion: model.serverVersion, connectedAt: model.connectedAt,
+                               onReconnect: { Task { await model.reconnect() } })
+            }
+            ToolbarItem(placement: .navigation) {
+                OpenConnectionMenu(current: model.config.id)
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { model.newQueryTab() } label: { Label("New Query", systemImage: "plus.square.on.square") }
                     .help("New query tab (⌘T)")
+                    .disabled(model.driver == nil)
+                Button { model.openDiagram() } label: { Label("Diagram", systemImage: "point.3.connected.trianglepath.dotted") }
+                    .help("Relationship diagram (⌥⌘3)")
+                    .disabled(model.driver == nil || model.config.kind == .redis)
+                Button { model.openMetrics() } label: { Label("Metrics", systemImage: "gauge.with.dots.needle.33percent") }
+                    .help("Server metrics (⌥⌘4)")
                     .disabled(model.driver == nil)
                 Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                     .help("Refresh (⌘R)")
@@ -103,6 +131,8 @@ struct WorkspaceView: View {
                     switch tab {
                     case .table(let table): TableTabView(model: table, workspace: model).id(table.id)
                     case .query(let query): QueryTabView(model: query, workspace: model).id(query.id)
+                    case .diagram(let diagram): DiagramView(model: diagram) { model.open($0) }.id(diagram.id)
+                    case .metrics(let metrics): MetricsView(model: metrics).id(metrics.id)
                     }
                 } else {
                     EmptyWorkspaceView(model: model)
@@ -112,35 +142,41 @@ struct WorkspaceView: View {
     }
 }
 
-/// The centered toolbar capsule: database kind, connection name, server and environment.
-private struct ConnectionPill: View {
-    let model: WorkspaceModel
+/// The centered toolbar capsule: database kind, environment, connection name, server and status.
+/// Clicking it shows the connection details and lets you open other connections.
+struct ConnectionPill: View {
+    let config: ConnectionConfig
+    let status: WorkspaceModel.Status
+    /// Schema, database or Redis db index shown after the server address.
+    var location: String?
+    var serverVersion: String?
+    var connectedAt: Date?
+    var onReconnect: () -> Void = {}
+    @State private var showingInfo = false
 
-    private var tint: Color { model.config.tag.color ?? .secondary }
+    private var tint: Color { config.tag.color ?? .secondary }
 
     private var statusText: String {
-        switch model.status {
+        switch status {
         case .connecting: return "Connecting…"
         case .failed: return "Disconnected"
         case .connected:
-            let config = model.config
             if config.kind == .sqlite { return (config.filePath as NSString).abbreviatingWithTildeInPath }
-            let schema = model.selectedSchema.isEmpty ? "" : " : \(model.selectedSchema)"
-            return "\(config.host):\(config.port)\(schema)"
+            return "\(config.host):\(config.port)" + (location.map { " : \($0)" } ?? "")
         }
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            KindBadge(kind: model.config.kind, size: 18)
-            if model.config.tag != .none {
-                Text(model.config.tag.displayName.uppercased())
+            KindBadge(kind: config.kind, size: 18)
+            if config.tag != .none {
+                Text(config.tag.displayName.uppercased())
                     .font(.system(size: 9, weight: .heavy))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(tint, in: RoundedRectangle(cornerRadius: 3))
             }
-            Text(model.config.displayName).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+            Text(config.displayName).font(.system(size: 12, weight: .semibold)).lineLimit(1)
             Text(statusText).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             statusDot
         }
@@ -148,14 +184,21 @@ private struct ConnectionPill: View {
         .frame(minWidth: 320, maxWidth: 560, minHeight: 26)
         .background(
             RoundedRectangle(cornerRadius: 7)
-                .fill(model.config.tag.color.map { $0.opacity(0.14) } ?? Color.primary.opacity(0.05))
+                .fill(config.tag.color.map { $0.opacity(0.14) } ?? Color.primary.opacity(0.05))
         )
         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.primary.opacity(0.08)))
+        .contentShape(Rectangle())
+        .onTapGesture { showingInfo.toggle() }
+        .help("Connection details")
+        .popover(isPresented: $showingInfo, arrowEdge: .bottom) {
+            ConnectionInfoPopover(config: config, status: status, location: location, serverVersion: serverVersion,
+                                  connectedAt: connectedAt, onReconnect: { showingInfo = false; onReconnect() })
+        }
     }
 
     @ViewBuilder
     private var statusDot: some View {
-        switch model.status {
+        switch status {
         case .connecting: ProgressView().controlSize(.mini)
         case .connected: Circle().fill(.green).frame(width: 7, height: 7).help("Connected")
         case .failed(let message): Circle().fill(.red).frame(width: 7, height: 7).help(message)
@@ -163,26 +206,46 @@ private struct ConnectionPill: View {
     }
 }
 
-/// Equal-width tabs that fill the bar, Safari-style.
+/// Tabs share the bar between 120 and 220 points each, left-aligned; when they don't fit, the bar scrolls
+/// and keeps the selected tab in view.
 private struct TabStrip: View {
     let model: WorkspaceModel
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(model.tabs) { tab in
-                TabButton(tab: tab, selected: tab.id == model.selectedTabID, isPreview: model.isPreview(tab.id),
-                          select: { model.selectedTabID = tab.id },
-                          pin: { model.pin(tab.id) },
-                          close: { model.requestClose(tab.id) },
-                          closeOthers: { for other in model.tabs where other.id != tab.id { model.requestClose(other.id) } })
-                if tab.id != model.tabs.last?.id { Divider().frame(height: 14) }
+            GeometryReader { geometry in
+                let width = min(220, max(120, geometry.size.width / CGFloat(max(model.tabs.count, 1))))
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 0) {
+                            ForEach(model.tabs) { tab in
+                                TabButton(tab: tab, selected: tab.id == model.selectedTabID, isPreview: model.isPreview(tab.id),
+                                          select: { model.selectedTabID = tab.id },
+                                          pin: { model.pin(tab.id) },
+                                          close: { model.requestClose(tab.id) },
+                                          closeOthers: { for other in model.tabs where other.id != tab.id { model.requestClose(other.id) } })
+                                    .frame(width: width)
+                                    .id(tab.id)
+                                Divider().frame(height: 14)
+                            }
+                        }
+                        .frame(height: geometry.size.height)
+                    }
+                    .onChange(of: model.selectedTabID) { _, id in
+                        guard let id else { return }
+                        withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id) }
+                    }
+                    .onAppear {
+                        if let id = model.selectedTabID { DispatchQueue.main.async { proxy.scrollTo(id) } }
+                    }
+                }
             }
             Button { model.newQueryTab() } label: {
                 Image(systemName: "plus").font(.system(size: 11, weight: .medium)).frame(width: 28, height: 26)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("New query tab")
+            .help("New query tab (⌘T)")
         }
         .frame(height: 28)
         .background(Color(nsColor: .underPageBackgroundColor))
@@ -204,6 +267,8 @@ private struct TabButton: View {
         switch tab {
         case .table(let model): model.table.kind == .view ? "eye" : "tablecells"
         case .query: "chevron.left.forwardslash.chevron.right"
+        case .diagram: "point.3.connected.trianglepath.dotted"
+        case .metrics: "gauge.with.dots.needle.33percent"
         }
     }
 
@@ -232,7 +297,7 @@ private struct TabButton: View {
             }
             .padding(.leading, 6)
         }
-        .frame(minWidth: 90, maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(selected ? Color(nsColor: .windowBackgroundColor) : (hovering ? Color.primary.opacity(0.04) : .clear))
         .overlay(alignment: .top) {
             if selected { Rectangle().fill(Color.accentColor).frame(height: 2) }
@@ -276,6 +341,167 @@ private struct EmptyWorkspaceView: View {
             Text(keys).font(.system(.body, design: .rounded)).foregroundStyle(.tertiary)
         }
         .frame(width: 220)
+    }
+}
+
+/// Shown in a new, empty window tab: pick the connection to open there.
+private struct ConnectionPicker: View {
+    let onPick: (UUID) -> Void
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+    @State private var search = ""
+
+    private var matches: [ConnectionConfig] {
+        search.isEmpty ? appState.connections : appState.connections.filter {
+            $0.displayName.localizedCaseInsensitiveContains(search) || $0.subtitle.localizedCaseInsensitiveContains(search)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Open a connection in this tab").font(.title3.weight(.semibold))
+            TextField("Search connections", text: $search)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 360)
+                .onSubmit { if let first = matches.first { onPick(first.id) } }
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(matches) { connection in
+                        Button { onPick(connection.id) } label: {
+                            HStack(spacing: 10) {
+                                KindBadge(kind: connection.kind, size: 26)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(connection.displayName).font(.system(size: 13, weight: .medium))
+                                    Text(connection.subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                Spacer()
+                                if let color = connection.tag.color { Circle().fill(color).frame(width: 7, height: 7) }
+                            }
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(width: 420, height: 300)
+            Button("Manage Connections…") { openWindow(id: WindowID.connections) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Details of the current connection, plus quick access to the others.
+struct ConnectionInfoPopover: View {
+    let config: ConnectionConfig
+    let status: WorkspaceModel.Status
+    var location: String?
+    var serverVersion: String?
+    var connectedAt: Date?
+    let onReconnect: () -> Void
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+
+    private var rows: [(String, String)] {
+        var rows: [(String, String)] = [("Type", config.kind.displayName)]
+        if let serverVersion { rows.append(("Server", serverVersion)) }
+        if config.kind == .sqlite {
+            rows.append(("File", (config.filePath as NSString).abbreviatingWithTildeInPath))
+        } else {
+            rows.append(("Host", "\(config.host):\(config.port)"))
+            if !config.user.isEmpty { rows.append(("User", config.user)) }
+            let databaseLabel = config.kind == .postgres ? "Schema" : "Database"
+            if let location { rows.append((databaseLabel, location)) }
+            rows.append(("TLS", config.tls.displayName))
+        }
+        if config.tag != .none { rows.append(("Tag", config.tag.displayName)) }
+        switch status {
+        case .connected: rows.append(("Status", connectedAt.map { "Connected \($0.formatted(.relative(presentation: .named)))" } ?? "Connected"))
+        case .connecting: rows.append(("Status", "Connecting…"))
+        case .failed(let message): rows.append(("Status", message))
+        }
+        return rows
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                KindBadge(kind: config.kind, size: 30)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(config.displayName).font(.headline)
+                    Text(config.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+            }
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 5) {
+                ForEach(rows, id: \.0) { row in
+                    GridRow {
+                        Text(row.0).foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        Text(row.1).textSelection(.enabled).lineLimit(3)
+                    }
+                }
+            }
+            .font(.system(size: 12))
+            HStack {
+                Button("Reconnect", action: onReconnect)
+                Button("Edit Connection…") { openWindow(id: WindowID.connections) }
+                Spacer()
+            }
+            .controlSize(.small)
+            let others = appState.connections.filter { $0.id != config.id }
+            if !others.isEmpty {
+                Divider()
+                Text("Open another connection").font(.caption).foregroundStyle(.secondary)
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(others) { other in
+                            Button { openWindow(id: WindowID.workspace, value: other.id) } label: {
+                                HStack(spacing: 8) {
+                                    KindBadge(kind: other.kind, size: 18)
+                                    Text(other.displayName).lineLimit(1)
+                                    if let color = other.tag.color { Circle().fill(color).frame(width: 6, height: 6) }
+                                    Spacer()
+                                    Text(other.kind.displayName).font(.caption).foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, 6).padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
+        }
+        .padding(14)
+        .frame(width: 380)
+    }
+}
+
+/// Toolbar menu that opens any saved connection in a new window tab.
+struct OpenConnectionMenu: View {
+    let current: UUID
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Menu {
+            ForEach(appState.connections) { connection in
+                Button {
+                    openWindow(id: WindowID.workspace, value: connection.id)
+                } label: {
+                    if connection.id == current {
+                        Label(connection.displayName, systemImage: "checkmark")
+                    } else {
+                        Text("\(connection.displayName) — \(connection.kind.displayName)")
+                    }
+                }
+            }
+            Divider()
+            Button("Manage Connections…") { openWindow(id: WindowID.connections) }
+        } label: {
+            Label("Connections", systemImage: "cylinder.split.1x2")
+        }
+        .help("Open another connection (⇧⌘K for all)")
     }
 }
 

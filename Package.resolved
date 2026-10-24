@@ -1,5 +1,5 @@
 {
-  "originHash" : "116eb280f0179c1344a4344766922c41e42da22c88d5675127f3d8270d05d1b5",
+  "originHash" : "2c3fca2a4fd0dd2771a7f81e1d7c3da1b0d668705a36b04879e5dbf4508116a8",
   "pins" : [
     {
       "identity" : "mysql-nio",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "649adba966158859f4fb1767e4d11802966d3fb4",
         "version" : "1.33.2"
+      }
+    },
+    {
+      "identity" : "redistack",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swift-server/RediStack.git",
+      "state" : {
+        "revision" : "8c4ce10883e405cdbde52855f97f1ec9468c889b",
+        "version" : "1.6.3"
       }
     },
     {

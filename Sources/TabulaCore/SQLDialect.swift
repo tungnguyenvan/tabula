@@ -10,7 +10,7 @@ public struct SQLDialect: Sendable {
         switch kind {
         case .mysql:
             return "`" + name.replacingOccurrences(of: "`", with: "``") + "`"
-        case .postgres, .sqlite:
+        case .postgres, .sqlite, .redis:
             return "\"" + name.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
     }

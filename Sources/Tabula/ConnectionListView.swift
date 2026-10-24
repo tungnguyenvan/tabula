@@ -58,9 +58,13 @@ struct ConnectionListView: View {
         } message: {
             Text("The saved connection and its Keychain password are removed. The database itself is not touched.")
         }
+        .onAppear { Updater.shared.checkInBackgroundIfDue() }
+        .onChange(of: Updater.shared.showWindow) { _, show in if show { openWindow(id: WindowID.update) } }
         #if DEBUG
         .onAppear {
-            if let id = DebugHooks.connectionToOpen { open(id) }
+            for (index, id) in DebugHooks.connectionsToOpen.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 1.5) { open(id) }
+            }
             if DebugHooks.showShortcuts { openWindow(id: WindowID.shortcuts) }
         }
         #endif

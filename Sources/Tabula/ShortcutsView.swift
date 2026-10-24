@@ -29,6 +29,8 @@ struct ShortcutsView: View {
             ("⌘R", "Refresh"),
             ("⌘[ / ⌘]", "Previous / next page"),
             ("⌥⌘0", "Row details panel"),
+            ("⌥⌘3", "Relationship diagram"),
+            ("⌥⌘4", "Server metrics"),
         ]),
         Group(title: "Data grid", items: [
             ("← → ↑ ↓", "Move between cells"),
@@ -65,6 +67,15 @@ struct ShortcutsView: View {
             ("⎋", "Complete table name or keyword"),
             ("⌘F", "Find (when editor is focused)"),
             ("⌘Z / ⇧⌘Z", "Undo / redo (per tab)"),
+        ]),
+        Group(title: "Redis", items: [
+            ("⌘T", "Console"),
+            ("⌘F", "Key pattern"),
+            ("⌘N", "New key"),
+            ("⌘I", "Add element"),
+            ("⌘S", "Save string value"),
+            ("⌫", "Delete key / elements"),
+            ("↑ ↓ in console", "Command history"),
         ]),
     ]
 
