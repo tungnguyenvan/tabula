@@ -167,13 +167,16 @@ struct SidebarView: View {
     }
 
     private func run(_ action: PendingAction) async {
-        guard let dialect = model.driver?.dialect else { return }
+        defer { pendingAction = nil }
+        guard let dialect = model.driver?.dialect else {
+            actionError = "Not connected. Reconnect and try again."
+            return
+        }
         let sql = action.kind == .drop ? dialect.drop(action.table) : dialect.truncate(action.table)
         do {
             try await model.perform(sql, on: action.table)
         } catch {
             actionError = error.localizedDescription
         }
-        pendingAction = nil
     }
 }

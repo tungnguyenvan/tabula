@@ -112,7 +112,7 @@ enum ConnectionRouter {
     }
 }
 
-/// The narrow column right of the sidebar listing this window's connections.
+/// The narrow column at the window's leading edge, left of the sidebar, listing this window's connections.
 struct ConnectionRail: View {
     let session: ConnectionSession
     @Environment(AppState.self) private var appState

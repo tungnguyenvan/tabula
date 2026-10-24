@@ -50,6 +50,8 @@ final class UpdateFeedTests: XCTestCase {
     /// The real repository: before any release is published GitHub returns 404, which must mean "no update".
     func testLiveFeedDoesNotThrow() async throws {
         guard ProcessInfo.processInfo.environment["TABULA_TEST_NETWORK"] != nil else { throw XCTSkip("TABULA_TEST_NETWORK not set") }
-        _ = try await UpdateFeed.check(current: try XCTUnwrap(SemanticVersion("0.0.1")))
+        let repository = ProcessInfo.processInfo.environment["TABULA_TEST_REPOSITORY"] ?? "tungnguyenvan/tabula"
+        let feed = try XCTUnwrap(UpdateFeed.latestReleaseURL(repository: repository))
+        _ = try await UpdateFeed.check(feed: feed, current: try XCTUnwrap(SemanticVersion("0.0.1")))
     }
 }

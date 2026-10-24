@@ -16,8 +16,12 @@ final class QueryTabModel {
     private(set) var running = false
     private(set) var version = 0
     let undoManager = UndoManager()
+    /// Added as LIMIT to SELECTs that have none; nil runs statements as written.
+    var rowLimit: Int? = Defaults.queryRowLimit
     /// Incremented by the menu bar to run from the editor (selection or current statement / everything).
     var runRequest: (all: Bool, id: Int) = (false, 0)
+    /// Incremented by the menu bar to beautify the editor (⇧⌘I).
+    var beautifyRequest = 0
 
     init(title: String, sql: String, driver: any DatabaseDriver, workspace: WorkspaceModel) {
         self.title = title
@@ -42,8 +46,11 @@ final class QueryTabModel {
         workspace?.recordHistory(script)
         let statements = SQLSplitter.split(script, kind: driver.kind)
         for (index, statement) in statements.enumerated() {
+            // The tab was closed mid-script: don't keep running statements nobody will see.
+            if Task.isCancelled { break }
             do {
-                results.append(try await driver.execute(statement))
+                let limited = rowLimit.map { driver.dialect.applyingRowLimit(statement, limit: $0) } ?? statement
+                results.append(try await driver.execute(limited))
             } catch {
                 let prefix = statements.count > 1 ? "Statement \(index + 1) of \(statements.count) failed:\n" : ""
                 self.error = prefix + error.localizedDescription

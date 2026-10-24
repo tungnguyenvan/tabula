@@ -42,7 +42,12 @@ final class WorkspaceModel {
 
     var schemas: [String] = []
     var selectedSchema: String = ""
-    private(set) var tables: [TableRef] = []
+    private(set) var tables: [TableRef] = [] {
+        didSet { columnCache = [:] }
+    }
+    /// Column names per table, filled on demand for SQL completion.
+    private var columnCache: [String: [String]] = [:]
+    private var loadingColumns: Set<String> = []
     var tableSearch = ""
     var tablesError: String?
     private(set) var loadingTables = false
@@ -269,12 +274,27 @@ final class WorkspaceModel {
     func recordHistory(_ sql: String) {
         history.removeAll { $0 == sql }
         history.insert(sql, at: 0)
-        if history.count > 200 { history.removeLast(history.count - 200) }
+        if history.count > Defaults.historyLimit { history.removeLast(history.count - Defaults.historyLimit) }
+    }
+
+    /// A table's column names if already loaded; otherwise starts loading them and returns nil,
+    /// so completion offers them from the next keystroke on.
+    func columnNames(of name: String) -> [String]? {
+        let key = name.lowercased()
+        if let cached = columnCache[key] { return cached }
+        guard let driver, let table = tables.first(where: { $0.name.lowercased() == key }), !loadingColumns.contains(key) else { return nil }
+        loadingColumns.insert(key)
+        Task {
+            let names = (try? await driver.columns(of: table).map(\.name)) ?? []
+            loadingColumns.remove(key)
+            columnCache[key] = names
+        }
+        return nil
     }
 
     /// Runs a destructive table operation (truncate/drop) after the UI has confirmed it.
     func perform(_ sql: String, on table: TableRef) async throws {
-        guard let driver else { return }
+        guard let driver else { throw DatabaseError("Not connected. Reconnect and try again.") }
         _ = try await driver.execute(sql)
         if sql.hasPrefix("DROP") {
             tabs.removeAll { if case .table(let model) = $0 { return model.table == table }; return false }

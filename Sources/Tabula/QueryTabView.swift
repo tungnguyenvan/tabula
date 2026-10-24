@@ -13,7 +13,7 @@ struct QueryTabView: View {
             VStack(spacing: 0) {
                 editorBar
                 Divider()
-                SQLEditorView(text: $model.sql, handle: handle, completionWords: completionWords,
+                SQLEditorView(text: $model.sql, handle: handle, suggest: suggest,
                               undoManager: model.undoManager) { all in run(all: all) }
             }
             .frame(minHeight: 120, idealHeight: 260)
@@ -23,21 +23,37 @@ struct QueryTabView: View {
         }
         .onAppear { DispatchQueue.main.async { handle.focus() } }
         .onChange(of: model.runRequest.id) { _, _ in run(all: model.runRequest.all) }
+        .onChange(of: model.beautifyRequest) { _, _ in handle.beautify(kind: model.driver.kind) }
+        .onChange(of: model.results.count) { _, _ in selection = [] }
+        .onChange(of: model.selectedResult) { _, _ in selection = [] }
     }
 
     private var editorBar: some View {
         HStack(spacing: 6) {
             Button { run(all: false) } label: {
-                Label("Run", systemImage: "play.fill").font(.system(size: 11, weight: .semibold))
+                Label("Run Current", systemImage: "play.fill")
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.running)
-            .help("Run the selection, or the statement at the cursor (⌘↩)")
+            .help("Run the selected text only, or the statement at the cursor when nothing is selected (⌘↩)")
             Button { run(all: true) } label: {
-                Label("Run All", systemImage: "forward.fill").font(.system(size: 11))
+                Label("Run All", systemImage: "forward.fill")
             }
             .disabled(model.running)
             .help("Run every statement in the editor (⇧⌘↩)")
+            Picker("Limit", selection: $model.rowLimit) {
+                Text("No Limit").tag(Int?.none)
+                Divider()
+                ForEach(Defaults.queryRowLimitChoices, id: \.self) { Text("Limit \($0)").tag(Int?.some($0)) }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .fixedSize()
+            .help("Adds LIMIT to SELECT statements that don't have one")
+            Button { handle.beautify(kind: model.driver.kind) } label: {
+                Label("Beautify", systemImage: "text.alignleft")
+            }
+            .help("Format the selection, or the whole editor (⇧⌘I)")
 
             Menu {
                 if workspace.history.isEmpty { Text("No queries yet") }
@@ -56,7 +72,7 @@ struct QueryTabView: View {
 
             if model.running { ProgressView().controlSize(.mini) }
             Spacer()
-            Text("⌘↩ Run current   ⇧⌘↩ Run all   ⌘/ Comment   ⎋ Complete").font(.system(size: 10)).foregroundStyle(.tertiary)
+            Text("⇥ Accept suggestion   ⎋ Suggestions   ⌘/ Comment").font(Layout.Font.icon).foregroundStyle(.tertiary)
         }
         .controlSize(.small)
         .padding(.horizontal, 8)
@@ -147,8 +163,10 @@ struct QueryTabView: View {
         Task { await model.run(text) }
     }
 
-    private func completionWords() -> [String] {
-        workspace.tables.map(\.name)
+    private func suggest(_ text: String, caret: Int) -> (range: NSRange, items: [String]) {
+        let context = SQLCompletion.context(in: text, caret: caret, kind: model.driver.kind)
+        let items = SQLCompletion.suggestions(for: context, tables: workspace.tables.map(\.name)) { workspace.columnNames(of: $0) }
+        return (context.partialRange, items)
     }
 
     private func saveSQL() {

@@ -80,6 +80,9 @@ enum WindowRequests {
 /// Virtual key codes for keys that menus can't bind.
 enum KeyCode {
     static let tab: UInt16 = 48
+    static let `return`: UInt16 = 36
+    static let enter: UInt16 = 76
+    static let space: UInt16 = 49
 }
 
 enum WindowID {
@@ -126,7 +129,12 @@ enum WorkspaceRegistry {
         guard sessions[window.windowNumber]?.session !== session else { return }
         sessions = sessions.filter { $0.value.session != nil }
         sessions[window.windowNumber] = WeakSession(session: session)
-        if window.isKeyWindow { ActiveWorkspace.shared.update(session) }
+        // The window often becomes key before SwiftUI hands it to us, so the notification below has
+        // already gone by; check now and once more after this layout pass.
+        let number = window.windowNumber
+        let refresh = { if NSApp.keyWindow?.windowNumber == number { ActiveWorkspace.shared.update(session) } }
+        refresh()
+        DispatchQueue.main.async(execute: refresh)
         if observer == nil {
             observer = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
                 let number = (note.object as? NSWindow)?.windowNumber
@@ -335,6 +343,10 @@ struct WorkspaceCommands: Commands {
             }
             .keyboardShortcut(.return, modifiers: [.command, .shift])
             .disabled(noWorkspace)
+            Divider()
+            Button("Beautify SQL") { query?.beautifyRequest += 1 }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(noWorkspace)
         }
 
         CommandGroup(after: .appInfo) {

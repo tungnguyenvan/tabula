@@ -97,8 +97,8 @@ private struct FieldView: View {
                 Spacer()
                 if editable {
                     Menu {
-                        Button("Set NULL") { onChange(nil) }
-                        Button("Set Empty String") { onChange("") }
+                        Button("Set NULL") { text = ""; onChange(nil) }
+                        Button("Set Empty String") { text = ""; onChange("") }
                     } label: { Image(systemName: "ellipsis") }
                         .menuStyle(.borderlessButton)
                         .menuIndicator(.hidden)

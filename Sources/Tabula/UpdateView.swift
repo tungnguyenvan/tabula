@@ -46,25 +46,28 @@ struct UpdateView: View {
             Text(message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("Open Releases Page") { NSWorkspace.shared.open(URL(string: "https://github.com/tungnguyenvan/tabula/releases")!) }
+                if let page = Updater.releasesPage {
+                    Button("Open Releases Page") { NSWorkspace.shared.open(page) }
+                }
                 Spacer()
                 Button("Close") { dismissWindow() }
                 Button("Try Again") { Task { await updater.check(userInitiated: true) } }.keyboardShortcut(.defaultAction)
             }
         case .available(let update):
             notes(update)
-            if case .failure(let reason) = Updater.installLocation() {
+            let location = Updater.installLocation()
+            if case .failure(let reason) = location {
                 Label(reason.localizedDescription, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
-                Button("Skip This Version") { updater.skip(update) }
+                Button("Skip This Version") { updater.skip(update); dismissWindow() }
                 Button("Release Page") { NSWorkspace.shared.open(update.pageURL) }
                 Spacer()
                 Button("Later") { dismissWindow() }.keyboardShortcut(.cancelAction)
                 Button("Install and Relaunch") { updater.install(update) }
                     .keyboardShortcut(.defaultAction)
-                    .disabled((try? Updater.installLocation().get()) == nil)
+                    .disabled((try? location.get()) == nil)
             }
         case .downloading(let update, let progress):
             notes(update)
@@ -96,7 +99,7 @@ struct UpdateView: View {
     private func notes(_ update: AvailableUpdate) -> some View {
         ScrollView {
             Text((try? AttributedString(markdown: Self.readable(update.notes), options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-                 ?? AttributedString(update.notes))
+                 ?? AttributedString(Self.readable(update.notes)))
                 .font(.callout)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)

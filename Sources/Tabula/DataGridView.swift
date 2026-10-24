@@ -282,8 +282,9 @@ struct DataGridView: NSViewRepresentable {
         // MARK: Editing
 
         @objc func doubleClicked(_ sender: Any?) {
-            guard let tableView, tableView.clickedRow >= 0 else { return }
-            if tableView.clickedColumn >= 1 { focusedColumn = tableView.clickedColumn }
+            // The row-number gutter (column 0) isn't a cell, as with single clicks.
+            guard let tableView, tableView.clickedRow >= 0, tableView.clickedColumn >= 1 else { return }
+            focusedColumn = tableView.clickedColumn
             if parent.onEdit != nil && parent.source.isEditable(tableView.clickedRow),
                dataColumn(focusedColumn).map(parent.source.isColumnEditable) == true {
                 beginEditing(row: tableView.clickedRow, column: focusedColumn)

@@ -13,6 +13,11 @@ public enum Defaults {
     public static let pageSizeChoices = [100, 300, 1000, 5000]
     /// How long SQLite waits on a locked database before failing a statement.
     public static let sqliteBusyTimeoutMilliseconds: Int32 = 5000
+    /// Rows a query tab's SELECT returns unless it sets its own LIMIT; nil runs it as written.
+    public static let queryRowLimit: Int? = 300
+    public static let queryRowLimitChoices = [100, 300, 1000, 5000]
+    /// Queries remembered in a workspace's history.
+    public static let historyLimit = 200
     /// Entries kept in the console log; older ones are dropped.
     public static let consoleLogLimit = 1000
 
@@ -44,6 +49,8 @@ public enum Defaults {
     public enum Updates {
         public static let requestTimeout: Double = 20
         public static let checkInterval: TimeInterval = 24 * 60 * 60
+        /// Download progress is reported in steps of this fraction.
+        public static let progressStep = 0.01
     }
 }
 

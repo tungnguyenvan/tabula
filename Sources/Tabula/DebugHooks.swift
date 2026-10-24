@@ -78,8 +78,19 @@ enum DebugHooks {
                     NSApp.activate(ignoringOtherApps: true)
                     window.makeKeyAndOrderFront(nil)
                 }
+                // Launched from a terminal the app may not be allowed to become active, so its window never
+                // turns key; route menu commands to it anyway.
+                WorkspaceRegistry.makeActiveForTesting(window)
                 print("KEY", token, "→ first responder:", String(describing: window.firstResponder.map { type(of: $0) }))
-                for event in events(for: token, window: window) { NSApp.postEvent(event, atStart: false) }
+                let events = events(for: token, window: window)
+                if let down = events.first, down.modifierFlags.contains(.command) {
+                    // AppKit's key-equivalent order (window, then main menu), which an inactive app skips.
+                    NSApp.mainMenu?.update()
+                    let handled = window.performKeyEquivalent(with: down) || NSApp.mainMenu?.performKeyEquivalent(with: down) == true
+                    print("KEY", token, handled ? "→ handled" : "→ not handled")
+                } else {
+                    for event in events { NSApp.postEvent(event, atStart: false) }
+                }
             }
             delay += 0.6
         }
@@ -127,7 +138,9 @@ enum DebugHooks {
             }
         }
         let (code, characters): (UInt16, String) = namedKeys[name] ?? (letterCodes[Character(name)] ?? 0, name)
-        return [true, false].compactMap { key(down: $0, code: code, characters: characters, ignoring: characters, flags: flags, window: window) }
+        // Like a real keyboard: Shift changes `characters` but not `charactersIgnoringModifiers`.
+        let typed = flags.contains(.shift) ? characters.uppercased() : characters
+        return [true, false].compactMap { key(down: $0, code: code, characters: typed, ignoring: characters, flags: flags, window: window) }
     }
 
     private static func key(down: Bool, code: UInt16, characters: String, ignoring: String, flags: NSEvent.ModifierFlags, window: NSWindow) -> NSEvent? {

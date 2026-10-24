@@ -31,17 +31,30 @@ final class EditorHandle {
     private func flash(_ range: NSRange) {
         guard let layoutManager = textView?.layoutManager else { return }
         layoutManager.addTemporaryAttribute(.backgroundColor, value: NSColor.controlAccentColor.withAlphaComponent(0.22), forCharacterRange: range)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Timing.runFlash) { [weak layoutManager] in
+            layoutManager?.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
         }
+    }
+
+    /// Beautifies the selection, or the whole editor when nothing is selected. Undoable.
+    func beautify(kind: DatabaseKind) {
+        guard let textView else { return }
+        let selection = textView.selectedRange()
+        let range = selection.length > 0 ? selection : NSRange(location: 0, length: (textView.string as NSString).length)
+        let original = (textView.string as NSString).substring(with: range)
+        let formatted = SQLFormatter.format(original, kind: kind)
+        guard formatted != original, textView.shouldChangeText(in: range, replacementString: formatted) else { return }
+        textView.replaceCharacters(in: range, with: formatted)
+        textView.didChangeText()
+        textView.setSelectedRange(NSRange(location: range.location, length: selection.length > 0 ? (formatted as NSString).length : 0))
     }
 }
 
 struct SQLEditorView: NSViewRepresentable {
     @Binding var text: String
     var handle: EditorHandle
-    /// Identifiers offered by completion (⎋ or ⌥⎋): tables, columns, etc.
-    var completionWords: () -> [String]
+    /// Completions for the word at a caret (UTF-16 offset): the range they replace and the candidates, best first.
+    var suggest: (_ text: String, _ caret: Int) -> (range: NSRange, items: [String])
     /// Each query tab keeps its own undo history.
     var undoManager: UndoManager
     /// ⌘↩ runs the selection or current statement; ⇧⌘↩ runs everything.
@@ -102,24 +115,92 @@ struct SQLEditorView: NSViewRepresentable {
         init(_ parent: SQLEditorView) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
+            guard let textView = notification.object as? SQLTextView else { return }
             SQLHighlighter.highlight(textView)
             textView.enclosingScrollView?.verticalRulerView?.needsDisplay = true
             parent.text = textView.string
+            textView.updateInlineSuggestion()
         }
 
+        func textViewDidChangeSelection(_ notification: Notification) {
+            (notification.object as? SQLTextView)?.dropInlineSuggestionIfMoved()
+        }
+
+        /// The native completion list (⎋, ⌃Space).
         func textView(_ textView: NSTextView, completions words: [String], forPartialWordRange charRange: NSRange,
                       indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String] {
-            let partial = (textView.string as NSString).substring(with: charRange)
-            guard !partial.isEmpty else { return [] }
-            let candidates = Set(parent.completionWords() + SQLHighlighter.keywords)
-            return candidates.filter { $0.lowercased().hasPrefix(partial.lowercased()) && $0.count > partial.count }.sorted()
+            parent.suggest(textView.string, NSMaxRange(charRange)).items
         }
     }
 }
 
 final class SQLTextView: NSTextView {
     weak var coordinator: SQLEditorView.Coordinator?
+
+    /// Grey text after the caret completing the current word; Tab accepts it.
+    private var inlineSuggestion: (location: Int, text: String)? {
+        didSet { needsDisplay = true }
+    }
+    /// Set while text is being typed, so only typing (not deleting or pasting) offers a suggestion.
+    private var typedCharacter = false
+
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
+        typedCharacter = text.count == 1
+        super.insertText(string, replacementRange: replacementRange)
+        typedCharacter = false
+    }
+
+    func updateInlineSuggestion() {
+        let caret = selectedRange()
+        guard typedCharacter, caret.length == 0, let coordinator else { inlineSuggestion = nil; return }
+        let (range, items) = coordinator.parent.suggest(string, caret.location)
+        let partial = (string as NSString).substring(with: range)
+        // Only complete at the end of a word, never in the middle of one.
+        let nextIsWord = caret.location < (string as NSString).length
+            && (string as NSString).substring(with: NSRange(location: caret.location, length: 1)).rangeOfCharacter(from: .alphanumerics) != nil
+        guard !partial.isEmpty, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
+        inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
+    }
+
+    func dropInlineSuggestionIfMoved() {
+        if let suggestion = inlineSuggestion, selectedRange() != NSRange(location: suggestion.location, length: 0) { inlineSuggestion = nil }
+    }
+
+    override func insertTab(_ sender: Any?) {
+        guard let suggestion = inlineSuggestion else { return super.insertTab(sender) }
+        inlineSuggestion = nil
+        insertText(suggestion.text, replacementRange: NSRange(location: suggestion.location, length: 0))
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        // ⎋ first dismisses the inline suggestion, then opens the completion list as usual.
+        if inlineSuggestion != nil { inlineSuggestion = nil } else { super.cancelOperation(sender) }
+    }
+
+    override func complete(_ sender: Any?) {
+        inlineSuggestion = nil
+        super.complete(sender)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let suggestion = inlineSuggestion, let layoutManager, let textContainer else { return }
+        let length = (string as NSString).length
+        let origin: NSPoint
+        if suggestion.location >= length, length > 0 {
+            let glyph = layoutManager.glyphIndexForCharacter(at: length - 1)
+            let rect = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
+            // After a trailing newline the caret sits on the extra line fragment.
+            let lastIsNewline = (string as NSString).character(at: length - 1) == 0x0A
+            origin = lastIsNewline ? layoutManager.extraLineFragmentRect.origin : NSPoint(x: rect.maxX, y: rect.minY)
+        } else {
+            let glyph = layoutManager.glyphIndexForCharacter(at: suggestion.location)
+            origin = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 0), in: textContainer).origin
+        }
+        let point = NSPoint(x: origin.x + textContainerOrigin.x, y: origin.y + textContainerOrigin.y)
+        (suggestion.text as NSString).draw(at: point, withAttributes: [.font: SQLHighlighter.font, .foregroundColor: NSColor.placeholderTextColor])
+    }
 
     override var undoManager: UndoManager? {
         coordinator?.parent.undoManager ?? super.undoManager
@@ -128,7 +209,7 @@ final class SQLTextView: NSTextView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self else { return super.performKeyEquivalent(with: event) }
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        if event.keyCode == 36 || event.keyCode == 76, flags == [.command] || flags == [.command, .shift] {
+        if event.keyCode == KeyCode.return || event.keyCode == KeyCode.enter, flags == [.command] || flags == [.command, .shift] {
             coordinator?.parent.onRun(flags.contains(.shift))
             return true
         }
@@ -138,6 +219,10 @@ final class SQLTextView: NSTextView {
         }
         if event.charactersIgnoringModifiers == "/" && flags == [.command] {
             toggleLineComments()
+            return true
+        }
+        if event.keyCode == KeyCode.space && flags == [.control] {
+            complete(nil)
             return true
         }
         return super.performKeyEquivalent(with: event)
@@ -242,15 +327,10 @@ final class LineNumberRuler: NSRulerView {
 }
 
 enum SQLHighlighter {
-    static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+    static let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+    static let maxHighlightedLength = 300_000
 
-    static let keywords: [String] = """
-        SELECT FROM WHERE AND OR NOT IN IS NULL LIKE ILIKE BETWEEN EXISTS AS ON JOIN LEFT RIGHT INNER OUTER FULL CROSS
-        GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL DISTINCT INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE VIEW INDEX
-        DROP ALTER ADD COLUMN PRIMARY KEY FOREIGN REFERENCES UNIQUE DEFAULT CHECK CONSTRAINT IF CASE WHEN THEN ELSE END
-        BEGIN COMMIT ROLLBACK TRANSACTION WITH RECURSIVE RETURNING ASC DESC TRUE FALSE CAST TRUNCATE SCHEMA DATABASE USE
-        SHOW EXPLAIN ANALYZE GRANT REVOKE CASCADE COUNT SUM AVG MIN MAX COALESCE NULLIF LATERAL OVER PARTITION WINDOW
-        """.split(whereSeparator: \.isWhitespace).map(String.init)
+    static let keywords = SQLKeywords.all
 
     private static let patterns: [(NSRegularExpression, NSColor)] = {
         let keywordPattern = "\\b(" + keywords.joined(separator: "|") + ")\\b"
@@ -271,7 +351,11 @@ enum SQLHighlighter {
         guard let storage = textView.textStorage else { return }
         let text = storage.string
         let full = NSRange(location: 0, length: (text as NSString).length)
-        guard full.length < 300_000 else { return }
+        // Past this size recoloring on every keystroke gets slow; large scripts stay plain.
+        guard full.length < Self.maxHighlightedLength else {
+            textView.typingAttributes = [.font: font, .foregroundColor: NSColor.textColor]
+            return
+        }
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
         for (regex, color) in patterns {

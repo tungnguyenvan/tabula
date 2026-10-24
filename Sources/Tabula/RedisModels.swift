@@ -35,6 +35,8 @@ final class RedisWorkspaceModel {
     }
     private(set) var scanCursor = "0"
     private(set) var loadingKeys = false
+    /// Bumped by every restart, so a scan still running for an old pattern or filter drops its results.
+    private var scanGeneration = 0
     var keysError: String?
     var selectedKey: RedisBytes? {
         didSet { if selectedKey != oldValue { openSelectedKey() } }
@@ -118,6 +120,7 @@ final class RedisWorkspaceModel {
 
     /// Restarts the scan with the current pattern and type filter.
     func reloadKeys() async {
+        scanGeneration += 1
         scanCursor = "0"
         keys = []
         keySelection = []
@@ -126,21 +129,24 @@ final class RedisWorkspaceModel {
     }
 
     func loadMoreKeys(restart: Bool = false) async {
-        guard let driver, restart || hasMoreKeys else { return }
+        guard let driver, restart || (hasMoreKeys && !loadingKeys) else { return }
+        let generation = scanGeneration
         loadingKeys = true
-        defer { loadingKeys = false }
+        defer { if generation == scanGeneration { loadingKeys = false } }
         do {
             let page = try await driver.scanKeys(from: scanCursor, match: pattern, type: typeFilter)
+            guard generation == scanGeneration else { return }
             let known = Set(keys.map(\.key))
             // SCAN can return a key more than once; keep the first.
             let fresh = Array(Set(page.keys).subtracting(known))
             let summaries = try await driver.summaries(of: fresh)
+            guard generation == scanGeneration else { return }
             keys += summaries.sorted(by: Self.naturalOrder)
             keysVersion += 1
             scanCursor = page.cursor
             keysError = nil
         } catch {
-            keysError = error.localizedDescription
+            if generation == scanGeneration { keysError = error.localizedDescription }
         }
     }
 
@@ -333,7 +339,9 @@ final class RedisKeyModel {
     }
 
     func loadMore() async {
-        guard let next else { return }
+        guard let next, !loading else { return }
+        loading = true
+        defer { loading = false }
         do {
             let page = try await driver.page(key, type: type, after: next)
             if page.columns.count > columns.count { columns = page.columns }
@@ -469,7 +477,7 @@ final class RedisConsoleModel {
             entries.append(Entry(prompt: prompt, command: line, output: refusal, isError: true))
             return
         }
-        if RedisCommandLine.isDestructive(arguments) || (config.tag == .production && isWrite(arguments)) {
+        if RedisCommandLine.isDestructive(arguments) || (config.tag == .production && !RedisCommandLine.isReadOnly(arguments)) {
             guard confirm(line) else {
                 entries.append(Entry(prompt: prompt, command: line, output: "Cancelled.", isError: true))
                 return
@@ -488,15 +496,6 @@ final class RedisConsoleModel {
         } catch {
             entries.append(Entry(prompt: prompt, command: line, output: error.localizedDescription, isError: true))
         }
-    }
-
-    /// Rough write detection for the production confirmation.
-    private func isWrite(_ arguments: [[UInt8]]) -> Bool {
-        guard let name = arguments.first.flatMap({ String(bytes: $0, encoding: .utf8) })?.uppercased() else { return false }
-        let writes: Set<String> = ["DEL", "UNLINK", "SET", "MSET", "HSET", "HDEL", "LPUSH", "RPUSH", "LPOP", "RPOP", "LSET", "LREM", "LTRIM",
-                                   "SADD", "SREM", "ZADD", "ZREM", "XADD", "XDEL", "XTRIM", "EXPIRE", "PEXPIRE", "PERSIST", "RENAME",
-                                   "RENAMENX", "INCR", "INCRBY", "DECR", "DECRBY", "APPEND", "GETDEL", "RESTORE", "MOVE", "COPY", "EVAL", "EVALSHA"]
-        return writes.contains(name)
     }
 
     private func confirm(_ line: String) -> Bool {

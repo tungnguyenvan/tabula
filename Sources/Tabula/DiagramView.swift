@@ -20,7 +20,15 @@ final class DiagramModel {
     private(set) var loading = false
     var error: String?
     var selected: String?
-    var zoom: CGFloat = 1
+    var zoom: CGFloat = 1 {
+        didSet { zoom = min(Self.maxZoom, max(Self.minZoom, zoom)) }
+    }
+    static let minZoom: CGFloat = 0.3
+    static let maxZoom: CGFloat = 2
+    static let zoomStep: CGFloat = 0.15
+    /// Room around the outermost tables, and the canvas size of an empty diagram.
+    static let canvasMargin: CGFloat = 60
+    static let emptyCanvas = CGSize(width: 400, height: 300)
     var showAllColumns = true
 
     static let nodeWidth: CGFloat = 210
@@ -48,16 +56,18 @@ final class DiagramModel {
     }
 
     var canvasSize: CGSize {
-        let maxX = nodes.map { $0.position.x + Self.nodeWidth }.max() ?? 400
-        let maxY = nodes.map { $0.position.y + height($0) }.max() ?? 300
-        return CGSize(width: maxX + 60, height: maxY + 60)
+        let maxX = nodes.map { $0.position.x + Self.nodeWidth }.max() ?? Self.emptyCanvas.width
+        let maxY = nodes.map { $0.position.y + height($0) }.max() ?? Self.emptyCanvas.height
+        return CGSize(width: maxX + Self.canvasMargin, height: maxY + Self.canvasMargin)
     }
 
     func load() async {
+        // The Reload button and the view's first appearance must not load twice at once.
+        guard !loading else { return }
         loading = true
         defer { loading = false }
         do {
-            let tables = try await driver.tables(in: schema).filter { $0.kind == .table }.prefix(200)
+            let tables = try await driver.tables(in: schema).filter { $0.kind == .table }.prefix(Defaults.Diagram.tableLimit)
             foreignKeys = try await driver.foreignKeys(in: schema)
             var loaded: [Node] = []
             for table in tables {
@@ -126,6 +136,7 @@ struct DiagramView: View {
     @Bindable var model: DiagramModel
     let onOpen: (TableRef) -> Void
     @State private var dragStart: [String: CGPoint] = [:]
+    @State private var pinchStart: CGFloat?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -142,7 +153,13 @@ struct DiagramView: View {
                         .frame(width: model.canvasSize.width * model.zoom, height: model.canvasSize.height * model.zoom, alignment: .topLeading)
                 }
                 .background(Color(nsColor: .textBackgroundColor))
-                .gesture(MagnifyGesture().onChanged { value in model.zoom = min(2, max(0.3, value.magnification)) })
+                // Magnification is relative to where the pinch started.
+                .gesture(MagnifyGesture()
+                    .onChanged { value in
+                        if pinchStart == nil { pinchStart = model.zoom }
+                        model.zoom = (pinchStart ?? 1) * value.magnification
+                    }
+                    .onEnded { _ in pinchStart = nil })
             }
         }
         .task { if model.nodes.isEmpty { await model.load() } }
@@ -155,9 +172,9 @@ struct DiagramView: View {
             Toggle("All columns", isOn: $model.showAllColumns).toggleStyle(.checkbox)
                 .onChange(of: model.showAllColumns) { _, _ in model.layout() }
             Divider().frame(height: 16)
-            BarButton(symbol: "minus.magnifyingglass", help: "Zoom out") { model.zoom = max(0.3, model.zoom - 0.15) }
+            BarButton(symbol: "minus.magnifyingglass", help: "Zoom out") { model.zoom -= DiagramModel.zoomStep }
             Text("\(Int(model.zoom * 100))%").font(.system(size: 11).monospacedDigit()).frame(width: 38)
-            BarButton(symbol: "plus.magnifyingglass", help: "Zoom in") { model.zoom = min(2, model.zoom + 0.15) }
+            BarButton(symbol: "plus.magnifyingglass", help: "Zoom in") { model.zoom += DiagramModel.zoomStep }
             BarButton(symbol: "rectangle.3.group", help: "Arrange automatically") { model.layout() }
             BarButton(symbol: "arrow.clockwise", help: "Reload schema") { Task { await model.load() } }
             BarButton(symbol: "square.and.arrow.down", help: "Export PNG") { exportPNG() }

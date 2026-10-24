@@ -50,7 +50,14 @@ public struct AvailableUpdate: Sendable, Equatable {
 }
 
 public enum UpdateFeed {
-    public static let defaultURL = URL(string: "https://api.github.com/repos/tungnguyenvan/tabula/releases/latest")!
+    /// The GitHub API endpoint for `owner/name`'s newest published release.
+    public static func latestReleaseURL(repository: String) -> URL? {
+        URL(string: "https://api.github.com/repos/\(repository)/releases/latest")
+    }
+
+    public static func releasesPageURL(repository: String) -> URL? {
+        URL(string: "https://github.com/\(repository)/releases")
+    }
 
     private struct Release: Decodable {
         struct Asset: Decodable {
@@ -95,7 +102,7 @@ public enum UpdateFeed {
     }
 
     /// Fetches the feed. GitHub answers 404 when no release has been published yet; that means "no update".
-    public static func check(feed: URL = defaultURL, current: SemanticVersion, session: URLSession = .shared) async throws -> AvailableUpdate? {
+    public static func check(feed: URL, current: SemanticVersion, session: URLSession = .shared) async throws -> AvailableUpdate? {
         var request = URLRequest(url: feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Defaults.Updates.requestTimeout)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("Tabula/\(current)", forHTTPHeaderField: "User-Agent")

@@ -132,6 +132,29 @@ public enum RedisCommandLine {
         }
     }
 
+    /// Commands known to only read. On production connections everything else asks first, so a command
+    /// missing here costs a confirmation rather than an unconfirmed write.
+    private static let readOnlyCommands: Set<String> = [
+        "GET", "MGET", "GETRANGE", "STRLEN", "EXISTS", "TYPE", "TTL", "PTTL", "EXPIRETIME", "PEXPIRETIME", "KEYS", "SCAN", "RANDOMKEY",
+        "DBSIZE", "HGET", "HMGET", "HGETALL", "HKEYS", "HVALS", "HLEN", "HEXISTS", "HSTRLEN", "HSCAN", "HRANDFIELD",
+        "LRANGE", "LINDEX", "LLEN", "LPOS", "SMEMBERS", "SISMEMBER", "SMISMEMBER", "SCARD", "SSCAN", "SRANDMEMBER", "SINTER", "SUNION",
+        "SDIFF", "SINTERCARD", "ZRANGE", "ZRANGEBYSCORE", "ZRANGEBYLEX", "ZREVRANGE", "ZREVRANGEBYSCORE", "ZREVRANGEBYLEX", "ZSCORE",
+        "ZMSCORE", "ZRANK", "ZREVRANK", "ZCARD", "ZCOUNT", "ZLEXCOUNT", "ZSCAN", "ZRANDMEMBER", "XRANGE", "XREVRANGE", "XLEN", "XINFO",
+        "XPENDING", "XREAD", "PFCOUNT", "GETBIT", "BITCOUNT", "BITPOS", "GEOPOS", "GEODIST", "GEOHASH", "GEOSEARCH", "OBJECT", "MEMORY",
+        "DUMP", "INFO", "PING", "ECHO", "TIME", "SELECT", "CLIENT", "CONFIG", "COMMAND", "SLOWLOG", "LATENCY", "LASTSAVE", "ROLE",
+        "HELLO", "AUTH", "SUBSCRIBE", "PSUBSCRIBE", "PUBSUB", "MONITOR",
+    ]
+
+    public static func isReadOnly(_ arguments: [[UInt8]]) -> Bool {
+        guard let name = arguments.first.map({ String(decoding: $0, as: UTF8.self).uppercased() }) else { return true }
+        if name == "CONFIG" || name == "CLIENT" || name == "OBJECT" || name == "MEMORY" {
+            // Only their inspection subcommands.
+            let sub = arguments.count > 1 ? String(decoding: arguments[1], as: UTF8.self).uppercased() : ""
+            return ["GET", "LIST", "INFO", "ENCODING", "FREQ", "IDLETIME", "REFCOUNT", "USAGE", "STATS", "GETNAME", "ID", "HELP"].contains(sub)
+        }
+        return readOnlyCommands.contains(name)
+    }
+
     /// Commands that need an explicit confirmation in the console.
     public static func isDestructive(_ arguments: [[UInt8]]) -> Bool {
         guard let first = arguments.first, let name = String(bytes: first, encoding: .utf8)?.uppercased() else { return false }

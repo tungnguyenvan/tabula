@@ -66,7 +66,7 @@ struct RedisWorkspaceView: View {
             RedisSidebar(model: model)
                 .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 320)
         } detail: {
-            WithConnectionRail { detail }
+            detail
         }
         .navigationTitle(model.config.displayName)
         .toolbar {
@@ -436,7 +436,7 @@ struct RedisKeyView: View {
             Spacer()
             Text("\(model.rows.count) of \(model.info?.length ?? model.rows.count)").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
             if model.next != nil {
-                Button("Load more") { Task { await model.loadMore() } }.controlSize(.small)
+                Button("Load more") { Task { await model.loadMore() } }.controlSize(.small).disabled(model.loading)
             }
         }
         .padding(.horizontal, 8)
@@ -594,6 +594,7 @@ private struct NewRedisKeySheet: View {
     @State private var second = ""
     @State private var ttl = ""
     @State private var error: String?
+    @State private var creating = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -612,7 +613,7 @@ private struct NewRedisKeySheet: View {
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Create") { Task { await create() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(name.isEmpty || !ElementFields.isValid(type: type, first: first, second: second) || (!ttl.isEmpty && (Int(ttl) ?? 0) <= 0))
+                    .disabled(creating || name.isEmpty || !ElementFields.isValid(type: type, first: first, second: second) || (!ttl.isEmpty && (Int(ttl) ?? 0) <= 0))
             }
         }
         .padding(18)
@@ -620,6 +621,8 @@ private struct NewRedisKeySheet: View {
     }
 
     private func create() async {
+        creating = true
+        defer { creating = false }
         do {
             try await model.create(key: RedisBytes(name), type: type, values: ElementFields.values(type: type, first: first, second: second).map(RedisBytes.init),
                                    ttl: ttl.isEmpty ? nil : Int(ttl))

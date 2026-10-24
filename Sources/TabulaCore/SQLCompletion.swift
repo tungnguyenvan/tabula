@@ -1,0 +1,110 @@
+import Foundation
+
+/// Context-aware completion for the SQL editor: table names after FROM / JOIN, a table's columns after
+/// `alias.`, and otherwise keywords plus the tables and columns the statement already uses.
+public enum SQLCompletion {
+    public enum Scope: Equatable, Sendable {
+        case tables
+        /// Columns of the table behind `qualifier` (a table name or alias).
+        case columns(qualifier: String)
+        case anything
+    }
+
+    public struct Context: Equatable, Sendable {
+        /// The word being typed, which a completion replaces (UTF-16).
+        public var partialRange: NSRange
+        public var partial: String
+        public var scope: Scope
+        /// alias or table name → table name, for the statement around the caret.
+        public var tables: [String: String]
+    }
+
+    /// Words after which a table name is expected.
+    private static let tableKeywords: Set<String> = ["FROM", "JOIN", "INTO", "UPDATE", "TABLE", "DESCRIBE", "DESC", "TRUNCATE"]
+    /// Words that can't be an alias after a table name.
+    private static let notAliases: Set<String> = SQLKeywords.set
+
+    public static func context(in text: String, caret: Int, kind: DatabaseKind) -> Context {
+        let statement = SQLSplitter.statement(at: caret, in: text, kind: kind)
+        let base = statement?.range.location ?? 0
+        let tokens = SQLLexer.tokens(text, kind: kind)
+        let before = tokens.filter { $0.range.location < caret }
+
+        var partialRange = NSRange(location: caret, length: 0)
+        var partial = ""
+        var rest = before
+        if let last = before.last, last.kind == .word, NSMaxRange(last.range) == caret {
+            partialRange = last.range
+            partial = last.text
+            rest.removeLast()
+        }
+        let significant = rest.filter { $0.kind != .whitespace && $0.kind != .comment }
+        let scope: Scope
+        if let dot = significant.last, dot.text == ".", significant.count >= 2,
+           NSMaxRange(dot.range) == partialRange.location {
+            scope = .columns(qualifier: unquoted(significant[significant.count - 2].text))
+        } else if let previous = significant.last, tableKeywords.contains(previous.keyword) {
+            scope = .tables
+        } else {
+            scope = .anything
+        }
+        let statementTokens = tokens.filter { $0.range.location >= base && (statement.map { $0.range.location + $0.range.length + 1 } ?? Int.max) > $0.range.location }
+        return Context(partialRange: partialRange, partial: partial, scope: scope, tables: referencedTables(statementTokens))
+    }
+
+    /// Tables named after FROM / JOIN / UPDATE / INTO, keyed by alias and by name.
+    static func referencedTables(_ tokens: [SQLToken]) -> [String: String] {
+        let words = tokens.filter { $0.kind != .whitespace && $0.kind != .comment }
+        var result: [String: String] = [:]
+        var index = 0
+        while index < words.count {
+            guard tableKeywords.contains(words[index].keyword), index + 1 < words.count else { index += 1; continue }
+            var position = index + 1
+            // Skip a schema prefix: schema.table
+            if position + 2 < words.count, words[position + 1].text == "." { position += 2 }
+            let nameToken = words[position]
+            guard nameToken.kind == .word || nameToken.kind == .quotedIdentifier else { index += 1; continue }
+            let name = unquoted(nameToken.text)
+            result[name.lowercased()] = name
+            var aliasIndex = position + 1
+            if aliasIndex < words.count, words[aliasIndex].keyword == "AS" { aliasIndex += 1 }
+            if aliasIndex < words.count, words[aliasIndex].kind == .word || words[aliasIndex].kind == .quotedIdentifier,
+               !notAliases.contains(words[aliasIndex].keyword) {
+                result[unquoted(words[aliasIndex].text).lowercased()] = name
+            }
+            index = position + 1
+        }
+        return result
+    }
+
+    /// Ranked suggestions for `context`. `columns` returns a table's columns when they are known.
+    public static func suggestions(for context: Context, tables: [String], columns: (String) -> [String]?) -> [String] {
+        // Groups in priority order: what the statement uses comes before everything else.
+        let groups: [[String]]
+        switch context.scope {
+        case .tables:
+            groups = [tables]
+        case .columns(let qualifier):
+            let table = context.tables[qualifier.lowercased()] ?? qualifier
+            groups = [columns(table) ?? []]
+        case .anything:
+            guard !context.partial.isEmpty else { return [] }
+            let usedColumns = Set(context.tables.values).sorted().flatMap { columns($0) ?? [] }
+            // Match the user's case for keywords.
+            let keywords = context.partial.first?.isLowercase == true ? SQLKeywords.all.map { $0.lowercased() } : SQLKeywords.all
+            groups = [usedColumns, tables, keywords]
+        }
+        let partial = context.partial.lowercased()
+        var seen = Set<String>()
+        return groups.flatMap { group in
+            group.filter { $0.lowercased().hasPrefix(partial) && $0.count > partial.count }
+                .sorted { ($0.count, $0) < ($1.count, $1) }
+        }
+        .filter { seen.insert($0.lowercased()).inserted }
+    }
+
+    private static func unquoted(_ name: String) -> String {
+        guard let first = name.first, ["\"", "`"].contains(first), name.count >= 2 else { return name }
+        return String(name.dropFirst().dropLast())
+    }
+}

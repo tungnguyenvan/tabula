@@ -10,27 +10,10 @@ struct WorkspaceWindow: View {
     @State private var openedInitial = false
 
     var body: some View {
-        Group {
-            switch session.active {
-            case .sql(let model):
-                WorkspaceView(model: model).id(model.config.id)
-            case .redis(let model):
-                RedisWorkspaceView(model: model).id(model.config.id)
-            case nil:
-                if let connectionID, !openedInitial {
-                    if appState.connection(connectionID) == nil {
-                        ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
-                                               description: Text("It may have been deleted."))
-                    } else {
-                        ProgressView()
-                    }
-                } else {
-                    ConnectionPicker { id in
-                        guard let config = appState.connection(id) else { return }
-                        Task { await session.open(config, appState: appState) }
-                    }
-                }
-            }
+        HStack(spacing: 0) {
+            // With one connection the rail would only repeat the toolbar; it appears once a second one opens.
+            if session.connections.count > 1 { ConnectionRail(session: session) }
+            activeConnection
         }
         .environment(session)
         .background(WindowAccessor { window in WorkspaceRegistry.register(session, window: window) })
@@ -40,6 +23,30 @@ struct WorkspaceWindow: View {
             await session.open(config, appState: appState)
         }
         .onDisappear { session.closeAll() }
+    }
+
+    @ViewBuilder
+    private var activeConnection: some View {
+        switch session.active {
+        case .sql(let model):
+            WorkspaceView(model: model).id(model.config.id)
+        case .redis(let model):
+            RedisWorkspaceView(model: model).id(model.config.id)
+        case nil:
+            if let connectionID, !openedInitial {
+                if appState.connection(connectionID) == nil {
+                    ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
+                                           description: Text("It may have been deleted."))
+                } else {
+                    ProgressView()
+                }
+            } else {
+                ConnectionPicker { id in
+                    guard let config = appState.connection(id) else { return }
+                    Task { await session.open(config, appState: appState) }
+                }
+            }
+        }
     }
 }
 
@@ -52,13 +59,11 @@ struct WorkspaceView: View {
             SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: Layout.Sidebar.minWidth, ideal: Layout.Sidebar.idealWidth, max: Layout.Sidebar.maxWidth)
         } detail: {
-            WithConnectionRail {
-                detail
-                    .inspector(isPresented: $model.showInspector) {
-                        RowInspectorView(model: model)
-                            .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
-                    }
-            }
+            detail
+                .inspector(isPresented: $model.showInspector) {
+                    RowInspectorView(model: model)
+                        .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
+                }
         }
         .navigationTitle(model.config.displayName)
         .overlay(alignment: .top) {
@@ -526,19 +531,6 @@ struct OpenConnectionMenu: View {
             Label("Connections", systemImage: "cylinder.split.1x2")
         }
         .help("Open another connection (⇧⌘K for all)")
-    }
-}
-
-/// Puts the window's connection rail at the leading edge of a workspace's content, right of the sidebar.
-struct WithConnectionRail<Content: View>: View {
-    @ViewBuilder let content: Content
-    @Environment(ConnectionSession.self) private var session: ConnectionSession?
-
-    var body: some View {
-        HStack(spacing: 0) {
-            if let session { ConnectionRail(session: session) }
-            content
-        }
     }
 }
 

@@ -40,11 +40,18 @@ final class Updater {
         return SemanticVersion(text) ?? SemanticVersion("0.0.0")!
     }
 
-    private var feedURL: URL {
+    /// `owner/name` of the GitHub repository that publishes releases, written into Info.plist by the build script.
+    static var repository: String? {
+        Bundle.main.object(forInfoDictionaryKey: "TabulaRepository") as? String
+    }
+
+    static var releasesPage: URL? { repository.flatMap(UpdateFeed.releasesPageURL) }
+
+    private var feedURL: URL? {
         #if DEBUG
         if let override = ProcessInfo.processInfo.environment["TABULA_UPDATE_FEED"], let url = URL(string: override) { return url }
         #endif
-        return UpdateFeed.defaultURL
+        return Self.repository.flatMap(UpdateFeed.latestReleaseURL)
     }
 
     /// At launch: check at most once a day, silently, and only show the window when there is something new.
@@ -56,7 +63,7 @@ final class Updater {
         }
         #endif
         guard automaticallyChecks, Bundle.main.bundleURL.pathExtension == "app" else { return }
-        if let lastCheck, Date().timeIntervalSince(lastCheck) < 86_400 { return }
+        if let lastCheck, Date().timeIntervalSince(lastCheck) < Defaults.Updates.checkInterval { return }
         Task { await check(userInitiated: false) }
     }
 
@@ -65,6 +72,7 @@ final class Updater {
         state = .checking
         if userInitiated { showWindow = true }
         do {
+            guard let feedURL else { throw DatabaseError("This build doesn't say where its releases are published.") }
             let update = try await UpdateFeed.check(feed: feedURL, current: Self.currentVersion)
             defaults.set(Date(), forKey: Self.lastCheckKey)
             if let update, userInitiated || update.version.description != defaults.string(forKey: Self.skippedKey) {
@@ -188,13 +196,19 @@ final class Updater {
         var buffer = Data()
         buffer.reserveCapacity(1 << 16)
         var received = 0
+        var reported = 0.0
         for try await byte in bytes {
             buffer.append(byte)
             if buffer.count >= 1 << 16 {
                 try handle.write(contentsOf: buffer)
                 received += buffer.count
                 buffer.removeAll(keepingCapacity: true)
-                progress(min(1, Double(received) / Double(total)))
+                // Report whole steps only, so the UI isn't flooded with one update per chunk.
+                let fraction = min(1, Double(received) / Double(total))
+                if fraction - reported >= Defaults.Updates.progressStep {
+                    reported = fraction
+                    progress(fraction)
+                }
                 try Task.checkCancellation()
             }
         }
@@ -218,9 +232,11 @@ final class Updater {
         process.standardError = errors
         process.standardOutput = FileHandle.nullDevice
         try process.run()
+        // Drain stderr before waiting: a tool that fills the pipe would otherwise block forever.
+        let output = errors.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            let message = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let message = String(data: output, encoding: .utf8) ?? ""
             throw DatabaseError("\((tool as NSString).lastPathComponent) failed: \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
     }

@@ -10,6 +10,7 @@
 #                  exists, so Keychain access survives rebuilds; otherwise the app is signed ad-hoc.
 #   LOCAL_IDENTITY name of that local identity (default: "Tabula Local Signing")
 #   COPYRIGHT      shown in Finder and the About panel
+#   REPOSITORY     GitHub owner/name checked for updates (default: the origin remote)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,6 +18,8 @@ VERSION="${VERSION:-$(cat VERSION)}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
 ARCHS="${ARCHS:-arm64 x86_64}"
 COPYRIGHT="${COPYRIGHT:-Copyright © 2026 Nguyen Van Tung. MIT License.}"
+# owner/name of the GitHub repository whose releases the app checks for updates (from the origin remote).
+REPOSITORY="${REPOSITORY:-$(git remote get-url origin 2>/dev/null | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')}"
 
 ARCH_FLAGS=()
 for arch in $ARCHS; do ARCH_FLAGS+=(--arch "$arch"); done
@@ -45,6 +48,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>NSHumanReadableCopyright</key><string>${COPYRIGHT}</string>
+    <key>TabulaRepository</key><string>${REPOSITORY}</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSHighResolutionCapable</key><true/>

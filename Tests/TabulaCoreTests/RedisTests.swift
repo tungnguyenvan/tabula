@@ -27,6 +27,21 @@ final class RedisCommandLineTests: XCTestCase {
         XCTAssertEqual(RedisReply.array([]).formatted(), "(empty array)")
     }
 
+    func testReadOnlyCommands() throws {
+        func readOnly(_ line: String) throws -> Bool { RedisCommandLine.isReadOnly(try RedisCommandLine.parse(line)) }
+        XCTAssertTrue(try readOnly("get user:1"))
+        XCTAssertTrue(try readOnly("HGETALL h"))
+        XCTAssertTrue(try readOnly("config get maxmemory"))
+        XCTAssertFalse(try readOnly("config set maxmemory 1"))
+        // Writes missing from any list still count as writes.
+        XCTAssertFalse(try readOnly("SETEX k 10 v"))
+        XCTAssertFalse(try readOnly("HINCRBY h f 1"))
+        XCTAssertFalse(try readOnly("SOMEFUTURECOMMAND x"))
+        // WAIT numreplicas timeout: only the second argument is the timeout.
+        XCTAssertNotNil(RedisCommandLine.refusal(for: try RedisCommandLine.parse("WAIT 1 0")))
+        XCTAssertNil(RedisCommandLine.refusal(for: try RedisCommandLine.parse("WAIT 0 100")))
+    }
+
     func testTTLParsing() throws {
         XCTAssertEqual(try RedisTTL.parse("3600"), 3600)
         XCTAssertEqual(try RedisTTL.parse("1h 30m"), 5400)
