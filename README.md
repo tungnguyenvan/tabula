@@ -63,23 +63,69 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Install
 
-1. Download `Tabula-<version>.dmg` from the [releases page](https://github.com/tungnguyenvan/tabula/releases) and check it against `SHA256SUMS.txt`:
-   ```bash
-   shasum -a 256 -c SHA256SUMS.txt
-   ```
-2. Open the DMG and drag **Tabula** to **Applications**.
-3. **First launch.** If the build is not notarized, macOS blocks it. Control-click Tabula in Applications and choose **Open**, then **Open** again. On macOS 15 and later, if there is no Open button, go to **System Settings › Privacy & Security** and choose **Open Anyway**. You only need to do this once.
+> **Why macOS warns you.** Tabula is free and not yet signed with an Apple Developer ID or notarized by Apple. macOS therefore cannot confirm who made it and blocks the first launch with a message such as *"Apple could not verify 'Tabula' is free of malware"* or *"'Tabula' cannot be opened because the developer cannot be verified"*. The steps below tell macOS you trust this app. You only do this once per installed version.
 
-Requires macOS 14 Sonoma or later. The app is a universal binary for Apple silicon and Intel Macs.
+**Requirements:** macOS 14 Sonoma or later, on an Apple silicon or Intel Mac.
+
+### 1. Download and verify
+
+1. From the [latest release](https://github.com/tungnguyenvan/tabula/releases/latest), download `Tabula-<version>.dmg` and `SHA256SUMS.txt` into the same folder.
+2. Check that the download is intact and unmodified:
+   ```bash
+   cd ~/Downloads
+   shasum -a 256 -c SHA256SUMS.txt --ignore-missing
+   ```
+   You should see `Tabula-<version>.dmg: OK`. If not, delete the file and download it again.
+
+### 2. Copy to Applications
+
+Open the DMG and drag **Tabula** onto the **Applications** folder. Then eject the DMG. Don't run Tabula from inside the DMG.
+
+### 3. First launch
+
+Choose the steps for your macOS version.
+
+**macOS 15 Sequoia and later (including 26 Tahoe)**
+1. Open **Applications** and double-click **Tabula**. macOS refuses to open it. Click **Done** (not *Move to Trash*).
+2. Open **System Settings › Privacy & Security** and scroll down to **Security**.
+3. Next to *"Tabula" was blocked to protect your Mac*, click **Open Anyway**.
+4. Confirm with **Open Anyway** again, then enter your Mac password or use Touch ID.
+
+The *Open Anyway* button stays available for about an hour after the blocked attempt. If it isn't there, double-click Tabula again first.
+
+**macOS 14 Sonoma**
+1. In **Applications**, Control-click (or right-click) **Tabula** and choose **Open**.
+2. In the dialog, click **Open**.
+
+After the first successful launch, Tabula opens normally with a double-click.
+
+### Alternative: Terminal
+
+If you prefer, remove the download quarantine flag instead of using System Settings:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Tabula.app
+```
+
+Only do this for a copy you downloaded from this repository and verified in step 1.
+
+### After launching
+
+- **Saved passwords:** macOS may ask whether Tabula may use its Keychain items, both the first time and after each update. Choose **Always Allow**.
+- **Local network (macOS 15 and later):** the first connection to a server on your local network (for example `192.168.x.x`) asks for permission. Choose **Allow**.
+
+### Updating
+
+Download the new DMG and drag Tabula to Applications again, replacing the old copy. Your saved connections are kept. Because the app isn't notarized, you repeat step 3 once for the new version.
+
+### Uninstalling
+
+Delete **Tabula** from Applications. To also remove saved connections, delete `~/Library/Application Support/Tabula`. Saved passwords are in **Keychain Access**, under items named `app.tabula.connections`.
 
 ## Things to know
 
 - **macOS version.** Tabula needs macOS 14 Sonoma or later. On older systems Finder refuses to open it. Version 0.1.0 was built and tested on macOS 26 Tahoe; macOS 14 and 15 meet the minimum requirement but have not been tested yet, so please report any problems.
-- **Not notarized yet.** Releases are ad-hoc signed and not notarized by Apple, so the first launch needs one confirmation (see [Install](#install)). If you prefer the command line, this removes the download quarantine flag:
-  ```bash
-  xattr -dr com.apple.quarantine /Applications/Tabula.app
-  ```
-  Only do this for a DMG you downloaded from this repository and verified with `SHA256SUMS.txt`.
+- **Not notarized yet.** Releases are ad-hoc signed and not notarized by Apple, so each new version needs one confirmation at first launch. See [First launch](#3-first-launch).
 - **Keychain prompt after updates.** Ad-hoc signatures change with every build. After installing a new version, macOS asks once whether Tabula may use the saved passwords. Choose **Always Allow**. If you choose Deny, Tabula can't read the password and the connection fails to authenticate; edit the connection and enter the password again.
 - **Local network permission (macOS 15 and later).** The first time you connect to a server on your local network, such as `192.168.x.x` or `10.x.x.x`, macOS asks whether Tabula may access it. If you deny it, those connections fail with "No route to host". Turn it back on in **System Settings › Privacy & Security › Local Network**. `localhost`, Docker port forwards and internet hosts are not affected.
 - **TLS certificates.** "Verify certificate" checks the server against the trust store in macOS Keychain Access. Managed databases with a private CA (for example AWS RDS, or self-signed certificates) fail verification until that CA is added to Keychain Access and marked trusted. "Required" encrypts the connection without checking the certificate.
