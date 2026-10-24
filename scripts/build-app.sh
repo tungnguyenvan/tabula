@@ -17,9 +17,8 @@ cd "$(dirname "$0")/.."
 VERSION="${VERSION:-$(cat VERSION)}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
 ARCHS="${ARCHS:-arm64 x86_64}"
-COPYRIGHT="${COPYRIGHT:-Copyright © 2026 Nguyen Van Tung. Freeware.}"
-# owner/name of the public GitHub repository whose releases the app checks for updates. The source
-# lives in a separate private repository, so this comes from RELEASES_REPOSITORY, not the git remote.
+COPYRIGHT="${COPYRIGHT:-Copyright © 2026 Nguyen Van Tung. MIT License.}"
+# owner/name of the public GitHub repository whose releases the app checks for updates (RELEASES_REPOSITORY).
 REPOSITORY="${REPOSITORY:-$(cat RELEASES_REPOSITORY)}"
 
 ARCH_FLAGS=()
