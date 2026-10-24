@@ -269,6 +269,20 @@ final class WorkspaceModel {
         return nil
     }
 
+    /// The schema for Ask AI and Fix with AI: waits for columns still loading (up to the prefetch
+    /// limit), so the model isn't told that tables have none.
+    func loadedAISchema() async -> SQLPrompts.Schema {
+        if let driver {
+            let generation = cacheGeneration
+            for table in tables.prefix(Defaults.completionPrefetchLimit) where columnCache[Self.columnKey(table)] == nil {
+                let names = (try? await driver.columns(of: table).map(\.name)) ?? []
+                guard generation == cacheGeneration else { break }
+                columnCache[Self.columnKey(table)] = names
+            }
+        }
+        return aiSchema()
+    }
+
     /// The schema as the AI sees it: table names and the columns loaded so far, never rows.
     func aiSchema() -> SQLPrompts.Schema {
         SQLPrompts.Schema(tables: tables.map { ($0.name, columnCache[Self.columnKey($0)] ?? []) })
@@ -289,6 +303,7 @@ final class WorkspaceModel {
         switch tabs[index] {
         case .table(let model): closedTabs.append(.table(model.table, model.mode))
         case .query(let model):
+            model.assistant.cancel()
             if !model.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 closedTabs.append(.query(title: model.title, sql: model.sql))
             }

@@ -19,15 +19,19 @@ final class AIService {
     private let keychain = DispatchQueue(label: "app.tabula.ai.keychain")
 
     private init() {
-        settings = defaults.data(forKey: Self.settingsKey).flatMap { try? JSONDecoder().decode(AISettings.self, from: $0) } ?? AISettings()
+        var loaded = UserDefaults.standard.data(forKey: Self.settingsKey).flatMap { try? JSONDecoder().decode(AISettings.self, from: $0) } ?? AISettings()
         #if DEBUG
-        if let provider = ProcessInfo.processInfo.environment["TABULA_DEBUG_AI_PROVIDER"].flatMap(AIProviderKind.init) {
-            settings.provider = provider
-            settings.enabled = true
-            if let url = ProcessInfo.processInfo.environment["TABULA_DEBUG_AI_URL"] { settings.baseURL = url }
-            if let model = ProcessInfo.processInfo.environment["TABULA_DEBUG_AI_MODEL"] { settings.model = model }
+        // Applied before the single assignment below: mutating `settings` afterwards, even here in init,
+        // would trigger didSet and save the overrides as the developer's real settings.
+        let environment = ProcessInfo.processInfo.environment
+        if let provider = environment["TABULA_DEBUG_AI_PROVIDER"].flatMap(AIProviderKind.init) {
+            loaded.provider = provider
+            loaded.enabled = true
+            loaded.baseURL = environment["TABULA_DEBUG_AI_URL"] ?? ""
+            loaded.model = environment["TABULA_DEBUG_AI_MODEL"] ?? ""
         }
         #endif
+        settings = loaded
     }
 
     private func save() {
@@ -48,12 +52,18 @@ final class AIService {
         let key = await withCheckedContinuation { continuation in
             keychain.async { continuation.resume(returning: item.read() ?? "") }
         }
-        keys[provider] = key
+        // A failed read (locked Keychain, denied access) looks like "no key"; only remember real keys.
+        if !key.isEmpty { keys[provider] = key }
         return key
     }
 
-    func setAPIKey(_ key: String, for provider: AIProviderKind) throws {
-        try item(for: provider).write(key)
+    /// Stores the key off the main thread (the Keychain may block while it asks the user).
+    func setAPIKey(_ key: String, for provider: AIProviderKind) async throws {
+        guard keys[provider] != key else { return }
+        let item = item(for: provider)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            keychain.async { continuation.resume(with: Result { try item.write(key) }) }
+        }
         keys[provider] = key
     }
 

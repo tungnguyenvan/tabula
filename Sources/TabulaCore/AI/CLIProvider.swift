@@ -49,10 +49,11 @@ public struct CLIProvider: AIProvider {
         switch tool {
         case .claude:
             // No tools: the agent only answers. JSON output separates the answer from anything the shell prints.
-            var arguments = ["-p", request.prompt, "--system-prompt", request.instructions, "--tools", "", "--output-format", "json"]
+            // The prompt goes in on stdin: arguments are visible to every local user in `ps`.
+            var arguments = ["-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "json"]
             if !model.isEmpty { arguments += ["--model", model] }
             let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
-                                                    directory: directory, timeout: Defaults.AI.generateTimeout)
+                                                    input: request.prompt, directory: directory, timeout: Defaults.AI.generateTimeout)
             for line in output.stdout.split(whereSeparator: \.isNewline).reversed() {
                 guard let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
                 if json["is_error"] as? Bool == true { throw AIError.server(json["result"] as? String ?? "Claude Code failed.") }
@@ -64,8 +65,9 @@ public struct CLIProvider: AIProvider {
             let answer = directory.appendingPathComponent("answer.txt")
             var arguments = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", answer.path]
             if !model.isEmpty { arguments += ["--model", model] }
-            arguments.append(request.instructions + "\n\n" + request.prompt)
+            arguments.append("-")  // read the prompt from stdin
             let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
+                                                    input: request.instructions + "\n\n" + request.prompt,
                                                     directory: directory, timeout: Defaults.AI.generateTimeout)
             if let text = try? String(contentsOf: answer, encoding: .utf8), !text.isEmpty { return text }
             throw AIError.server(Self.failure("Codex", output))
@@ -90,14 +92,15 @@ enum ShellCommand {
     /// What shells return when the command isn't found.
     static let notFoundStatus: Int32 = 127
 
-    static func run(script: String, arguments: [String], directory: URL? = nil, timeout: Double) async throws -> Output {
+    static func run(script: String, arguments: [String], input: String? = nil, directory: URL? = nil, timeout: Double) async throws -> Output {
         let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/zsh"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
         // -l and -i load the same profile files as a Terminal window, where PATH is set up.
         process.arguments = ["-l", "-i", "-c", script] + arguments
         if let directory { process.currentDirectoryURL = directory }
-        process.standardInput = FileHandle.nullDevice
+        let stdin = Pipe()
+        process.standardInput = input == nil ? FileHandle.nullDevice : stdin
         let stdout = Pipe(), stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
@@ -125,6 +128,13 @@ enum ShellCommand {
                     continuation.resume(throwing: error)
                     return
                 }
+                if let input {
+                    // Written from a background queue so a large prompt can't block on a full pipe.
+                    DispatchQueue.global().async {
+                        try? stdin.fileHandleForWriting.write(contentsOf: Data(input.utf8))
+                        try? stdin.fileHandleForWriting.close()
+                    }
+                }
                 // Stop the tool itself on timeout; abandoning it would leave it running in the background.
                 DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
                     guard process.isRunning else { return }
@@ -145,6 +155,10 @@ enum ShellCommand {
         let children = childProcesses(of: shell)
         kill(shell, SIGKILL)
         for child in children { kill(child, SIGTERM) }
+        // Whatever ignores SIGTERM is killed shortly after.
+        DispatchQueue.global().asyncAfter(deadline: .now() + Defaults.AI.terminateGrace) {
+            for child in children where kill(child, 0) == 0 { kill(child, SIGKILL) }
+        }
     }
 
     private static func childProcesses(of pid: pid_t) -> [pid_t] {

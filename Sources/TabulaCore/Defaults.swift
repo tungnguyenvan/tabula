@@ -60,6 +60,8 @@ public enum Defaults {
         /// Tables described to the model; larger schemas are cut off.
         public static let schemaTableLimit = 150
         public static let anthropicVersion = "2026-10-21"
+        /// Seconds a command-line tool gets to exit after being asked to stop.
+        public static let terminateGrace: Double = 2
         /// Characters of a failing tool's output shown in an error.
         public static let errorLength = 400
 

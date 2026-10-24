@@ -6,7 +6,7 @@ public struct OllamaProvider: AIProvider {
     let inner: OpenAICompatibleProvider
 
     public init(settings: AISettings) {
-        inner = OpenAICompatibleProvider(settings: settings, apiKey: "", baseURL: settings.resolvedBaseURL + "/v1")
+        inner = OpenAICompatibleProvider(settings: settings, apiKey: "", baseURL: OllamaLibrary.normalized(settings.resolvedBaseURL) + "/v1")
     }
 
     public func complete(_ request: AIRequest) async throws -> String {
@@ -39,7 +39,14 @@ public struct OllamaLibrary: Sendable {
     let baseURL: String
 
     public init(baseURL: String = AIProviderKind.ollama.defaultBaseURL) {
-        self.baseURL = baseURL
+        self.baseURL = Self.normalized(baseURL)
+    }
+
+    /// The server address without trailing slashes, so paths can be appended.
+    static func normalized(_ url: String) -> String {
+        var url = url.trimmingCharacters(in: .whitespaces)
+        while url.hasSuffix("/") { url.removeLast() }
+        return url
     }
 
     private func url(_ path: String) throws -> URL {

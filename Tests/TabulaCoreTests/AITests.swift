@@ -27,6 +27,16 @@ final class SQLPromptsTests: XCTestCase {
         XCTAssertLessThanOrEqual(inline.prompt.count, schema.text.count + Defaults.AI.inlineContextLength + 40)
     }
 
+    func testErrorsAreRedactedBeforeTheyGoToAModel() {
+        XCTAssertEqual(SQLPrompts.redacted(#"duplicate key value violates unique constraint "users_email_key" DETAIL: Key (email)=(an@example.com) already exists."#),
+                       #"duplicate key value violates unique constraint "users_email_key" DETAIL: Key (email)=(…) already exists."#)
+        XCTAssertEqual(SQLPrompts.redacted("invalid input syntax for type integer: 'abc'"), "invalid input syntax for type integer: '…'")
+        XCTAssertEqual(SQLPrompts.redacted("Incorrect integer value: 'x1' for column 'age'"), "Incorrect integer value: '…' for column '…'")
+        let fix = SQLPrompts.fix(sql: "INSERT INTO users VALUES (1, 'an@example.com')", error: "Key (id)=(1) already exists.",
+                                 schema: SQLPrompts.Schema(tables: []), kind: .postgres)
+        XCTAssertFalse(fix.prompt.contains("Key (id)=(1)"))
+    }
+
     func testSettingsDefaults() throws {
         var settings = AISettings()
         XCTAssertFalse(settings.enabled)
@@ -144,6 +154,11 @@ final class AIProviderTests: XCTestCase {
 }
 
 final class ShellCommandTests: XCTestCase {
+    func testInputGoesThroughStdin() async throws {
+        let output = try await ShellCommand.run(script: "cat", arguments: [], input: "SELECT 'secret'", timeout: 30)
+        XCTAssertTrue(output.stdout.hasSuffix("SELECT 'secret'"), output.stdout)
+    }
+
     func testRunsWithArgumentsKeptSeparate() async throws {
         let output = try await ShellCommand.run(script: #"printf '%s|' "$0" "$@""#, arguments: ["a b", "$HOME", "; rm"], timeout: 30)
         XCTAssertTrue(output.stdout.hasSuffix("a b|$HOME|; rm|"), output.stdout)

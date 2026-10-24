@@ -32,6 +32,7 @@ final class OllamaModels {
                 try await library.pull(name) { progress in
                     Task { @MainActor in self.downloads[name] = progress }
                 }
+                error = nil
                 if AIService.shared.settings.model.isEmpty { AIService.shared.settings.model = name }
             } catch {
                 self.error = error.localizedDescription
@@ -44,7 +45,12 @@ final class OllamaModels {
     func delete(_ name: String) {
         let library = library
         Task {
-            do { try await library.delete(name) } catch { self.error = error.localizedDescription }
+            do {
+                try await library.delete(name)
+                error = nil
+            } catch {
+                self.error = error.localizedDescription
+            }
             await refresh()
         }
     }
@@ -53,6 +59,9 @@ final class OllamaModels {
 struct AISettingsView: View {
     @Bindable private var ai = AIService.shared
     @State private var apiKey = ""
+    /// The provider `apiKey` belongs to. Switching providers tears the field down before the new key loads,
+    /// so saving must not assume the current provider.
+    @State private var keyProvider: AIProviderKind?
     @State private var ollama = OllamaModels()
     @State private var cliPath: String?
     @State private var lookingForCLI = false
@@ -152,8 +161,8 @@ struct AISettingsView: View {
     private var apiKeyField: some View {
         // Saved on Return, on Test and when Settings closes, not on every keystroke.
         SecureField("API key", text: $apiKey)
-            .onSubmit(saveKey)
-            .onDisappear(perform: saveKey)
+            .onSubmit { Task { await saveKey() } }
+            .onDisappear { Task { await saveKey() } }
     }
 
     @ViewBuilder
@@ -220,7 +229,10 @@ struct AISettingsView: View {
 
     private func providerChanged() async {
         testResult = nil
+        await saveKey()
+        keyProvider = nil
         apiKey = provider.needsAPIKey ? await ai.apiKey(for: provider) : ""
+        keyProvider = provider.needsAPIKey ? provider : nil
         switch provider {
         case .ollama:
             await ollama.refresh()
@@ -233,22 +245,26 @@ struct AISettingsView: View {
         }
     }
 
-    private func saveKey() {
-        guard provider.needsAPIKey else { return }
+    /// Saves the key shown in the field for the provider it was loaded for.
+    @discardableResult
+    private func saveKey() async -> Bool {
+        guard let owner = keyProvider else { return true }
         do {
-            try ai.setAPIKey(apiKey, for: provider)
+            try await ai.setAPIKey(apiKey, for: owner)
+            return true
         } catch {
             testResult = .failure(error)
+            return false
         }
     }
 
     private func runTest() {
-        saveKey()
         testing = true
         testResult = nil
         Task {
+            defer { testing = false }
+            guard await saveKey() else { return }
             do { testResult = .success(try await ai.test()) } catch { testResult = .failure(error) }
-            testing = false
         }
     }
 }

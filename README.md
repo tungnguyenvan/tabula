@@ -213,7 +213,7 @@ Choose where the model runs:
 | Claude API | Anthropic | API key; the model defaults to `claude-opus-5-5`, and a faster one (such as `claude-haiku-5-5`) can be set for suggestions |
 | Claude Code, Codex | Your installed command-line agent, with its own sign-in | Installed and signed in once in Terminal. Tabula finds them on your shell's PATH or the usual install locations, and runs them without tools (Claude Code) or in a read-only sandbox (Codex). Too slow for suggestions while typing. |
 
-**What is sent:** the table and column names of the current schema, the SQL in the editor around the cursor (or the selection), and for Fix with AI the error message. Rows from your tables are never sent. AI is off for Production-tagged connections unless you allow it in Settings. API keys are stored in the login Keychain.
+**What is sent:** the table and column names of the current schema, the SQL in the editor around the cursor (or the selection), and for Fix with AI the error message with any quoted values removed (database errors can quote row values, such as a duplicate key). Rows from your tables are never sent. Prompts reach the command-line agents on standard input, not as arguments other users of the Mac could see. AI is off for Production-tagged connections unless you allow it in Settings. API keys are stored in the login Keychain.
 
 ## Redis
 

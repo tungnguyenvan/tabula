@@ -36,6 +36,23 @@ final class EditorHandle {
         }
     }
 
+    /// The editor's selection and text at one moment, to insert an answer where it was asked for.
+    struct Snapshot {
+        var range: NSRange
+        var text: String
+        var selectedText: String? { range.length > 0 ? (text as NSString).substring(with: range) : nil }
+    }
+
+    func snapshot() -> Snapshot {
+        Snapshot(range: textView?.selectedRange() ?? NSRange(location: 0, length: 0), text: textView?.string ?? "")
+    }
+
+    /// Inserts at the snapshot's selection if the text hasn't changed since, otherwise at the current one.
+    func insert(_ text: String, at snapshot: Snapshot) {
+        if let textView, textView.string == snapshot.text { textView.setSelectedRange(snapshot.range) }
+        insertReplacingSelection(text)
+    }
+
     /// Replaces the selection with `text`, or inserts it on its own line at the caret. Undoable.
     func insertReplacingSelection(_ text: String) {
         guard let textView else { return }
@@ -235,7 +252,7 @@ final class SQLTextView: NSTextView {
         guard let ai = coordinator?.parent.aiSuggest else { return }
         let location = selectedRange().location
         let text = string
-        aiTask = Task { [weak self] in
+        aiTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Defaults.AI.inlineDelay))
             guard !Task.isCancelled else { return }
             let full = text as NSString

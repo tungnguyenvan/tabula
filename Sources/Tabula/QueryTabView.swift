@@ -61,11 +61,11 @@ struct QueryTabView: View {
             Button { handle.beautify(kind: model.driver.kind) } label: {
                 Label("Beautify", systemImage: "text.alignleft")
             }
+            .help("Format the selection, or the whole editor (⇧⌘I)")
             Button { model.assistant.error = nil; model.assistant.showPrompt.toggle() } label: {
                 Label("Ask AI", systemImage: "sparkles")
             }
             .help("Write SQL from a description, or change the selection (⌘K)")
-            .help("Format the selection, or the whole editor (⇧⌘I)")
 
             Menu {
                 if workspace.history.isEmpty { Text("No queries yet") }
@@ -109,9 +109,16 @@ struct QueryTabView: View {
                         }
                         .foregroundStyle(.red)
                         if model.failedStatement != nil, AIService.shared.settings.enabled {
-                            Button { fixWithAI() } label: { Label("Fix with AI", systemImage: "sparkles") }
-                                .controlSize(.small)
-                                .disabled(model.assistant.busy)
+                            HStack(spacing: Layout.barPadding) {
+                                Button { fixWithAI() } label: { Label("Fix with AI", systemImage: "sparkles") }
+                                    .controlSize(.small)
+                                    .disabled(model.assistant.busy)
+                                if model.assistant.busy { ProgressView().controlSize(.small) }
+                                // The prompt bar may be closed, so a failed fix reports here.
+                                if !model.assistant.showPrompt, let failure = model.assistant.error {
+                                    Text(failure).font(Layout.Font.small).foregroundStyle(.secondary).lineLimit(2)
+                                }
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading).padding(Layout.barPadding)
@@ -189,15 +196,24 @@ struct QueryTabView: View {
     private func askAI() {
         let description = model.assistant.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !description.isEmpty else { return }
-        let request = SQLPrompts.generate(description: description, current: handle.selectedText,
-                                          schema: workspace.aiSchema(), kind: model.driver.kind)
-        model.assistant.run(request, for: workspace.config) { sql in handle.insertReplacingSelection(sql) }
+        // Where the answer goes is decided now, not when it arrives: the user may keep typing meanwhile.
+        let target = handle.snapshot()
+        let kind = model.driver.kind
+        model.assistant.run(for: workspace.config, request: {
+            SQLPrompts.generate(description: description, current: target.selectedText,
+                                schema: await workspace.loadedAISchema(), kind: kind)
+        }) { sql in handle.insert(sql, at: target) }
     }
 
     private func fixWithAI() {
         guard let statement = model.failedStatement, let error = model.error else { return }
-        let request = SQLPrompts.fix(sql: statement, error: error, schema: workspace.aiSchema(), kind: model.driver.kind)
-        model.assistant.run(request, for: workspace.config) { sql in handle.replace(statement, with: sql) }
+        let kind = model.driver.kind
+        model.assistant.run(for: workspace.config, request: {
+            SQLPrompts.fix(sql: statement, error: error, schema: await workspace.loadedAISchema(), kind: kind)
+        }) { sql in
+            handle.replace(statement, with: sql)
+            model.clearFailure()
+        }
     }
 
     /// Asks the model to continue the SQL at the caret when the user pauses; nil when AI suggestions are off.

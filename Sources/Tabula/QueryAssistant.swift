@@ -13,9 +13,11 @@ final class QueryAssistant {
     private(set) var busy = false
     var error: String?
     private var task: Task<Void, Never>?
+    private var current: UUID?
 
-    /// Sends `request` and hands the cleaned-up SQL to `apply`, unless the connection may not use AI.
-    func run(_ request: AIRequest, for connection: ConnectionConfig, apply: @escaping (String) -> Void) {
+    /// Builds the request (which may wait for the schema), sends it and hands the cleaned-up SQL to
+    /// `apply`, unless the connection may not use AI.
+    func run(for connection: ConnectionConfig, request: @escaping () async -> AIRequest, apply: @escaping (String) -> Void) {
         if let refusal = AIService.shared.refusal(for: connection) {
             error = refusal
             showPrompt = true
@@ -24,10 +26,13 @@ final class QueryAssistant {
         task?.cancel()
         busy = true
         error = nil
+        let id = UUID()
+        current = id
         task = Task {
-            defer { busy = false }
+            // A newer request owns `busy`; an older one finishing late must not clear it.
+            defer { if current == id { busy = false } }
             do {
-                let sql = SQLPrompts.cleanSQL(try await AIService.shared.complete(request))
+                let sql = SQLPrompts.cleanSQL(try await AIService.shared.complete(await request()))
                 guard !Task.isCancelled else { return }
                 guard !sql.isEmpty else { error = "The model didn't return any SQL."; return }
                 apply(sql)
@@ -41,6 +46,7 @@ final class QueryAssistant {
 
     func cancel() {
         task?.cancel()
+        current = nil
         busy = false
     }
 }

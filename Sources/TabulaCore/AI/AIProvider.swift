@@ -134,7 +134,22 @@ public enum SQLPrompts {
     public static func fix(sql: String, error: String, schema: Schema, kind: DatabaseKind) -> AIRequest {
         AIRequest(purpose: .generate, instructions: """
             You fix \(kind.displayName) SQL. Reply with the corrected SQL alone: no explanation, no Markdown fences.
-            """, prompt: "Schema:\n\(schema.text)\n\nSQL:\n\(sql)\n\nThe server answered:\n\(error)")
+            """, prompt: "Schema:\n\(schema.text)\n\nSQL:\n\(sql)\n\nThe server answered:\n\(redacted(error))")
+    }
+
+    /// Database errors can quote row values ("Key (email)=(an@example.com) already exists", "invalid input
+    /// value 'x'"); those are replaced before the message goes to a model. The SQL itself is the user's.
+    public static func redacted(_ error: String) -> String {
+        var text = error
+        let patterns = [
+            #"\)=\((?:[^()]|\([^()]*\))*\)"#,  // Postgres key details: (column)=(value)
+            #"'(?:[^']|'')*'"#,                    // quoted literals (MySQL quotes the values it reports)
+        ]
+        let replacements = [")=(…)", "'…'"]
+        for (pattern, replacement) in zip(patterns, replacements) {
+            text = text.replacingOccurrences(of: pattern, with: replacement, options: .regularExpression)
+        }
+        return text
     }
 
     /// Asks for the text that continues `before`, placed before `after`. Only the text near the caret is

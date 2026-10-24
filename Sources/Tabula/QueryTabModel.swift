@@ -26,6 +26,12 @@ final class QueryTabModel {
     var askAIRequest = 0
     /// The statement that failed in the last run, for Fix with AI.
     private(set) var failedStatement: String?
+
+    /// After Fix with AI replaced the failed statement, its error no longer applies.
+    func clearFailure() {
+        error = nil
+        failedStatement = nil
+    }
     let assistant = QueryAssistant()
 
     init(title: String, sql: String, driver: any DatabaseDriver, workspace: WorkspaceModel) {
