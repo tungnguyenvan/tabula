@@ -245,7 +245,7 @@ final class RoutineTests: XCTestCase {
             CREATE TRIGGER touch_items BEFORE INSERT ON tabula_routines.items FOR EACH ROW EXECUTE FUNCTION tabula_routines.touch();
             """)
         let routines = try await driver.routines(in: "tabula_routines")
-        XCTAssertEqual(Set(routines.map(\.displayName)), ["add_one(n integer)", "touch()", "touch_items"])
+        XCTAssertEqual(Set(routines.map(\.displayName)), ["add_one(n integer)", "touch", "touch_items"])
         let addOne = try XCTUnwrap(routines.first { $0.name == "add_one" })
         let definition = try await driver.definition(of: addOne)
         XCTAssertTrue(definition.contains("CREATE OR REPLACE FUNCTION tabula_routines.add_one"), definition)

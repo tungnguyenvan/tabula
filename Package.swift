@@ -13,6 +13,7 @@ let package = Package(
         .package(url: "https://github.com/vapor/mysql-nio.git", from: "1.7.0"),
         .package(url: "https://github.com/swift-server/RediStack.git", from: "1.6.0"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.27.0"),
+        .package(url: "https://github.com/orlandos-nl/MongoKitten.git", from: "7.16.3"),
     ],
     targets: [
         .target(
@@ -22,6 +23,7 @@ let package = Package(
                 .product(name: "MySQLNIO", package: "mysql-nio"),
                 .product(name: "RediStack", package: "RediStack"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "MongoKitten", package: "MongoKitten"),
                 "llama",
             ],
             linkerSettings: [.linkedLibrary("sqlite3")]

@@ -117,7 +117,7 @@ struct MetricsView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12, alignment: .top)], spacing: 12) {
                             ForEach(sample.groups) { group in card(group) }
                         }
-                        if !sample.tables.isEmpty { tables(sample.tables) }
+                        if !sample.tables.isEmpty { tables(sample.tables, collections: sample.tablesAreCollections) }
                     }
                     .padding(14)
                 }
@@ -186,12 +186,12 @@ struct MetricsView: View {
         .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private func tables(_ tables: [MetricsSample.TableStat]) -> some View {
+    private func tables(_ tables: [MetricsSample.TableStat], collections: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Largest tables").font(.system(size: 12, weight: .semibold))
+            Text(collections ? "Largest collections" : "Largest tables").font(.system(size: 12, weight: .semibold))
             Table(tables) {
-                TableColumn("Table") { Text($0.name).font(.system(size: 12, design: .monospaced)) }
-                TableColumn("Rows (est.)") { Text($0.rows.map { MetricFormat.number(Double($0)) } ?? "—").monospacedDigit() }.width(110)
+                TableColumn(collections ? "Collection" : "Table") { Text($0.name).font(.system(size: 12, design: .monospaced)) }
+                TableColumn(collections ? "Documents" : "Rows (est.)") { Text($0.rows.map { MetricFormat.number(Double($0)) } ?? "—").monospacedDigit() }.width(110)
                 TableColumn("Data") { Text(MetricFormat.bytes($0.dataBytes.map(Double.init))).monospacedDigit() }.width(90)
                 TableColumn("Indexes") { Text(MetricFormat.bytes($0.indexBytes.map(Double.init))).monospacedDigit() }.width(90)
                 TableColumn("Total") { Text(MetricFormat.bytes($0.totalBytes.map(Double.init))).monospacedDigit() }.width(90)

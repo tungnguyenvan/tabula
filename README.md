@@ -4,10 +4,23 @@
 
 <p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
-<p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b> and <b>Redis</b>.<br>
+<p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b> and <b>Redis</b>.<br>
 Free, no usage limits, keyboard-first.</p>
 
 <p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a Redis and a PostgreSQL connection open, browsing a table with the row details panel"></p>
+
+> ### 🍃 New in 0.4: MongoDB
+>
+> - **Collections in the grid you already know.** Databases in the sidebar, collections and views as tables, documents as rows with nested values inline. Filter with the builder or a query document, sort, and page with a total count.
+> - **Edit without losing types.** Change a cell and a `NumberLong` stays a long, a date stays a date. Open a whole document as JSON (`{ }`) to edit nested fields, or insert a new one. Preview the exact `updateOne` / `deleteOne` commands before they run.
+> - **The shell you know, in the query editor:** `db.orders.find({ status: "paid" }).sort({ total: -1 })`, `aggregate([…])`, `insertMany`, `updateMany`, `createIndex`, `show dbs`, `use shop`, `db.runCommand({…})`. Highlighting, Beautify, suggestions for collections, methods, fields and `$` operators, and the row limit adds `.limit()`.
+> - **AI speaks MongoDB too:** chat, Ask AI and Fix with AI write shell commands from the fields Tabula sampled. Documents are never sent.
+> - **Server metrics** from `serverStatus` and `dbStats`, structure with sampled field types and indexes, and every command in the console log.
+> - Atlas (`mongodb+srv`), replica sets, TLS and SCRAM authentication.
+>
+> [More about MongoDB →](#mongodb)
+
+<p align="center"><img src="docs/screenshots/mongodb.png" width="900" alt="A MongoDB collection in the grid, with typed fields in the row details panel"></p>
 
 > ### ✨ New in 0.3: an AI assistant that can run entirely on your Mac
 >
@@ -30,6 +43,7 @@ Free, no usage limits, keyboard-first.</p>
 - [Things to know](#things-to-know)
 - [Getting started](#getting-started)
 - [AI assistant](#ai-assistant)
+- [MongoDB](#mongodb)
 - [Redis](#redis)
 - [Updates](#updates)
 - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -48,8 +62,11 @@ Free, no usage limits, keyboard-first.</p>
 - Chat panel, Ask AI (⌘K), Fix with AI, and model-written suggestions while typing.
 - Models that run inside Tabula, Apple Intelligence, Claude, OpenAI-compatible APIs, Ollama, Claude Code or Codex.
 
+**MongoDB** (new in 0.4, see [MongoDB](#mongodb))
+- Collections in the data grid with type-preserving edits, a JSON document editor, and a query editor that runs shell commands.
+
 **Connections**
-- PostgreSQL, MySQL / MariaDB, SQLite files and Redis.
+- PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB and Redis.
 - Tag each connection Local, Development, Staging or Production. The tag colors the sidebar strip and the toolbar pill, and Production gets an extra warning before destructive actions.
 - Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
 - Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
@@ -105,7 +122,7 @@ Free, no usage limits, keyboard-first.</p>
 
 **Server metrics** (⌥⌘4)
 - Live charts of reads, writes, transactions, connections and active queries, refreshed every 1 to 30 seconds (pause any time), plus server details, connection counts, cache hit ratio and the largest tables.
-- PostgreSQL uses `pg_stat_database` and `pg_stat_activity`, MySQL `SHOW GLOBAL STATUS`, SQLite its pragmas, Redis `INFO`. Polling is not written to the console log.
+- PostgreSQL uses `pg_stat_database` and `pg_stat_activity`, MySQL `SHOW GLOBAL STATUS`, SQLite its pragmas, MongoDB `serverStatus` and `dbStats`, Redis `INFO`. Polling is not written to the console log.
 
 **Structure**
 - Columns with type, nullability, default, comment and primary key, plus indexes with their definitions.
@@ -123,6 +140,7 @@ Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0
 | Memory, Connections window only | 26 MB |
 | Memory, one Postgres table open (300 rows) | 78 MB |
 | Memory, three connections open (Postgres, MySQL, Redis) | 92 MB |
+| Memory, one MongoDB collection open (300 documents; measured on 0.4.0) | 79 MB |
 | CPU when idle | 0% |
 | CPU with the metrics tab refreshing every 3 s | about 1% |
 
@@ -208,6 +226,7 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
    - **PostgreSQL:** if Database is empty, the user name is used.
    - **MySQL / MariaDB:** the database is optional, and you can switch databases from the sidebar.
    - **SQLite:** choose an existing file, or create a new one.
+   - **MongoDB:** see [MongoDB](#mongodb).
 2. Choose a **tag**, so a Production connection is obvious at a glance.
 3. Click **Test**, then **Connect**. You can also double-click a saved connection or press Return.
 
@@ -245,6 +264,39 @@ Choose where the model runs:
 | Claude Code, Codex | Your installed command-line agent, with its own sign-in | Installed and signed in once in Terminal. Tabula finds them on your shell's PATH or the usual install locations, and runs them without tools (Claude Code) or in a read-only sandbox (Codex). Too slow for suggestions while typing. |
 
 **What is sent:** the table and column names of the current schema, the SQL in the editor around the cursor (or the selection), and for Fix with AI the error message with any quoted values removed (database errors can quote row values, such as a duplicate key). Rows from your tables are never sent. Prompts reach the command-line agents on standard input, not as arguments other users of the Mac could see. AI is off for Production-tagged connections unless you allow it in Settings. API keys are stored in the login Keychain.
+
+## MongoDB
+
+Add a connection of type **MongoDB**.
+
+- **Host and port**, or several hosts (`a:27017,b:27017`) for a replica set. For Atlas and other DNS seed lists, turn on **DNS seed list (mongodb+srv)** and enter the cluster's host name; TLS is then on by default.
+- **User and password** are optional. **Auth database** is where the user is defined (`authSource`), `admin` when left empty. **Database** is the one to open first (`test` when empty); every database you may list appears in the sidebar's picker.
+- Authentication is SCRAM-SHA-1 or SCRAM-SHA-256, chosen with the server. X.509, LDAP and Kerberos aren't supported.
+
+**Browsing and editing**
+- Collections and views are listed like tables. The grid's columns are the fields of the documents, `_id` first; nested documents and arrays show inline (`{ city: "Hà Nội" }`), and Row Details (⌥⌘0) shows each field's BSON type.
+- **Filter** with the builder: `=` on `42` matches the number or the string, on a 24-digit hex id the ObjectId or the string; `contains` and friends are case-insensitive regular expressions; fields can be paths such as `address.city`. The `{ }` button takes a query document instead: `{ total: { $gte: 100 }, status: "paid" }`.
+- **Edit a cell** and the value keeps the field's type: `46` in a long field is stored as `NumberLong(46)`, `2025-02-03` in a date field as a date. To change a type, type a shell value such as `"text"` or `NumberDecimal("9.99")`. Commit (⌘S) sends `updateOne` / `deleteOne` / `insertOne` by `_id`; Preview (⇧⌘S) shows them. MongoDB applies them one by one (no transaction needed); if one fails, the message says which ones were saved.
+- **`{ }`** opens the selected document as JSON for nested edits (replaced as a whole, matched by `_id`); the document-plus button inserts a new one.
+- **Structure** lists the fields found in the first 100 documents with the types seen, and the indexes with their keys and options (unique, sparse, TTL, partial).
+
+**Query editor**
+
+Write MongoDB shell statements, one per line or separated by `;`. A statement may continue on the next line with `.sort(…)` and the like.
+
+```js
+use shop
+db.orders.find({ status: "paid", total: { $gte: NumberDecimal("100") } }, { items: 0 }).sort({ createdAt: -1 })
+db.orders.aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }, { $sort: { n: -1 } }])
+db.customers.updateMany({ vip: true }, { $set: { tier: "gold" } })
+db.getCollection("audit log").countDocuments({ at: { $gte: ISODate("2026-01-01") } })
+```
+
+- Collection methods: `find` / `findOne` (with `sort`, `skip`, `limit`, `projection`, `hint`, `collation`, `count()`, `explain()`), `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne` / `insertMany`, `updateOne` / `updateMany` / `replaceOne`, `deleteOne` / `deleteMany`, `findOneAndUpdate` / `Replace` / `Delete`, `createIndex(es)`, `dropIndex(es)`, `getIndexes`, `drop`, `renameCollection`, `stats`.
+- Database methods: `runCommand`, `adminCommand`, `getCollectionNames`, `getCollectionInfos`, `createCollection`, `createView`, `dropDatabase`, `stats`, `serverStatus`, `version`, `currentOp`, `getUsers`, `getRoles`, `getSiblingDB("other")`; and `show dbs`, `show collections`, `show users`, `use <db>`.
+- Values: JSON, the shell's relaxed syntax (unquoted keys, single quotes, trailing commas, comments, `/regex/i`) and its types: `ObjectId`, `ISODate` / `new Date`, `NumberLong`, `NumberInt`, `NumberDecimal`, `UUID`, `BinData`, `Timestamp`, `MinKey` / `MaxKey`; Extended JSON (`{ "$oid": "…" }`) works too.
+- Tabula reads these statements and sends the matching commands; it doesn't run JavaScript, so variables, loops and functions aren't available.
+- Results come back as a grid, at most 50,000 documents per statement; the toolbar's limit adds `.limit()` to finds and aggregations that have none.
 
 ## Redis
 
@@ -348,7 +400,8 @@ Other options: `SKIP_TESTS=1`, `BUILD_NUMBER=…` (defaults to a UTC timestamp) 
 
 ```
 Sources/TabulaCore   Drivers and SQL: PostgresDriver (PostgresNIO), MySQLDriver (MySQLNIO), SQLiteDriver
-                     (system SQLite), RedisDriver (RediStack) and RedisCommandLine, LoggingDriver (console log),
+                     (system SQLite), RedisDriver (RediStack) and RedisCommandLine, MongoDriver (MongoKitten) with
+                     Mongo/ (shell parser and printer, statements, dialect, completion), LoggingDriver (console log),
                      SQLLexer, SQLSplitter, SQLFormatter, SQLCompletion, SQLDialect, FilterRule, SchemaInsights
                      (foreign keys, metrics), ConnectionStore (JSON + Keychain), ResultExporter, UpdateFeed,
                      Defaults (every tunable value in one place)
@@ -359,12 +412,13 @@ Tests/TabulaCoreTests
 scripts/             build-app.sh, release.sh, seed-dev.sh, make-icon.swift, third-party-notices.sh
 ```
 
-**Tests.** Unit tests and SQLite tests always run. The Postgres, MySQL and Redis tests run against real servers when ports are set:
+**Tests.** Unit tests and SQLite tests always run. The Postgres, MySQL, Redis and MongoDB tests run against real servers when ports are set:
 
 ```bash
 docker run -d --name tabula-test-pg -e POSTGRES_USER=tabula -e POSTGRES_PASSWORD=tabula -e POSTGRES_DB=tabula -p 55432:5432 postgres:16
 docker run -d --name tabula-test-mysql -e MYSQL_ROOT_PASSWORD=tabula -e MYSQL_DATABASE=tabula -e MYSQL_USER=tabula -e MYSQL_PASSWORD=tabula -p 53306:3306 mysql:8.4
 docker run -d --name tabula-test-redis -p 56379:6379 redis:7.4 redis-server --requirepass tabula --user tabula on '>tabula' '~*' '&*' '+@all'
+docker run -d --name tabula-test-mongo -p 57017:27017 -e MONGO_INITDB_ROOT_USERNAME=tabula -e MONGO_INITDB_ROOT_PASSWORD=tabula mongo:8.0
 
 # optional: Redis over TLS with a throwaway self-signed certificate
 mkdir -p /tmp/redis-tls && openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=localhost \
@@ -373,19 +427,19 @@ docker run -d --name tabula-test-redis-tls -p 56380:6380 -v /tmp/redis-tls:/tls:
   --tls-port 6380 --tls-cert-file /tls/redis.crt --tls-key-file /tls/redis.key --tls-auth-clients no --requirepass tabula
 
 TABULA_TEST_PG_PORT=55432 TABULA_TEST_MYSQL_PORT=53306 TABULA_TEST_REDIS_PORT=56379 TABULA_TEST_REDIS_TLS_PORT=56380 \
-TABULA_TEST_NETWORK=1 swift test
+TABULA_TEST_MONGO_PORT=57017 TABULA_TEST_NETWORK=1 swift test
 ```
 
-`TABULA_TEST_NETWORK=1` also checks the live GitHub release feed.
+`TABULA_TEST_NETWORK=1` also checks the live GitHub release feed. `TABULA_TEST_MONGO_PORT` can also point at a replica set (user and password `tabula`), and `TABULA_TEST_MONGO_PLAIN_PORT` at a server without authentication.
 
-**Sample data.** This creates a SQLite file, plus Postgres, MySQL and Redis data if the containers above are running, in a separate store that leaves your real connections alone. Debug builds read that store's passwords from `passwords.json`, so test runs never touch your Keychain:
+**Sample data.** This creates a SQLite file, plus Postgres, MySQL, Redis and MongoDB data if the containers above are running, in a separate store that leaves your real connections alone. Debug builds read that store's passwords from `passwords.json`, so test runs never touch your Keychain:
 
 ```bash
 ./scripts/seed-dev.sh /tmp/tabula-dev-data
 TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 ```
 
-**Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_TABLE`, `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_KEY` and `TABULA_DEBUG_REDIS_CONSOLE` (Redis), `TABULA_DEBUG_DIAGRAM`, `TABULA_DEBUG_METRICS`, `TABULA_DEBUG_CONSOLE`, `TABULA_UPDATE_FEED=<url>` with `TABULA_DEBUG_AUTOINSTALL=1` (test the updater against a local feed), `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
+**Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_EDIT=<connection id>` (open its editor), `TABULA_DEBUG_TABLE` (with `TABULA_DEBUG_DOCUMENT=<row>` for the MongoDB document editor), `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_KEY` and `TABULA_DEBUG_REDIS_CONSOLE` (Redis), `TABULA_DEBUG_DIAGRAM`, `TABULA_DEBUG_METRICS`, `TABULA_DEBUG_CONSOLE`, `TABULA_UPDATE_FEED=<url>` with `TABULA_DEBUG_AUTOINSTALL=1` (test the updater against a local feed), `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
 
 **Icon.** `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`.
 
@@ -404,6 +458,7 @@ Known limitations:
 - A running query cannot be cancelled.
 - Editing existing rows needs a primary key. Tables without one are read-only, apart from inserting rows.
 - Redis Cluster and Sentinel aren't supported yet; connect to a single node. Pub/Sub and `MONITOR` are not available in the console.
+- MongoDB: the query editor runs shell statements, not JavaScript. Edits from the grid aren't wrapped in a transaction. X.509, LDAP and Kerberos authentication aren't supported. The grid's columns come from the first 100 documents, so a field that appears only later shows up after it is seen on a page.
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
 

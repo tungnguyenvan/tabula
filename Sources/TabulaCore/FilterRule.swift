@@ -68,6 +68,7 @@ extension SQLDialect {
     /// Combines rules by their conjunctions; rules missing a required value are skipped.
     /// `a AND b OR c` becomes `(a AND b) OR c`, spelling out SQL's precedence.
     public func condition(_ rules: [FilterRule]) -> String {
+        if kind == .mongodb { return MongoDialect.condition(rules) }
         var groups: [[String]] = []
         for rule in rules where !rule.op.needsValue || !rule.value.isEmpty {
             if groups.isEmpty || rule.conjunction == .or { groups.append([]) }

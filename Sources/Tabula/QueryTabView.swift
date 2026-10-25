@@ -14,7 +14,7 @@ struct QueryTabView: View {
                 editorBar
                 Divider()
                 if model.assistant.showPrompt {
-                    AIPromptBar(assistant: model.assistant, hasSelection: handle.selectedText != nil, submit: askAI)
+                    promptBar
                     Divider()
                 }
                 SQLEditorView(text: $model.sql, handle: handle, kind: model.driver.kind, suggest: suggest, aiSuggest: aiSuggest,
@@ -36,6 +36,11 @@ struct QueryTabView: View {
         }
         .onChange(of: model.results.count) { _, _ in selection = [] }
         .onChange(of: model.selectedResult) { _, _ in selection = [] }
+    }
+
+    private var promptBar: AIPromptBar {
+        AIPromptBar(assistant: model.assistant, hasSelection: handle.selectedText != nil,
+                    language: model.driver.kind.languageName, submit: askAI)
     }
 
     private var editorBar: some View {
@@ -61,7 +66,8 @@ struct QueryTabView: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
-            .help("Adds LIMIT to SELECT statements that don't have one")
+            .help(model.driver.kind.isDocument ? "Adds .limit() to find and aggregate commands that don't have one"
+                  : "Adds LIMIT to SELECT statements that don't have one")
             Button { handle.beautify(kind: model.driver.kind) } label: {
                 Label("Beautify", systemImage: "text.alignleft")
             }
@@ -69,7 +75,7 @@ struct QueryTabView: View {
             Button { model.assistant.error = nil; model.assistant.showPrompt.toggle() } label: {
                 Label("Ask AI", systemImage: "sparkles")
             }
-            .help("Write SQL from a description, or change the selection (⌘K)")
+            .help("Write \(model.driver.kind.isDocument ? "a query" : "SQL") from a description, or change the selection (⌘K)")
 
             Menu {
                 if workspace.history.isEmpty { Text("No queries yet") }
@@ -239,6 +245,10 @@ struct QueryTabView: View {
     }
 
     private func suggest(_ text: String, caret: Int) -> (range: NSRange, items: [String]) {
+        if model.driver.kind.isDocument {
+            return MongoCompletion.suggestions(in: text, caret: caret, collections: workspace.tables.map(\.name),
+                                               fields: { workspace.columnNames(of: SQLCompletion.TableName(name: $0)) })
+        }
         let context = SQLCompletion.context(in: text, caret: caret, kind: model.driver.kind, schemas: workspace.schemas)
         let items = SQLCompletion.suggestions(for: context, tables: workspace.tables.map(\.name),
                                               columns: { workspace.columnNames(of: $0) }, allColumns: workspace.knownColumnNames,

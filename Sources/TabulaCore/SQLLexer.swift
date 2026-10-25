@@ -37,7 +37,9 @@ public enum SQLLexer {
             let start = i
             let c = chars[i]
             let next = at(i + 1)
-            if c == unit("-") && next == unit("-") || (c == unit("#") && kind == .mysql) {
+            let document = kind == .mongodb
+            if (c == unit("-") && next == unit("-") && !document) || (c == unit("#") && kind == .mysql)
+                || (c == unit("/") && next == unit("/") && document) {
                 while let u = at(i), u != unit("\n") { i += 1 }
                 emit(.comment, from: start)
             } else if c == unit("/") && next == unit("*") {
@@ -48,16 +50,17 @@ public enum SQLLexer {
             } else if c == unit("'") || c == unit("\"") || c == unit("`") {
                 i += 1
                 while i < chars.count {
-                    if chars[i] == unit("\\") && kind == .mysql { i += 2; continue }
+                    if chars[i] == unit("\\") && (kind == .mysql || document) { i += 2; continue }
                     if chars[i] == c {
-                        if at(i + 1) == c { i += 2; continue } // doubled quote
+                        if at(i + 1) == c && !document { i += 2; continue } // doubled quote
                         i += 1
                         break
                     }
                     i += 1
                 }
                 i = min(i, chars.count)
-                emit(c == unit("'") ? .string : .quotedIdentifier, from: start)
+                // The shell has no quoted identifiers: every quote is a string.
+                emit(c == unit("'") || document ? .string : .quotedIdentifier, from: start)
             } else if c == unit("$") && kind == .postgres, let tag = dollarTag(chars, at: i) {
                 i += tag.count
                 while i < chars.count && !(chars[i] == unit("$") && Array(chars[i..<min(chars.count, i + tag.count)]) == tag) { i += 1 }

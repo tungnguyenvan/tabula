@@ -22,6 +22,8 @@ final class TableTabModel {
     private(set) var indexes: [IndexInfo] = []
     private(set) var resultColumns: [String] = []
     private(set) var rows: [[String?]] = []
+    /// MongoDB: each row's whole document, so edits keep field types.
+    private(set) var documents: [String]?
     private(set) var totalRows: Int?
     private(set) var loading = false
     private(set) var committing = false
@@ -42,6 +44,8 @@ final class TableTabModel {
     var filterFocusRequest = 0
     /// Incremented by the menu to open the SQL preview sheet (⇧⌘S).
     var showPreviewRequest = 0
+    /// MongoDB: a row whose document should open in the editor sheet.
+    var documentEditRequest: Int?
     private(set) var appliedFilter = ""
 
     /// row index → column index → new value (inner nil = SQL NULL).
@@ -92,6 +96,7 @@ final class TableTabModel {
             guard generation == reloadGeneration else { return }
             resultColumns = page.columns.isEmpty ? columns.map(\.name) : page.columns
             rows = page.rows
+            documents = page.documents
             clearPending()
             undoManager.removeAllActions()
             if focusGridOnLoad && !rows.isEmpty {
@@ -286,7 +291,7 @@ final class TableTabModel {
     private var firstColumnToFill: Int {
         let keys = columns.filter(\.isPrimaryKey)
         guard keys.count == 1, let key = keys.first,
-              ["int", "serial"].contains(where: key.dataType.lowercased().contains),
+              ["int", "serial", "objectid"].contains(where: key.dataType.lowercased().contains),
               let index = resultColumns.firstIndex(of: key.name), index == 0, resultColumns.count > 1 else { return 0 }
         return 1
     }
@@ -352,8 +357,9 @@ final class TableTabModel {
         primaryKeyIndices.map { (resultColumns[$0], rows[row][$0]) }
     }
 
-    /// SQL statements that apply the pending changes, in the order they will run.
-    func pendingStatements() -> [String] {
+    /// Statements that apply the pending changes, in the order they will run.
+    func pendingStatements() throws -> [String] {
+        if driver.kind.isDocument { return try pendingDocumentStatements() }
         let d = driver.dialect
         var statements: [String] = []
         for row in deletedRows.sorted() {
@@ -370,8 +376,59 @@ final class TableTabModel {
         return statements
     }
 
+    /// MongoDB: updates and deletes match each document's `_id`; edited text is read back in the field's type.
+    private func pendingDocumentStatements() throws -> [String] {
+        func document(_ row: Int) throws -> String {
+            guard let documents, documents.indices.contains(row) else { throw DatabaseError("Reload the collection and try again.") }
+            return documents[row]
+        }
+        var statements: [String] = []
+        for row in deletedRows.sorted() {
+            statements.append(try MongoChanges.delete(table, document: document(row)))
+        }
+        for row in edits.keys.sorted() where !deletedRows.contains(row) {
+            let changes = Dictionary(uniqueKeysWithValues: (edits[row] ?? [:]).map { (resultColumns[$0.key], $0.value) })
+            statements.append(try MongoChanges.update(table, row: .init(document: document(row), changes: changes)))
+        }
+        for inserted in insertedRows {
+            statements.append(MongoChanges.insert(table, values: inserted.sorted { $0.key < $1.key }.map { (resultColumns[$0.key], $0.value) }))
+        }
+        return statements
+    }
+
+    /// MongoDB: the row's whole document over indented lines, for the document editor.
+    func documentText(row: Int) -> String? {
+        guard let documents, documents.indices.contains(row) else { return nil }
+        return MongoShell.pretty(documents[row])
+    }
+
+    /// MongoDB: replaces the document at `row`, or inserts a new one when `row` is nil. Returns the error, if any.
+    func saveDocument(_ text: String, replacing row: Int?) async -> String? {
+        guard confirmDiscard() else { return nil }
+        do {
+            let statement: String
+            if let row {
+                guard let documents, documents.indices.contains(row) else { return "Reload the collection and try again." }
+                statement = try MongoChanges.replace(table, original: documents[row], with: text)
+            } else {
+                statement = try MongoChanges.insertDocument(table, text: text)
+            }
+            _ = try await driver.execute(statement)
+            await reload()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     func commit() async {
-        let statements = pendingStatements()
+        let statements: [String]
+        do {
+            statements = try pendingStatements()
+        } catch {
+            self.error = error.localizedDescription
+            return
+        }
         guard !statements.isEmpty, !committing else { return }
         committing = true
         defer { committing = false }
@@ -379,7 +436,8 @@ final class TableTabModel {
             try await driver.applyInTransaction(statements)
             await reload()
         } catch {
-            self.error = "Changes were rolled back: \(error.localizedDescription)"
+            // MongoDB runs the changes one by one; its error already says which were saved.
+            self.error = driver.kind.isDocument ? error.localizedDescription : "Changes were rolled back: \(error.localizedDescription)"
         }
     }
 

@@ -25,6 +25,7 @@ struct ConnectionFormView: View {
                     .onChange(of: config.kind) { old, new in
                         if config.port == old.defaultPort || config.port == 0 { config.port = new.defaultPort }
                         if new == .mysql && config.tls == .disable { config.tls = .require }
+                        if new != .mongodb { config.srv = nil; config.authSource = nil }
                     }
                     TextField("Name", text: $config.name, prompt: Text(config.displayName.isEmpty ? "My database" : config.displayName))
                     Picker("Tag", selection: $config.tag) {
@@ -42,12 +43,23 @@ struct ConnectionFormView: View {
                     }
                 } else {
                     Section("Server") {
-                        TextField("Host", text: $config.host, prompt: Text("127.0.0.1"))
-                        TextField("Port", value: $config.port, format: .number.grouping(.never))
+                        TextField("Host", text: $config.host, prompt: Text(hostPrompt))
+                        if config.kind == .mongodb {
+                            Toggle("DNS seed list (mongodb+srv)", isOn: srv)
+                                .help("For hosts such as cluster0.example.mongodb.net (MongoDB Atlas). The port comes from DNS.")
+                        }
+                        if !(config.kind == .mongodb && config.srv == true) {
+                            TextField("Port", value: $config.port, format: .number.grouping(.never))
+                        }
                         if config.kind == .redis {
                             TextField("User", text: $config.user, prompt: Text("optional (ACL user, Redis 6+)"))
                             SecureField("Password", text: $password, prompt: Text("optional"))
                             TextField("Database", text: $config.database, prompt: Text("0"))
+                        } else if config.kind == .mongodb {
+                            TextField("User", text: $config.user, prompt: Text("optional"))
+                            SecureField("Password", text: $password, prompt: Text("optional"))
+                            TextField("Database", text: $config.database, prompt: Text(Defaults.Mongo.defaultDatabase))
+                            TextField("Auth database", text: authSource, prompt: Text(Defaults.Mongo.authDatabase))
                         } else {
                             TextField("User", text: $config.user)
                             SecureField("Password", text: $password)
@@ -88,7 +100,25 @@ struct ConnectionFormView: View {
             let database = config.database.trimmingCharacters(in: .whitespaces)
             return (1...65535).contains(config.port) && (database.isEmpty || (Int(database).map { $0 >= 0 } ?? false))
         case .postgres, .mysql: return !config.user.isEmpty && (1...65535).contains(config.port)
+        case .mongodb: return !config.host.isEmpty && (config.srv == true || (1...65535).contains(config.port))
         }
+    }
+
+    private var hostPrompt: String {
+        guard config.kind == .mongodb else { return Defaults.host }
+        return config.srv == true ? "cluster0.example.mongodb.net" : "\(Defaults.host)  (or a:27017,b:27017)"
+    }
+
+    private var srv: Binding<Bool> {
+        Binding { config.srv == true } set: { on in
+            config.srv = on ? true : nil
+            // Seed lists (Atlas) always use TLS.
+            if on && config.tls == .disable { config.tls = .verifyFull }
+        }
+    }
+
+    private var authSource: Binding<String> {
+        Binding { config.authSource ?? "" } set: { config.authSource = $0.isEmpty ? nil : $0 }
     }
 
     @ViewBuilder
@@ -124,9 +154,9 @@ struct ConnectionFormView: View {
                 return
             }
             let driver = try await DriverFactory.connect(config, password: password)
-            let version = try? await driver.execute(config.kind == .sqlite ? "SELECT 'SQLite ' || sqlite_version()" : "SELECT version()")
+            let version = await driver.serverVersion()
             await driver.close()
-            let text = (version?.rows.first?.first ?? nil).map { String($0.prefix(48)) } ?? "Connected"
+            let text = version.map { String($0.prefix(Layout.versionLength)) } ?? "Connected"
             testState = .success(text)
         } catch {
             testState = .failure(error.localizedDescription)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Creates sample data in a throwaway store for trying Tabula (and for screenshots):
-#   SQLite file + the tabula-test-pg / tabula-test-mysql containers from the README.
+#   SQLite file + the tabula-test-pg / -mysql / -redis / -mongo containers from the README.
 # Usage: scripts/seed-dev.sh [data-dir]   then   TABULA_DATA_DIR=<data-dir> swift run Tabula
 set -euo pipefail
 
@@ -33,7 +33,7 @@ SQL
 if PGPASSWORD=tabula with_timeout 5 psql -q -h 127.0.0.1 -p 55432 -U tabula tabula -c 'select 1' >/dev/null 2>&1; then
 PGPASSWORD=tabula psql -q -h 127.0.0.1 -p 55432 -U tabula tabula <<'SQL'
 SET client_min_messages = warning;
-DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS products CASCADE;
 CREATE TABLE products (id serial PRIMARY KEY, sku text UNIQUE NOT NULL, name text, price numeric(10,2), tags text[],
   attrs jsonb, launched date, updated_at timestamptz DEFAULT now());
 INSERT INTO products (sku, name, price, tags, attrs, launched)
@@ -75,16 +75,41 @@ else
 echo "Redis container not reachable; skipping Redis sample data" >&2
 fi
 
+if with_timeout 10 docker exec tabula-test-mongo mongosh --quiet -u tabula -p tabula --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 }).ok' >/dev/null 2>&1; then
+docker exec -i tabula-test-mongo mongosh --quiet -u tabula -p tabula --authenticationDatabase admin shop >/dev/null <<'JS'
+db.customers.drop(); db.orders.drop(); db.products.drop();
+const cities = ["Hà Nội", "Đà Nẵng", "TP.HCM", null];
+db.customers.insertMany(Array.from({ length: 750 }, (_, i) => ({
+  name: "Customer " + (i + 1), email: "c" + (i + 1) + "@example.com",
+  ...(cities[i % 4] ? { address: { city: cities[i % 4], country: "VN" } } : {}),
+  tags: ["tag" + (i % 5)], vip: i % 9 === 0, joined: new Date(Date.UTC(2024, i % 12, (i % 28) + 1)),
+  visits: i % 3 === 0 ? Long(i * 1000) : i,
+})));
+const ids = db.customers.find({}, { _id: 1 }).toArray().map(c => c._id);
+db.orders.insertMany(Array.from({ length: 2000 }, (_, i) => ({
+  customer: ids[i % ids.length], total: Decimal128(((i * 37) % 500 + 0.99).toFixed(2)),
+  status: ["paid", "pending", "shipped"][i % 3], items: [{ sku: "SKU-" + (i % 50), qty: (i % 4) + 1 }],
+  createdAt: new Date(Date.UTC(2025, i % 12, (i % 28) + 1, i % 24)),
+})));
+db.orders.createIndex({ customer: 1, createdAt: -1 });
+db.customers.createIndex({ email: 1 }, { unique: true });
+db.createView("big_orders", "orders", [{ $match: { total: { $gt: Decimal128("400") } } }]);
+JS
+else
+echo "MongoDB container not reachable; skipping MongoDB sample data" >&2
+fi
+
 cat > "$D/connections.json" <<JSON
 [
   {"id": "00000000-0000-0000-0000-000000000001", "name": "Shop (SQLite)", "kind": "sqlite", "host": "", "port": 0, "user": "", "database": "", "filePath": "$D/shop.sqlite", "tls": "disable", "tag": "local"},
   {"id": "00000000-0000-0000-0000-000000000002", "name": "Test Postgres", "kind": "postgres", "host": "127.0.0.1", "port": 55432, "user": "tabula", "database": "tabula", "filePath": "", "tls": "disable", "tag": "development"},
   {"id": "00000000-0000-0000-0000-000000000003", "name": "Test MySQL", "kind": "mysql", "host": "127.0.0.1", "port": 53306, "user": "tabula", "database": "tabula", "filePath": "", "tls": "require", "tag": "production"},
-  {"id": "00000000-0000-0000-0000-000000000004", "name": "Test Redis", "kind": "redis", "host": "127.0.0.1", "port": 56379, "user": "tabula", "database": "1", "filePath": "", "tls": "disable", "tag": "staging"}
+  {"id": "00000000-0000-0000-0000-000000000004", "name": "Test Redis", "kind": "redis", "host": "127.0.0.1", "port": 56379, "user": "tabula", "database": "1", "filePath": "", "tls": "disable", "tag": "staging"},
+  {"id": "00000000-0000-0000-0000-000000000005", "name": "Test MongoDB", "kind": "mongodb", "host": "127.0.0.1", "port": 57017, "user": "tabula", "database": "shop", "filePath": "", "tls": "disable", "tag": "development"}
 ]
 JSON
 # Test passwords: debug builds read these instead of the Keychain when TABULA_DATA_DIR is set.
 cat > "$D/passwords.json" <<'JSON'
-{"00000000-0000-0000-0000-000000000002": "tabula", "00000000-0000-0000-0000-000000000003": "tabula", "00000000-0000-0000-0000-000000000004": "tabula"}
+{"00000000-0000-0000-0000-000000000002": "tabula", "00000000-0000-0000-0000-000000000003": "tabula", "00000000-0000-0000-0000-000000000004": "tabula", "00000000-0000-0000-0000-000000000005": "tabula"}
 JSON
 echo "Seeded $D"

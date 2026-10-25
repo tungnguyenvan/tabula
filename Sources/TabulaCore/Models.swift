@@ -1,7 +1,7 @@
 import Foundation
 
 public enum DatabaseKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case postgres, mysql, sqlite, redis
+    case postgres, mysql, sqlite, redis, mongodb
 
     public var id: String { rawValue }
 
@@ -11,6 +11,7 @@ public enum DatabaseKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .mysql: "MySQL / MariaDB"
         case .sqlite: "SQLite"
         case .redis: "Redis"
+        case .mongodb: "MongoDB"
         }
     }
 
@@ -20,13 +21,14 @@ public enum DatabaseKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .mysql: 3306
         case .sqlite: 0
         case .redis: 6379
+        case .mongodb: 27017
         }
     }
 
     public var isFileBased: Bool { self == .sqlite }
 
-    /// SQL databases share the table workspace; Redis has its own key browser.
-    public var isSQL: Bool { self != .redis }
+    /// MongoDB: collections of documents, queried with shell statements instead of SQL.
+    public var isDocument: Bool { self == .mongodb }
 }
 
 public enum TLSMode: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -78,6 +80,10 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
     public var tag: ConnectionTag
     /// Seconds to wait while connecting; nil uses `Defaults.connectTimeout`. Optional so older saved files still load.
     public var connectTimeout: Double?
+    /// MongoDB: the database that holds the user (authSource); nil uses admin.
+    public var authSource: String?
+    /// MongoDB: `host` is a DNS seed list name (mongodb+srv://, e.g. Atlas).
+    public var srv: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -90,7 +96,9 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
         filePath: String = "",
         tls: TLSMode = .disable,
         tag: ConnectionTag = .none,
-        connectTimeout: Double? = nil
+        connectTimeout: Double? = nil,
+        authSource: String? = nil,
+        srv: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -103,6 +111,8 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
         self.tls = tls
         self.tag = tag
         self.connectTimeout = connectTimeout
+        self.authSource = authSource
+        self.srv = srv
     }
 
     public var displayName: String {
@@ -210,13 +220,17 @@ public struct QueryResult: Sendable {
     public var affectedRows: Int?
     public var duration: TimeInterval
     public var statement: String
+    /// MongoDB: each row's whole document as shell text, which keeps the field types the cells don't show.
+    public var documents: [String]?
 
-    public init(columns: [String] = [], rows: [[String?]] = [], affectedRows: Int? = nil, duration: TimeInterval = 0, statement: String = "") {
+    public init(columns: [String] = [], rows: [[String?]] = [], affectedRows: Int? = nil, duration: TimeInterval = 0, statement: String = "",
+                documents: [String]? = nil) {
         self.columns = columns
         self.rows = rows
         self.affectedRows = affectedRows
         self.duration = duration
         self.statement = statement
+        self.documents = documents
     }
 
     public var hasResultSet: Bool { !columns.isEmpty }

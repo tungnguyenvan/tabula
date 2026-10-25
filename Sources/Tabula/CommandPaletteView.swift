@@ -25,10 +25,12 @@ struct CommandPaletteView: View {
         items += model.tabs.map { tab in
             Item(id: "tab:\(tab.id)", title: tab.title, subtitle: "Open tab", symbol: "square.on.square", kind: .tab(tab.id))
         }
+        items.append(Item(id: "action:query", title: "New Query", subtitle: "⌘T", symbol: "plus.square", kind: .action { model.newQueryTab() }))
+        if model.config.kind.supportsDiagram {
+            items.append(Item(id: "action:diagram", title: "Relationship Diagram", subtitle: "⌥⌘3", symbol: "point.3.connected.trianglepath.dotted",
+                              kind: .action { model.openDiagram() }))
+        }
         items += [
-            Item(id: "action:query", title: "New Query", subtitle: "⌘T", symbol: "plus.square", kind: .action { model.newQueryTab() }),
-            Item(id: "action:diagram", title: "Relationship Diagram", subtitle: "⌥⌘3", symbol: "point.3.connected.trianglepath.dotted",
-                 kind: .action { model.openDiagram() }),
             Item(id: "action:metrics", title: "Server Metrics", subtitle: "⌥⌘4", symbol: "gauge.with.dots.needle.33percent",
                  kind: .action { model.openMetrics() }),
             Item(id: "action:refresh", title: "Refresh", subtitle: "⌘R", symbol: "arrow.clockwise", kind: .action { Task { await model.refresh() } }),

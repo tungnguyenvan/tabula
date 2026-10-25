@@ -98,9 +98,11 @@ struct WorkspaceView: View {
                 Button { model.newQueryTab() } label: { Label("New Query", systemImage: "plus.square.on.square") }
                     .help("New query tab (⌘T)")
                     .disabled(model.driver == nil)
-                Button { model.openDiagram() } label: { Label("Diagram", systemImage: "point.3.connected.trianglepath.dotted") }
-                    .help("Relationship diagram (⌥⌘3)")
-                    .disabled(model.driver == nil || model.config.kind == .redis)
+                if model.config.kind.supportsDiagram {
+                    Button { model.openDiagram() } label: { Label("Diagram", systemImage: "point.3.connected.trianglepath.dotted") }
+                        .help("Relationship diagram (⌥⌘3)")
+                        .disabled(model.driver == nil)
+                }
                 Button { model.openMetrics() } label: { Label("Metrics", systemImage: "gauge.with.dots.needle.33percent") }
                     .help("Server metrics (⌥⌘4)")
                     .disabled(model.driver == nil)

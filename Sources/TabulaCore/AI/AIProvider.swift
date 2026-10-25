@@ -248,9 +248,12 @@ public enum SQLPrompts {
             self.init(tables: tables.map { Table(name: $0.name, columns: $0.columns.map { Column(name: $0) }) })
         }
 
+        /// MongoDB: collections and the fields sampled from their documents.
+        public var isDocument = false
+
         var text: String {
             var lines: [String] = []
-            if let defaultSchema { lines.append("Default schema: \(defaultSchema)") }
+            if let defaultSchema { lines.append(isDocument ? "Database: \(defaultSchema)" : "Default schema: \(defaultSchema)") }
             lines += tables.prefix(Defaults.AI.schemaTableLimit).map { table in
                 guard !table.columns.isEmpty else { return table.name }
                 let columns = table.columns.map { column in
@@ -269,8 +272,15 @@ public enum SQLPrompts {
     /// Repeated in every instruction: unqualified names may resolve elsewhere than the user expects.
     static let tableNamesRule = "Write table names exactly as the schema lists them, keeping any schema prefix."
 
+    /// The same rule for collections, which the shell reaches as `db.name` or `db.getCollection("name")`.
+    static let collectionNamesRule = "Write collection names exactly as the schema lists them; use db.getCollection(\"name\") "
+        + "for names that aren't plain identifiers."
+    /// Tabula reads shell statements; it doesn't run JavaScript.
+    static let shellRule = "Write MongoDB shell statements only, such as db.orders.find({ … }).sort({ … }) or "
+        + "db.orders.aggregate([ … ]): no variables, loops, functions or print calls. Put each statement on its own line."
+
     /// The system prompts, each editable in Settings › AI. `{database}` becomes the database's name
-    /// (PostgreSQL, MySQL / MariaDB, SQLite).
+    /// (PostgreSQL, MySQL / MariaDB, SQLite, MongoDB). MongoDB has its own defaults, since it isn't queried with SQL.
     public enum PromptKind: String, CaseIterable, Identifiable, Sendable {
         case chat, generate, fix, inline
         public var id: String { rawValue }
@@ -303,25 +313,54 @@ public enum SQLPrompts {
         }
     }
 
+}
+
+extension SQLPrompts.PromptKind {
+    /// The defaults for MongoDB connections.
+    public var documentTemplate: String {
+        switch self {
+        case .chat:
+            return "You are the MongoDB assistant of a database client. Answer briefly. Put every command in a ```javascript "
+                + "fenced block. \(SQLPrompts.shellRule) Use only collections and fields from the schema. \(SQLPrompts.collectionNamesRule) "
+                + "You can't see the data, only its structure (fields sampled from documents); say so if a question needs the data."
+        case .generate:
+            return "You write MongoDB shell commands for a database client. \(SQLPrompts.shellRule) Use only collections and fields "
+                + "from the schema. \(SQLPrompts.collectionNamesRule) Reply with the commands alone: no explanation, no Markdown "
+                + "fences. Use a comment line (// ...) only when something needs a short note."
+        case .fix:
+            return "You fix MongoDB shell commands. \(SQLPrompts.shellRule) \(SQLPrompts.collectionNamesRule) Reply with the "
+                + "corrected command alone: no explanation, no Markdown fences."
+        case .inline:
+            return "You complete MongoDB shell commands as the user types. \(SQLPrompts.collectionNamesRule) Reply with only the "
+                + "characters to insert at <cursor>, at most one line, nothing else. Reply with an empty message if nothing fits."
+        }
+    }
+}
+
+extension SQLPrompts {
     /// The instructions for a request: the user's own template if set, else the default.
     static func instructions(_ prompt: PromptKind, custom: String?, kind: DatabaseKind) -> String {
-        let template = custom.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? prompt.defaultTemplate
+        let template = custom.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+            ?? (kind.isDocument ? prompt.documentTemplate : prompt.defaultTemplate)
         return template.replacingOccurrences(of: "{database}", with: kind.displayName)
     }
+
+    /// What the prompt calls the user's code.
+    static func language(_ kind: DatabaseKind) -> String { kind.isDocument ? "MongoDB shell commands" : "SQL" }
 
     public static func generate(description: String, current: String?, schema: Schema, kind: DatabaseKind,
                                 instructions custom: String? = nil) -> AIRequest {
         var prompt = "Schema:\n\(schema.text)\n\n"
         if let current, !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            prompt += "Current SQL:\n\(current)\n\nChange it as follows: \(description)"
+            prompt += "Current \(language(kind)):\n\(current)\n\nChange it as follows: \(description)"
         } else {
-            prompt += "Write SQL for: \(description)"
+            prompt += "Write \(language(kind)) for: \(description)"
         }
         return AIRequest(purpose: .generate, instructions: instructions(.generate, custom: custom, kind: kind), prompt: prompt)
     }
 
     public static func fix(sql: String, error: String, schema: Schema, kind: DatabaseKind, instructions custom: String? = nil) -> AIRequest {
-        AIRequest(purpose: .generate, instructions: instructions(.fix, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\nSQL:\n\(sql)\n\nThe server answered:\n\(redacted(error))")
+        AIRequest(purpose: .generate, instructions: instructions(.fix, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\n\(language(kind)):\n\(sql)\n\nThe server answered:\n\(redacted(error))")
     }
 
     /// Database errors can quote row values ("Key (email)=(an@example.com) already exists", "invalid input
@@ -344,7 +383,7 @@ public enum SQLPrompts {
                             schema: Schema, kind: DatabaseKind, instructions custom: String? = nil) -> AIRequest {
         var prompt = "Schema:\n\(schema.text)\n\n"
         if let editorSQL, !editorSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            prompt += "SQL in the editor:\n\(editorSQL.prefix(Defaults.AI.chatEditorLength))\n\n"
+            prompt += "\(language(kind)) in the editor:\n\(editorSQL.prefix(Defaults.AI.chatEditorLength))\n\n"
         }
         if !history.isEmpty {
             prompt += "Conversation so far:\n" + history.map { "\($0.role): \($0.text)" }.joined(separator: "\n\n") + "\n\n"
@@ -358,8 +397,9 @@ public enum SQLPrompts {
     public static func inline(before: String, after: String, schema: Schema, kind: DatabaseKind,
                               instructions custom: String? = nil) -> AIRequest {
         let before = String(before.suffix(Defaults.AI.inlineContextLength)), after = String(after.prefix(Defaults.AI.inlineContextLength / 4))
-        // For fill-in-the-middle models the schema rides along as SQL comments above the text.
-        let header = schema.text.split(separator: "\n").map { "-- \($0)" }.joined(separator: "\n")
+        // For fill-in-the-middle models the schema rides along as comments above the text.
+        let comment = kind.isDocument ? "// " : "-- "
+        let header = schema.text.split(separator: "\n").map { comment + $0 }.joined(separator: "\n")
         let fill = AIRequest.Fill(prefix: header + "\n" + before, suffix: after)
         return AIRequest(purpose: .inline, instructions: instructions(.inline, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)", fill: fill)
     }

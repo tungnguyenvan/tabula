@@ -7,6 +7,8 @@ enum Layout {
     /// Height of the filter, tab and status bars.
     static let barHeight: CGFloat = 28
     static let barPadding: CGFloat = 8
+    /// Characters of a server version shown after a successful connection test.
+    static let versionLength = 48
 
     enum Font {
         /// Bars, captions and secondary labels.
@@ -116,6 +118,11 @@ enum Layout {
         static let workspace = CGSize(width: 1280, height: 800)
         static let connections = CGSize(width: 760, height: 480)
         static let shortcuts = CGSize(width: 760, height: 620)
+    }
+    enum Sheet {
+        static let padding: CGFloat = 16
+        static let documentWidth: CGFloat = 640
+        static let documentHeight: CGFloat = 480
     }
 }
 

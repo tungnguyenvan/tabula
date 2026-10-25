@@ -30,15 +30,15 @@ enum AboutPanel {
             text.append(NSAttributedString(string: string, attributes: attributes))
         }
 
-        add("A fast, native client for PostgreSQL, MySQL / MariaDB, SQLite and Redis.\n")
-        add("Browse and edit tables, write SQL with suggestions, see relationships and server metrics, "
+        add("A fast, native client for PostgreSQL, MySQL / MariaDB, SQLite, MongoDB and Redis.\n")
+        add("Browse and edit tables and collections, write SQL or MongoDB queries with suggestions, see relationships and server metrics, "
             + "and keep several connections in one window. Optional AI assistant: Apple Intelligence, local models, "
             + "or the API or tool of your choice.\n", color: .secondaryLabelColor)
 
         add("Your data\n", bold: true)
         add("Connections are stored on this Mac and passwords in the Keychain. Tabula talks only to your databases, "
-            + "to GitHub for updates, and, if you turn it on, to your AI provider, which receives table and column names "
-            + "and SQL, never rows. No telemetry, no account.\n", color: .secondaryLabelColor)
+            + "to GitHub for updates, and, if you turn it on, to your AI provider, which receives table, collection and "
+            + "field names and your queries, never rows or documents. No telemetry, no account.\n", color: .secondaryLabelColor)
 
         if let repositoryURL {
             add("Website", link: repositoryURL)
@@ -52,7 +52,7 @@ enum AboutPanel {
         add("Keyboard shortcuts: Help › Keyboard Shortcuts (⇧⌘/)\n", color: .secondaryLabelColor)
 
         add("Made by Nguyen Van Tung. Free, under the MIT License.\n", color: .secondaryLabelColor)
-        add("Built with PostgresNIO, MySQLNIO, RediStack, SwiftNIO, swift-nio-ssl, swift-crypto, SQLite and llama.cpp. "
+        add("Built with PostgresNIO, MySQLNIO, RediStack, MongoKitten, SwiftNIO, swift-nio-ssl, swift-crypto, SQLite and llama.cpp. "
             + "Their licenses are in THIRD_PARTY_NOTICES.txt inside the app.", color: .tertiaryLabelColor)
         return text
     }

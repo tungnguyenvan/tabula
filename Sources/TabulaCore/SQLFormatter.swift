@@ -46,6 +46,7 @@ public enum SQLFormatter {
     }
 
     public static func format(_ sql: String, kind: DatabaseKind) -> String {
+        if kind == .mongodb { return MongoStatement.beautify(sql) }
         let tokens = SQLLexer.tokens(sql, kind: kind).filter { $0.kind != .whitespace }
         var out = ""
         var frames = [Frame(level: 0, isSubquery: false)]
@@ -184,6 +185,7 @@ extension SQLDialect {
     /// Adds `LIMIT n` to a plain SELECT that has no LIMIT of its own, so an accidental full-table query stays small.
     /// Anything else (writes, existing LIMIT/FETCH, locking clauses) is returned unchanged.
     public func applyingRowLimit(_ statement: String, limit: Int) -> String {
+        if kind == .mongodb { return MongoStatement.applyingRowLimit(statement, limit: limit) }
         let tokens = SQLLexer.tokens(statement, kind: kind)
         let significant = tokens.filter { $0.kind != .whitespace && $0.kind != .comment }
         guard let first = significant.first, first.keyword == "SELECT" || first.keyword == "WITH" else { return statement }
