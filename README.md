@@ -144,7 +144,9 @@ Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.4.0
 | CPU when idle | 0% |
 | CPU with the metrics tab refreshing every 3 s | about 1% |
 
-Memory is the process footprint reported by macOS (`footprint`), which is also what Activity Monitor shows as Memory. It grows with the number of rows on screen: a 5,000-row page takes more than a 300-row one.
+Memory is the process footprint reported by macOS (`footprint`), which is also what Activity Monitor shows as Memory. A 5,000-row page takes only a few MB more than a 300-row one, because the grid draws just the rows on screen.
+
+**Speed:** [docs/benchmarks.md](docs/benchmarks.md) times connecting, loading pages of 300 to 5,000 rows, sorting, filtering, counting, a 50,000-row result and committing edits on PostgreSQL, MySQL, SQLite, MongoDB and Redis, each with a 100,000-row table. On this Mac a 300-row page loads in 0.2 to 4 ms and a 5,000-row page in 4 to 43 ms, depending on the database.
 
 ## Install
 
@@ -409,7 +411,8 @@ Sources/Tabula       SwiftUI app. ConnectionSession holds a window's connections
                      and SQLEditorView (NSTextView) wrap AppKit for speed and keyboard control; Layout holds the
                      design tokens.
 Tests/TabulaCoreTests
-scripts/             build-app.sh, release.sh, seed-dev.sh, make-icon.swift, third-party-notices.sh
+Sources/TabulaBench  Benchmarks against the test containers (swift run -c release TabulaBench)
+scripts/             build-app.sh, release.sh, seed-dev.sh, benchmark.sh, make-icon.swift, third-party-notices.sh
 ```
 
 **Tests.** Unit tests and SQLite tests always run. The Postgres, MySQL, Redis and MongoDB tests run against real servers when ports are set:
@@ -440,6 +443,8 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 ```
 
 **Debug automation** (debug builds only; none of it is compiled into release builds). `TABULA_DEBUG_OPEN=<connection id>`, `TABULA_DEBUG_EDIT=<connection id>` (open its editor), `TABULA_DEBUG_TABLE` (with `TABULA_DEBUG_DOCUMENT=<row>` for the MongoDB document editor), `TABULA_DEBUG_QUERY`, `TABULA_DEBUG_KEY` and `TABULA_DEBUG_REDIS_CONSOLE` (Redis), `TABULA_DEBUG_DIAGRAM`, `TABULA_DEBUG_METRICS`, `TABULA_DEBUG_CONSOLE`, `TABULA_UPDATE_FEED=<url>` with `TABULA_DEBUG_AUTOINSTALL=1` (test the updater against a local feed), `TABULA_DEBUG_SNAPSHOT=<dir>` (PNG snapshots of every window) and `TABULA_DEBUG_KEYS` (replays key presses such as `"down;return;type:abc;cmd+s"`; note that this brings the app to the front). See `Sources/Tabula/DebugHooks.swift`.
+
+**Benchmarks.** With the test containers running, `scripts/benchmark.sh` times every database (100,000 rows each; `--rows`, `--runs` to change that), measures the app's memory with 300- and 5,000-row pages open, and rewrites [docs/benchmarks.md](docs/benchmarks.md). `swift run -c release TabulaBench --only mongodb` runs just the timings for one database.
 
 **Icon.** `swift scripts/make-icon.swift` regenerates `Resources/AppIcon.icns`.
 

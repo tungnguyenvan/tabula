@@ -31,6 +31,8 @@ let package = Package(
         // llama.cpp, which runs local models inside the app. Fetched by scripts/fetch-llama.sh.
         .binaryTarget(name: "llama", path: "Vendor/llama.xcframework"),
         .executableTarget(name: "Tabula", dependencies: ["TabulaCore"]),
+        // Times the drivers against the test containers: swift run -c release TabulaBench
+        .executableTarget(name: "TabulaBench", dependencies: ["TabulaCore"]),
         .testTarget(name: "TabulaCoreTests", dependencies: ["TabulaCore"]),
     ],
     swiftLanguageModes: [.v5]

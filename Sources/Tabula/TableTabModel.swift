@@ -23,7 +23,7 @@ final class TableTabModel {
     private(set) var resultColumns: [String] = []
     private(set) var rows: [[String?]] = []
     /// MongoDB: each row's whole document, so edits keep field types.
-    private(set) var documents: [String]?
+    private(set) var documents: DocumentTexts?
     private(set) var totalRows: Int?
     private(set) var loading = false
     private(set) var committing = false
@@ -31,7 +31,7 @@ final class TableTabModel {
     private var reloadGeneration = 0
     var error: String?
 
-    var pageSize = 300
+    var pageSize = Defaults.pageSize
     private(set) var offset = 0
     private(set) var orderBy: String?
     private(set) var ascending = true

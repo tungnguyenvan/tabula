@@ -1,5 +1,6 @@
 import BSON
 import Foundation
+import NIOCore
 
 /// Decimal128 (IEEE 754-2008 decimal, binary integer significand) to and from text.
 ///
@@ -19,11 +20,10 @@ enum MongoDecimal {
     static func words(_ decimal: Decimal128) -> (high: UInt64, low: UInt64) {
         var document = Document()
         document.appendValue(decimal, forKey: "v")
-        let bytes = Array(document.makeData())
-        func word(_ start: Int) -> UInt64 {
-            (0..<8).reduce(UInt64(0)) { $0 | UInt64(bytes[start + $1]) << (8 * UInt64($1)) }
-        }
-        return (word(valueOffset + 8), word(valueOffset))
+        let buffer = document.makeByteBuffer()
+        let high = buffer.getInteger(at: buffer.readerIndex + valueOffset + 8, endianness: .little, as: UInt64.self) ?? 0
+        let low = buffer.getInteger(at: buffer.readerIndex + valueOffset, endianness: .little, as: UInt64.self) ?? 0
+        return (high, low)
     }
 
     static func make(high: UInt64, low: UInt64) -> Decimal128? {
