@@ -172,7 +172,8 @@ private struct RedisKeysPane: View {
     @FocusState private var patternFocused: Bool
 
     var body: some View {
-        VSplitView {
+        VerticalSplit(topMinimum: Layout.Redis.keysMinHeight, bottomMinimum: Layout.Redis.valueMinHeight,
+                      topIdeal: Layout.Redis.keysIdealHeight, autosaveName: "RedisKeys") {
             VStack(spacing: 0) {
                 filterBar
                 Divider()
@@ -211,7 +212,7 @@ private struct RedisKeysPane: View {
                 Divider()
                 bottomBar
             }
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Redis.keysMinHeight, idealHeight: Layout.Redis.keysIdealHeight)
+        } bottom: {
 
             Group {
                 if let key = model.keyModel {
@@ -222,7 +223,6 @@ private struct RedisKeysPane: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Redis.valueMinHeight, idealHeight: Layout.Redis.valueIdealHeight)
         }
         .onChange(of: model.patternFocusRequest) { _, _ in model.mode = .keys; patternFocused = true }
     }

@@ -300,13 +300,14 @@ struct StructureView: View {
     let model: TableTabModel
 
     var body: some View {
-        VSplitView {
+        VerticalSplit(topMinimum: Layout.Structure.columnsMinHeight, bottomMinimum: Layout.Structure.indexesMinHeight,
+                      autosaveName: "Structure") {
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.driver.kind.isDocument ? "Fields (from the first \(Defaults.Mongo.sampleSize) documents)" : "Columns")
                     .font(.headline).padding([.horizontal, .top], 10)
                 if model.driver.kind.isDocument { fieldsTable } else { columnsTable }
             }
-            .frame(minHeight: 160)
+        } bottom: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Indexes").font(.headline).padding([.horizontal, .top], 10)
                 Table(model.indexes) {
@@ -319,7 +320,6 @@ struct StructureView: View {
                     TableColumn("Definition") { Text($0.definition ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled) }
                 }
             }
-            .frame(minHeight: 120)
         }
     }
 

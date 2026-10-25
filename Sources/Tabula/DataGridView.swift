@@ -152,6 +152,9 @@ struct DataGridView: NSViewRepresentable {
 
         private func rebuildColumns(_ tableView: NSTableView) {
             tableView.tableColumns.forEach(tableView.removeTableColumn)
+            // Take the new row count before adding columns: each added column makes the table fill in its cells
+            // for the rows it shows, and with the old count those could be rows the new result doesn't have.
+            tableView.reloadData()
             let font = GridCellView.font
             let gutter = NSTableColumn(identifier: Self.gutterID)
             gutter.title = ""
@@ -204,6 +207,8 @@ struct DataGridView: NSViewRepresentable {
                 view.textField?.delegate = self
                 return view
             }()
+            // The table can ask for a cell before it has caught up with a new result (while editing, say).
+            guard row < parent.source.rowCount, column < parent.source.columns.count else { return view }
             view.configure(parent.source.cell(row, column), state: parent.source.state(row, column))
             view.isFocusedCell = row == tableView.selectedRow && tableView.column(withIdentifier: tableColumn.identifier) == focusedColumn
             return view

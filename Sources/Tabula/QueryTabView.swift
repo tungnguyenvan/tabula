@@ -9,7 +9,8 @@ struct QueryTabView: View {
     @State private var selection = IndexSet()
 
     var body: some View {
-        VSplitView {
+        VerticalSplit(topMinimum: Layout.Query.editorMinHeight, bottomMinimum: Layout.Query.resultsMinHeight,
+                      topIdeal: Layout.Query.editorIdealHeight, autosaveName: "QueryEditor") {
             VStack(spacing: 0) {
                 editorBar
                 Divider()
@@ -21,10 +22,8 @@ struct QueryTabView: View {
                               aiSuggestDelay: AIService.shared.settings.provider(for: .inline).runsLocally ? Defaults.AI.localInlineDelay : Defaults.AI.inlineDelay,
                               completionVersion: workspace.completionVersion, undoManager: model.undoManager) { all in run(all: all) }
             }
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.editorMinHeight, idealHeight: Layout.Query.editorIdealHeight)
-
+        } bottom: {
             results
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.resultsMinHeight)
         }
         .onAppear { DispatchQueue.main.async { handle.focus() } }
         .onChange(of: model.runRequest.id) { _, _ in run(all: model.runRequest.all) }

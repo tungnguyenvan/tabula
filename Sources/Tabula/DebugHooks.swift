@@ -61,6 +61,13 @@ enum DebugHooks {
         if let sql = environment["TABULA_DEBUG_QUERY"], case .query(let query) = model.tabs.first {
             query.sql = sql
             Task { await query.run() }
+            // A second query a moment later, e.g. to check how the grid moves to a different result.
+            if let next = environment["TABULA_DEBUG_QUERY_THEN"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    query.sql = next
+                    Task { await query.run() }
+                }
+            }
         }
         if let name = environment["TABULA_DEBUG_TABLE"], let table = model.tables.first(where: { $0.name == name }) {
             model.open(table, mode: environment["TABULA_DEBUG_MODE"] == "structure" ? .structure : .data)
