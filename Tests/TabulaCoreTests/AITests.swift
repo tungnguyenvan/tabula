@@ -228,3 +228,48 @@ final class ShellCommandTests: XCTestCase {
         XCTAssertTrue(sql.lowercased().contains("orders"), sql)
     }
 }
+
+final class LocalModelTests: XCTestCase {
+    func testStoreRefusesFilesThatAreNotGGUF() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-models-\(UUID())")
+        let store = LocalModelStore(directory: directory)
+        let bogus = FileManager.default.temporaryDirectory.appendingPathComponent("bogus-\(UUID()).gguf")
+        try Data("<html>not found</html>".utf8).write(to: bogus)
+        XCTAssertThrowsError(try store.add(bogus))
+        XCTAssertTrue(store.installed().isEmpty)
+        XCTAssertThrowsError(try store.model(from: URL(string: "https://example.com/model.bin")!))
+        XCTAssertEqual(try store.model(from: URL(string: "https://huggingface.co/a/b/resolve/main/m.gguf")!).id, "m.gguf")
+        XCTAssertTrue(LocalModel.catalog.allSatisfy { $0.sha256?.count == 64 && $0.size > 0 })
+    }
+
+    /// Downloads the smallest catalog model (about 490 MB) and runs it in-process.
+    /// Set TABULA_TEST_LOCAL_MODEL=1 (and optionally TABULA_TEST_MODELS_DIR to reuse a download).
+    func testDownloadAndRunLive() async throws {
+        guard ProcessInfo.processInfo.environment["TABULA_TEST_LOCAL_MODEL"] != nil else { throw XCTSkip("TABULA_TEST_LOCAL_MODEL not set") }
+        let directory = ProcessInfo.processInfo.environment["TABULA_TEST_MODELS_DIR"].map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.temporaryDirectory.appendingPathComponent("tabula-models")
+        let store = LocalModelStore(directory: directory)
+        let model = try XCTUnwrap(LocalModel.catalog.first)
+        if !store.isInstalled(model.id) { try await store.download(model) { _ in } }
+        XCTAssertTrue(store.isInstalled(model.id))
+
+        let schema = SQLPrompts.Schema(tables: [.init(name: "dev.transactions", columns: [
+            .init(name: "id", type: "uuid", isPrimaryKey: true), .init(name: "amount", type: "numeric"), .init(name: "created_at", type: "timestamptz"),
+        ])], defaultSchema: "dev")
+        let provider = BuiltInProvider(AIEndpoint(kind: .builtIn, model: model.id), store: store)
+        let start = Date()
+        let reply = try await provider.complete(SQLPrompts.generate(description: "total amount of all transactions", current: nil, schema: schema, kind: .postgres))
+        let sql = SQLPrompts.cleanSQL(reply)
+        print("LOCAL MODEL (\(Int(Date().timeIntervalSince(start) * 1000)) ms): \(sql)")
+        XCTAssertTrue(sql.uppercased().contains("SUM"), sql)
+        XCTAssertTrue(sql.contains("dev.transactions"), sql)
+
+        // Suggestions while typing: one short line, quickly (the model is already loaded).
+        let typingStart = Date()
+        let inline = try await provider.complete(SQLPrompts.inline(before: "SELECT * FROM dev.transactions WHERE ", after: "", schema: schema, kind: .postgres))
+        print("LOCAL INLINE (\(Int(Date().timeIntervalSince(typingStart) * 1000)) ms): \(inline)")
+        XCTAssertFalse(inline.contains("\n\n"))
+        // The app frees the model before quitting too; llama.cpp aborts if Metal resources outlive it.
+        LocalModelRunner.shared.unload()
+    }
+}

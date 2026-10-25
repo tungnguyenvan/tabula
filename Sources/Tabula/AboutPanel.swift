@@ -52,7 +52,7 @@ enum AboutPanel {
         add("Keyboard shortcuts: Help › Keyboard Shortcuts (⇧⌘/)\n", color: .secondaryLabelColor)
 
         add("Made by Nguyen Van Tung. Free, under the MIT License.\n", color: .secondaryLabelColor)
-        add("Built with PostgresNIO, MySQLNIO, RediStack, SwiftNIO, swift-nio-ssl, swift-crypto and SQLite. "
+        add("Built with PostgresNIO, MySQLNIO, RediStack, SwiftNIO, swift-nio-ssl, swift-crypto, SQLite and llama.cpp. "
             + "Their licenses are in THIRD_PARTY_NOTICES.txt inside the app.", color: .tertiaryLabelColor)
         return text
     }

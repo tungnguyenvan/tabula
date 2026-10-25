@@ -30,12 +30,13 @@ public protocol AIProvider: Sendable {
 
 /// The backends Tabula can use.
 public enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case appleIntelligence, ollama, openAICompatible, anthropic, claudeCode, codex
+    case builtIn, appleIntelligence, ollama, openAICompatible, anthropic, claudeCode, codex
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
+        case .builtIn: "Model on this Mac (runs in Tabula)"
         case .appleIntelligence: "Apple Intelligence (on device)"
         case .ollama: "Local model (Ollama)"
         case .openAICompatible: "OpenAI-compatible API (LiteLLM, LM Studio, OpenAI…)"
@@ -55,12 +56,13 @@ public enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendabl
         case .ollama: "http://localhost:11434"
         case .openAICompatible: "http://localhost:4000/v1"
         case .anthropic: "https://api.anthropic.com"
-        case .appleIntelligence, .claudeCode, .codex: ""
+        case .builtIn, .appleIntelligence, .claudeCode, .codex: ""
         }
     }
 
     public var defaultModel: String {
         switch self {
+        case .builtIn: LocalModel.catalog.first { !$0.forTyping }?.id ?? ""
         case .ollama: Defaults.AI.recommendedLocalModels.first { !$0.forTyping }?.name ?? ""
         case .anthropic: "claude-opus-5-5"
         case .openAICompatible, .appleIntelligence, .claudeCode, .codex: ""
@@ -70,6 +72,7 @@ public enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendabl
     /// A faster model for suggestions while typing, when the provider has an obvious one.
     public var defaultInlineModel: String? {
         switch self {
+        case .builtIn: LocalModel.catalog.first { $0.forTyping }?.id
         case .ollama: Defaults.AI.recommendedLocalModels.first { $0.forTyping }?.name
         case .appleIntelligence, .openAICompatible, .anthropic, .claudeCode, .codex: nil
         }
@@ -259,6 +262,24 @@ public enum SQLPrompts {
         return text
     }
 
+    /// One turn of the chat panel: earlier turns, the editor's SQL and the schema come along.
+    public static func chat(question: String, history: [(role: String, text: String)], editorSQL: String?,
+                            schema: Schema, kind: DatabaseKind) -> AIRequest {
+        var prompt = "Schema:\n\(schema.text)\n\n"
+        if let editorSQL, !editorSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            prompt += "SQL in the editor:\n\(editorSQL.prefix(Defaults.AI.chatEditorLength))\n\n"
+        }
+        if !history.isEmpty {
+            prompt += "Conversation so far:\n" + history.map { "\($0.role): \($0.text)" }.joined(separator: "\n\n") + "\n\n"
+        }
+        prompt += "User: \(question)"
+        return AIRequest(purpose: .generate, instructions: """
+            You are the SQL assistant of a \(kind.displayName) database client. Answer briefly. Put every query \
+            in a ```sql fenced block. Use only tables and columns from the schema. \(tableNamesRule) \
+            You can't see the data, only its structure; say so if a question needs the data.
+            """, prompt: prompt)
+    }
+
     /// Asks for the text that continues `before`, placed before `after`. Only the text near the caret is
     /// sent, which keeps the request small and fast.
     public static func inline(before: String, after: String, schema: Schema, kind: DatabaseKind) -> AIRequest {
@@ -301,6 +322,7 @@ public enum SQLPrompts {
 public enum AIProviders {
     public static func make(_ endpoint: AIEndpoint) -> any AIProvider {
         switch endpoint.kind {
+        case .builtIn: BuiltInProvider(endpoint)
         case .appleIntelligence: AppleIntelligenceProvider()
         case .ollama: OllamaProvider(endpoint)
         case .openAICompatible: OpenAICompatibleProvider(endpoint)

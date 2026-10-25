@@ -12,6 +12,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ### Added
 - **AI assistant**, off until turned on in Settings › AI:
+  - **AI chat** in the panel on the right (⌥⌘A): a conversation per connection, aware of the schema and the editor's SQL; queries in answers can be inserted, run or copied.
+  - **Models that run inside Tabula** (llama.cpp), with nothing else to install: light models to download from Settings (checked by SHA-256), any GGUF file added from disk or from a link, per-purpose use and delete. GPU on Apple silicon, CPU on Intel.
   - **Ask AI** (⌘K): write SQL from a description, or change the selected SQL. The result is inserted (or replaces the selection) and can be undone.
   - **Fix with AI** under a failed statement.
   - **Suggestions while typing** from the model when nothing local fits; Tab accepts. They can use their own provider, such as a small local model, while Ask AI uses Claude Code or an API.

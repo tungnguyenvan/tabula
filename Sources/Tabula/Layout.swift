@@ -62,6 +62,12 @@ enum Layout {
         static let rowHeight: CGFloat = 20
     }
 
+    enum Chat {
+        static let spacing: CGFloat = 14
+        static let padding: CGFloat = 10
+        static let inputLines = 6
+    }
+
     enum About {
         static let paragraphSpacing: CGFloat = 6
     }

@@ -24,6 +24,8 @@ final class QueryTabModel {
     var beautifyRequest = 0
     /// Incremented by the menu bar to open the Ask AI bar (⌘K).
     var askAIRequest = 0
+    /// SQL from the chat panel to insert at the caret (the id makes each request distinct).
+    var insertRequest: (sql: String, id: UUID)?
     /// The statement that failed in the last run, for Fix with AI.
     private(set) var failedStatement: String?
 

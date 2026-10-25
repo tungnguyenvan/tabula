@@ -20,6 +20,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DebugHooks.startKeyScript()
         #endif
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // llama.cpp aborts at exit if a model is still loaded on the GPU.
+        LocalModelRunner.shared.unload()
+    }
 }
 
 @main
@@ -262,7 +267,10 @@ struct WorkspaceCommands: Commands {
             Button("Console Log") { workspace?.showConsole.toggle() }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
-            Button("Row Details") { workspace?.showInspector.toggle() }
+            Button("AI Chat") { workspace?.toggleRightPanel(.ai) }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                .disabled(noWorkspace)
+            Button("Row Details") { workspace?.toggleRightPanel(.rowDetails) }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(noWorkspace)
             Divider()

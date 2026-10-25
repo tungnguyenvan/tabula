@@ -97,8 +97,8 @@ Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0
 
 | | |
 | --- | --- |
-| Download | 18 MB (ZIP) |
-| Installed | 62 MB: one universal app for Apple silicon and Intel, about 30 MB per architecture |
+| Download | 18 MB (ZIP) in 0.2; about 28 MB from 0.3, which includes the local-model engine |
+| Installed | 62 MB in 0.2; 88 MB from 0.3 (llama.cpp adds 23 MB). One universal app for Apple silicon and Intel. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
 | Memory, Connections window only | 26 MB |
 | Memory, one Postgres table open (300 rows) | 78 MB |
 | Memory, three connections open (Postgres, MySQL, Redis) | 92 MB |
@@ -197,7 +197,11 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 
 ## AI assistant
 
-AI is off until you turn it on in **Settings › AI** (⌘,). Then, in a query tab:
+AI is off until you turn it on in **Settings › AI** (⌘,). Then:
+
+- **AI chat** (⌥⌘A, or the chat button in the toolbar) opens a conversation in the panel on the right, next to Row Details. Ask for queries, explanations or changes to the SQL in the editor; it remembers the conversation for that connection. Every query in an answer has **Insert**, **Run** and copy buttons.
+
+In a query tab:
 
 - **Ask AI** (⌘K, or the Ask AI button) opens a bar above the editor. Describe what you want ("top 5 customers by order value, with their email") and the SQL is inserted at the cursor. With SQL selected, describe the change instead ("only last month", "add the product name"); the selection is replaced. ⌘Z undoes it.
 - **Fix with AI** appears under an error. It sends the failing statement and the server's message, and replaces the statement with the corrected one.
@@ -209,6 +213,7 @@ Choose where the model runs:
 
 | Provider | Runs | Setup |
 | --- | --- | --- |
+| Model on this Mac | Inside Tabula, offline | Nothing to install. Choose it in Settings › AI, then download a model from the list (Qwen2.5 Coder 0.5B to 7B, Llama 3.2 1B and 3B; from about 490 MB), add any GGUF file you already have, or paste a link to one. Downloads are checked against their published SHA-256. Runs on the GPU on Apple silicon and on the CPU on Intel. |
 | Apple Intelligence | On the Mac, offline | macOS 26 with Apple Intelligence turned on in System Settings |
 | Local model (Ollama) | On the Mac | Install [Ollama](https://ollama.com/download) (it runs the models), then download one from the list in Settings › AI. Light models for suggestions while typing: `qwen2.5-coder:0.5b` (about 0.4 GB), `deepseek-coder:1.3b`, `qwen2.5-coder:1.5b`. For whole queries: `qwen2.5-coder:3b`, `qwen2.5-coder:7b`, `sqlcoder:7b`. Progress shows in Settings; a downloaded model can be used for Ask AI, for suggestions, or deleted. |
 | OpenAI-compatible API | Your server or a provider | Base URL, API key and model: LiteLLM, LM Studio, llama.cpp, vLLM, OpenAI and others |
@@ -263,6 +268,7 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 ## Your data
 
 - **Connection settings** are stored in `~/Library/Application Support/Tabula/connections.json`. This file never contains passwords.
+- **Local models** you download or add live in `~/Library/Application Support/Tabula/Models` (Settings › AI › Show in Finder). Delete them there or from Settings.
 - **Passwords** are stored in the login Keychain, under the service `app.tabula.connections`. Deleting a connection also deletes its password.
 - **Network:** Tabula connects to the databases you configure, and to `api.github.com` / `github.com` to check for and download updates. If you turn on the AI assistant, it also talks to the provider you chose (see [AI assistant](#ai-assistant) for what is sent). There is no telemetry and no account.
 - **Windows:** workspace windows are not restored at launch, so Tabula never reconnects to a database, such as Production, unless you choose to.
@@ -274,6 +280,7 @@ You need macOS 14 or later and Xcode 16 or later (the Swift 6 toolchain).
 
 ```bash
 git clone https://github.com/tungnguyenvan/tabula.git && cd tabula
+./scripts/fetch-llama.sh         # once: the pinned llama.cpp build (checked by SHA-256) into Vendor/
 swift run Tabula                 # debug build, launched directly
 ./scripts/build-app.sh           # release build → dist/Tabula.app (universal)
 ARCHS=arm64 ./scripts/build-app.sh   # faster, Apple silicon only

@@ -34,6 +34,15 @@ enum DebugHooks {
             for table in model.tables { model.open(table) }
             for _ in 0..<count { model.newQueryTab() }
         }
+        if let question = environment["TABULA_DEBUG_CHAT"] {
+            model.rightPanel = .ai
+            model.showInspector = true
+            model.chat.input = question
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                let editor: String? = if case .query(let query) = model.selectedTab { query.sql } else { nil }
+                model.chat.send(workspace: model, editorSQL: editor)
+            }
+        }
         if let prompt = environment["TABULA_DEBUG_ASK"], case .query(let query) = model.tabs.first {
             query.assistant.showPrompt = true
             query.assistant.prompt = prompt

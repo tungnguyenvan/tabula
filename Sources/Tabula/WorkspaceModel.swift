@@ -67,6 +67,23 @@ final class WorkspaceModel {
     var selectedTabID: UUID?
     var history: [String] = []
     var showInspector = false
+    /// What the right-hand panel shows.
+    enum RightPanel: String, CaseIterable, Identifiable {
+        case rowDetails = "Row Details", ai = "AI"
+        var id: String { rawValue }
+    }
+    var rightPanel: RightPanel = .rowDetails
+    let chat = AIChatModel()
+
+    /// Shows `panel` on the right, or hides the panel if it is already showing it.
+    func toggleRightPanel(_ panel: RightPanel) {
+        if showInspector && rightPanel == panel {
+            showInspector = false
+        } else {
+            rightPanel = panel
+            showInspector = true
+        }
+    }
     /// The console log panel under the tabs (⇧⌘C).
     var showConsole = false
     let log = QueryLogModel()

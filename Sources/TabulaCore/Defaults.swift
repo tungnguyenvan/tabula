@@ -55,6 +55,18 @@ public enum Defaults {
         public static let generateMaxTokens = 16000
         public static let inlineTimeout: Double = 15
         public static let generateTimeout: Double = 120
+        /// Built-in local models (llama.cpp): tokens of context, prompt batch size, buffer for one token's
+        /// text, and how long an unused model stays in memory.
+        public static let localContextLength: UInt32 = 8192
+        public static let localBatchSize: UInt32 = 512
+        public static let localPieceLength: Int32 = 256
+        public static let localUnloadDelay: Double = 5 * 60
+        /// Tokens a built-in model may write: a line while typing, a query for Ask AI.
+        public static let localInlineTokens = 48
+        public static let localGenerateTokens = 1024
+        /// Earlier chat messages sent with each question, and characters of the editor's SQL.
+        public static let chatHistoryMessages = 12
+        public static let chatEditorLength = 8000
         /// Characters before the caret sent with an inline request.
         public static let inlineContextLength = 2000
         /// Foreign keys described to the model.

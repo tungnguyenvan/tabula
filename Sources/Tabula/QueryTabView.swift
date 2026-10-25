@@ -30,6 +30,9 @@ struct QueryTabView: View {
         .onChange(of: model.beautifyRequest) { _, _ in handle.beautify(kind: model.driver.kind) }
         .onChange(of: model.askAIRequest) { _, _ in model.assistant.error = nil; model.assistant.showPrompt = true }
         .onChange(of: model.assistant.submitRequest) { _, _ in askAI() }
+        .onChange(of: model.insertRequest?.id) { _, _ in
+            if let sql = model.insertRequest?.sql { handle.insertReplacingSelection(sql) }
+        }
         .onChange(of: model.results.count) { _, _ in selection = [] }
         .onChange(of: model.selectedResult) { _, _ in selection = [] }
     }
