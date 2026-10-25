@@ -361,13 +361,19 @@ extension SQLPrompts {
     }
 
     public static func fix(sql: String, error: String, schema: Schema, kind: DatabaseKind, instructions custom: String? = nil) -> AIRequest {
-        AIRequest(purpose: .generate, instructions: instructions(.fix, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\n\(language(kind)):\n\(sql)\n\nThe server answered:\n\(redacted(error))")
+        AIRequest(purpose: .generate, instructions: instructions(.fix, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\n\(language(kind)):\n\(sql)\n\nThe server answered:\n\(redacted(error, kind: kind))")
     }
 
     /// Database errors can quote row values ("Key (email)=(an@example.com) already exists", "invalid input
-    /// value 'x'"); those are replaced before the message goes to a model. The SQL itself is the user's.
-    public static func redacted(_ error: String) -> String {
+    /// value 'x'", MongoDB's "dup key: { email: \"an@example.com\" }"); those are replaced before the message goes
+    /// to a model. The SQL itself is the user's.
+    public static func redacted(_ error: String, kind: DatabaseKind = .postgres) -> String {
         var text = error
+        if kind.isDocument {
+            text = redactingDuplicateKeys(text)
+            // MongoDB quotes values in double quotes; on SQL databases those are identifiers, worth keeping.
+            text = text.replacingOccurrences(of: #""(?:[^"\\]|\\.)*""#, with: "\"…\"", options: .regularExpression)
+        }
         let patterns = [
             #"\)=\((?:[^()]|\([^()]*\))*\)"#,  // Postgres key details: (column)=(value)
             #"'(?:[^']|'')*'"#,                    // quoted literals (MySQL quotes the values it reports)
@@ -377,6 +383,24 @@ extension SQLPrompts {
             text = text.replacingOccurrences(of: pattern, with: replacement, options: .regularExpression)
         }
         return text
+    }
+
+    /// `dup key: { email: "a@b", n: 5 }` → `dup key: { … }`, braces matched so nested documents go too.
+    private static func redactingDuplicateKeys(_ text: String) -> String {
+        var result = ""
+        var rest = Substring(text)
+        while let marker = rest.range(of: "dup key: {") {
+            result += rest[..<marker.upperBound]
+            var depth = 1
+            var index = marker.upperBound
+            while index < rest.endIndex, depth > 0 {
+                if rest[index] == "{" { depth += 1 } else if rest[index] == "}" { depth -= 1 }
+                index = rest.index(after: index)
+            }
+            result += " … }"
+            rest = rest[index...]
+        }
+        return result + rest
     }
 
     /// One turn of the chat panel: earlier turns, the editor's SQL and the schema come along.

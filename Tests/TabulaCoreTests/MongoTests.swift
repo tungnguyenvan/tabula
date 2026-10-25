@@ -338,6 +338,26 @@ final class MongoIntegrationTests: XCTestCase {
         await driver.close()
     }
 
+    /// TABULA_TEST_MONGO_SRV_SEED: a seed list whose members run a server without authentication, e.g.
+    /// test1.test.build.10gen.cc (MongoDB's test records, pointing at localhost:27017/27018).
+    func testSeedListConnection() async throws {
+        guard let seed = env["TABULA_TEST_MONGO_SRV_SEED"] else { throw XCTSkip("TABULA_TEST_MONGO_SRV_SEED not set") }
+        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, host: seed, tls: .disable, srv: true), password: nil)
+        let version = await driver.serverVersion()
+        XCTAssertTrue(version?.hasPrefix("MongoDB") == true, version ?? "nil")
+        await driver.close()
+    }
+
+    func testUnreachableMembersGiveAReadableError() async throws {
+        do {
+            _ = try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, host: "127.0.0.1:1,127.0.0.1:2", connectTimeout: 5), password: nil)
+            XCTFail("expected a connection error")
+        } catch {
+            let message = error.localizedDescription
+            XCTAssertTrue(message.contains("127.0.0.1:1: Connection refused") && message.contains("127.0.0.1:2: Connection refused"), message)
+        }
+    }
+
     func testUnreachableServerTimesOut() async throws {
         let started = Date()
         do {
@@ -392,14 +412,76 @@ final class MongoReviewFixTests: XCTestCase {
         XCTAssertEqual(MongoChanges.typed("2.5") as? Double, 2.5)
     }
 
-    func testSeedListHonorsTLSMode() throws {
+    func testSeedListHonorsTLSModeAndResolvedMembers() throws {
         let config = ConnectionConfig(kind: .mongodb, host: "cluster0.example.net", tls: .require, srv: true)
-        let settings = try MongoDriver.settings(for: config, password: nil)
+        let settings = try MongoDriver.settings(for: config, password: nil,
+                                                members: [.init(hostname: "shard-00.example.net", port: 27017)])
         XCTAssertTrue(settings.useSSL)
         XCTAssertFalse(settings.verifySSLCertificates)
+        XCTAssertFalse(settings.isSRV)
+        XCTAssertEqual(settings.hosts.map(\.hostname), ["shard-00.example.net"])
+    }
+
+    func testSeedListTargetsMustShareTheParentDomain() throws {
+        let good = [MongoSRV.Target(host: "cluster0-shard-00-00.abcde.mongodb.net.", port: 27017)]
+        XCTAssertNoThrow(try MongoSRV.validate(good, seed: "cluster0.abcde.mongodb.net"))
+        for bad in ["evil.attacker.com", "abcde.mongodb.net", "xabcde.mongodb.net", "mongodb.net"] {
+            XCTAssertThrowsError(try MongoSRV.validate([.init(host: bad, port: 27017)], seed: "cluster0.abcde.mongodb.net"), bad)
+        }
+    }
+
+    func testSRVRecordParsing() throws {
+        // priority 0, weight 5, port 27017, target "a.example.net."
+        var bytes: [UInt8] = [0, 0, 0, 5, 0x69, 0x89, 1, 97, 7]
+        bytes += Array("example".utf8)
+        bytes.append(3)
+        bytes += Array("net".utf8)
+        bytes.append(0)
+        let target = bytes.withUnsafeBytes { MongoSRV.parse($0) }
+        XCTAssertEqual(target, MongoSRV.Target(host: "a.example.net", port: 27017))
+    }
+
+    func testSystemResolverFindsSRVRecords() async throws {
+        guard ProcessInfo.processInfo.environment["TABULA_TEST_NETWORK"] != nil else { throw XCTSkip("TABULA_TEST_NETWORK not set") }
+        // MongoDB's public test records for the SRV specification.
+        let members = try await MongoSRV.resolve("test1.test.build.10gen.cc", timeout: 10)
+        XCTAssertEqual(Set(members.map(\.port)), [27017, 27018])
+        XCTAssertTrue(members.allSatisfy { $0.host == "localhost.test.build.10gen.cc" }, "\(members)")
+        // test19 includes a target in another domain (evil.build.10gen.cc), which must be refused.
+        do {
+            _ = try await MongoSRV.resolve("test19.test.build.10gen.cc", timeout: 10)
+            XCTFail("expected the foreign target to be refused")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("evil.build.10gen.cc"), error.localizedDescription)
+        }
+        // A seed with no MongoDB records resolves to nothing, which is reported rather than hanging.
+        do {
+            _ = try await MongoSRV.resolve("nothing-here.example.com", timeout: 5)
+            XCTFail("expected no records")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("no MongoDB servers") || error.localizedDescription.contains("DNS"),
+                          error.localizedDescription)
+        }
     }
 
     func testReplicaSetURLKeepsPorts() {
         XCTAssertEqual(ConnectionConfig(kind: .mongodb, host: "a,b:27019", port: 27018).url(), "mongodb://a:27018,b:27019")
+    }
+}
+
+final class SplitterSecurityTests: XCTestCase {
+    /// A name starting with a combining mark joins the opening quote into one grapheme; the splitter must still
+    /// see the quote, so nothing inside the name can end the statement.
+    func testCombiningMarkAfterQuoteDoesNotSplit() {
+        let name = "\u{0301});db.adminCommand({createUser:'mallory',pwd:'pw',roles:['root']});//"
+        let mongo = SQLDialect(kind: .mongodb).selectSample(TableRef(schema: "shop", name: name), limit: 100)
+        let statements = SQLSplitter.statements(in: mongo, kind: .mongodb)
+        XCTAssertEqual(statements.map(\.text), [mongo])
+        XCTAssertEqual(SQLSplitter.statement(at: (mongo as NSString).length, in: mongo, kind: .mongodb)?.text, mongo)
+        XCTAssertEqual(try MongoStatement.parse(mongo).collection, name)
+
+        let sqlName = "\u{0301}\"; DROP TABLE users; --"
+        let sql = SQLDialect(kind: .postgres).selectSample(TableRef(schema: "public", name: sqlName), limit: 100)
+        XCTAssertEqual(SQLSplitter.split(sql, kind: .postgres), [String(sql.dropLast())])
     }
 }

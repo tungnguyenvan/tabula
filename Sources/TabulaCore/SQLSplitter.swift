@@ -25,7 +25,9 @@ public enum SQLSplitter {
 
     public static func statements(in script: String, kind: DatabaseKind) -> [Statement] {
         if kind == .mongodb { return MongoSplitter.statements(in: script) }
-        let chars = Array(script)
+        // One element per Unicode scalar, not per grapheme: a combining mark after a quote would otherwise merge
+        // with it into one "character" that isn't a quote, and a crafted name could end the string early.
+        let chars = script.unicodeScalars.map(Character.init)
         // UTF-16 offset of each character, so ranges can be reported in NSString units.
         var utf16Offsets: [Int] = []
         utf16Offsets.reserveCapacity(chars.count + 1)

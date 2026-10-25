@@ -131,16 +131,16 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Size and resource use
 
-Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0 (sizes for 0.4.0). A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
+Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.4.0. Sizes are in decimal megabytes, as Finder and GitHub show them. A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
 
 | | |
 | --- | --- |
-| Download | 29 MB (ZIP) in 0.4 (the MongoDB driver adds 3 MB); 26 MB in 0.3, which added the local-model engine; 18 MB in 0.2 |
-| Installed | 100 MB in 0.4; 88 MB in 0.3 (llama.cpp adds 23 MB); 62 MB in 0.2. One universal app for Apple silicon and Intel. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
-| Memory, Connections window only | 26 MB |
-| Memory, one Postgres table open (300 rows) | 78 MB |
-| Memory, three connections open (Postgres, MySQL, Redis) | 92 MB |
-| Memory, one MongoDB collection open (300 documents; measured on 0.4.0) | 79 MB |
+| Download | 30.5 MB (ZIP). Earlier: 27.5 MB in 0.3.1, 19.3 MB in 0.2.1. |
+| Installed | 104 MB: the app 79 MB and llama.cpp, which runs local models, 24.5 MB. 0.3.1 was 93 MB; the 11 MB since then is MongoDB support (the MongoKitten driver, BSON and Tabula's own MongoDB code). One universal app for Apple silicon and Intel. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
+| Memory, Connections window only | 28 MB |
+| Memory, one Postgres table open (300 rows) | 81 MB |
+| Memory, one MongoDB collection open (300 documents) | 79 MB |
+| Memory, three connections open (Postgres, MySQL, Redis) | 70 MB |
 | CPU when idle | 0% |
 | CPU with the metrics tab refreshing every 3 s | about 1% |
 
@@ -269,7 +269,7 @@ Choose where the model runs:
 
 Add a connection of type **MongoDB**.
 
-- **Host and port**, or several hosts (`a:27017,b:27017`) for a replica set. For Atlas and other DNS seed lists, turn on **DNS seed list (mongodb+srv)** and enter the cluster's host name; TLS is then on by default.
+- **Host and port**, or several hosts (`a:27017,b:27017`) for a replica set; if the first is down, the next is tried. For Atlas and other DNS seed lists, turn on **DNS seed list (mongodb+srv)** and enter the cluster's host name; TLS is then on by default. Tabula looks the seed list up with the Mac's resolver and refuses servers outside the seed's domain, so a spoofed DNS answer can't redirect the connection. Options published in the seed list's TXT record are not read; set the auth database yourself if it isn't `admin`.
 - **User and password** are optional. **Auth database** is where the user is defined (`authSource`), `admin` when left empty. **Database** is the one to open first (`test` when empty); every database you may list appears in the sidebar's picker.
 - Authentication is SCRAM-SHA-1 or SCRAM-SHA-256, chosen with the server. X.509, LDAP and Kerberos aren't supported.
 
@@ -430,7 +430,7 @@ TABULA_TEST_PG_PORT=55432 TABULA_TEST_MYSQL_PORT=53306 TABULA_TEST_REDIS_PORT=56
 TABULA_TEST_MONGO_PORT=57017 TABULA_TEST_NETWORK=1 swift test
 ```
 
-`TABULA_TEST_NETWORK=1` also checks the live GitHub release feed. `TABULA_TEST_MONGO_PORT` can also point at a replica set (user and password `tabula`), and `TABULA_TEST_MONGO_PLAIN_PORT` at a server without authentication.
+`TABULA_TEST_NETWORK=1` also checks the live GitHub release feed. `TABULA_TEST_MONGO_PORT` can also point at a replica set (user and password `tabula`), and `TABULA_TEST_MONGO_PLAIN_PORT` at a server without authentication. With `TABULA_TEST_NETWORK=1` the seed-list checks use MongoDB's public test records, and `TABULA_TEST_MONGO_SRV_SEED=test1.test.build.10gen.cc` connects through them to a server without authentication on `localhost:27017`.
 
 **Sample data.** This creates a SQLite file, plus Postgres, MySQL, Redis and MongoDB data if the containers above are running, in a separate store that leaves your real connections alone. Debug builds read that store's passwords from `passwords.json`, so test runs never touch your Keychain:
 

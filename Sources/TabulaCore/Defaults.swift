@@ -53,6 +53,8 @@ public enum Defaults {
         public static let statsCollectionLimit = 500
         /// Seconds the per-collection sizes are reused between metrics samples.
         public static let statsRefreshInterval: Double = 60
+        /// A seed list name has at least this many labels (cluster0.example.net), per the SRV specification.
+        public static let srvMinimumLabels = 3
         /// Database that authenticates the user when the connection names none (the drivers' default).
         public static let authDatabase = "admin"
     }

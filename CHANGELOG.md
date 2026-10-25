@@ -8,6 +8,20 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - SSH tunnels
 - Cancelling a running query
 
+## [0.4.1] - 2026-10-25
+
+### Security
+- Running a statement from the editor could split a table or collection name into two statements when the name began with a combining accent (for example U+0301 right after the opening quote). A crafted name created by another database user could then run a command of its own, such as creating a user, when "New Query" was run from its context menu. Statements are now split by Unicode scalar, so names always stay inside their quotes. This affected SQL databases as well as MongoDB.
+- MongoDB seed lists (`mongodb+srv`) are now resolved with the Mac's own resolver, and every server they name must be in the seed's domain. Previously a spoofed DNS answer could send the connection to another host with a valid certificate of its own.
+- Fix with AI no longer sends values from MongoDB errors (the existing document in a duplicate key, quoted values) to the AI provider.
+
+### Fixed
+- A MongoDB replica set or seed list whose first member is down now connects through the next one.
+- MongoDB connection errors read "host:port: Connection refused" instead of a nested error structure.
+
+### Changed
+- README: sizes and memory use measured on 0.4.0, in decimal megabytes.
+
 ## [0.4.0] - 2026-10-25
 
 ### Added

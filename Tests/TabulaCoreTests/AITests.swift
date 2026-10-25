@@ -73,6 +73,13 @@ final class SQLPromptsTests: XCTestCase {
                        #"duplicate key value violates unique constraint "users_email_key" DETAIL: Key (email)=(…) already exists."#)
         XCTAssertEqual(SQLPrompts.redacted("invalid input syntax for type integer: 'abc'"), "invalid input syntax for type integer: '…'")
         XCTAssertEqual(SQLPrompts.redacted("Incorrect integer value: 'x1' for column 'age'"), "Incorrect integer value: '…' for column '…'")
+        // MongoDB reports the existing document's values in the duplicate key, in double quotes.
+        let duplicate = #"E11000 duplicate key error collection: shop.users index: email_1 dup key: { email: "ann@example.com", n: { a: 5 } }"#
+        XCTAssertEqual(SQLPrompts.redacted(duplicate, kind: .mongodb),
+                       "E11000 duplicate key error collection: shop.users index: email_1 dup key: { … }")
+        XCTAssertEqual(SQLPrompts.redacted(#"Document failed validation: ssn "123-45-6789""#, kind: .mongodb),
+                       #"Document failed validation: ssn "…""#)
+        XCTAssertEqual(SQLPrompts.redacted(#"relation "orders" does not exist"#), #"relation "orders" does not exist"#)
         let fix = SQLPrompts.fix(sql: "INSERT INTO users VALUES (1, 'an@example.com')", error: "Key (id)=(1) already exists.",
                                  schema: SQLPrompts.Schema(tables: []), kind: .postgres)
         XCTAssertFalse(fix.prompt.contains("Key (id)=(1)"))
