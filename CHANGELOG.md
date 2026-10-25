@@ -12,7 +12,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ### Added
 - **AI assistant**, off until turned on in Settings › AI:
-  - **AI chat** in the panel on the right (⌥⌘A): a conversation per connection, aware of the schema and the editor's SQL; queries in answers can be inserted, run or copied.
+  - **AI chat** in the panel on the right (⌥⌘A): a conversation per connection, aware of the schema and the editor's SQL; queries in answers can be inserted, run or copied. A model menu under the message field switches models.
+  - With AI suggestions on, the grey suggestion comes from the model only. Models on this Mac complete by filling in the middle (prefix and suffix around the cursor), answer in well under a second, and stop on runaway repetition.
   - **Models that run inside Tabula** (llama.cpp), with nothing else to install: light models to download from Settings (checked by SHA-256), any GGUF file added from disk or from a link, per-purpose use and delete. GPU on Apple silicon, CPU on Intel.
   - **Ask AI** (⌘K): write SQL from a description, or change the selected SQL. The result is inserted (or replaces the selection) and can be undone.
   - **Fix with AI** under a failed statement.

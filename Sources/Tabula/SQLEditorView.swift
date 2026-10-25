@@ -113,6 +113,8 @@ struct SQLEditorView: NSViewRepresentable {
     typealias AISuggest = @MainActor (_ before: String, _ after: String) async -> String?
     /// Asks a model for a continuation when the user pauses typing; nil when AI suggestions are off.
     var aiSuggest: AISuggest?
+    /// Pause before asking: short for models on this Mac, longer for remote ones.
+    var aiSuggestDelay: Double = Defaults.AI.inlineDelay
     /// Changes when completion has learned new names; the editor then refreshes its suggestion.
     var completionVersion = 0
     /// Each query tab keeps its own undo history.
@@ -232,6 +234,13 @@ final class SQLTextView: NSTextView {
         aiTask?.cancel()
         let caret = selectedRange()
         guard typedCharacter, caret.length == 0, let coordinator else { inlineSuggestion = nil; return }
+        // With AI suggestions on, the grey text comes from the model only; the completion list (⎋) still
+        // offers tables, columns and keywords.
+        if coordinator.parent.aiSuggest != nil {
+            inlineSuggestion = nil
+            scheduleAISuggestion()
+            return
+        }
         let (range, items) = coordinator.parent.suggest(string, caret.location)
         let partial = (string as NSString).substring(with: range)
         // Only complete at the end of a word, never in the middle of one.
@@ -242,7 +251,6 @@ final class SQLTextView: NSTextView {
         let afterDot = caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
         guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else {
             inlineSuggestion = nil
-            if !nextIsWord { scheduleAISuggestion() }
             return
         }
         inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
@@ -250,19 +258,32 @@ final class SQLTextView: NSTextView {
 
     private var aiTask: Task<Void, Never>?
 
-    /// When nothing local fits, asks the model once typing pauses. Any keystroke or caret move cancels it,
-    /// and the answer is only shown if the text and caret are exactly as they were.
+    /// The last answer, so returning to the same text and caret (e.g. typing then deleting a character)
+    /// shows it again without asking.
+    private var lastAnswer: (text: String, location: Int, suggestion: String)?
+
+    /// Asks the model once typing pauses. Any keystroke or caret move cancels it, and the answer is only
+    /// shown if the text and caret are exactly as they were. Not in the middle of a word.
     private func scheduleAISuggestion() {
-        guard let ai = coordinator?.parent.aiSuggest else { return }
+        guard let parent = coordinator?.parent, let ai = parent.aiSuggest else { return }
         let location = selectedRange().location
         let text = string
+        let full = text as NSString
+        let nextIsWord = location < full.length
+            && full.substring(with: NSRange(location: location, length: 1)).rangeOfCharacter(from: .alphanumerics) != nil
+        guard !nextIsWord else { return }
+        if let lastAnswer, lastAnswer.text == text, lastAnswer.location == location {
+            inlineSuggestion = (location, lastAnswer.suggestion)
+            return
+        }
+        let delay = parent.aiSuggestDelay
         aiTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(Defaults.AI.inlineDelay))
+            try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
-            let full = text as NSString
             let suggestion = await ai(full.substring(to: location), full.substring(from: location))
             guard let self, !Task.isCancelled, let suggestion, self.string == text,
                   self.selectedRange() == NSRange(location: location, length: 0) else { return }
+            self.lastAnswer = (text, location, suggestion)
             self.inlineSuggestion = (location, suggestion)
         }
     }

@@ -9,14 +9,22 @@ public struct AIRequest: Sendable, Equatable {
         case inline
     }
 
+    /// Text around the caret, for models that complete code by filling in the middle.
+    public struct Fill: Sendable, Equatable {
+        public var prefix: String
+        public var suffix: String
+    }
+
     public var purpose: Purpose
     public var instructions: String
     public var prompt: String
+    public var fill: Fill?
 
-    public init(purpose: Purpose, instructions: String, prompt: String) {
+    public init(purpose: Purpose, instructions: String, prompt: String, fill: Fill? = nil) {
         self.purpose = purpose
         self.instructions = instructions
         self.prompt = prompt
+        self.fill = fill
     }
 
     var maxTokens: Int { purpose == .inline ? Defaults.AI.inlineMaxTokens : Defaults.AI.generateMaxTokens }
@@ -45,6 +53,17 @@ public enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendabl
         case .codex: "Codex (installed CLI)"
         }
     }
+
+    /// Models offered in the chat panel's picker, newest first, as (id, display name).
+    public var suggestedModels: [(id: String, name: String)] {
+        switch self {
+        case .anthropic: [("claude-opus-5-5", "Claude Opus 5.5"), ("claude-sonnet-5-5", "Claude Sonnet 5.5"), ("claude-haiku-5-5", "Claude Haiku 5.5")]
+        case .builtIn, .appleIntelligence, .ollama, .openAICompatible, .claudeCode, .codex: []
+        }
+    }
+
+    /// Runs on this Mac, so suggestions can be asked for after a shorter pause.
+    public var runsLocally: Bool { self == .builtIn || self == .appleIntelligence || self == .ollama }
 
     /// Whether the backend answers quickly enough to suggest as you type.
     public var supportsInline: Bool { self != .claudeCode && self != .codex }
@@ -284,10 +303,13 @@ public enum SQLPrompts {
     /// sent, which keeps the request small and fast.
     public static func inline(before: String, after: String, schema: Schema, kind: DatabaseKind) -> AIRequest {
         let before = String(before.suffix(Defaults.AI.inlineContextLength)), after = String(after.prefix(Defaults.AI.inlineContextLength / 4))
+        // For fill-in-the-middle models the schema rides along as SQL comments above the text.
+        let header = schema.text.split(separator: "\n").map { "-- \($0)" }.joined(separator: "\n")
+        let fill = AIRequest.Fill(prefix: header + "\n" + before, suffix: after)
         return AIRequest(purpose: .inline, instructions: """
             You complete \(kind.displayName) SQL as the user types. \(tableNamesRule) Reply with only the characters to insert at \
             <cursor>, at most one line, nothing else. Reply with an empty message if nothing fits.
-            """, prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)")
+            """, prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)", fill: fill)
     }
 
     /// Removes Markdown fences and chatter that models add despite instructions.
@@ -314,7 +336,12 @@ public enum SQLPrompts {
         }
         // Don't double the space the user already typed.
         if before.last?.isWhitespace == true { line = String(line.drop(while: { $0 == " " })) }
-        return line
+        // A run of one repeated character is a model looping, not SQL.
+        while let last = line.last, line.hasSuffix(String(repeating: last, count: 4)), last.isNumber || last.isLetter {
+            line = String(line.dropLast(line.reversed().prefix(while: { $0 == last }).count))
+            line = line.trimmingCharacters(in: .whitespaces)
+        }
+        return String(line.prefix(Defaults.AI.inlineMaxCharacters))
     }
 }
 

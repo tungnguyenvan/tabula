@@ -18,6 +18,7 @@ struct QueryTabView: View {
                     Divider()
                 }
                 SQLEditorView(text: $model.sql, handle: handle, kind: model.driver.kind, suggest: suggest, aiSuggest: aiSuggest,
+                              aiSuggestDelay: AIService.shared.settings.provider(for: .inline).runsLocally ? Defaults.AI.localInlineDelay : Defaults.AI.inlineDelay,
                               completionVersion: workspace.completionVersion, undoManager: model.undoManager) { all in run(all: all) }
             }
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.editorMinHeight, idealHeight: Layout.Query.editorIdealHeight)
@@ -224,9 +225,10 @@ struct QueryTabView: View {
         guard AIService.shared.suggestsInline(for: workspace.config) else { return nil }
         let kind = model.driver.kind
         return { [workspace] before, after in
-            // Columns only for the tables this statement uses; the rest by name, to keep typing fast.
+            // Columns only for the tables this statement uses (the rest by name, to keep typing fast); before
+            // it names any, every table's columns, so the model doesn't invent some.
             let used = Set(SQLCompletion.tables(in: before + after, kind: kind).map { $0.name.lowercased() })
-            let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(focus: used), kind: kind)
+            let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(focus: used.isEmpty ? nil : used), kind: kind)
             guard let reply = try? await AIService.shared.complete(request) else { return nil }
             let continuation = SQLPrompts.cleanContinuation(reply, before: before)
             return continuation.isEmpty ? nil : continuation

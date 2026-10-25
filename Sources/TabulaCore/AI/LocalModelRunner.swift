@@ -41,6 +41,24 @@ public final class LocalModelRunner: @unchecked Sendable {
         }
     }
 
+    /// Code completion the way coding models are trained for it ("fill in the middle"): the text before
+    /// and after the caret go in, the model writes what belongs between. Nil when the model has no
+    /// fill-in-the-middle tokens; use `generate` then.
+    public func fill(path: String, prefix: String, suffix: String, maxTokens: Int) async throws -> String? {
+        let cancelled = CancelFlag()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                queue.async {
+                    continuation.resume(with: Result {
+                        try self.runFill(path: path, prefix: prefix, suffix: suffix, maxTokens: maxTokens, cancelled: cancelled)
+                    })
+                }
+            }
+        } onCancel: {
+            cancelled.set()
+        }
+    }
+
     /// Releases the model now (e.g. before its file is deleted).
     public func unload() {
         queue.sync { release() }
@@ -56,8 +74,29 @@ public final class LocalModelRunner: @unchecked Sendable {
         guard let vocab = llama_model_get_vocab(model) else { throw AIError.server("The model has no vocabulary.") }
         llama_memory_clear(llama_get_memory(context), true)
 
-        var tokens = tokenize(chat(model: model, instructions: instructions, prompt: prompt), vocab: vocab)
-        // Keep the end of an over-long prompt (the question is last) and leave room for the answer.
+        let tokens = tokenize(chat(model: model, instructions: instructions, prompt: prompt), vocab: vocab, special: true)
+        return try complete(tokens, context: context, vocab: vocab, maxTokens: maxTokens, stopAtNewline: stopAtNewline, cancelled: cancelled)
+    }
+
+    private func runFill(path: String, prefix: String, suffix: String, maxTokens: Int, cancelled: CancelFlag) throws -> String? {
+        unloadWork?.cancel()
+        defer { scheduleUnload() }
+        let (model, context) = try load(path)
+        guard let vocab = llama_model_get_vocab(model) else { throw AIError.server("The model has no vocabulary.") }
+        let pre = llama_vocab_fim_pre(vocab), suf = llama_vocab_fim_suf(vocab), mid = llama_vocab_fim_mid(vocab)
+        guard pre >= 0, suf >= 0, mid >= 0 else { return nil }
+        llama_memory_clear(llama_get_memory(context), true)
+        // <fim_prefix>before<fim_suffix>after<fim_middle> - the user's text is never parsed for special tokens.
+        let tokens = [pre] + tokenize(prefix, vocab: vocab, special: false) + [suf] + tokenize(suffix, vocab: vocab, special: false) + [mid]
+        return try complete(tokens, context: context, vocab: vocab, maxTokens: maxTokens, stopAtNewline: true, cancelled: cancelled)
+    }
+
+    /// Feeds `prompt` to the model and samples up to `maxTokens` tokens of answer.
+    private func complete(_ prompt: [llama_token], context: OpaquePointer, vocab: OpaquePointer, maxTokens: Int,
+                          stopAtNewline: Bool, cancelled: CancelFlag) throws -> String {
+        var tokens = prompt
+        // Keep the end of an over-long prompt (the question, or the text at the caret, is last) and leave
+        // room for the answer.
         let room = Int(llama_n_ctx(context)) - maxTokens - 1
         guard room > 0 else { throw AIError.server("The model's context is too small.") }
         if tokens.count > room { tokens = Array(tokens.suffix(room)) }
@@ -85,10 +124,17 @@ public final class LocalModelRunner: @unchecked Sendable {
 
         var output = Data()
         var piece = [CChar](repeating: 0, count: Int(Defaults.AI.localPieceLength))
+        let fimPad = llama_vocab_fim_pad(vocab)
+        var previous: llama_token = -1
+        var repeats = 0
         for _ in 0..<maxTokens {
             if cancelled.isSet { throw CancellationError() }
             var token = llama_sampler_sample(sampler, context, -1)
-            if llama_vocab_is_eog(vocab, token) { break }
+            if llama_vocab_is_eog(vocab, token) || (fimPad >= 0 && token == fimPad) { break }
+            // Small models sometimes loop on one token ("1000000…"); stop before the run gets long.
+            repeats = token == previous ? repeats + 1 : 0
+            previous = token
+            if repeats >= Defaults.AI.localRepeatLimit { break }
             let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, false)
             if length > 0 { output.append(contentsOf: piece[0..<Int(length)].map { UInt8(bitPattern: $0) }) }
             if stopAtNewline, output.contains(UInt8(ascii: "\n")) { break }
@@ -163,13 +209,15 @@ public final class LocalModelRunner: @unchecked Sendable {
         }
     }
 
-    private func tokenize(_ text: String, vocab: OpaquePointer) -> [llama_token] {
+    /// `special`: the text is a prompt we built (chat template markup, BOS); off for the user's own text.
+    private func tokenize(_ text: String, vocab: OpaquePointer, special: Bool) -> [llama_token] {
         let utf8 = Array(text.utf8CString.dropLast())
+        guard !utf8.isEmpty else { return [] }
         var tokens = [llama_token](repeating: 0, count: utf8.count + 16)
-        var count = llama_tokenize(vocab, utf8, Int32(utf8.count), &tokens, Int32(tokens.count), true, true)
+        var count = llama_tokenize(vocab, utf8, Int32(utf8.count), &tokens, Int32(tokens.count), special, special)
         if count < 0 {
             tokens = [llama_token](repeating: 0, count: Int(-count))
-            count = llama_tokenize(vocab, utf8, Int32(utf8.count), &tokens, Int32(tokens.count), true, true)
+            count = llama_tokenize(vocab, utf8, Int32(utf8.count), &tokens, Int32(tokens.count), special, special)
         }
         return Array(tokens.prefix(Int(max(0, count))))
     }

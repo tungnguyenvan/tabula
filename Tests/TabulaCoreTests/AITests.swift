@@ -264,11 +264,14 @@ final class LocalModelTests: XCTestCase {
         XCTAssertTrue(sql.uppercased().contains("SUM"), sql)
         XCTAssertTrue(sql.contains("dev.transactions"), sql)
 
-        // Suggestions while typing: one short line, quickly (the model is already loaded).
-        let typingStart = Date()
-        let inline = try await provider.complete(SQLPrompts.inline(before: "SELECT * FROM dev.transactions WHERE ", after: "", schema: schema, kind: .postgres))
-        print("LOCAL INLINE (\(Int(Date().timeIntervalSince(typingStart) * 1000)) ms): \(inline)")
-        XCTAssertFalse(inline.contains("\n\n"))
+        // Suggestions while typing: fill in the middle, one short line, quickly (the model is loaded).
+        for before in ["SELECT * FROM dev.transactions WHERE ", "SELECT SUM(amount) FROM dev.transactions WHERE created_at >= ", "SELECT id, amo"] {
+            let typingStart = Date()
+            let raw = try await provider.complete(SQLPrompts.inline(before: before, after: "", schema: schema, kind: .postgres))
+            let inline = SQLPrompts.cleanContinuation(raw, before: before)
+            print("LOCAL INLINE (\(Int(Date().timeIntervalSince(typingStart) * 1000)) ms): \(before)⟨\(inline)⟩")
+            XCTAssertFalse(inline.contains("\n"))
+        }
         // The app frees the model before quitting too; llama.cpp aborts if Metal resources outlive it.
         LocalModelRunner.shared.unload()
     }

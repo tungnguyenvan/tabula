@@ -49,8 +49,10 @@ public enum Defaults {
     }
 
     public enum AI {
-        /// Pause after the last keystroke before asking a model for an inline suggestion.
+        /// Pause after the last keystroke before asking a model for an inline suggestion: remote providers,
+        /// and models on this Mac (fast enough to ask sooner).
         public static let inlineDelay: Double = 0.6
+        public static let localInlineDelay: Double = 0.25
         public static let inlineMaxTokens = 1024
         public static let generateMaxTokens = 16000
         public static let inlineTimeout: Double = 15
@@ -63,6 +65,10 @@ public enum Defaults {
         public static let localUnloadDelay: Double = 5 * 60
         /// Tokens a built-in model may write: a line while typing, a query for Ask AI.
         public static let localInlineTokens = 48
+        /// A token repeated this many times in a row ends the answer.
+        public static let localRepeatLimit = 3
+        /// Longest suggestion shown while typing.
+        public static let inlineMaxCharacters = 120
         public static let localGenerateTokens = 1024
         /// Earlier chat messages sent with each question, and characters of the editor's SQL.
         public static let chatHistoryMessages = 12

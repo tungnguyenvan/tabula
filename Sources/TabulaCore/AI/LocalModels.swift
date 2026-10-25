@@ -172,8 +172,14 @@ public struct BuiltInProvider: AIProvider {
         guard store.isInstalled(endpoint.model) else {
             throw AIError.notConfigured("\(endpoint.model) isn't downloaded yet. Download it in Settings › AI.")
         }
+        let path = store.path(for: endpoint.model).path
+        if request.purpose == .inline, let fill = request.fill,
+           let completion = try await LocalModelRunner.shared.fill(path: path, prefix: fill.prefix, suffix: fill.suffix,
+                                                                   maxTokens: Defaults.AI.localInlineTokens) {
+            return completion
+        }
         return try await LocalModelRunner.shared.generate(
-            path: store.path(for: endpoint.model).path, instructions: request.instructions, prompt: request.prompt,
+            path: path, instructions: request.instructions, prompt: request.prompt,
             maxTokens: request.purpose == .inline ? Defaults.AI.localInlineTokens : Defaults.AI.localGenerateTokens,
             stopAtNewline: request.purpose == .inline)
     }
