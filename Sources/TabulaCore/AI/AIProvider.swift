@@ -34,6 +34,9 @@ public struct AIRequest: Sendable, Equatable {
 /// implements this, so the editor doesn't care which one the user picked.
 public protocol AIProvider: Sendable {
     func complete(_ request: AIRequest) async throws -> String
+    /// The answer as it is generated, with the model's reasoning when it shares it. Backends that can't
+    /// stream send the whole answer at the end (see the default in AIStreaming.swift).
+    func stream(_ request: AIRequest) -> AIStream
 }
 
 /// The backends Tabula can use.

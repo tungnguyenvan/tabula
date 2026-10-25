@@ -91,6 +91,14 @@ final class AIService {
         return try await AIProviders.make(endpoint).complete(request)
     }
 
+    /// The answer as the model writes it, with its reasoning when the provider shares it.
+    func stream(_ request: AIRequest) async -> AIStream {
+        let settings = settings
+        let kind = settings.provider(for: request.purpose)
+        let endpoint = settings.endpoint(for: request.purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : "")
+        return AIProviders.make(endpoint).stream(request)
+    }
+
     /// A tiny round trip, for the Test buttons in Settings.
     func test(_ purpose: AIRequest.Purpose) async throws -> String {
         let reply = try await complete(AIRequest(purpose: purpose, instructions: "Reply with the single word OK.", prompt: "Say OK."))

@@ -9,10 +9,18 @@ final class AIChatModel {
         enum Role { case user, assistant }
         let id = UUID()
         let role: Role
-        let text: String
+        var text: String
+        /// The model's reasoning, when the provider shares it.
+        var thinking = ""
+        /// Seconds of reasoning before the answer began.
+        var thoughtFor: TimeInterval?
+        /// Still arriving.
+        var streaming = false
     }
 
     private(set) var messages: [Message] = []
+    /// Bumped as a streamed answer grows, so the list can follow it.
+    private(set) var revision = 0
     var input = ""
     private(set) var busy = false
     var error: String?
@@ -32,19 +40,83 @@ final class AIChatModel {
         error = nil
         busy = true
         let kind = workspace.driver?.kind ?? workspace.config.kind
+        let reply = Message(role: .assistant, text: "", streaming: true)
+        messages.append(reply)
         task = Task {
-            defer { busy = false }
+            defer {
+                busy = false
+                update(reply.id) { $0.streaming = false }
+                // Nothing came back (an error before the first token): no empty bubble.
+                if let index = messages.firstIndex(where: { $0.id == reply.id }), messages[index].text.isEmpty, messages[index].thinking.isEmpty {
+                    messages.remove(at: index)
+                }
+            }
             do {
                 let schema = await workspace.loadedAISchema(for: [editorSQL ?? "", question].joined(separator: "\n"))
                 let request = SQLPrompts.chat(question: question, history: history, editorSQL: editorSQL, schema: schema, kind: kind,
                 instructions: AIService.shared.settings.instructions(.chat))
-                let reply = try await AIService.shared.complete(request)
-                guard !Task.isCancelled else { return }
-                messages.append(Message(role: .assistant, text: reply.trimmingCharacters(in: .whitespacesAndNewlines)))
+                try await receive(AIService.shared.stream(request), into: reply.id)
             } catch {
                 if !Task.isCancelled { self.error = error.localizedDescription }
             }
         }
+    }
+
+    /// Appends the stream to the message, redrawing a few times a second rather than for every token.
+    private func receive(_ stream: AIStream, into id: UUID) async throws {
+        let started = Date()
+        var lastRefresh = Date.distantPast
+        var text = "", thinking = ""
+        func flush() {
+            update(id) { message in
+                message.thinking += thinking
+                message.text += text
+                if message.thoughtFor == nil, !message.thinking.isEmpty, !message.text.isEmpty {
+                    message.thoughtFor = Date().timeIntervalSince(started)
+                }
+            }
+            text = ""
+            thinking = ""
+            lastRefresh = Date()
+            revision += 1
+        }
+        for try await event in stream {
+            switch event {
+            case .text(let piece): text += piece
+            case .thinking(let piece): thinking += piece
+            }
+            if Date().timeIntervalSince(lastRefresh) >= Defaults.AI.streamRefreshInterval { flush() }
+        }
+        flush()
+        update(id) { $0.text = $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    #if DEBUG
+    /// Plays a made-up answer at a steady pace, to look at how streaming and reasoning are shown.
+    func simulate(question: String, thinking: String, answer: String, piece: Duration) {
+        messages.append(Message(role: .user, text: question))
+        let reply = Message(role: .assistant, text: "", streaming: true)
+        messages.append(reply)
+        busy = true
+        task = Task {
+            defer { busy = false; update(reply.id) { $0.streaming = false } }
+            let stream = AIStream { continuation in
+                Task {
+                    for word in thinking.split(separator: " ") { try await Task.sleep(for: piece); continuation.yield(.thinking(word + " ")) }
+                    for word in answer.split(separator: " ", omittingEmptySubsequences: false) {
+                        try await Task.sleep(for: piece); continuation.yield(.text(word + " "))
+                    }
+                    continuation.finish()
+                }
+            }
+            try? await receive(stream, into: reply.id)
+        }
+    }
+    #endif
+
+    private func update(_ id: UUID, _ change: (inout Message) -> Void) {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
+        change(&messages[index])
     }
 
     func stop() {
@@ -107,10 +179,7 @@ struct AIChatView: View {
                         ForEach(chat.messages) { message in
                             MessageView(message: message, insert: insert, run: run).id(message.id)
                         }
-                        if chat.busy {
-                            HStack { ProgressView().controlSize(.small); Text("Thinking…").foregroundStyle(.secondary) }
-                                .id("busy")
-                        }
+
                         if let error = chat.error {
                             Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled)
                         }
@@ -120,8 +189,9 @@ struct AIChatView: View {
                 .onChange(of: chat.messages.count) { _, _ in
                     if let last = chat.messages.last?.id { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
                 }
-                .onChange(of: chat.busy) { _, busy in
-                    if busy { withAnimation { proxy.scrollTo("busy", anchor: .bottom) } }
+                // Follow an answer as it streams in.
+                .onChange(of: chat.revision) { _, _ in
+                    if let last = chat.messages.last?.id { proxy.scrollTo(last, anchor: .bottom) }
                 }
             }
             Divider()
@@ -206,12 +276,30 @@ private struct MessageView: View {
     let insert: (String) -> Void
     let run: (String) -> Void
 
+    /// Set when the user opens or closes the reasoning; until then it is open while the model thinks.
+    @State private var showThinking: Bool?
+
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding) {
             Text(message.role == .user ? "You" : "AI").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             if message.role == .user {
                 Text(message.text).textSelection(.enabled)
             } else {
+                if !message.thinking.isEmpty {
+                    DisclosureGroup(isExpanded: Binding(get: { showThinking ?? (message.streaming && message.text.isEmpty) },
+                                                        set: { showThinking = $0 })) {
+                        // Selectable text ignores hierarchical styles; the system's secondary label color sets it apart.
+                        Text(message.thinking.trimmingCharacters(in: .whitespacesAndNewlines))
+                            .font(.callout)
+                            .foregroundColor(Color(nsColor: .secondaryLabelColor))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Label(thinkingTitle, systemImage: "brain").font(.callout).foregroundStyle(.secondary)
+                    }
+                } else if message.streaming && message.text.isEmpty {
+                    HStack { ProgressView().controlSize(.small); Text("Thinking…").foregroundStyle(.secondary) }
+                }
                 ForEach(Array(ChatSegment.split(message.text).enumerated()), id: \.offset) { _, segment in
                     switch segment {
                     case .text(let text):
@@ -224,6 +312,14 @@ private struct MessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension MessageView {
+    private var thinkingTitle: String {
+        if message.streaming && message.text.isEmpty { return "Thinking…" }
+        guard let seconds = message.thoughtFor else { return "Thinking" }
+        return seconds < 1 ? "Thought briefly" : "Thought for \(Int(seconds.rounded())) s"
     }
 }
 

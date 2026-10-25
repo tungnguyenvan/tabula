@@ -8,7 +8,7 @@ public struct AnthropicProvider: AIProvider {
         self.endpoint = endpoint
     }
 
-    public func complete(_ request: AIRequest) async throws -> String {
+    private func httpRequest(_ request: AIRequest, stream: Bool) throws -> URLRequest {
         guard !endpoint.apiKey.isEmpty else { throw AIError.notConfigured("Add a Claude API key in Settings → AI.") }
         guard let url = URL(string: endpoint.baseURL)?.appendingPathComponent("v1/messages") else { throw AIError.notConfigured("The API address isn't a valid URL.") }
         var http = URLRequest(url: url, timeoutInterval: request.purpose == .inline ? Defaults.AI.inlineTimeout : Defaults.AI.generateTimeout)
@@ -25,23 +25,58 @@ public struct AnthropicProvider: AIProvider {
             "messages": [["role": "user", "content": request.prompt]],
             "fallbacks": "default",
         ]
+        if stream { body["stream"] = true }
         // Inline suggestions must come back while the user is still looking at the caret.
         if request.purpose == .inline {
             body["output_config"] = ["effort": "low"]
-        } else if let effort = endpoint.effort {
-            body["output_config"] = ["effort": effort]
+        } else {
+            if let effort = endpoint.effort { body["output_config"] = ["effort": effort] }
+            // Current models think by default but return the reasoning empty unless asked for a summary.
+            body["thinking"] = ["type": "adaptive", "display": "summarized"]
         }
         http.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return http
+    }
 
-        let (data, response) = try await URLSession.shared.data(for: http)
+    private static func errorMessage(_ data: Data) -> String {
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        guard (response as? HTTPURLResponse)?.statusCode == 200, let json else {
-            let message = ((json?["error"] as? [String: Any])?["message"] as? String) ?? String(decoding: data, as: UTF8.self)
-            throw AIError.server("Claude API: \(message)")
+        let message = ((json?["error"] as? [String: Any])?["message"] as? String) ?? String(decoding: data, as: UTF8.self)
+        return "Claude API: \(message)"
+    }
+
+    public func complete(_ request: AIRequest) async throws -> String {
+        let (data, response) = try await URLSession.shared.data(for: try httpRequest(request, stream: false))
+        guard (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw AIError.server(Self.errorMessage(data))
         }
         if json["stop_reason"] as? String == "refusal" { throw AIError.refused }
         let blocks = json["content"] as? [[String: Any]] ?? []
         return blocks.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined()
+    }
+
+    public func stream(_ request: AIRequest) -> AIStream {
+        AIStream.run { continuation in
+            try await ServerSentEvents.stream(try httpRequest(request, stream: true), describeError: Self.errorMessage) { payload in
+                guard let event = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any] else { return }
+                switch event["type"] as? String {
+                case "content_block_delta":
+                    let delta = event["delta"] as? [String: Any] ?? [:]
+                    switch delta["type"] as? String {
+                    case "thinking_delta": if let text = delta["thinking"] as? String { continuation.yield(.thinking(text)) }
+                    case "text_delta": if let text = delta["text"] as? String { continuation.yield(.text(text)) }
+                    default: break
+                    }
+                case "message_delta":
+                    if (event["delta"] as? [String: Any])?["stop_reason"] as? String == "refusal" { throw AIError.refused }
+                case "error":
+                    let message = (event["error"] as? [String: Any])?["message"] as? String ?? payload
+                    throw AIError.server("Claude API: \(message)")
+                default:
+                    break
+                }
+            }
+        }
     }
 }
 
@@ -53,7 +88,7 @@ public struct OpenAICompatibleProvider: AIProvider {
         self.endpoint = endpoint
     }
 
-    public func complete(_ request: AIRequest) async throws -> String {
+    private func httpRequest(_ request: AIRequest, stream: Bool) throws -> URLRequest {
         let model = endpoint.model
         guard !model.isEmpty else { throw AIError.notConfigured("Choose a model in Settings → AI.") }
         guard let url = URL(string: endpoint.baseURL)?.appendingPathComponent("chat/completions") else { throw AIError.notConfigured("The API address isn't a valid URL.") }
@@ -66,17 +101,49 @@ public struct OpenAICompatibleProvider: AIProvider {
             "max_tokens": request.maxTokens,
             "messages": [["role": "system", "content": request.instructions], ["role": "user", "content": request.prompt]],
         ]
+        if stream { body["stream"] = true }
         // OpenAI reasoning models (and LiteLLM, which maps it for others) take this.
         if let effort = endpoint.effort { body["reasoning_effort"] = effort }
         http.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return http
+    }
 
-        let (data, response) = try await URLSession.shared.data(for: http)
+    private func errorMessage(_ data: Data) -> String {
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        guard (response as? HTTPURLResponse)?.statusCode == 200, let json else {
-            let message = ((json?["error"] as? [String: Any])?["message"] as? String) ?? String(decoding: data, as: UTF8.self)
-            throw AIError.server(message.isEmpty ? "The server at \(endpoint.baseURL) didn't answer." : message)
+        let message = ((json?["error"] as? [String: Any])?["message"] as? String) ?? String(decoding: data, as: UTF8.self)
+        return message.isEmpty ? "The server at \(endpoint.baseURL) didn't answer." : message
+    }
+
+    public func complete(_ request: AIRequest) async throws -> String {
+        let (data, response) = try await URLSession.shared.data(for: try httpRequest(request, stream: false))
+        guard (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw AIError.server(errorMessage(data))
         }
         let choices = json["choices"] as? [[String: Any]] ?? []
-        return (choices.first?["message"] as? [String: Any])?["content"] as? String ?? ""
+        let content = (choices.first?["message"] as? [String: Any])?["content"] as? String ?? ""
+        // Reasoning that some servers leave in the text as <think>…</think> isn't part of the answer.
+        var splitter = ThinkTagSplitter()
+        let events = splitter.feed(content) + splitter.finish()
+        return events.compactMap { if case .text(let text) = $0 { text } else { nil } }.joined()
+    }
+
+    public func stream(_ request: AIRequest) -> AIStream {
+        AIStream.run { continuation in
+            var splitter = ThinkTagSplitter()
+            try await ServerSentEvents.stream(try httpRequest(request, stream: true), describeError: errorMessage) { payload in
+                guard payload != "[DONE]", let chunk = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any] else { return }
+                if let error = chunk["error"] as? [String: Any] { throw AIError.server(error["message"] as? String ?? payload) }
+                let delta = ((chunk["choices"] as? [[String: Any]])?.first?["delta"] as? [String: Any]) ?? [:]
+                // DeepSeek, vLLM and LiteLLM send reasoning as reasoning_content; OpenRouter and Ollama as reasoning.
+                if let reasoning = (delta["reasoning_content"] ?? delta["reasoning"]) as? String, !reasoning.isEmpty {
+                    continuation.yield(.thinking(reasoning))
+                }
+                if let content = delta["content"] as? String, !content.isEmpty {
+                    for event in splitter.feed(content) { continuation.yield(event) }
+                }
+            }
+            for event in splitter.finish() { continuation.yield(event) }
+        }
     }
 }

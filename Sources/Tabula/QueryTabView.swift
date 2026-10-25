@@ -123,6 +123,9 @@ struct QueryTabView: View {
                                     .controlSize(.small)
                                     .disabled(model.assistant.busy)
                                 if model.assistant.busy { ProgressView().controlSize(.small) }
+                                if model.assistant.busy, !model.assistant.showPrompt, let progress = model.assistant.progress {
+                                    AIProgressLine(progress: progress)
+                                }
                                 // The prompt bar may be closed, so a failed fix reports here.
                                 if !model.assistant.showPrompt, let failure = model.assistant.error {
                                     Text(failure).font(Layout.Font.small).foregroundStyle(.secondary).lineLimit(2)

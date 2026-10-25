@@ -4,12 +4,18 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **AI answers stream in** as the model writes them, in the chat panel, Ask AI and Fix with AI, for every provider that can: the Claude API, OpenAI-compatible servers, Ollama, models running in Tabula, Apple Intelligence, Claude Code and Codex.
+- **The model's thinking** shows above its answer while it reasons, then folds into "Thought for N s" (click to open it again). Claude models send a summary of their reasoning; DeepSeek-R1, Qwen3 and other models that reason in `<think>` tags or a `reasoning` field show theirs too. Ask AI and Fix with AI show the latest line of the reasoning, then of the SQL being written.
+
 ### Changed
 - Faster MongoDB pages and results, found with the new benchmarks (`scripts/benchmark.sh`, [docs/benchmarks.md](docs/benchmarks.md)): a 5,000-document page loads in 43 ms instead of 136, a 50,000-document result in 0.42 s instead of 1.3, a commit of 100 edits in 25 ms instead of 41. Documents are written as text only when an edit needs them, and dates no longer go through the system's date formatter.
 - Reading shell values (the document editor, edits, filters) is 17 times faster; dates were parsed by trying several formatters.
 - PostgreSQL pages with date and timestamp columns are about 15% faster.
 
 ### Fixed
+- **The app could quit unexpectedly with the AI or Row Details panel open**, typically when sending a chat message or dragging a divider: SwiftUI's split views (query editor and results, console, structure, Redis) and the panel kept asking the window to recompute constraints until AppKit stopped the app. These split views are now AppKit's own, and remember where you put the divider.
+- Running a script whose last result had different columns and fewer rows than the first could quit the app.
 - PostgreSQL dates before 15 October 1582 showed in the Julian calendar, days off from what the server stores and `psql` shows; they now show in the proleptic Gregorian calendar, as PostgreSQL counts them.
 
 ### Planned

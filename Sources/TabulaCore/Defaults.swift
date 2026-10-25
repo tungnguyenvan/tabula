@@ -97,6 +97,10 @@ public enum Defaults {
         public static let localGenerateTokens = 1024
         /// Earlier chat messages sent with each question, and characters of the editor's SQL.
         public static let chatHistoryMessages = 12
+        /// Seconds between screen updates while an answer streams in (each token would redraw too often).
+        public static let streamRefreshInterval: Double = 0.05
+        /// Characters of the reasoning or SQL shown under the Ask AI bar while the model works.
+        public static let progressLength = 160
         public static let chatEditorLength = 8000
         /// Characters before the caret sent with an inline request.
         public static let inlineContextLength = 2000

@@ -312,6 +312,14 @@ final class LocalModelTests: XCTestCase {
             print("LOCAL INLINE (\(Int(Date().timeIntervalSince(typingStart) * 1000)) ms): \(before)⟨\(inline)⟩")
             XCTAssertFalse(inline.contains("\n"))
         }
+        // Streaming: the answer arrives token by token.
+        var pieces: [String] = []
+        for try await event in provider.stream(SQLPrompts.generate(description: "count the transactions", current: nil, schema: schema, kind: .postgres)) {
+            if case .text(let piece) = event { pieces.append(piece) }
+        }
+        XCTAssertGreaterThan(pieces.count, 3, "expected the answer in several pieces")
+        XCTAssertTrue(pieces.joined().uppercased().contains("COUNT"), pieces.joined())
+
         // The app frees the model before quitting too; llama.cpp aborts if Metal resources outlive it.
         LocalModelRunner.shared.unload()
     }

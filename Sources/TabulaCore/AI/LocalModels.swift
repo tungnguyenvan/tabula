@@ -183,4 +183,22 @@ public struct BuiltInProvider: AIProvider {
             maxTokens: request.purpose == .inline ? Defaults.AI.localInlineTokens : Defaults.AI.localGenerateTokens,
             stopAtNewline: request.purpose == .inline)
     }
+
+    /// Tokens as the model writes them; models that reason in <think> tags (Qwen3, DeepSeek-R1) show it as thinking.
+    public func stream(_ request: AIRequest) -> AIStream {
+        guard request.purpose != .inline else {
+            return AIStream.run { continuation in continuation.yield(.text(try await complete(request))) }
+        }
+        return AIStream.run { continuation in
+            guard !endpoint.model.isEmpty else { throw AIError.notConfigured("Download or add a model in Settings › AI.") }
+            guard store.isInstalled(endpoint.model) else {
+                throw AIError.notConfigured("\(endpoint.model) isn't downloaded yet. Download it in Settings › AI.")
+            }
+            let splitter = ThinkTagStream(continuation)
+            _ = try await LocalModelRunner.shared.generate(
+                path: store.path(for: endpoint.model).path, instructions: request.instructions, prompt: request.prompt,
+                maxTokens: Defaults.AI.localGenerateTokens, onText: { splitter.feed($0) })
+            splitter.finish()
+        }
+    }
 }
