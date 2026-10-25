@@ -9,6 +9,19 @@ Free, no usage limits, keyboard-first.</p>
 
 <p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a Redis and a PostgreSQL connection open, browsing a table with the row details panel"></p>
 
+> ### ✨ New in 0.3: an AI assistant that can run entirely on your Mac
+>
+> - **Chat about your database** in the panel on the right (⌥⌘A). Ask for a query in plain words and get SQL you can **Insert**, **Run** or copy. The model knows your tables, columns, keys and schemas, so it writes `dev.transactions`, not a guess.
+> - **Suggestions as you type**, written by the model in grey after the cursor; Tab accepts. With a small model on your Mac they arrive in under 100 ms.
+> - **Ask AI** (⌘K) to write or change SQL in the editor, and **Fix with AI** when a statement fails.
+> - **Runs inside Tabula, offline.** Download a light model from Settings (Qwen2.5 Coder from 490 MB, Llama 3.2), add any GGUF file, or paste a link. Nothing else to install.
+> - **Or use what you already have:** Apple Intelligence, Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5), any OpenAI-compatible API such as LiteLLM, Ollama, or the Claude Code and Codex tools on your Mac. A different model can handle suggestions while typing.
+> - **Private by design:** table and column names and your SQL are sent, never the rows in your tables. Off for Production connections unless you allow it.
+>
+> [How it works →](#ai-assistant)
+
+<p align="center"><img src="docs/screenshots/ai.png" width="900" alt="The AI chat answering with a query, and a model-written suggestion in grey in the SQL editor"></p>
+
 ## Contents
 
 - [Features](#features)
@@ -30,6 +43,10 @@ Free, no usage limits, keyboard-first.</p>
 - [License](#license)
 
 ## Features
+
+**AI assistant** (new in 0.3, see [AI assistant](#ai-assistant))
+- Chat panel, Ask AI (⌘K), Fix with AI, and model-written suggestions while typing.
+- Models that run inside Tabula, Apple Intelligence, Claude, OpenAI-compatible APIs, Ollama, Claude Code or Codex.
 
 **Connections**
 - PostgreSQL, MySQL / MariaDB, SQLite files and Redis.
@@ -93,11 +110,11 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Size and resource use
 
-Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0:
+Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0 (sizes for 0.3.0). A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
 
 | | |
 | --- | --- |
-| Download | 18 MB (ZIP) in 0.2; about 28 MB from 0.3, which includes the local-model engine |
+| Download | 26 MB (ZIP) from 0.3, which includes the local-model engine; 18 MB in 0.2 |
 | Installed | 62 MB in 0.2; 88 MB from 0.3 (llama.cpp adds 23 MB). One universal app for Apple silicon and Intel. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
 | Memory, Connections window only | 26 MB |
 | Memory, one Postgres table open (300 rows) | 78 MB |
@@ -196,6 +213,8 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 > `ssh -N -L 15432:db.internal:5432 user@bastion`, then connect to `127.0.0.1:15432`.
 
 ## AI assistant
+
+<p align="center"><img src="docs/screenshots/ai-settings.png" width="520" alt="Settings › AI with a model running in Tabula for Ask AI and suggestions"></p>
 
 AI is off until you turn it on in **Settings › AI** (⌘,). Then:
 

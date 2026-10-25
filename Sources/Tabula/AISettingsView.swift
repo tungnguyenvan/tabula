@@ -105,7 +105,7 @@ struct AISettingsView: View {
                     Text("Suggestions while typing")
                 } footer: {
                     Text(typing.supportsInline
-                         ? "A suggestion appears in grey when you pause; Tab accepts it. A small local model (Ollama) keeps up best."
+                         ? "A suggestion appears in grey when you pause; Tab accepts it. A small model on this Mac keeps up best."
                          : "Command-line agents are too slow to suggest while typing. Choose a local model or an API here.")
                 }
 
