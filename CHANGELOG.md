@@ -4,6 +4,13 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Planned
+- MongoDB connections
+- SSH tunnels
+- Cancelling a running query
+
+## [0.3.1] - 2026-10-25
+
 ### Added
 - **Functions, procedures and triggers** in the sidebar (PostgreSQL, MySQL; triggers on SQLite): view, edit and save the definition, create new ones from a template, delete. Saving never loses a routine: transactional where the database allows, and on MySQL the original is restored if the new definition fails.
 - AI: an **Effort** setting for models that reason (Claude Opus / Sonnet / Haiku 5.5, Claude Code, Codex, OpenAI reasoning models), in the chat panel and in Settings. Suggestions while typing always use the quickest.
@@ -11,10 +18,6 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ### Fixed
 - Scripts containing `CREATE TRIGGER`, `CREATE PROCEDURE` or `CREATE FUNCTION` with a `BEGIN … END` body (SQLite, MySQL) are no longer split at the semicolons inside the body.
-
-### Planned
-- SSH tunnels
-- Cancelling a running query
 
 ## [0.3.0] - 2026-10-25
 
@@ -121,7 +124,8 @@ First public release.
 - Release builds are ad-hoc signed and not notarized; macOS asks for confirmation on first launch (see the README).
 - Connecting to a database on the local network asks for Local Network permission on macOS 15 and later.
 
-[Unreleased]: https://github.com/tungnguyenvan/tabula/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tungnguyenvan/tabula/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.3.1
 [0.3.0]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.3.0
 [0.2.1]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.2.1
 [0.2.0]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.2.0
