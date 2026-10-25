@@ -12,6 +12,8 @@ public actor MongoDriver: DatabaseDriver {
     private var currentDatabase: String
     /// Field order learned per collection ("db.collection"), so pages show columns in a steady order.
     private var fieldOrder: [String: [String]] = [:]
+    /// The metrics' largest collections, measured now and then (see `largestCollections`).
+    var collectionStats: (database: String, time: Date, stats: [MetricsSample.TableStat])?
 
     private init(cluster: MongoCluster, database: String) {
         self.cluster = cluster
@@ -47,8 +49,12 @@ public actor MongoDriver: DatabaseDriver {
         let host = config.resolvedHost
         let database = config.database.isEmpty ? Defaults.Mongo.defaultDatabase : config.database
         if config.srv == true {
-            return ConnectionSettings(authentication: authentication, authenticationSource: authSource, srvHostname: host,
-                                      targetDatabase: database, connectTimeout: timeout, applicationName: Defaults.applicationName)
+            var settings = ConnectionSettings(authentication: authentication, authenticationSource: authSource, srvHostname: host,
+                                              targetDatabase: database, connectTimeout: timeout, applicationName: Defaults.applicationName)
+            // Seed lists default to verified TLS; honor the connection's choice like the other databases do.
+            settings.useSSL = config.tls != .disable
+            settings.verifySSLCertificates = config.tls == .verifyFull
+            return settings
         }
         // "a:27017,b:27017" lists the members of a replica set.
         let hosts = try host.split(separator: ",").map { part -> ConnectionSettings.Host in
@@ -340,7 +346,10 @@ public actor MongoDriver: DatabaseDriver {
             return documentsResult([summary], affected: summary["modifiedCount"].flatMap(MongoShellParser.double).map { Int($0) })
         case "deleteOne", "deleteMany", "remove":
             let filter = try arguments.document(0, "a filter")
-            let justOne = call.name == "deleteOne" || (call.name == "remove" && (arguments.values.dropFirst().first as? Bool == true))
+            // remove(filter, true) and remove(filter, { justOne: true }) both delete one document.
+            let second = arguments.values.dropFirst().first
+            let justOne = call.name == "deleteOne"
+                || (call.name == "remove" && (second as? Bool == true || (second as? Document)?["justOne"] as? Bool == true))
             var delete: Document = ["q": filter, "limit": Int32(justOne ? 1 : 0)]
             if let options = arguments.optionalDocument(1) {
                 for key in ["hint", "collation"] { if let value = options[key] { delete[key] = value } }

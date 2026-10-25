@@ -249,6 +249,8 @@ struct MongoShellParser {
     private(set) var index = 0
     /// Set when a comment was skipped (the beautifier leaves such text alone, since comments would be lost).
     private(set) var sawComment = false
+    /// Set when a value was made at parse time (`ObjectId()`, `new Date()`, `UUID()`); re-printing would freeze it.
+    private(set) var madeValue = false
 
     init(_ text: String) {
         bytes = Array(text.utf8)
@@ -530,12 +532,12 @@ struct MongoShellParser {
 
         switch name {
         case "ObjectId", "ObjectID":
-            guard let hex = argument(0) as? String else { return ObjectId() }
+            guard let hex = argument(0) as? String else { madeValue = true; return ObjectId() }
             guard let id = ObjectId(hex) else { throw error("“\(hex)” isn't a valid ObjectId (24 hex digits)") }
             return id
         case "ISODate", "Date":
             switch argument(0) {
-            case nil: return Date()
+            case nil: madeValue = true; return Date()
             case let string as String:
                 guard let date = MongoDates.parse(string) else { throw error("“\(string)” isn't a date") }
                 return date
@@ -566,7 +568,7 @@ struct MongoShellParser {
             guard let decimal = MongoDecimal.parse(value) else { throw error("“\(value)” isn't a decimal number") }
             return decimal
         case "UUID":
-            guard let string = argument(0) as? String else { return MongoBinary.uuid(UUID()) }
+            guard let string = argument(0) as? String else { madeValue = true; return MongoBinary.uuid(UUID()) }
             guard let binary = MongoBinary.uuid(string) else { throw error("“\(string)” isn't a UUID") }
             return binary
         case "BinData":

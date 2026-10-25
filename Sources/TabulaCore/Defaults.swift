@@ -49,6 +49,10 @@ public enum Defaults {
         public static let inlineWidth = 60
         /// Database opened when the connection names none.
         public static let defaultDatabase = "test"
+        /// Collections whose sizes the metrics compare to find the largest (one round trip each).
+        public static let statsCollectionLimit = 500
+        /// Seconds the per-collection sizes are reused between metrics samples.
+        public static let statsRefreshInterval: Double = 60
         /// Database that authenticates the user when the connection names none (the drivers' default).
         public static let authDatabase = "admin"
     }

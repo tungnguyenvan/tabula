@@ -23,17 +23,7 @@ extension DatabaseDriver {
         let current = number(connections, "current"), available = number(connections, "available")
         let operationNames = ["insert", "query", "update", "delete", "getmore", "command"]
 
-        var tables: [MetricsSample.TableStat] = []
-        let collections = try await execute("db.getSiblingDB(\(MongoShell.quoted(database))).getCollectionInfos({ type: \"collection\" })")
-        for text in (collections.documents ?? []).prefix(Defaults.Metrics.tableLimit) {
-            guard let name = (try? MongoShell.parseDocument(text))?["name"] as? String, !name.hasPrefix("system.") else { continue }
-            let table = TableRef(schema: database, name: name)
-            guard let stat = try? await document(MongoDialect.collection(table) + ".stats()"),
-                  let storage = stat["storageStats"] as? Document else { continue }
-            tables.append(.init(name: name, rows: Int(number(storage, "count")), dataBytes: Int(number(storage, "size")),
-                                indexBytes: Int(number(storage, "totalIndexSize"))))
-        }
-        tables.sort { ($0.totalBytes ?? 0) > ($1.totalBytes ?? 0) }
+        let tables = try await (self as? MongoDriver)?.largestCollections(in: database) ?? []
 
         var sample = MetricsSample(
             groups: [
@@ -72,5 +62,28 @@ extension DatabaseDriver {
             tables: tables)
         sample.tablesAreCollections = true
         return sample
+    }
+}
+
+extension MongoDriver {
+    /// The largest collections by data plus index size. Sizes take a round trip per collection, so they are
+    /// measured for up to `statsCollectionLimit` collections and reused for `statsRefreshInterval` seconds.
+    func largestCollections(in database: String) async throws -> [MetricsSample.TableStat] {
+        if let cached = collectionStats, cached.database == database,
+           Date().timeIntervalSince(cached.time) < Defaults.Mongo.statsRefreshInterval {
+            return cached.stats
+        }
+        var stats: [MetricsSample.TableStat] = []
+        for table in try await tables(in: database).filter({ $0.kind == .table }).prefix(Defaults.Mongo.statsCollectionLimit) {
+            guard let result = try? await execute(MongoDialect.collection(table) + ".stats()"),
+                  let text = result.documents?.first, let stat = try? MongoShell.parseDocument(text),
+                  let storage = stat["storageStats"] as? Document else { continue }
+            func number(_ key: String) -> Int { storage[key].flatMap(MongoShellParser.double).map { Int($0) } ?? 0 }
+            stats.append(.init(name: table.name, rows: number("count"), dataBytes: number("size"), indexBytes: number("totalIndexSize")))
+        }
+        stats.sort { ($0.totalBytes ?? 0) > ($1.totalBytes ?? 0) }
+        let largest = Array(stats.prefix(Defaults.Metrics.tableLimit))
+        collectionStats = (database, Date(), largest)
+        return largest
     }
 }

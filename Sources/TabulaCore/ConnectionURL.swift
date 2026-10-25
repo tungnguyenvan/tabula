@@ -23,7 +23,12 @@ extension ConnectionConfig {
             let placeholder = "tabula.hosts.invalid"
             components.host = placeholder
             components.port = nil
-            return components.string?.replacingOccurrences(of: placeholder, with: resolvedHost) ?? ""
+            // Members without their own port use the connection's, as the driver does.
+            let members = resolvedHost.split(separator: ",").map { member -> String in
+                let text = member.trimmingCharacters(in: .whitespaces)
+                return text.contains(":") ? text : "\(text):\(port)"
+            }
+            return components.string?.replacingOccurrences(of: placeholder, with: members.joined(separator: ",")) ?? ""
         }
         return components.string ?? ""
     }

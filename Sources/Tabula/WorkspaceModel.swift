@@ -390,7 +390,7 @@ final class WorkspaceModel {
         }
         if kind == .sqlite && table.schema == "main" { return part(table.name) }
         // Collections are named as the shell reaches them from the current database.
-        if kind.isDocument { return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name) (db.getSiblingDB(\"\(table.schema)\"))" }
+        if kind.isDocument { return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name)" }
         return "\(part(table.schema)).\(part(table.name))"
     }
 

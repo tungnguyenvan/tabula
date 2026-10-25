@@ -274,7 +274,8 @@ public enum SQLPrompts {
 
     /// The same rule for collections, which the shell reaches as `db.name` or `db.getCollection("name")`.
     static let collectionNamesRule = "Write collection names exactly as the schema lists them; use db.getCollection(\"name\") "
-        + "for names that aren't plain identifiers."
+        + "for names that aren't plain identifiers. A name listed as other_db.collection is in another database: "
+        + "db.getSiblingDB(\"other_db\").getCollection(\"collection\")."
     /// Tabula reads shell statements; it doesn't run JavaScript.
     static let shellRule = "Write MongoDB shell statements only, such as db.orders.find({ … }).sort({ … }) or "
         + "db.orders.aggregate([ … ]): no variables, loops, functions or print calls. Put each statement on its own line."

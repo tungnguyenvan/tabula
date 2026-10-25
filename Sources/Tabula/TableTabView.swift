@@ -388,7 +388,7 @@ struct DocumentEditorSheet: View {
                           undoManager: undoManager) { _ in Task { await submit() } }
                 .border(Color(nsColor: .separatorColor))
             HStack {
-                Button("Format") { handle.beautify(kind: .mongodb); text = MongoShell.pretty(text) }
+                Button("Format") { text = MongoShell.pretty(text) }
                     .help("Lay the document out over indented lines")
                 Spacer()
                 if saving { ProgressView().controlSize(.small) }

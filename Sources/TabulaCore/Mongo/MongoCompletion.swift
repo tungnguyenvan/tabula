@@ -77,11 +77,13 @@ public enum MongoCompletion {
     }
 
     /// The collection the statement works on: `db.name.` or `db.getCollection("name").`.
+    private static let collectionPatterns: [NSRegularExpression] = [
+        #"db\s*\.\s*getCollection\(\s*["']([^"']+)["']\s*\)"#, #"db\s*\.\s*([A-Za-z_$][\w$.]*?)\s*\.\s*[A-Za-z_$]\w*\s*\("#,
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
+
     static func collection(in statement: String) -> String? {
-        let patterns = [#"db\s*\.\s*getCollection\(\s*["']([^"']+)["']\s*\)"#, #"db\s*\.\s*([A-Za-z_$][\w$.]*?)\s*\.\s*[A-Za-z_$]\w*\s*\("#]
-        for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern),
-                  let match = regex.firstMatch(in: statement, range: NSRange(location: 0, length: (statement as NSString).length)),
+        for regex in collectionPatterns {
+            guard let match = regex.firstMatch(in: statement, range: NSRange(location: 0, length: (statement as NSString).length)),
                   match.numberOfRanges > 1 else { continue }
             let name = (statement as NSString).substring(with: match.range(at: 1))
             if !MongoStatement.databaseMethods.contains(name) { return name }

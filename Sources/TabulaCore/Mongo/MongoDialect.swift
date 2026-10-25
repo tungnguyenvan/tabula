@@ -179,7 +179,12 @@ public enum MongoChanges {
             return typed(text)
         case is String:
             return text
-        case is Int32, is Int, is Double, is Decimal128:
+        case is Decimal128:
+            // Read straight as a decimal, never through a double, so every digit is kept.
+            if let decimal = MongoDecimal.parse(text) { return decimal }
+            guard let parsed else { throw invalid("a number") }
+            return parsed
+        case is Int32, is Int, is Double:
             guard let parsed else { throw invalid("a number") }
             return coerce(parsed, like: original!)
         case is Date:
@@ -213,9 +218,13 @@ public enum MongoChanges {
         }
     }
 
-    /// Text in a field with no type yet: a shell value when it reads as one, otherwise a string.
+    /// Text in a field with no type yet: a shell value when it reads as one, otherwise a string. A number counts
+    /// only when it reads back the same, so "02134" or a 20-digit account number stays text.
     static func typed(_ text: String) -> Primitive {
         guard let value = try? MongoShell.parseValue(text) else { return text }
+        if value is Int32 || value is Int || value is Double, MongoShell.cell(value) != text.trimmingCharacters(in: .whitespaces) {
+            return text
+        }
         return value
     }
 }

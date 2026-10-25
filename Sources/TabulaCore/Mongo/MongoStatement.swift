@@ -31,6 +31,8 @@ public struct MongoStatement: Sendable {
     public var calls: [Call]
     /// The text had comments, which `formatted()` would drop.
     public var hasComments = false
+    /// The text makes values when it runs (`ObjectId()`, `new Date()`), which `formatted()` would write as constants.
+    public var makesValues = false
 
     public init(target: Target, database: String? = nil, calls: [Call] = []) {
         self.target = target
@@ -113,6 +115,7 @@ public struct MongoStatement: Sendable {
         try parser.expectEnd()
         var statement = MongoStatement(target: collection.map(Target.collection) ?? .database, database: database, calls: calls)
         statement.hasComments = parser.sawComment
+        statement.makesValues = parser.madeValue
         return statement
     }
 
@@ -267,11 +270,12 @@ public enum MongoSplitter {
 
 extension MongoStatement {
     /// Beautify for the shell: each statement rewritten with even spacing and long documents over several lines.
-    /// Statements with comments, or that don't parse, are left as written.
+    /// Statements with comments, with values made when they run (`ObjectId()`, `new Date()`), or that don't parse,
+    /// are left as written.
     public static func beautify(_ script: String) -> String {
         let text = NSMutableString(string: script)
         for statement in MongoSplitter.statements(in: script).reversed() {
-            guard let parsed = try? parse(statement.text), !parsed.hasComments else { continue }
+            guard let parsed = try? parse(statement.text), !parsed.hasComments, !parsed.makesValues else { continue }
             text.replaceCharacters(in: statement.range, with: parsed.formatted())
         }
         return text as String

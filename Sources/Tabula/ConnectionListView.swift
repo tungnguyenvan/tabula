@@ -47,7 +47,9 @@ struct ConnectionListView: View {
         .ignoresSafeArea(.container, edges: .top)
         .frame(minWidth: 680, minHeight: 420)
         .onAppear {
+            #if DEBUG
             if let id = DebugHooks.connectionToEdit, let config = appState.connection(id) { edit(config) }
+            #endif
         }
         .sheet(item: $editing) { request in
             ConnectionFormView(config: request.config, isNew: request.isNew, password: request.password) { saved, password, connect in

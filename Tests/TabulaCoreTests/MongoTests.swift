@@ -301,6 +301,15 @@ final class MongoIntegrationTests: XCTestCase {
         let value8 = try await driver.execute("db.many.find({ i: { $gte: 1000 } }).count()").rows.first?.first
         XCTAssertEqual(value8, "200")
 
+        _ = try await driver.execute("db.removing.insertMany([{ k: 1 }, { k: 1 }, { k: 1 }])")
+        _ = try await driver.execute("db.removing.remove({ k: 1 }, { justOne: true })")
+        let leftAfterOne = try await driver.execute("db.removing.countDocuments({})").rows.first?.first
+        XCTAssertEqual(leftAfterOne, "2")
+        _ = try await driver.execute("db.removing.remove({ k: 1 })")
+        let leftAfterAll = try await driver.execute("db.removing.countDocuments({})").rows.first?.first
+        XCTAssertEqual(leftAfterAll, "0")
+        _ = try await driver.execute("db.removing.drop()")
+
         let explain = try await driver.execute("db.people.find({ name: \"Ann\" }).explain()")
         XCTAssertTrue(explain.columns.contains("queryPlanner"))
         let value9 = try await driver.execute("show collections").rows.compactMap { $0.first ?? nil }.sorted()
@@ -361,5 +370,36 @@ final class MongoCompletionTests: XCTestCase {
         XCTAssertEqual(items("db.users.find()\nd|"), ["db"])
         XCTAssertEqual(items("show c|"), ["collections"])
         XCTAssertTrue(items("db.users.find({ _id: Obj|").contains("ObjectId"))
+    }
+}
+
+final class MongoReviewFixTests: XCTestCase {
+    private let table = TableRef(schema: "shop", name: "users")
+
+    func testBeautifyKeepsValuesMadeAtRunTime() {
+        let text = "db.logs.insertOne({_id:ObjectId(),at:new Date(),u:UUID()})"
+        XCTAssertEqual(SQLFormatter.format(text, kind: .mongodb), text)
+        XCTAssertEqual(SQLFormatter.format("db.logs.find({a:1})", kind: .mongodb), "db.logs.find({ a: 1 })")
+    }
+
+    func testDecimalAndUntypedValuesKeepEveryDigit() throws {
+        let original = #"{ _id: 1, price: NumberDecimal("1.00") }"#
+        let update = try MongoChanges.update(table, row: .init(document: original, changes: ["price": "12345678901234567.89"]))
+        XCTAssertTrue(update.contains(#"NumberDecimal("12345678901234567.89")"#), update)
+        XCTAssertEqual(MongoChanges.typed("02134") as? String, "02134")
+        XCTAssertEqual(MongoChanges.typed("12345678901234567890") as? String, "12345678901234567890")
+        XCTAssertEqual(MongoChanges.typed("42") as? Int32, 42)
+        XCTAssertEqual(MongoChanges.typed("2.5") as? Double, 2.5)
+    }
+
+    func testSeedListHonorsTLSMode() throws {
+        let config = ConnectionConfig(kind: .mongodb, host: "cluster0.example.net", tls: .require, srv: true)
+        let settings = try MongoDriver.settings(for: config, password: nil)
+        XCTAssertTrue(settings.useSSL)
+        XCTAssertFalse(settings.verifySSLCertificates)
+    }
+
+    func testReplicaSetURLKeepsPorts() {
+        XCTAssertEqual(ConnectionConfig(kind: .mongodb, host: "a,b:27019", port: 27018).url(), "mongodb://a:27018,b:27019")
     }
 }

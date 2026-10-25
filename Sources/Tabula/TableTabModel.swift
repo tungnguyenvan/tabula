@@ -404,7 +404,7 @@ final class TableTabModel {
 
     /// MongoDB: replaces the document at `row`, or inserts a new one when `row` is nil. Returns the error, if any.
     func saveDocument(_ text: String, replacing row: Int?) async -> String? {
-        guard confirmDiscard() else { return nil }
+        guard confirmDiscard(action: "Discard and Save") else { return "Commit or discard the changes in the grid first." }
         do {
             let statement: String
             if let row {
@@ -436,8 +436,14 @@ final class TableTabModel {
             try await driver.applyInTransaction(statements)
             await reload()
         } catch {
-            // MongoDB runs the changes one by one; its error already says which were saved.
-            self.error = driver.kind.isDocument ? error.localizedDescription : "Changes were rolled back: \(error.localizedDescription)"
+            guard driver.kind.isDocument else {
+                self.error = "Changes were rolled back: \(error.localizedDescription)"
+                return
+            }
+            // MongoDB ran the changes one by one and some may be saved; reload so a second Commit can't repeat them.
+            // The message says which ones failed.
+            await reload()
+            self.error = error.localizedDescription
         }
     }
 
