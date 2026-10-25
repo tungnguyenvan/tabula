@@ -157,7 +157,9 @@ public struct MongoStatement: Sendable {
 /// line doesn't continue it with `.method(…)`).
 public enum MongoSplitter {
     public static func statements(in script: String) -> [SQLSplitter.Statement] {
-        let chars = Array(script)
+        // One element per Unicode scalar, not per grapheme: a combining mark after a quote would otherwise merge
+        // with it into one "character" that isn't a quote, and a crafted name could end the string early.
+        let chars = script.unicodeScalars.map(Character.init)
         var utf16Offsets: [Int] = []
         utf16Offsets.reserveCapacity(chars.count + 1)
         var running = 0

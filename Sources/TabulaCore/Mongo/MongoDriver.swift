@@ -21,12 +21,16 @@ public actor MongoDriver: DatabaseDriver {
     }
 
     public static func connect(_ config: ConnectionConfig, password: String?) async throws -> MongoDriver {
-        let settings = try settings(for: config, password: password)
         let timeout = config.timeout
+        // Seed lists are resolved and checked here rather than by the driver, which would accept any answer.
+        let members = config.srv == true
+            ? try await MongoSRV.resolve(config.resolvedHost, timeout: timeout).map { ConnectionSettings.Host(hostname: $0.host, port: $0.port) }
+            : nil
+        let settings = try settings(for: config, password: password, members: members)
         let cluster = try await withTimeout(seconds: timeout, "Connecting to MongoDB", discard: { cluster in
             Task { await cluster.disconnect() }
         }) {
-            try await MongoCluster(connectingTo: settings)
+            try await openCluster(settings)
         }
         let database = config.database.trimmingCharacters(in: .whitespaces)
         let driver = MongoDriver(cluster: cluster, database: database.isEmpty ? Defaults.Mongo.defaultDatabase : database)
@@ -40,7 +44,42 @@ public actor MongoDriver: DatabaseDriver {
         return driver
     }
 
-    static func settings(for config: ConnectionConfig, password: String?) throws -> ConnectionSettings {
+    /// `members`: the servers a seed list resolved to (`MongoSRV`); nil reads them from the host field.
+    /// The cluster opens through the first member it tries and gives up if that one is down, so with several
+    /// members each is tried in turn; the one that answers tells the cluster about the rest.
+    private static func openCluster(_ settings: ConnectionSettings) async throws -> MongoCluster {
+        do {
+            return try await MongoCluster(connectingTo: settings)
+        } catch where settings.hosts.count > 1 {
+            var failures: [String] = [readable(error)]
+            for host in settings.hosts {
+                var single = settings
+                single.hosts = [host]
+                do {
+                    return try await MongoCluster(connectingTo: single)
+                } catch {
+                    failures.append(readable(error))
+                }
+            }
+            throw DatabaseError("Couldn't reach any member: " + Array(Set(failures)).sorted().joined(separator: "; "))
+        } catch {
+            throw DatabaseError(readable(error))
+        }
+    }
+
+    /// NIO's connection errors print as nested structures; this gives "host:port: Connection refused".
+    static func readable(_ error: any Error) -> String {
+        guard let connection = error as? NIOConnectionError else { return error.localizedDescription }
+        let causes = connection.connectionErrors.map { failure -> String in
+            let reason = (failure.error as? IOError).map { String(cString: strerror($0.errnoCode)) } ?? String(describing: failure.error)
+            return reason
+        }
+        let dns = [connection.dnsAError, connection.dnsAAAAError].compactMap { $0 }
+        let reason = causes.first ?? dns.first.map { "can't resolve the name (\($0))" } ?? "no connection"
+        return "\(connection.host):\(connection.port): \(reason)"
+    }
+
+    static func settings(for config: ConnectionConfig, password: String?, members: [ConnectionSettings.Host]? = nil) throws -> ConnectionSettings {
         let authentication: ConnectionSettings.Authentication = config.user.isEmpty
             ? .unauthenticated : .auto(username: config.user, password: password ?? "")
         let source = config.authSource?.trimmingCharacters(in: .whitespaces)
@@ -48,16 +87,8 @@ public actor MongoDriver: DatabaseDriver {
         let timeout = config.timeout
         let host = config.resolvedHost
         let database = config.database.isEmpty ? Defaults.Mongo.defaultDatabase : config.database
-        if config.srv == true {
-            var settings = ConnectionSettings(authentication: authentication, authenticationSource: authSource, srvHostname: host,
-                                              targetDatabase: database, connectTimeout: timeout, applicationName: Defaults.applicationName)
-            // Seed lists default to verified TLS; honor the connection's choice like the other databases do.
-            settings.useSSL = config.tls != .disable
-            settings.verifySSLCertificates = config.tls == .verifyFull
-            return settings
-        }
         // "a:27017,b:27017" lists the members of a replica set.
-        let hosts = try host.split(separator: ",").map { part -> ConnectionSettings.Host in
+        let hosts = try members ?? host.split(separator: ",").map { part -> ConnectionSettings.Host in
             let text = part.trimmingCharacters(in: .whitespaces)
             if text.contains(":") { return try ConnectionSettings.Host(text, srv: false) }
             return ConnectionSettings.Host(hostname: text, port: config.port)
