@@ -140,23 +140,38 @@ struct WorkspaceView: View {
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .connected:
-            if model.showConsole {
-                VSplitView {
-                    tabContent
-                    ConsoleLogView(log: model.log) { model.showConsole = false }
-                        .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Console.minHeight, idealHeight: Layout.Console.idealHeight)
+            VStack(spacing: 0) {
+                // The tab strip stays above the console's split view, which mustn't sit under the toolbar.
+                if !model.tabs.isEmpty {
+                    TabStrip(model: model)
                 }
-            } else {
-                tabContent
+                if !model.showConsole {
+                    tabContent
+                } else if model.tabs.isEmpty {
+                    tabContent
+                    Divider()
+                    console.frame(height: Layout.Console.idealHeight)
+                } else {
+                    VerticalSplit(topMinimum: Layout.Console.contentMinHeight, bottomMinimum: Layout.Console.minHeight,
+                                  bottomIdeal: Layout.Console.idealHeight, growing: .top, autosaveName: "ConsoleLog") {
+                        tabContent
+                    } bottom: {
+                        console
+                    }
+                }
             }
+            // Content must not dictate a minimum width: split views take a child's ideal width as its
+            // minimum, which would stop the window from getting narrower than the widest row.
+            .frame(minWidth: 0, maxWidth: .infinity)
         }
+    }
+
+    private var console: some View {
+        ConsoleLogView(log: model.log) { model.showConsole = false }
     }
 
     private var tabContent: some View {
         VStack(spacing: 0) {
-            if !model.tabs.isEmpty {
-                TabStrip(model: model)
-            }
             if let tab = model.selectedTab {
                 switch tab {
                 case .table(let table): TableTabView(model: table, workspace: model).id(table.id)
@@ -169,8 +184,6 @@ struct WorkspaceView: View {
                 EmptyWorkspaceView(model: model)
             }
         }
-        // Content must not dictate a minimum width: split views take a child's ideal width as its
-        // minimum, which would stop the window from getting narrower than the widest row.
         .frame(minWidth: 0, maxWidth: .infinity)
     }
 }

@@ -55,10 +55,16 @@ enum Layout {
         static let keysMinHeight: CGFloat = 180
         static let keysIdealHeight: CGFloat = 380
         static let valueMinHeight: CGFloat = 160
-        static let valueIdealHeight: CGFloat = 320
+    }
+
+    enum Structure {
+        static let columnsMinHeight: CGFloat = 160
+        static let indexesMinHeight: CGFloat = 120
     }
 
     enum Console {
+        /// Room the tabs keep above the console.
+        static let contentMinHeight: CGFloat = 200
         static let minHeight: CGFloat = 90
         static let idealHeight: CGFloat = 180
         static let rowHeight: CGFloat = 20

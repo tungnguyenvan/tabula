@@ -15,11 +15,31 @@ public struct OllamaProvider: AIProvider {
     public func complete(_ request: AIRequest) async throws -> String {
         do {
             return try await inner.complete(request)
-        } catch let error as URLError where error.code == .cannotConnectToHost || error.code == .cannotFindHost {
-            throw AIError.unavailable("Ollama isn't running. Open Ollama, or install it from ollama.com.")
-        } catch AIError.server(let message) where message.contains("not found") {
-            throw AIError.notConfigured("The model isn't downloaded yet. Download it in Settings › AI.")
+        } catch {
+            throw Self.explained(error)
         }
+    }
+
+    public func stream(_ request: AIRequest) -> AIStream {
+        let inner = inner
+        return AIStream.run { continuation in
+            do {
+                for try await event in inner.stream(request) { continuation.yield(event) }
+            } catch {
+                throw Self.explained(error)
+            }
+        }
+    }
+
+    /// Connection and missing-model errors in words that say what to do.
+    private static func explained(_ error: any Error) -> any Error {
+        if let error = error as? URLError, error.code == .cannotConnectToHost || error.code == .cannotFindHost {
+            return AIError.unavailable("Ollama isn't running. Open Ollama, or install it from ollama.com.")
+        }
+        if case AIError.server(let message) = error, message.contains("not found") {
+            return AIError.notConfigured("The model isn't downloaded yet. Download it in Settings › AI.")
+        }
+        return error
     }
 }
 

@@ -23,16 +23,16 @@ public final class LocalModelRunner: @unchecked Sendable {
     }
 
     /// Generates a reply to `prompt` with the model at `path`. Cancelling the calling task stops
-    /// generation at the next token.
+    /// generation at the next token. `onText` receives the reply as it grows, a piece at a time.
     public func generate(path: String, instructions: String, prompt: String, maxTokens: Int,
-                         stopAtNewline: Bool = false) async throws -> String {
+                         stopAtNewline: Bool = false, onText: (@Sendable (String) -> Void)? = nil) async throws -> String {
         let cancelled = CancelFlag()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
                     continuation.resume(with: Result {
                         try self.run(path: path, instructions: instructions, prompt: prompt, maxTokens: maxTokens,
-                                     stopAtNewline: stopAtNewline, cancelled: cancelled)
+                                     stopAtNewline: stopAtNewline, cancelled: cancelled, onText: onText)
                     })
                 }
             }
@@ -67,15 +67,20 @@ public final class LocalModelRunner: @unchecked Sendable {
     // MARK: On the queue
 
     private func run(path: String, instructions: String, prompt: String, maxTokens: Int,
-                     stopAtNewline: Bool, cancelled: CancelFlag) throws -> String {
+                     stopAtNewline: Bool, cancelled: CancelFlag, onText: (@Sendable (String) -> Void)?) throws -> String {
         unloadWork?.cancel()
         defer { scheduleUnload() }
         let (model, context) = try load(path)
         guard let vocab = llama_model_get_vocab(model) else { throw AIError.server("The model has no vocabulary.") }
         llama_memory_clear(llama_get_memory(context), true)
 
-        let tokens = tokenize(chat(model: model, instructions: instructions, prompt: prompt), vocab: vocab, special: true)
-        return try complete(tokens, context: context, vocab: vocab, maxTokens: maxTokens, stopAtNewline: stopAtNewline, cancelled: cancelled)
+        let formatted = chat(model: model, instructions: instructions, prompt: prompt)
+        // Some chat templates (DeepSeek-R1 distills, Qwen3) open the reasoning block themselves, so the model's
+        // output starts inside it; say so to whoever splits the reasoning out.
+        if formatted.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("<think>") { onText?("<think>") }
+        let tokens = tokenize(formatted, vocab: vocab, special: true)
+        return try complete(tokens, context: context, vocab: vocab, maxTokens: maxTokens, stopAtNewline: stopAtNewline,
+                            cancelled: cancelled, onText: onText)
     }
 
     private func runFill(path: String, prefix: String, suffix: String, maxTokens: Int, cancelled: CancelFlag) throws -> String? {
@@ -93,7 +98,7 @@ public final class LocalModelRunner: @unchecked Sendable {
 
     /// Feeds `prompt` to the model and samples up to `maxTokens` tokens of answer.
     private func complete(_ prompt: [llama_token], context: OpaquePointer, vocab: OpaquePointer, maxTokens: Int,
-                          stopAtNewline: Bool, cancelled: CancelFlag) throws -> String {
+                          stopAtNewline: Bool, cancelled: CancelFlag, onText: (@Sendable (String) -> Void)? = nil) throws -> String {
         var tokens = prompt
         // Keep the end of an over-long prompt (the question, or the text at the caret, is last) and leave
         // room for the answer.
@@ -127,6 +132,8 @@ public final class LocalModelRunner: @unchecked Sendable {
         let fimPad = llama_vocab_fim_pad(vocab)
         var previous: llama_token = -1
         var repeats = 0
+        /// Bytes already passed to `onText`; a token can end in the middle of a UTF-8 character.
+        var sent = 0
         for _ in 0..<maxTokens {
             if cancelled.isSet { throw CancellationError() }
             var token = llama_sampler_sample(sampler, context, -1)
@@ -137,10 +144,28 @@ public final class LocalModelRunner: @unchecked Sendable {
             if repeats >= Defaults.AI.localRepeatLimit { break }
             let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, false)
             if length > 0 { output.append(contentsOf: piece[0..<Int(length)].map { UInt8(bitPattern: $0) }) }
+            if let onText {
+                let complete = Self.completeUTF8Length(output)
+                if complete > sent {
+                    onText(String(decoding: output[sent..<complete], as: UTF8.self))
+                    sent = complete
+                }
+            }
             if stopAtNewline, output.contains(UInt8(ascii: "\n")) { break }
             guard llama_decode(context, llama_batch_get_one(&token, 1)) == 0 else { break }
         }
         return String(decoding: output, as: UTF8.self)
+    }
+
+    /// The length of `data` without a UTF-8 character cut off at its end.
+    static func completeUTF8Length(_ data: Data) -> Int {
+        var index = data.count
+        // Walk back over continuation bytes (10xxxxxx) to the lead byte of the last character.
+        while index > 0, data.count - index < 4, data[data.startIndex + index - 1] & 0xC0 == 0x80 { index -= 1 }
+        guard index > 0 else { return data.count }
+        let lead = data[data.startIndex + index - 1]
+        let needed = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1
+        return data.count - (index - 1) >= needed ? data.count : index - 1
     }
 
     private func load(_ path: String) throws -> (OpaquePointer, OpaquePointer) {

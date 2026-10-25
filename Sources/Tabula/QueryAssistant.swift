@@ -11,7 +11,14 @@ final class QueryAssistant {
     /// Incremented to submit the prompt from outside the bar (debug automation).
     var submitRequest = 0
     private(set) var busy = false
+    /// What the model is doing while it works: the end of its reasoning, then of the SQL it is writing.
+    private(set) var progress: Progress?
     var error: String?
+
+    enum Progress: Equatable {
+        case thinking(String)
+        case writing(String)
+    }
     private var task: Task<Void, Never>?
     private var current: UUID?
 
@@ -30,9 +37,10 @@ final class QueryAssistant {
         current = id
         task = Task {
             // A newer request owns `busy`; an older one finishing late must not clear it.
-            defer { if current == id { busy = false } }
+            defer { if current == id { busy = false; progress = nil } }
             do {
-                let sql = SQLPrompts.cleanSQL(try await AIService.shared.complete(await request()))
+                let reply = try await receive(AIService.shared.stream(await request()), id: id)
+                let sql = SQLPrompts.cleanSQL(reply)
                 guard !Task.isCancelled else { return }
                 guard !sql.isEmpty else { error = "The model returned nothing to insert."; return }
                 apply(sql)
@@ -44,10 +52,54 @@ final class QueryAssistant {
         }
     }
 
+    #if DEBUG
+    /// Plays a made-up answer at a steady pace, to look at the progress line.
+    func simulate(thinking: String, answer: String, piece: Duration, apply: @escaping (String) -> Void) {
+        busy = true
+        showPrompt = true
+        let id = UUID()
+        current = id
+        task = Task {
+            defer { if current == id { busy = false; progress = nil } }
+            let stream = AIStream { continuation in
+                Task {
+                    for word in thinking.split(separator: " ") { try await Task.sleep(for: piece); continuation.yield(.thinking(word + " ")) }
+                    for word in answer.split(separator: " ") { try await Task.sleep(for: piece); continuation.yield(.text(word + " ")) }
+                    continuation.finish()
+                }
+            }
+            if let reply = try? await receive(stream, id: id) { apply(SQLPrompts.cleanSQL(reply)) }
+        }
+    }
+    #endif
+
+    /// Collects the answer, showing the reasoning and the SQL as they arrive (a few times a second).
+    private func receive(_ stream: AIStream, id: UUID) async throws -> String {
+        var text = "", thinking = ""
+        var lastRefresh = Date.distantPast
+        for try await event in stream {
+            switch event {
+            case .text(let piece): text += piece
+            case .thinking(let piece): thinking += piece
+            }
+            guard current == id, Date().timeIntervalSince(lastRefresh) >= Defaults.AI.streamRefreshInterval else { continue }
+            lastRefresh = Date()
+            progress = text.isEmpty ? .thinking(Self.tail(thinking)) : .writing(Self.tail(text))
+        }
+        return text
+    }
+
+    /// The last words of a growing text, on one line.
+    private static func tail(_ text: String) -> String {
+        String(text.suffix(Defaults.AI.progressLength)).replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+    }
+
     func cancel() {
         task?.cancel()
         current = nil
         busy = false
+        progress = nil
     }
 }
 
@@ -63,6 +115,10 @@ struct AIPromptBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             bar
+            if assistant.busy, let progress = assistant.progress {
+                AIProgressLine(progress: progress)
+                    .padding(.horizontal, Layout.barPadding).padding(.bottom, Layout.barPadding / 2)
+            }
             if let error = assistant.error {
                 Text(error).font(Layout.Font.small).foregroundStyle(.red).lineLimit(3).textSelection(.enabled)
                     .padding(.horizontal, Layout.barPadding).padding(.bottom, Layout.barPadding / 2)
@@ -96,5 +152,27 @@ struct AIPromptBar: View {
         .controlSize(.small)
         .padding(.horizontal, Layout.barPadding)
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.barHeight)
+    }
+}
+
+/// One line of what the model is doing: the end of its reasoning, or of the SQL it is writing.
+struct AIProgressLine: View {
+    let progress: QueryAssistant.Progress
+
+    var body: some View {
+        HStack(spacing: Layout.barPadding / 2) {
+            switch progress {
+            case .thinking(let text):
+                Image(systemName: "brain").foregroundStyle(.secondary)
+                Text(text).foregroundStyle(.secondary)
+            case .writing(let text):
+                Image(systemName: "pencil").foregroundStyle(.secondary)
+                Text(text).font(Layout.Font.monoSmall).foregroundStyle(.secondary)
+            }
+        }
+        .font(Layout.Font.small)
+        .lineLimit(1)
+        .truncationMode(.head)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

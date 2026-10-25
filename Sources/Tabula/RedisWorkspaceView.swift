@@ -169,12 +169,12 @@ private struct RedisSidebar: View {
 /// Content: the keys table with filters, and the selected key's editor underneath.
 private struct RedisKeysPane: View {
     @Bindable var model: RedisWorkspaceModel
-    @FocusState private var patternFocused: Bool
 
     var body: some View {
-        VSplitView {
+        VerticalSplit(topMinimum: Layout.Redis.keysMinHeight, bottomMinimum: Layout.Redis.valueMinHeight,
+                      topIdeal: Layout.Redis.keysIdealHeight, autosaveName: "RedisKeys") {
             VStack(spacing: 0) {
-                filterBar
+                RedisFilterBar(model: model)
                 Divider()
                 if let error = model.keysError {
                     ErrorBanner(message: error) { model.keysError = nil }
@@ -211,7 +211,7 @@ private struct RedisKeysPane: View {
                 Divider()
                 bottomBar
             }
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Redis.keysMinHeight, idealHeight: Layout.Redis.keysIdealHeight)
+        } bottom: {
 
             Group {
                 if let key = model.keyModel {
@@ -222,9 +222,7 @@ private struct RedisKeysPane: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Redis.valueMinHeight, idealHeight: Layout.Redis.valueIdealHeight)
         }
-        .onChange(of: model.patternFocusRequest) { _, _ in model.mode = .keys; patternFocused = true }
     }
 
     private func cell(row: Int, column: Int) -> GridCell {
@@ -239,40 +237,6 @@ private struct RedisKeysPane: View {
         }
     }
 
-    private var filterBar: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
-                TextField("Key pattern, e.g. user:*   (⌘F)", text: $model.pattern)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: .monospaced))
-                    .focused($patternFocused)
-                    .onSubmit { Task { await model.reloadKeys() } }
-                if model.pattern != "*" {
-                    Button { model.pattern = "*"; Task { await model.reloadKeys() } } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-
-            Picker("Type", selection: Binding(get: { model.typeFilter }, set: { type in
-                model.typeFilter = type
-                Task { await model.reloadKeys() }
-            })) {
-                Text("All types").tag(RedisKeyType?.none)
-                Divider()
-                ForEach(RedisKeyType.allCases.filter { $0 != .unknown }, id: \.self) { Text($0.displayName).tag(RedisKeyType?.some($0)) }
-            }
-            .labelsHidden()
-            .fixedSize()
-            Button { model.showNewKey = true } label: { Label("New Key", systemImage: "plus") }
-                .help("New key (⌘N)")
-        }
-        .controlSize(.small)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-    }
 
     private var bottomBar: some View {
         HStack(spacing: 8) {
@@ -679,5 +643,48 @@ struct RedisConsoleView: View {
             .barBackground()
         }
         .onAppear { focused = true }
+    }
+}
+
+/// The key pattern, type filter and New Key button. Its own view so the pattern field and the focus state that
+/// ⌘F sets live in the same hosting view (the split view hosts each pane separately).
+private struct RedisFilterBar: View {
+    @Bindable var model: RedisWorkspaceModel
+    @FocusState private var patternFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
+                TextField("Key pattern, e.g. user:*   (⌘F)", text: $model.pattern)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced))
+                    .focused($patternFocused)
+                    .onSubmit { Task { await model.reloadKeys() } }
+                if model.pattern != "*" {
+                    Button { model.pattern = "*"; Task { await model.reloadKeys() } } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+
+            Picker("Type", selection: Binding(get: { model.typeFilter }, set: { type in
+                model.typeFilter = type
+                Task { await model.reloadKeys() }
+            })) {
+                Text("All types").tag(RedisKeyType?.none)
+                Divider()
+                ForEach(RedisKeyType.allCases.filter { $0 != .unknown }, id: \.self) { Text($0.displayName).tag(RedisKeyType?.some($0)) }
+            }
+            .labelsHidden()
+            .fixedSize()
+            Button { model.showNewKey = true } label: { Label("New Key", systemImage: "plus") }
+                .help("New key (⌘N)")
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .onChange(of: model.patternFocusRequest) { _, _ in model.mode = .keys; patternFocused = true }
     }
 }

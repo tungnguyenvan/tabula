@@ -7,9 +7,10 @@ import TabulaCore
 /// - TABULA_DEBUG_OPEN: connection UUID to open at launch
 /// - TABULA_DEBUG_TABLE: table name to open once connected; TABULA_DEBUG_DOCUMENT: a row to open in the document editor (MongoDB);
 ///   TABULA_DEBUG_PAGE_SIZE: rows per page for that table
-/// - TABULA_DEBUG_QUERY: SQL to run in the first query tab
+/// - TABULA_DEBUG_QUERY: SQL to run in the first query tab; TABULA_DEBUG_QUERY_THEN: more SQL to run a moment later
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
+/// - TABULA_DEBUG_CHAT_DEMO (a question) / TABULA_DEBUG_ASK_DEMO: play a made-up streamed answer with reasoning
 @MainActor
 enum DebugHooks {
     private static let environment = ProcessInfo.processInfo.environment
@@ -42,6 +43,20 @@ enum DebugHooks {
                 if let routine = model.routines.first(where: { $0.name == name }) { model.openRoutine(routine) }
             }
         }
+        if environment["TABULA_DEBUG_ASK_DEMO"] != nil, case .query(let query) = model.tabs.first {
+            query.assistant.prompt = "top 5 customers by total order value"
+            query.assistant.simulate(thinking: "Orders hold each order's total, so sum it per customer and join customers for the name.",
+                                     answer: "SELECT c.id, c.name, SUM(o.total) AS spent FROM public.customers c JOIN public.orders o ON o.customer_id = c.id GROUP BY c.id, c.name ORDER BY spent DESC LIMIT 5;",
+                                     piece: .milliseconds(200)) { query.insertRequest = ($0, UUID()) }
+        }
+        if let question = environment["TABULA_DEBUG_CHAT_DEMO"] {
+            model.rightPanel = .ai
+            model.showInspector = true
+            model.chat.simulate(question: question,
+                                thinking: "The user wants the customers who spent the most. Orders hold the total per order, so sum orders.total per customer, join customers for the name, sort descending and keep five.",
+                                answer: "Sum each customer's orders and keep the top five:\n\n```sql\nSELECT c.id, c.name, SUM(o.total) AS spent\nFROM public.customers c\nJOIN public.orders o ON o.customer_id = c.id\nGROUP BY c.id, c.name\nORDER BY spent DESC\nLIMIT 5;\n```",
+                                piece: .milliseconds(150))
+        }
         if let question = environment["TABULA_DEBUG_CHAT"] {
             model.rightPanel = .ai
             model.showInspector = true
@@ -61,6 +76,13 @@ enum DebugHooks {
         if let sql = environment["TABULA_DEBUG_QUERY"], case .query(let query) = model.tabs.first {
             query.sql = sql
             Task { await query.run() }
+            // A second query a moment later, e.g. to check how the grid moves to a different result.
+            if let next = environment["TABULA_DEBUG_QUERY_THEN"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    query.sql = next
+                    Task { await query.run() }
+                }
+            }
         }
         if let name = environment["TABULA_DEBUG_TABLE"], let table = model.tables.first(where: { $0.name == name }) {
             model.open(table, mode: environment["TABULA_DEBUG_MODE"] == "structure" ? .structure : .data)
