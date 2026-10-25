@@ -51,13 +51,9 @@ public struct AppleIntelligenceProvider: AIProvider {
                 var sent = ""
                 for try await snapshot in session.streamResponse(to: request.prompt, options: options) {
                     let text = snapshot.content
-                    if text.hasPrefix(sent) {
-                        let new = String(text.dropFirst(sent.count))
-                        if !new.isEmpty { continuation.yield(.text(new)) }
-                    } else {
-                        continuation.yield(.text(text))
-                    }
-                    sent = text
+                    // A snapshot that rewrites earlier text can't be taken back; send only what goes past it.
+                    if text.count > sent.count { continuation.yield(.text(String(text.dropFirst(sent.count)))) }
+                    if text.count >= sent.count { sent = text }
                 }
                 return
             }

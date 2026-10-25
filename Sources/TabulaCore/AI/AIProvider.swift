@@ -435,6 +435,8 @@ extension SQLPrompts {
     /// Removes Markdown fences and chatter that models add despite instructions.
     public static func cleanSQL(_ text: String) -> String {
         var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Reasoning a server left in the answer (`…</think>`, sometimes without the opening tag) isn't SQL.
+        if let close = body.range(of: "</think>", options: .backwards) { body = String(body[close.upperBound...]) }
         if let open = body.range(of: "```") {
             var inner = body[open.upperBound...]
             // Drop a language tag on the fence line.

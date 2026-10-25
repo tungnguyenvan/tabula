@@ -85,18 +85,19 @@ final class AIService {
 
     /// Sends the request to the provider configured for its purpose (Ask AI or suggestions while typing).
     func complete(_ request: AIRequest) async throws -> String {
+        try await provider(for: request.purpose).complete(request)
+    }
+
+    /// The backend chosen for this kind of request, with its address, model and key.
+    private func provider(for purpose: AIRequest.Purpose) async -> any AIProvider {
         let settings = settings
-        let kind = settings.provider(for: request.purpose)
-        let endpoint = settings.endpoint(for: request.purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : "")
-        return try await AIProviders.make(endpoint).complete(request)
+        let kind = settings.provider(for: purpose)
+        return AIProviders.make(settings.endpoint(for: purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : ""))
     }
 
     /// The answer as the model writes it, with its reasoning when the provider shares it.
     func stream(_ request: AIRequest) async -> AIStream {
-        let settings = settings
-        let kind = settings.provider(for: request.purpose)
-        let endpoint = settings.endpoint(for: request.purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : "")
-        return AIProviders.make(endpoint).stream(request)
+        await provider(for: request.purpose).stream(request)
     }
 
     /// A tiny round trip, for the Test buttons in Settings.

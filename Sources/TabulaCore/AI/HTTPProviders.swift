@@ -32,10 +32,22 @@ public struct AnthropicProvider: AIProvider {
         } else {
             if let effort = endpoint.effort { body["output_config"] = ["effort": effort] }
             // Current models think by default but return the reasoning empty unless asked for a summary.
-            body["thinking"] = ["type": "adaptive", "display": "summarized"]
+            // Older ones (before 4.6) only take a token budget and would reject this.
+            if Self.takesAdaptiveThinking(endpoint.model) { body["thinking"] = ["type": "adaptive", "display": "summarized"] }
         }
         http.httpBody = try JSONSerialization.data(withJSONObject: body)
         return http
+    }
+
+    /// Claude models from 4.6 on (Opus, Sonnet, Haiku, Fable, Mythos) take adaptive thinking; ids look like
+    /// `claude-opus-5-5`, `claude-sonnet-4-6-20260101` or `anthropic/claude-haiku-5-5` behind a gateway.
+    static func takesAdaptiveThinking(_ model: String) -> Bool {
+        let pattern = #"claude-(?:opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: model, range: NSRange(location: 0, length: (model as NSString).length)) else { return false }
+        let major = Int((model as NSString).substring(with: match.range(at: 1))) ?? 0
+        let minor = match.range(at: 2).location == NSNotFound ? 0 : Int((model as NSString).substring(with: match.range(at: 2))) ?? 0
+        return major > 4 || (major == 4 && minor >= 6)
     }
 
     private static func errorMessage(_ data: Data) -> String {

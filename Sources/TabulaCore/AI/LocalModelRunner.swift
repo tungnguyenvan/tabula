@@ -74,7 +74,11 @@ public final class LocalModelRunner: @unchecked Sendable {
         guard let vocab = llama_model_get_vocab(model) else { throw AIError.server("The model has no vocabulary.") }
         llama_memory_clear(llama_get_memory(context), true)
 
-        let tokens = tokenize(chat(model: model, instructions: instructions, prompt: prompt), vocab: vocab, special: true)
+        let formatted = chat(model: model, instructions: instructions, prompt: prompt)
+        // Some chat templates (DeepSeek-R1 distills, Qwen3) open the reasoning block themselves, so the model's
+        // output starts inside it; say so to whoever splits the reasoning out.
+        if formatted.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("<think>") { onText?("<think>") }
+        let tokens = tokenize(formatted, vocab: vocab, special: true)
         return try complete(tokens, context: context, vocab: vocab, maxTokens: maxTokens, stopAtNewline: stopAtNewline,
                             cancelled: cancelled, onText: onText)
     }

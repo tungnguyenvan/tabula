@@ -149,6 +149,21 @@ final class AIStreamingTests: XCTestCase {
         XCTAssertEqual(reply, "SELECT 4")
     }
 
+    func testAdaptiveThinkingOnlyForModelsThatTakeIt() {
+        for model in ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-opus-4-6",
+                      "claude-sonnet-4-6-20260115", "anthropic/claude-opus-5", "claude-opus-5-20260301"] {
+            XCTAssertTrue(AnthropicProvider.takesAdaptiveThinking(model), model)
+        }
+        for model in ["claude-haiku-4-5", "claude-sonnet-4-5-20250929", "claude-3-7-sonnet", "claude-opus-4-1", "gpt-5", ""] {
+            XCTAssertFalse(AnthropicProvider.takesAdaptiveThinking(model), model)
+        }
+    }
+
+    func testCleanSQLDropsLeftoverReasoning() {
+        XCTAssertEqual(SQLPrompts.cleanSQL("Okay, the user wants a count.</think>\n\nSELECT count(*) FROM t"), "SELECT count(*) FROM t")
+        XCTAssertEqual(SQLPrompts.cleanSQL("<think>hm</think>```sql\nSELECT 1\n```"), "SELECT 1")
+    }
+
     func testCompleteUTF8Prefix() {
         let text = Data("Hà Nội".utf8)
         XCTAssertEqual(LocalModelRunner.completeUTF8Length(text), text.count)
@@ -203,11 +218,15 @@ final class CLIEventsTests: XCTestCase {
         let current = try await run([
             #"{"type":"thread.started","thread_id":"t"}"#,
             #"{"type":"item.completed","item":{"id":"i0","type":"reasoning","text":"Look at the schema"}}"#,
-            #"{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"SELECT 1"}}"#,
+            #"{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"Let me check the tables."}}"#,
+            #"{"type":"error","message":"Reconnecting... 1/5"}"#,
+            #"{"type":"item.completed","item":{"id":"i2","type":"agent_message","text":"SELECT 1"}}"#,
             #"{"type":"turn.completed","usage":{}}"#,
         ]) { $0.codex($1) }
-        XCTAssertEqual(current.thinking, "Look at the schema\n\n")
-        XCTAssertEqual(current.text, "SELECT 1")
+        // A progress note goes with the reasoning; the last message is the answer, sent when Codex finishes.
+        XCTAssertEqual(current.thinking, "Look at the schema\n\nLet me check the tables.\n\n")
+        XCTAssertEqual(current.text, "")
+        XCTAssertEqual(current.events.lastMessage, "SELECT 1")
         let older = try await run([
             #"{"id":"0","msg":{"type":"agent_reasoning_delta","delta":"Hm"}}"#,
             #"{"id":"0","msg":{"type":"agent_message_delta","delta":"SELECT "}}"#,
@@ -216,6 +235,7 @@ final class CLIEventsTests: XCTestCase {
         ]) { $0.codex($1) }
         XCTAssertEqual(older.thinking, "Hm")
         XCTAssertEqual(older.text, "SELECT 2")
+        XCTAssertTrue(older.events.sentText)
         let failed = try await run([#"{"type":"turn.failed","error":{"message":"quota"}}"#]) { $0.codex($1) }
         XCTAssertEqual(failed.events.failure, "quota")
     }

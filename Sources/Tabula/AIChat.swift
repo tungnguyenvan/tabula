@@ -80,6 +80,11 @@ final class AIChatModel {
             lastRefresh = Date()
             revision += 1
         }
+        // Whatever arrived before a failure stays in the message.
+        defer {
+            flush()
+            update(id) { $0.text = $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
         for try await event in stream {
             switch event {
             case .text(let piece): text += piece
@@ -87,8 +92,6 @@ final class AIChatModel {
             }
             if Date().timeIntervalSince(lastRefresh) >= Defaults.AI.streamRefreshInterval { flush() }
         }
-        flush()
-        update(id) { $0.text = $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
     #if DEBUG
@@ -164,6 +167,9 @@ struct AIChatView: View {
     @Bindable var chat: AIChatModel
     @FocusState private var inputFocused: Bool
     @State private var editingInstructions = false
+    /// Whether the end of the conversation is on screen; a streaming answer is followed only then, so scrolling
+    /// up to read something stays put.
+    @State private var atBottom = true
 
     private var queryTab: QueryTabModel? {
         if case .query(let query) = workspace.selectedTab { return query }
@@ -183,15 +189,18 @@ struct AIChatView: View {
                         if let error = chat.error {
                             Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled)
                         }
+                        Color.clear.frame(height: 1).id(Self.endID)
+                            .onAppear { atBottom = true }
+                            .onDisappear { atBottom = false }
                     }
                     .padding(Layout.Chat.padding)
                 }
                 .onChange(of: chat.messages.count) { _, _ in
                     if let last = chat.messages.last?.id { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
                 }
-                // Follow an answer as it streams in.
+                // Follow an answer as it streams in, unless the user scrolled away from the end.
                 .onChange(of: chat.revision) { _, _ in
-                    if let last = chat.messages.last?.id { proxy.scrollTo(last, anchor: .bottom) }
+                    if atBottom { proxy.scrollTo(Self.endID, anchor: .bottom) }
                 }
             }
             Divider()
@@ -199,6 +208,8 @@ struct AIChatView: View {
         }
         .sheet(isPresented: $editingInstructions) { PromptEditor(prompt: .chat) }
     }
+
+    private static let endID = "end"
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding) {

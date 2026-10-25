@@ -41,41 +41,7 @@ public struct CLIProvider: AIProvider {
     }
 
     public func complete(_ request: AIRequest) async throws -> String {
-        guard let executable = await Self.locate(tool) else {
-            throw AIError.unavailable("\(tool == .claude ? "Claude Code" : "Codex") isn't installed, or isn't on your shell's PATH.")
-        }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("TabulaAI-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        switch tool {
-        case .claude:
-            // No tools: the agent only answers. JSON output separates the answer from anything the shell prints.
-            // The prompt goes in on stdin: arguments are visible to every local user in `ps`.
-            var arguments = ["-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "json"]
-            if !model.isEmpty { arguments += ["--model", model] }
-            if let effort { arguments += ["--effort", effort] }
-            let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
-                                                    input: request.prompt, directory: directory, timeout: Defaults.AI.generateTimeout)
-            for line in output.stdout.split(whereSeparator: \.isNewline).reversed() {
-                guard let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
-                if json["is_error"] as? Bool == true { throw AIError.server(json["result"] as? String ?? "Claude Code failed.") }
-                if let result = json["result"] as? String { return result }
-            }
-            throw AIError.server(Self.failure("Claude Code", output))
-        case .codex:
-            // Read-only sandbox; the final answer is written to a file, apart from the progress log.
-            let answer = directory.appendingPathComponent("answer.txt")
-            var arguments = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", answer.path]
-            if !model.isEmpty { arguments += ["--model", model] }
-            if let effort { arguments += ["-c", "model_reasoning_effort=\"\(effort)\""] }
-            arguments.append("-")  // read the prompt from stdin
-            let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
-                                                    input: request.instructions + "\n\n" + request.prompt,
-                                                    directory: directory, timeout: Defaults.AI.generateTimeout)
-            if let text = try? String(contentsOf: answer, encoding: .utf8), !text.isEmpty { return text }
-            throw AIError.server(Self.failure("Codex", output))
-        }
+        try await stream(request).text()
     }
 
     /// The agent's output as it works: Claude Code's partial messages (thinking and text), Codex's reasoning and
@@ -114,12 +80,13 @@ public struct CLIProvider: AIProvider {
                 let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
                                                         input: request.instructions + "\n\n" + request.prompt, directory: directory,
                                                         timeout: Defaults.AI.generateTimeout, onLine: { events.codex($0) })
-                if let failure = events.failure { throw AIError.server("Codex: \(failure)") }
+                // Codex writes status messages between steps; the answer is the last message (also in the file).
+                let final = (try? String(contentsOf: answer, encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 } ?? events.lastMessage
                 if !events.sentText {
-                    guard let text = try? String(contentsOf: answer, encoding: .utf8), !text.isEmpty else {
-                        throw AIError.server(Self.failure("Codex", output))
+                    guard let final else {
+                        throw AIError.server(events.failure.map { "Codex: \($0)" } ?? Self.failure("Codex", output))
                     }
-                    continuation.yield(.text(text))
+                    continuation.yield(.text(final))
                 }
             }
         }
@@ -139,12 +106,15 @@ final class CLIEvents: @unchecked Sendable {
     private var textSent = false
     private var finalResult: String?
     private var error: String?
+    /// Codex: the newest complete message; earlier ones were progress notes.
+    private var message: String?
 
     init(_ continuation: AIStream.Continuation) { self.continuation = continuation }
 
     var sentText: Bool { lock.withLock { textSent } }
     var result: String? { lock.withLock { finalResult } }
     var failure: String? { lock.withLock { error } }
+    var lastMessage: String? { lock.withLock { message } }
 
     private func yield(_ event: AIStreamEvent) {
         if case .text = event { lock.withLock { textSent = true } }
@@ -178,28 +148,33 @@ final class CLIEvents: @unchecked Sendable {
     }
 
     /// `codex exec --json`: completed items (reasoning, agent_message) in current versions; older versions sent
-    /// `msg` objects with deltas.
+    /// `msg` objects with deltas. Messages before the last are progress notes, shown with the reasoning; the
+    /// answer is sent at the end. Error events are kept but only matter when no answer comes (Codex reports
+    /// retries it recovers from as errors too).
     func codex(_ line: String) {
         guard let json = Self.object(line) else { return }
         if let item = json["item"] as? [String: Any], json["type"] as? String == "item.completed" {
             switch item["type"] as? String {
             case "reasoning": if let text = item["text"] as? String { yield(.thinking(text + "\n\n")) }
-            case "agent_message": if let text = item["text"] as? String { yield(.text(text)) }
+            case "agent_message":
+                guard let text = item["text"] as? String else { return }
+                let previous = lock.withLock { () -> String? in defer { message = text }; return message }
+                if let previous { yield(.thinking(previous + "\n\n")) }
             default: break
             }
             return
         }
         if json["type"] as? String == "turn.failed" || json["type"] as? String == "error" {
-            let message = ((json["error"] as? [String: Any])?["message"] ?? json["message"]) as? String
-            lock.withLock { error = message ?? "Codex failed." }
+            let text = ((json["error"] as? [String: Any])?["message"] ?? json["message"]) as? String
+            lock.withLock { error = text ?? "Codex failed." }
             return
         }
-        guard let message = json["msg"] as? [String: Any] else { return }
-        switch message["type"] as? String {
-        case "agent_reasoning_delta": if let text = message["delta"] as? String { yield(.thinking(text)) }
-        case "agent_message_delta": if let text = message["delta"] as? String { yield(.text(text)) }
-        case "agent_message": if !sentText, let text = message["message"] as? String { yield(.text(text)) }
-        case "error": lock.withLock { error = message["message"] as? String ?? "Codex failed." }
+        guard let event = json["msg"] as? [String: Any] else { return }
+        switch event["type"] as? String {
+        case "agent_reasoning_delta": if let text = event["delta"] as? String { yield(.thinking(text)) }
+        case "agent_message_delta": if let text = event["delta"] as? String { yield(.text(text)) }
+        case "agent_message": if let text = event["message"] as? String { lock.withLock { message = text } }
+        case "error": lock.withLock { error = event["message"] as? String ?? "Codex failed." }
         default: break
         }
     }
@@ -316,28 +291,26 @@ enum ShellCommand {
             set { lock.withLock { expired = newValue } }
         }
 
+        /// Lines are handed on while the lock is held: the pipe's handler and the termination handler run on
+        /// different threads, and the lines must keep their order.
         func append(out data: Data) {
-            let lines: [String] = lock.withLock {
+            lock.withLock {
                 out.append(data)
-                guard onLine != nil else { return [] }
+                guard let onLine else { return }
                 partialLine.append(data)
-                var lines: [String] = []
                 while let newline = partialLine.firstIndex(of: UInt8(ascii: "\n")) {
-                    lines.append(String(decoding: partialLine[partialLine.startIndex..<newline], as: UTF8.self))
+                    onLine(String(decoding: partialLine[partialLine.startIndex..<newline], as: UTF8.self))
                     partialLine = Data(partialLine[partialLine.index(after: newline)...])
                 }
-                return lines
             }
-            lines.forEach { onLine?($0) }
         }
 
         /// The last line, when output didn't end with a newline.
         func flushLine() {
-            let line: String? = lock.withLock {
+            lock.withLock {
                 defer { partialLine = Data() }
-                return partialLine.isEmpty ? nil : String(decoding: partialLine, as: UTF8.self)
+                if !partialLine.isEmpty { onLine?(String(decoding: partialLine, as: UTF8.self)) }
             }
-            if let line { onLine?(line) }
         }
         func append(err data: Data) { lock.withLock { err.append(data) } }
         func output(status: Int32) -> Output {
