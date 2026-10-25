@@ -61,8 +61,20 @@ struct WorkspaceView: View {
         } detail: {
             detail
                 .inspector(isPresented: $model.showInspector) {
-                    RowInspectorView(model: model)
-                        .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
+                    VStack(spacing: 0) {
+                        Picker("Panel", selection: $model.rightPanel) {
+                            ForEach(WorkspaceModel.RightPanel.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .padding(Layout.barPadding)
+                        Divider()
+                        switch model.rightPanel {
+                        case .rowDetails: RowInspectorView(model: model)
+                        case .ai: AIChatView(workspace: model, chat: model.chat)
+                        }
+                    }
+                    .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
                 }
         }
         .navigationTitle(model.config.displayName)
@@ -97,7 +109,9 @@ struct WorkspaceView: View {
                     .disabled(model.driver == nil)
                 Button { model.showConsole.toggle() } label: { Label("Console", systemImage: "rectangle.bottomthird.inset.filled") }
                     .help("Console log (⇧⌘C)")
-                Button { model.showInspector.toggle() } label: { Label("Row Details", systemImage: "sidebar.right") }
+                Button { model.toggleRightPanel(.ai) } label: { Label("AI Chat", systemImage: "bubble.left.and.text.bubble.right") }
+                    .help("AI chat (⌥⌘A)")
+                Button { model.toggleRightPanel(.rowDetails) } label: { Label("Row Details", systemImage: "sidebar.right") }
                     .help("Show row details (⌥⌘0)")
                     .keyboardShortcut("0", modifiers: [.command, .option])
             }
@@ -187,8 +201,10 @@ struct ConnectionPill: View {
             KindBadge(kind: config.kind, size: 18)
             if config.tag != .none {
                 Text(config.tag.displayName.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
+                    .font(Layout.Font.tag)
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .fixedSize()
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(tint, in: RoundedRectangle(cornerRadius: 3))
             }

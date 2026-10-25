@@ -112,6 +112,18 @@ struct UpdateView: View {
 }
 
 struct SettingsView: View {
+    /// Reopens on the tab used last, as macOS settings windows do.
+    @AppStorage("TabulaSettingsTab") private var tab = "general"
+
+    var body: some View {
+        TabView(selection: $tab) {
+            GeneralSettingsView().tabItem { Label("General", systemImage: "gearshape") }.tag("general")
+            AISettingsView().tabItem { Label("AI", systemImage: "sparkles") }.tag("ai")
+        }
+    }
+}
+
+private struct GeneralSettingsView: View {
     @State private var automatic = Updater.shared.automaticallyChecks
 
     var body: some View {
@@ -127,7 +139,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: Layout.Settings.width)
         .fixedSize()
     }
 }

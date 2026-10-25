@@ -22,9 +22,12 @@ let package = Package(
                 .product(name: "MySQLNIO", package: "mysql-nio"),
                 .product(name: "RediStack", package: "RediStack"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                "llama",
             ],
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
+        // llama.cpp, which runs local models inside the app. Fetched by scripts/fetch-llama.sh.
+        .binaryTarget(name: "llama", path: "Vendor/llama.xcframework"),
         .executableTarget(name: "Tabula", dependencies: ["TabulaCore"]),
         .testTarget(name: "TabulaCoreTests", dependencies: ["TabulaCore"]),
     ],

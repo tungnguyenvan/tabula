@@ -49,6 +49,8 @@ public actor MySQLDriver: DatabaseDriver {
     }
 
     static func describe(_ error: any Error) -> String {
+        // Our own errors (timeouts, TLS setup) already read well.
+        if let database = error as? DatabaseError { return database.message }
         if let mysql = error as? MySQLError {
             if case .server(let packet) = mysql {
                 return "\(packet.errorMessage) (\(packet.errorCode.rawValue))"

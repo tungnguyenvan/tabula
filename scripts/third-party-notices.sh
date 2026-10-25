@@ -31,6 +31,12 @@ for pin in sorted(pins, key=lambda p: p["identity"]):
             parts.append(f"--- {name} ---\n" + open(os.path.join(root, name), encoding="utf-8", errors="replace").read().strip() + "\n")
     if not license:
         parts.append("(No license file found in the package checkout.)\n")
+# Binary dependencies aren't in Package.resolved; their licenses are kept in Resources/licenses.
+tag = open("LLAMA_CPP_VERSION").read().split()[0]
+parts.append("=" * 78)
+parts.append(f"llama.cpp {tag}\nhttps://github.com/ggml-org/llama.cpp")
+parts.append("=" * 78)
+parts.append("--- LICENSE ---\n" + open("Resources/licenses/llama.cpp-LICENSE.txt", encoding="utf-8").read().strip() + "\n")
 open(out, "w").write("\n".join(parts) + "\n")
-print(f"Wrote {out} ({len(pins)} packages)")
+print(f"Wrote {out} ({len(pins)} packages and llama.cpp)")
 PY

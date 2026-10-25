@@ -57,13 +57,17 @@ public enum SQLCompletion {
             rest.removeLast()
         }
         let significant = rest.filter { $0.kind != .whitespace && $0.kind != .comment }
+        let statementTokens = tokens.filter { $0.range.location >= base && (statement.map { $0.range.location + $0.range.length + 1 } ?? Int.max) > $0.range.location }
+        let statementTables = referencedTables(statementTokens)
         let scope: Scope
         if let dot = significant.last, dot.text == ".", significant.count >= 2,
            NSMaxRange(dot.range) == partialRange.location {
             let qualifier = unquoted(significant[significant.count - 2].text)
             // `FROM sales.` (or any known schema name) names a schema; otherwise `x.` is a table or alias.
             let afterTableKeyword = significant.count >= 3 && tableKeywords.contains(significant[significant.count - 3].keyword)
-            let isSchema = afterTableKeyword || schemas.contains { $0.caseInsensitiveCompare(qualifier) == .orderedSame }
+            // An alias defined in the statement wins over a schema of the same name.
+            let isAlias = statementTables.keys.contains(qualifier.lowercased())
+            let isSchema = afterTableKeyword || (!isAlias && schemas.contains { $0.caseInsensitiveCompare(qualifier) == .orderedSame })
             // schema.table. - the word before the qualifier is itself followed by a dot.
             let schema = significant.count >= 4 && significant[significant.count - 3].text == "."
                 ? unquoted(significant[significant.count - 4].text) : nil
@@ -73,8 +77,12 @@ public enum SQLCompletion {
         } else {
             scope = .anything
         }
-        let statementTokens = tokens.filter { $0.range.location >= base && (statement.map { $0.range.location + $0.range.length + 1 } ?? Int.max) > $0.range.location }
-        return Context(partialRange: partialRange, partial: partial, scope: scope, tables: referencedTables(statementTokens))
+        return Context(partialRange: partialRange, partial: partial, scope: scope, tables: statementTables)
+    }
+
+    /// Every table a statement names after FROM / JOIN / UPDATE / INTO.
+    public static func tables(in sql: String, kind: DatabaseKind) -> [TableName] {
+        Array(Set(referencedTables(SQLLexer.tokens(sql, kind: kind)).values)).sorted()
     }
 
     /// Tables named after FROM / JOIN / UPDATE / INTO, keyed by alias and by name.

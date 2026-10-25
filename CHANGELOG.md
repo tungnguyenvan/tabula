@@ -5,9 +5,31 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Planned
-- AI assistant: write and fix queries, AI suggestions as you type; Apple Intelligence, local models via Ollama, OpenAI-compatible APIs (LiteLLM), the Claude API, Claude Code and Codex
 - SSH tunnels
 - Cancelling a running query
+
+## [0.3.0] - 2026-10-25
+
+### Added
+- **AI assistant**, off until turned on in Settings › AI:
+  - **AI chat** in the panel on the right (⌥⌘A): a conversation per connection, aware of the schema and the editor's SQL; queries in answers can be inserted, run or copied. A model menu under the message field switches models.
+  - With AI suggestions on, the grey suggestion comes from the model only. Models on this Mac complete by filling in the middle (prefix and suffix around the cursor), answer in well under a second, and stop on runaway repetition.
+  - **Models that run inside Tabula** (llama.cpp), with nothing else to install: light models to download from Settings (checked by SHA-256), any GGUF file added from disk or from a link, per-purpose use and delete. GPU on Apple silicon, CPU on Intel.
+  - **Ask AI** (⌘K): write SQL from a description, or change the selected SQL. The result is inserted (or replaces the selection) and can be undone.
+  - **Fix with AI** under a failed statement.
+  - **Suggestions while typing** from the model when nothing local fits; Tab accepts. They can use their own provider, such as a small local model, while Ask AI uses Claude Code or an API.
+  - The model is told schema-qualified table names, column types, primary and foreign keys.
+  - Providers: **Apple Intelligence** on the Mac; **local models through Ollama**, with light recommended models (from about 0.4 GB) to download, progress, and per-purpose use or delete in Settings; any **OpenAI-compatible API** (LiteLLM, LM Studio, OpenAI…); the **Claude API**; the installed **Claude Code** and **Codex** command-line tools.
+  - Only table and column names and the SQL near the cursor are sent, never rows. Off for Production connections unless allowed. API keys are kept in the Keychain.
+- Settings has General and AI tabs and reopens on the last one used; each AI provider keeps its own address, models and key.
+- A fuller About Tabula, readable in Dark Mode.
+
+### Fixed
+- Picking a schema (Postgres) or database (MySQL) in the sidebar now makes it the default for queries, so unqualified names no longer fail with "relation does not exist".
+- An apostrophe in a SQL comment no longer colors the following lines as a string; highlighting follows the database's comment and quoting rules.
+- Column suggestions could come from the wrong schema when the schema changed while names were loading, or when a schema name was mistyped.
+- An alias with the same name as a schema now completes the alias's columns.
+- Deleting forward no longer brings back a stale grey suggestion.
 
 ## [0.2.1] - 2026-10-25
 
@@ -91,7 +113,8 @@ First public release.
 - Release builds are ad-hoc signed and not notarized; macOS asks for confirmation on first launch (see the README).
 - Connecting to a database on the local network asks for Local Network permission on macOS 15 and later.
 
-[Unreleased]: https://github.com/tungnguyenvan/tabula/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/tungnguyenvan/tabula/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.3.0
 [0.2.1]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.2.1
 [0.2.0]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.2.0
 [0.1.0]: https://github.com/tungnguyenvan/tabula/releases/tag/v0.1.0

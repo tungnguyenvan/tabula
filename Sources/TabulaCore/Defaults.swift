@@ -48,6 +48,62 @@ public enum Defaults {
         public static let tableLimit = 200
     }
 
+    public enum AI {
+        /// Pause after the last keystroke before asking a model for an inline suggestion: remote providers,
+        /// and models on this Mac (fast enough to ask sooner).
+        public static let inlineDelay: Double = 0.6
+        public static let localInlineDelay: Double = 0.25
+        public static let inlineMaxTokens = 1024
+        public static let generateMaxTokens = 16000
+        public static let inlineTimeout: Double = 15
+        public static let generateTimeout: Double = 120
+        /// Built-in local models (llama.cpp): tokens of context, prompt batch size, buffer for one token's
+        /// text, and how long an unused model stays in memory.
+        public static let localContextLength: UInt32 = 8192
+        public static let localBatchSize: UInt32 = 512
+        public static let localPieceLength: Int32 = 256
+        public static let localUnloadDelay: Double = 5 * 60
+        /// Tokens a built-in model may write: a line while typing, a query for Ask AI.
+        public static let localInlineTokens = 48
+        /// A token repeated this many times in a row ends the answer.
+        public static let localRepeatLimit = 3
+        /// Longest suggestion shown while typing.
+        public static let inlineMaxCharacters = 120
+        public static let localGenerateTokens = 1024
+        /// Earlier chat messages sent with each question, and characters of the editor's SQL.
+        public static let chatHistoryMessages = 12
+        public static let chatEditorLength = 8000
+        /// Characters before the caret sent with an inline request.
+        public static let inlineContextLength = 2000
+        /// Foreign keys described to the model.
+        public static let schemaForeignKeyLimit = 300
+        /// Tables described to the model; larger schemas are cut off.
+        public static let schemaTableLimit = 150
+        public static let anthropicVersion = "2026-10-21"
+        /// Seconds a command-line tool gets to exit after being asked to stop.
+        public static let terminateGrace: Double = 2
+        /// Characters of a failing tool's output shown in an error.
+        public static let errorLength = 400
+
+        public struct LocalModel: Sendable, Identifiable {
+            public let name: String
+            public let summary: String
+            /// Small enough to answer while the user types.
+            public let forTyping: Bool
+            public var id: String { name }
+        }
+
+        /// Light models that run well on a Mac, offered for download in Settings, smallest first.
+        public static let recommendedLocalModels = [
+            LocalModel(name: "qwen2.5-coder:0.5b", summary: "Fastest, about 0.4 GB. Good for suggestions while typing.", forTyping: true),
+            LocalModel(name: "qwen2.5-coder:1.5b", summary: "About 1 GB. Fast suggestions that know SQL better.", forTyping: true),
+            LocalModel(name: "deepseek-coder:1.3b", summary: "About 0.8 GB. Another fast code model.", forTyping: true),
+            LocalModel(name: "qwen2.5-coder:3b", summary: "About 2 GB. Writes whole queries well on most Macs.", forTyping: false),
+            LocalModel(name: "qwen2.5-coder:7b", summary: "About 5 GB, 16 GB of memory recommended. Best local queries.", forTyping: false),
+            LocalModel(name: "sqlcoder:7b", summary: "About 4 GB. Tuned for SQL from a question.", forTyping: false),
+        ]
+    }
+
     public enum Updates {
         public static let requestTimeout: Double = 20
         public static let checkInterval: TimeInterval = 24 * 60 * 60

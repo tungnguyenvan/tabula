@@ -24,6 +24,7 @@ REPOSITORY="${REPOSITORY:-$(cat RELEASES_REPOSITORY)}"
 ARCH_FLAGS=()
 for arch in $ARCHS; do ARCH_FLAGS+=(--arch "$arch"); done
 
+./scripts/fetch-llama.sh
 swift build -c release "${ARCH_FLAGS[@]}" --product Tabula
 BIN="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)/Tabula"
 
@@ -32,6 +33,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Tabula"
 cp Resources/AppIcon.icns Resources/Credits.html Resources/THIRD_PARTY_NOTICES.txt LICENSE "$APP/Contents/Resources/"
+# llama.cpp (local models) ships inside the app; the executable finds it through this rpath.
+mkdir -p "$APP/Contents/Frameworks"
+ditto "$(dirname "$BIN")/llama.framework" "$APP/Contents/Frameworks/llama.framework"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/Tabula" 2>/dev/null || true
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -62,12 +67,15 @@ PLIST
 LOCAL_IDENTITY="${LOCAL_IDENTITY:-Tabula Local Signing}"
 if [ -n "${SIGN_IDENTITY:-}" ]; then
   # Hardened runtime + secure timestamp are required for notarization.
+  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP/Contents/Frameworks/llama.framework"
   codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
 elif security find-certificate -c "$LOCAL_IDENTITY" >/dev/null 2>&1; then
   # A fixed certificate keeps the same code identity across builds, so the Keychain keeps trusting the app.
+  codesign --force --sign "$LOCAL_IDENTITY" "$APP/Contents/Frameworks/llama.framework"
   codesign --force --sign "$LOCAL_IDENTITY" "$APP"
 else
   echo "warning: signing ad-hoc; the Keychain will ask again after every build (run scripts/make-signing-identity.sh)" >&2
+  codesign --force --sign - "$APP/Contents/Frameworks/llama.framework"
   codesign --force --sign - "$APP"
 fi
 echo "Built $APP $VERSION ($BUILD_NUMBER) for: $ARCHS"

@@ -36,6 +36,59 @@ final class EditorHandle {
         }
     }
 
+    /// The editor's selection and text at one moment, to insert an answer where it was asked for.
+    struct Snapshot {
+        var range: NSRange
+        var text: String
+        var selectedText: String? { range.length > 0 ? (text as NSString).substring(with: range) : nil }
+    }
+
+    func snapshot() -> Snapshot {
+        Snapshot(range: textView?.selectedRange() ?? NSRange(location: 0, length: 0), text: textView?.string ?? "")
+    }
+
+    /// Inserts at the snapshot's selection if the text hasn't changed since, otherwise at the current one.
+    func insert(_ text: String, at snapshot: Snapshot) {
+        if let textView, textView.string == snapshot.text { textView.setSelectedRange(snapshot.range) }
+        insertReplacingSelection(text)
+    }
+
+    /// Replaces the selection with `text`, or inserts it on its own line at the caret. Undoable.
+    func insertReplacingSelection(_ text: String) {
+        guard let textView else { return }
+        var range = textView.selectedRange()
+        var insertion = text
+        let string = textView.string as NSString
+        if range.length == 0, string.length > 0 {
+            // Put generated SQL on a line of its own rather than in the middle of the current one.
+            let line = string.lineRange(for: NSRange(location: range.location, length: 0))
+            let lineText = string.substring(with: line).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !lineText.isEmpty {
+                range = NSRange(location: NSMaxRange(line), length: 0)
+                insertion = (string.substring(with: line).hasSuffix("\n") ? "" : "\n") + text + "\n"
+            }
+        }
+        replace(range, with: insertion)
+        textView.setSelectedRange(NSRange(location: range.location, length: (insertion as NSString).length))
+    }
+
+    /// Replaces the first occurrence of `original` (e.g. the statement that failed) with `text`;
+    /// inserts `text` when `original` is no longer in the editor. Undoable.
+    func replace(_ original: String, with text: String) {
+        guard let textView else { return }
+        let range = (textView.string as NSString).range(of: original)
+        guard range.location != NSNotFound else { return insertReplacingSelection(text) }
+        replace(range, with: text)
+        textView.setSelectedRange(NSRange(location: range.location, length: (text as NSString).length))
+    }
+
+    private func replace(_ range: NSRange, with text: String) {
+        guard let textView, textView.shouldChangeText(in: range, replacementString: text) else { return }
+        textView.replaceCharacters(in: range, with: text)
+        textView.didChangeText()
+        SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
+    }
+
     /// Beautifies the selection, or the whole editor when nothing is selected. Undoable.
     func beautify(kind: DatabaseKind) {
         guard let textView else { return }
@@ -53,8 +106,15 @@ final class EditorHandle {
 struct SQLEditorView: NSViewRepresentable {
     @Binding var text: String
     var handle: EditorHandle
+    /// Decides comment and quoting rules for highlighting (`#` comments on MySQL, `$$` strings on Postgres).
+    var kind: DatabaseKind
     /// Completions for the word at a caret (UTF-16 offset): the range they replace and the candidates, best first.
     var suggest: (_ text: String, _ caret: Int) -> (range: NSRange, items: [String])
+    typealias AISuggest = @MainActor (_ before: String, _ after: String) async -> String?
+    /// Asks a model for a continuation when the user pauses typing; nil when AI suggestions are off.
+    var aiSuggest: AISuggest?
+    /// Pause before asking: short for models on this Mac, longer for remote ones.
+    var aiSuggestDelay: Double = Defaults.AI.inlineDelay
     /// Changes when completion has learned new names; the editor then refreshes its suggestion.
     var completionVersion = 0
     /// Each query tab keeps its own undo history.
@@ -68,6 +128,7 @@ struct SQLEditorView: NSViewRepresentable {
         let scrollView = SQLTextView.scrollableTextView()
         let textView = SQLTextView(frame: .zero)
         textView.coordinator = context.coordinator
+        textView.kind = kind
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -91,7 +152,7 @@ struct SQLEditorView: NSViewRepresentable {
         textView.isIncrementalSearchingEnabled = true
         textView.delegate = context.coordinator
         textView.string = text
-        SQLHighlighter.highlight(textView)
+        SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
 
         // Since macOS 14 views don't clip by default; the line-number gutter would draw over the bar above.
         scrollView.clipsToBounds = true
@@ -114,7 +175,7 @@ struct SQLEditorView: NSViewRepresentable {
         handle.textView = textView
         if textView.string != text {
             textView.string = text
-            SQLHighlighter.highlight(textView)
+            SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
         }
         if context.coordinator.completionVersion != completionVersion {
             context.coordinator.completionVersion = completionVersion
@@ -130,7 +191,7 @@ struct SQLEditorView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? SQLTextView else { return }
-            SQLHighlighter.highlight(textView)
+            SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
             textView.enclosingScrollView?.verticalRulerView?.needsDisplay = true
             parent.text = textView.string
             textView.updateInlineSuggestion()
@@ -150,6 +211,7 @@ struct SQLEditorView: NSViewRepresentable {
 
 final class SQLTextView: NSTextView {
     weak var coordinator: SQLEditorView.Coordinator?
+    var kind: DatabaseKind = .postgres
 
     /// Grey text after the caret completing the current word; Tab accepts it.
     private var inlineSuggestion: (location: Int, text: String)? {
@@ -169,8 +231,16 @@ final class SQLTextView: NSTextView {
     }
 
     func updateInlineSuggestion() {
+        aiTask?.cancel()
         let caret = selectedRange()
         guard typedCharacter, caret.length == 0, let coordinator else { inlineSuggestion = nil; return }
+        // With AI suggestions on, the grey text comes from the model only; the completion list (⎋) still
+        // offers tables, columns and keywords.
+        if coordinator.parent.aiSuggest != nil {
+            inlineSuggestion = nil
+            scheduleAISuggestion()
+            return
+        }
         let (range, items) = coordinator.parent.suggest(string, caret.location)
         let partial = (string as NSString).substring(with: range)
         // Only complete at the end of a word, never in the middle of one.
@@ -179,8 +249,49 @@ final class SQLTextView: NSTextView {
         // Right after "schema." or "alias." there is no word yet; the first table or column is offered as is.
         // (Not the completion list: NSTextView runs it modally, which would stall the app while it's open.)
         let afterDot = caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
-        guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else { inlineSuggestion = nil; return }
+        guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else {
+            inlineSuggestion = nil
+            return
+        }
         inlineSuggestion = (caret.location, String(best.dropFirst(partial.count)))
+    }
+
+    private var aiTask: Task<Void, Never>?
+
+    /// The last answer, so returning to the same text and caret (e.g. typing then deleting a character)
+    /// shows it again without asking.
+    private var lastAnswer: (text: String, location: Int, suggestion: String)?
+
+    /// Asks the model once typing pauses. Any keystroke or caret move cancels it, and the answer is only
+    /// shown if the text and caret are exactly as they were. Not in the middle of a word.
+    private func scheduleAISuggestion() {
+        guard let parent = coordinator?.parent, let ai = parent.aiSuggest else { return }
+        let location = selectedRange().location
+        let text = string
+        let full = text as NSString
+        let nextIsWord = location < full.length
+            && full.substring(with: NSRange(location: location, length: 1)).rangeOfCharacter(from: .alphanumerics) != nil
+        guard !nextIsWord else { return }
+        if let lastAnswer, lastAnswer.text == text, lastAnswer.location == location {
+            inlineSuggestion = (location, lastAnswer.suggestion)
+            return
+        }
+        let delay = parent.aiSuggestDelay
+        aiTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            let suggestion = await ai(full.substring(to: location), full.substring(from: location))
+            guard let self, !Task.isCancelled, let suggestion, self.string == text,
+                  self.selectedRange() == NSRange(location: location, length: 0) else { return }
+            self.lastAnswer = (text, location, suggestion)
+            self.inlineSuggestion = (location, suggestion)
+        }
+    }
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        // Any edit other than typing (delete, paste, undo) cancels a pending late refresh.
+        if !typedCharacter { lastTypedLocation = nil }
+        return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
     }
 
     /// Recomputes the suggestion after table or column names arrive, if the caret is still where the user typed.
@@ -192,6 +303,8 @@ final class SQLTextView: NSTextView {
     }
 
     func dropInlineSuggestionIfMoved() {
+        // Moving the caret away from where the user typed cancels a pending AI request.
+        if selectedRange() != NSRange(location: lastTypedLocation ?? -1, length: 0) { aiTask?.cancel() }
         if let suggestion = inlineSuggestion, selectedRange() != NSRange(location: suggestion.location, length: 0) { inlineSuggestion = nil }
     }
 
@@ -366,22 +479,21 @@ enum SQLHighlighter {
 
     static let keywords = SQLKeywords.all
 
-    private static let patterns: [(NSRegularExpression, NSColor)] = {
-        let keywordPattern = "\\b(" + keywords.joined(separator: "|") + ")\\b"
-        let rules: [(String, NSRegularExpression.Options, NSColor)] = [
-            (keywordPattern, [.caseInsensitive], .systemPink),
-            ("\\b\\d+(\\.\\d+)?\\b", [], .systemBlue),
-            ("'(?:[^']|'')*'?", [], .systemOrange),
-            ("\"(?:[^\"]|\"\")*\"?|`[^`]*`?", [], .systemTeal),
-            ("--[^\n]*|#[^\n]*|/\\*[\\s\\S]*?(\\*/|$)", [], .systemGray),
-        ]
-        return rules.compactMap { pattern, options, color in
-            (try? NSRegularExpression(pattern: pattern, options: options)).map { ($0, color) }
+    /// Colors by token kind, from the same lexer the formatter and completion use, so an apostrophe
+    /// in a comment can't start a "string" that runs on through the next lines.
+    private static func color(for token: SQLToken) -> NSColor? {
+        switch token.kind {
+        case .word: return SQLKeywords.set.contains(token.keyword) ? .systemPink : nil
+        case .number: return .systemBlue
+        case .string: return .systemOrange
+        case .quotedIdentifier: return .systemTeal
+        case .comment: return .systemGray
+        case .whitespace, .punctuation: return nil
         }
-    }()
+    }
 
-    /// Recolors the whole document; later rules (strings, comments) win over earlier ones.
-    static func highlight(_ textView: NSTextView) {
+    /// Recolors the whole document.
+    static func highlight(_ textView: NSTextView, kind: DatabaseKind) {
         guard let storage = textView.textStorage else { return }
         let text = storage.string
         let full = NSRange(location: 0, length: (text as NSString).length)
@@ -392,10 +504,8 @@ enum SQLHighlighter {
         }
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
-        for (regex, color) in patterns {
-            regex.enumerateMatches(in: text, range: full) { match, _, _ in
-                if let range = match?.range { storage.addAttribute(.foregroundColor, value: color, range: range) }
-            }
+        for token in SQLLexer.tokens(text, kind: kind) {
+            if let color = color(for: token) { storage.addAttribute(.foregroundColor, value: color, range: token.range) }
         }
         storage.endEditing()
         textView.typingAttributes = [.font: font, .foregroundColor: NSColor.textColor]

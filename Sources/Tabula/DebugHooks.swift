@@ -8,11 +8,14 @@ import TabulaCore
 /// - TABULA_DEBUG_TABLE: table name to open once connected
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
+/// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
 @MainActor
 enum DebugHooks {
     private static let environment = ProcessInfo.processInfo.environment
 
     static var showShortcuts: Bool { environment["TABULA_DEBUG_SHORTCUTS"] != nil }
+    static var showSettings: Bool { environment["TABULA_DEBUG_SETTINGS"] != nil }
+    static var showAbout: Bool { environment["TABULA_DEBUG_ABOUT"] != nil }
 
     static var connectionToOpen: UUID? { connectionsToOpen.first }
 
@@ -30,6 +33,22 @@ enum DebugHooks {
         if let count = environment["TABULA_DEBUG_TABS"].flatMap(Int.init) {
             for table in model.tables { model.open(table) }
             for _ in 0..<count { model.newQueryTab() }
+        }
+        if let question = environment["TABULA_DEBUG_CHAT"] {
+            model.rightPanel = .ai
+            model.showInspector = true
+            model.chat.input = question
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                let editor: String? = if case .query(let query) = model.selectedTab { query.sql } else { nil }
+                model.chat.send(workspace: model, editorSQL: editor)
+            }
+        }
+        if let prompt = environment["TABULA_DEBUG_ASK"], case .query(let query) = model.tabs.first {
+            query.assistant.showPrompt = true
+            query.assistant.prompt = prompt
+            if environment["TABULA_DEBUG_ASK_SUBMIT"] != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { query.assistant.submitRequest += 1 }
+            }
         }
         if let sql = environment["TABULA_DEBUG_QUERY"], case .query(let query) = model.tabs.first {
             query.sql = sql

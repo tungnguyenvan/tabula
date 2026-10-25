@@ -62,6 +62,23 @@ enum Layout {
         static let rowHeight: CGFloat = 20
     }
 
+    enum Chat {
+        static let spacing: CGFloat = 14
+        static let padding: CGFloat = 10
+        static let inputLines = 6
+    }
+
+    enum About {
+        static let paragraphSpacing: CGFloat = 6
+    }
+
+    enum Settings {
+        static let width: CGFloat = 520
+        /// The AI tab scrolls when a provider has more settings than fit.
+        static let aiHeight: CGFloat = 620
+        static let progressWidth: CGFloat = 120
+    }
+
     enum Welcome {
         static let width: CGFloat = 250
     }

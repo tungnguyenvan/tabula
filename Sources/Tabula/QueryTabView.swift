@@ -13,8 +13,13 @@ struct QueryTabView: View {
             VStack(spacing: 0) {
                 editorBar
                 Divider()
-                SQLEditorView(text: $model.sql, handle: handle, suggest: suggest, completionVersion: workspace.completionVersion,
-                              undoManager: model.undoManager) { all in run(all: all) }
+                if model.assistant.showPrompt {
+                    AIPromptBar(assistant: model.assistant, hasSelection: handle.selectedText != nil, submit: askAI)
+                    Divider()
+                }
+                SQLEditorView(text: $model.sql, handle: handle, kind: model.driver.kind, suggest: suggest, aiSuggest: aiSuggest,
+                              aiSuggestDelay: AIService.shared.settings.provider(for: .inline).runsLocally ? Defaults.AI.localInlineDelay : Defaults.AI.inlineDelay,
+                              completionVersion: workspace.completionVersion, undoManager: model.undoManager) { all in run(all: all) }
             }
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: Layout.Query.editorMinHeight, idealHeight: Layout.Query.editorIdealHeight)
 
@@ -24,6 +29,11 @@ struct QueryTabView: View {
         .onAppear { DispatchQueue.main.async { handle.focus() } }
         .onChange(of: model.runRequest.id) { _, _ in run(all: model.runRequest.all) }
         .onChange(of: model.beautifyRequest) { _, _ in handle.beautify(kind: model.driver.kind) }
+        .onChange(of: model.askAIRequest) { _, _ in model.assistant.error = nil; model.assistant.showPrompt = true }
+        .onChange(of: model.assistant.submitRequest) { _, _ in askAI() }
+        .onChange(of: model.insertRequest?.id) { _, _ in
+            if let sql = model.insertRequest?.sql { handle.insertReplacingSelection(sql) }
+        }
         .onChange(of: model.results.count) { _, _ in selection = [] }
         .onChange(of: model.selectedResult) { _, _ in selection = [] }
     }
@@ -56,6 +66,10 @@ struct QueryTabView: View {
                 Label("Beautify", systemImage: "text.alignleft")
             }
             .help("Format the selection, or the whole editor (⇧⌘I)")
+            Button { model.assistant.error = nil; model.assistant.showPrompt.toggle() } label: {
+                Label("Ask AI", systemImage: "sparkles")
+            }
+            .help("Write SQL from a description, or change the selection (⌘K)")
 
             Menu {
                 if workspace.history.isEmpty { Text("No queries yet") }
@@ -91,13 +105,27 @@ struct QueryTabView: View {
         VStack(spacing: 0) {
             if let error = model.error {
                 ScrollView {
-                    Label {
-                        Text(error).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
-                    } icon: {
-                        Image(systemName: "exclamationmark.octagon.fill")
+                    VStack(alignment: .leading, spacing: Layout.barPadding) {
+                        Label {
+                            Text(error).font(Layout.Font.mono).textSelection(.enabled)
+                        } icon: {
+                            Image(systemName: "exclamationmark.octagon.fill")
+                        }
+                        .foregroundStyle(.red)
+                        if model.failedStatement != nil, AIService.shared.settings.enabled {
+                            HStack(spacing: Layout.barPadding) {
+                                Button { fixWithAI() } label: { Label("Fix with AI", systemImage: "sparkles") }
+                                    .controlSize(.small)
+                                    .disabled(model.assistant.busy)
+                                if model.assistant.busy { ProgressView().controlSize(.small) }
+                                // The prompt bar may be closed, so a failed fix reports here.
+                                if !model.assistant.showPrompt, let failure = model.assistant.error {
+                                    Text(failure).font(Layout.Font.small).foregroundStyle(.secondary).lineLimit(2)
+                                }
+                            }
+                        }
                     }
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(Layout.barPadding)
                 }
                 .frame(maxHeight: model.results.isEmpty ? .infinity : 90)
                 Divider()
@@ -167,6 +195,44 @@ struct QueryTabView: View {
         let text = all ? nil : handle.textToRun(kind: model.driver.kind)
         if !all && text == nil { return }
         Task { await model.run(text) }
+    }
+
+    private func askAI() {
+        let description = model.assistant.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !description.isEmpty else { return }
+        // Where the answer goes is decided now, not when it arrives: the user may keep typing meanwhile.
+        let target = handle.snapshot()
+        let kind = model.driver.kind
+        model.assistant.run(for: workspace.config, request: {
+            SQLPrompts.generate(description: description, current: target.selectedText,
+                                schema: await workspace.loadedAISchema(for: target.text), kind: kind)
+        }) { sql in handle.insert(sql, at: target) }
+    }
+
+    private func fixWithAI() {
+        guard let statement = model.failedStatement, let error = model.error else { return }
+        let kind = model.driver.kind
+        model.assistant.run(for: workspace.config, request: {
+            SQLPrompts.fix(sql: statement, error: error, schema: await workspace.loadedAISchema(for: statement), kind: kind)
+        }) { sql in
+            handle.replace(statement, with: sql)
+            model.clearFailure()
+        }
+    }
+
+    /// Asks the model to continue the SQL at the caret when the user pauses; nil when AI suggestions are off.
+    private var aiSuggest: SQLEditorView.AISuggest? {
+        guard AIService.shared.suggestsInline(for: workspace.config) else { return nil }
+        let kind = model.driver.kind
+        return { [workspace] before, after in
+            // Columns only for the tables this statement uses (the rest by name, to keep typing fast); before
+            // it names any, every table's columns, so the model doesn't invent some.
+            let used = Set(SQLCompletion.tables(in: before + after, kind: kind).map { $0.name.lowercased() })
+            let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(focus: used.isEmpty ? nil : used), kind: kind)
+            guard let reply = try? await AIService.shared.complete(request) else { return nil }
+            let continuation = SQLPrompts.cleanContinuation(reply, before: before)
+            return continuation.isEmpty ? nil : continuation
+        }
     }
 
     private func suggest(_ text: String, caret: Int) -> (range: NSRange, items: [String]) {

@@ -9,6 +9,19 @@ Free, no usage limits, keyboard-first.</p>
 
 <p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a Redis and a PostgreSQL connection open, browsing a table with the row details panel"></p>
 
+> ### ✨ New in 0.3: an AI assistant that can run entirely on your Mac
+>
+> - **Chat about your database** in the panel on the right (⌥⌘A). Ask for a query in plain words and get SQL you can **Insert**, **Run** or copy. The model knows your tables, columns, keys and schemas, so it writes `dev.transactions`, not a guess.
+> - **Suggestions as you type**, written by the model in grey after the cursor; Tab accepts. With a small model on your Mac they arrive in under 100 ms.
+> - **Ask AI** (⌘K) to write or change SQL in the editor, and **Fix with AI** when a statement fails.
+> - **Runs inside Tabula, offline.** Download a light model from Settings (Qwen2.5 Coder from 490 MB, Llama 3.2), add any GGUF file, or paste a link. Nothing else to install.
+> - **Or use what you already have:** Apple Intelligence, Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5), any OpenAI-compatible API such as LiteLLM, Ollama, or the Claude Code and Codex tools on your Mac. A different model can handle suggestions while typing.
+> - **Private by design:** table and column names and your SQL are sent, never the rows in your tables. Off for Production connections unless you allow it.
+>
+> [How it works →](#ai-assistant)
+
+<p align="center"><img src="docs/screenshots/ai.png" width="900" alt="The AI chat answering with a query, and a model-written suggestion in grey in the SQL editor"></p>
+
 ## Contents
 
 - [Features](#features)
@@ -16,6 +29,7 @@ Free, no usage limits, keyboard-first.</p>
 - [Install](#install)
 - [Things to know](#things-to-know)
 - [Getting started](#getting-started)
+- [AI assistant](#ai-assistant)
 - [Redis](#redis)
 - [Updates](#updates)
 - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -30,6 +44,10 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Features
 
+**AI assistant** (new in 0.3, see [AI assistant](#ai-assistant))
+- Chat panel, Ask AI (⌘K), Fix with AI, and model-written suggestions while typing.
+- Models that run inside Tabula, Apple Intelligence, Claude, OpenAI-compatible APIs, Ollama, Claude Code or Codex.
+
 **Connections**
 - PostgreSQL, MySQL / MariaDB, SQLite files and Redis.
 - Tag each connection Local, Development, Staging or Production. The tag colors the sidebar strip and the toolbar pill, and Production gets an extra warning before destructive actions.
@@ -42,7 +60,7 @@ Free, no usage limits, keyboard-first.</p>
 - With two or more open, a column at the left edge of the window lists them. Hover for the name and address, click to switch, or use ⌃⌘] / ⌃⌘[. Each connection keeps its own tabs and state.
 
 **Browsing**
-- A schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter.
+- A schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter. Picking a schema also makes it the default for queries (`search_path` on Postgres, `USE` on MySQL), so `SELECT * FROM transactions` finds `dev.transactions`.
 - Equal-width tabs. Browsing the sidebar with the arrow keys reuses a single preview tab; press Return or double-click to keep a table open in its own tab.
 - Command palette (⌘P) to jump to any table, open tab, schema or action.
 
@@ -92,12 +110,12 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Size and resource use
 
-Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0:
+Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.2.0 (sizes for 0.3.0). A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
 
 | | |
 | --- | --- |
-| Download | 18 MB (ZIP) |
-| Installed | 62 MB: one universal app for Apple silicon and Intel, about 30 MB per architecture |
+| Download | 26 MB (ZIP) from 0.3, which includes the local-model engine; 18 MB in 0.2 |
+| Installed | 62 MB in 0.2; 88 MB from 0.3 (llama.cpp adds 23 MB). One universal app for Apple silicon and Intel. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
 | Memory, Connections window only | 26 MB |
 | Memory, one Postgres table open (300 rows) | 78 MB |
 | Memory, three connections open (Postgres, MySQL, Redis) | 92 MB |
@@ -194,6 +212,35 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 > **SSH:** tunnels are not built in yet. Forward a local port and connect to it:
 > `ssh -N -L 15432:db.internal:5432 user@bastion`, then connect to `127.0.0.1:15432`.
 
+## AI assistant
+
+<p align="center"><img src="docs/screenshots/ai-settings.png" width="520" alt="Settings › AI with a model running in Tabula for Ask AI and suggestions"></p>
+
+AI is off until you turn it on in **Settings › AI** (⌘,). Then:
+
+- **AI chat** (⌥⌘A, or the chat button in the toolbar) opens a conversation in the panel on the right, next to Row Details. Ask for queries, explanations or changes to the SQL in the editor; it remembers the conversation for that connection. Every query in an answer has **Insert**, **Run** and copy buttons. The model menu under the message field switches between downloaded models, Apple Intelligence, Claude Opus 5.5 / Sonnet 5.5 / Haiku 5.5, your OpenAI-compatible model, Claude Code and Codex.
+
+In a query tab:
+
+- **Ask AI** (⌘K, or the Ask AI button) opens a bar above the editor. Describe what you want ("top 5 customers by order value, with their email") and the SQL is inserted at the cursor. With SQL selected, describe the change instead ("only last month", "add the product name"); the selection is replaced. ⌘Z undoes it.
+- **Fix with AI** appears under an error. It sends the failing statement and the server's message, and replaces the statement with the corrected one.
+- **Suggestions while typing:** with AI suggestions on, the grey text after the cursor comes from the model (it replaces the built-in table/column/keyword suggestion; ⎋ still lists those). Tab accepts it; any key or caret move dismisses it. Models on this Mac are asked after a 0.25 s pause and, when they support it (Qwen2.5 Coder does), complete the SQL by filling in the text between what is before and after the cursor, which is how code completion models are trained. Suggestions can use a different provider from Ask AI: command-line agents and large hosted models are too slow to keep up with typing, so a small local model (such as `qwen2.5-coder:0.5b`) is the usual choice, with Claude Code or the Claude API for Ask AI.
+
+The model sees table names written as SQL needs them (`dev.transactions`), column types, primary and foreign keys, and the default schema, so it qualifies names and joins on the real keys.
+
+Choose where the model runs:
+
+| Provider | Runs | Setup |
+| --- | --- | --- |
+| Model on this Mac | Inside Tabula, offline | Nothing to install. Choose it in Settings › AI, then download a model from the list (Qwen2.5 Coder 0.5B to 7B, Llama 3.2 1B and 3B; from about 490 MB), add any GGUF file you already have, or paste a link to one. Downloads are checked against their published SHA-256. Runs on the GPU on Apple silicon and on the CPU on Intel. |
+| Apple Intelligence | On the Mac, offline | macOS 26 with Apple Intelligence turned on in System Settings |
+| Local model (Ollama) | On the Mac | Install [Ollama](https://ollama.com/download) (it runs the models), then download one from the list in Settings › AI. Light models for suggestions while typing: `qwen2.5-coder:0.5b` (about 0.4 GB), `deepseek-coder:1.3b`, `qwen2.5-coder:1.5b`. For whole queries: `qwen2.5-coder:3b`, `qwen2.5-coder:7b`, `sqlcoder:7b`. Progress shows in Settings; a downloaded model can be used for Ask AI, for suggestions, or deleted. |
+| OpenAI-compatible API | Your server or a provider | Base URL, API key and model: LiteLLM, LM Studio, llama.cpp, vLLM, OpenAI and others |
+| Claude API | Anthropic | API key; the model defaults to `claude-opus-5-5`, and a faster one (such as `claude-haiku-5-5`) can be set for suggestions |
+| Claude Code, Codex | Your installed command-line agent, with its own sign-in | Installed and signed in once in Terminal. Tabula finds them on your shell's PATH or the usual install locations, and runs them without tools (Claude Code) or in a read-only sandbox (Codex). Too slow for suggestions while typing. |
+
+**What is sent:** the table and column names of the current schema, the SQL in the editor around the cursor (or the selection), and for Fix with AI the error message with any quoted values removed (database errors can quote row values, such as a duplicate key). Rows from your tables are never sent. Prompts reach the command-line agents on standard input, not as arguments other users of the Mac could see. AI is off for Production-tagged connections unless you allow it in Settings. API keys are stored in the login Keychain.
+
 ## Redis
 
 <p align="center"><img src="docs/screenshots/redis.png" width="820" alt="Redis keys and a hash value"></p>
@@ -234,14 +281,15 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 | Data grid | ← → ↑ ↓ move between cells · Tab / ⇧Tab next / previous cell · ⌘← ⌘→ ⌘↑ ⌘↓ first / last column or row · ↩ or F2 edit · type any key to replace the value · Space quick look · ⌥⌫ set NULL · ⌫ delete rows · ⌘C copy rows · ⌥⇧⌘C copy rows with headers · ⌥⌘C copy cell |
 | Editing a cell | ↩ save and move down · Tab / ⇧Tab save and edit the next / previous cell · ⌥↩ new line · ⎋ cancel |
 | Changes | ⌘I add row · ⌘D duplicate row · ⌘Z / ⇧⌘Z undo / redo · ⌘S commit · ⇧⌘S preview SQL · ⌥⌘Z discard all changes |
-| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · Tab accept the grey suggestion · ⎋ or ⌃Space suggestions · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find |
+| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · Tab accept the grey suggestion · ⎋ or ⌃Space suggestions · ⌘K ask AI · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find |
 | Redis | ⌘T console · ⌘F key pattern · ⌘R refresh · ⌘N new key · ⌘I add element · ⌘S save string · ⌫ delete |
 
 ## Your data
 
 - **Connection settings** are stored in `~/Library/Application Support/Tabula/connections.json`. This file never contains passwords.
+- **Local models** you download or add live in `~/Library/Application Support/Tabula/Models` (Settings › AI › Show in Finder). Delete them there or from Settings.
 - **Passwords** are stored in the login Keychain, under the service `app.tabula.connections`. Deleting a connection also deletes its password.
-- **Network:** Tabula connects to the databases you configure, and to `api.github.com` / `github.com` to check for and download updates. There is no telemetry and no account.
+- **Network:** Tabula connects to the databases you configure, and to `api.github.com` / `github.com` to check for and download updates. If you turn on the AI assistant, it also talks to the provider you chose (see [AI assistant](#ai-assistant) for what is sent). There is no telemetry and no account.
 - **Windows:** workspace windows are not restored at launch, so Tabula never reconnects to a database, such as Production, unless you choose to.
 
 <!-- source-only -->
@@ -251,6 +299,7 @@ You need macOS 14 or later and Xcode 16 or later (the Swift 6 toolchain).
 
 ```bash
 git clone https://github.com/tungnguyenvan/tabula.git && cd tabula
+./scripts/fetch-llama.sh         # once: the pinned llama.cpp build (checked by SHA-256) into Vendor/
 swift run Tabula                 # debug build, launched directly
 ./scripts/build-app.sh           # release build → dist/Tabula.app (universal)
 ARCHS=arm64 ./scripts/build-app.sh   # faster, Apple silicon only
@@ -262,7 +311,7 @@ Builds are signed ad-hoc unless a signing identity exists. Ad-hoc signatures cha
 ./scripts/make-signing-identity.sh   # adds "Tabula Local Signing" to your login keychain
 ```
 
-The update checker reads the GitHub repository from the `origin` remote (override with `REPOSITORY=owner/name`).
+The update checker uses the GitHub repository named in `RELEASES_REPOSITORY` (override with `REPOSITORY=owner/name`).
 
 ## Making a release
 
@@ -342,7 +391,6 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 ## Roadmap and known limitations
 
 Planned:
-- AI assistant (0.3.0): write and fix queries from a description, and AI suggestions as you type, with a choice of Apple Intelligence on the Mac, small local models downloaded through Ollama, any OpenAI-compatible API (LiteLLM, LM Studio, OpenAI), the Claude API, or the Claude Code and Codex command-line tools already installed. Only table and column names and the query are sent, never row data.
 - SSH tunnels
 - Cancelling a running query
 

@@ -1,0 +1,318 @@
+import AppKit
+import SwiftUI
+import TabulaCore
+
+/// A conversation with the AI about one connection, shown in the panel on the right.
+@MainActor @Observable
+final class AIChatModel {
+    struct Message: Identifiable, Equatable {
+        enum Role { case user, assistant }
+        let id = UUID()
+        let role: Role
+        let text: String
+    }
+
+    private(set) var messages: [Message] = []
+    var input = ""
+    private(set) var busy = false
+    var error: String?
+    private var task: Task<Void, Never>?
+
+    /// Sends `input` with the conversation so far, the schema and the SQL in the editor.
+    func send(workspace: WorkspaceModel, editorSQL: String?) {
+        let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty, !busy else { return }
+        if let refusal = AIService.shared.refusal(for: workspace.config) {
+            error = refusal
+            return
+        }
+        let history = messages.suffix(Defaults.AI.chatHistoryMessages).map { ($0.role == .user ? "User" : "Assistant", $0.text) }
+        messages.append(Message(role: .user, text: question))
+        input = ""
+        error = nil
+        busy = true
+        let kind = workspace.driver?.kind ?? workspace.config.kind
+        task = Task {
+            defer { busy = false }
+            do {
+                let schema = await workspace.loadedAISchema(for: [editorSQL ?? "", question].joined(separator: "\n"))
+                let request = SQLPrompts.chat(question: question, history: history, editorSQL: editorSQL, schema: schema, kind: kind)
+                let reply = try await AIService.shared.complete(request)
+                guard !Task.isCancelled else { return }
+                messages.append(Message(role: .assistant, text: reply.trimmingCharacters(in: .whitespacesAndNewlines)))
+            } catch {
+                if !Task.isCancelled { self.error = error.localizedDescription }
+            }
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        busy = false
+    }
+
+    func clear() {
+        stop()
+        messages = []
+        error = nil
+    }
+}
+
+/// Text and fenced SQL blocks of an answer, so code gets Insert / Run / Copy.
+enum ChatSegment: Equatable {
+    case text(String)
+    case code(String)
+
+    static func split(_ reply: String) -> [ChatSegment] {
+        var segments: [ChatSegment] = []
+        var rest = Substring(reply)
+        while let open = rest.range(of: "```") {
+            let before = rest[..<open.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !before.isEmpty { segments.append(.text(before)) }
+            var body = rest[open.upperBound...]
+            // Skip the language tag on the fence line.
+            if let newline = body.firstIndex(of: "\n") { body = body[body.index(after: newline)...] }
+            guard let close = body.range(of: "```") else {
+                segments.append(.code(body.trimmingCharacters(in: .whitespacesAndNewlines)))
+                return segments
+            }
+            let code = body[..<close.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !code.isEmpty { segments.append(.code(code)) }
+            rest = body[close.upperBound...]
+        }
+        let tail = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty { segments.append(.text(tail)) }
+        return segments
+    }
+}
+
+struct AIChatView: View {
+    let workspace: WorkspaceModel
+    @Bindable var chat: AIChatModel
+    @FocusState private var inputFocused: Bool
+
+    private var queryTab: QueryTabModel? {
+        if case .query(let query) = workspace.selectedTab { return query }
+        return nil
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: Layout.Chat.spacing) {
+                        if chat.messages.isEmpty { emptyState }
+                        ForEach(chat.messages) { message in
+                            MessageView(message: message, insert: insert, run: run).id(message.id)
+                        }
+                        if chat.busy {
+                            HStack { ProgressView().controlSize(.small); Text("Thinking…").foregroundStyle(.secondary) }
+                                .id("busy")
+                        }
+                        if let error = chat.error {
+                            Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled)
+                        }
+                    }
+                    .padding(Layout.Chat.padding)
+                }
+                .onChange(of: chat.messages.count) { _, _ in
+                    if let last = chat.messages.last?.id { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
+                }
+                .onChange(of: chat.busy) { _, busy in
+                    if busy { withAnimation { proxy.scrollTo("busy", anchor: .bottom) } }
+                }
+            }
+            Divider()
+            composer
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: Layout.barPadding) {
+            Label("Ask about this database", systemImage: "sparkles").font(.headline)
+            Text("Write or explain queries, find tables, or change the SQL in the editor. The AI sees table and column names, keys and the editor's SQL, never rows.")
+                .font(.callout).foregroundStyle(.secondary)
+            if AIService.shared.refusal(for: workspace.config) != nil {
+                SettingsLink { Text("Turn on AI in Settings…") }
+            }
+        }
+    }
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: Layout.barPadding / 2) {
+            input
+            ModelPicker()
+        }
+        .padding(Layout.Chat.padding)
+        .onAppear { inputFocused = true }
+    }
+
+    private var input: some View {
+        HStack(alignment: .bottom, spacing: Layout.barPadding) {
+            TextField("Ask the AI", text: $chat.input, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...Layout.Chat.inputLines)
+                .focused($inputFocused)
+                .onSubmit(send)
+            if chat.busy {
+                Button("Stop") { chat.stop() }
+            } else {
+                Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
+                    .buttonStyle(.borderless)
+                    .disabled(chat.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help("Send (↩)")
+            }
+            Menu {
+                Button("Clear Conversation") { chat.clear() }
+                SettingsLink { Text("AI Settings…") }
+            } label: { Image(systemName: "ellipsis.circle") }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+        }
+    }
+
+    private func send() {
+        chat.send(workspace: workspace, editorSQL: queryTab?.sql)
+    }
+
+    /// Puts SQL in the current query tab, or a new one.
+    private func insert(_ sql: String) {
+        if let queryTab {
+            queryTab.insertRequest = (sql, UUID())
+        } else {
+            workspace.newQueryTab(sql: sql)
+        }
+    }
+
+    private func run(_ sql: String) {
+        insert(sql)
+        // Inserted SQL is selected, so running "the selection" runs exactly it.
+        DispatchQueue.main.async {
+            if let query = self.queryTab { query.runRequest = (false, query.runRequest.id + 1) }
+        }
+    }
+}
+
+private struct MessageView: View {
+    let message: AIChatModel.Message
+    let insert: (String) -> Void
+    let run: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Layout.barPadding) {
+            Text(message.role == .user ? "You" : "AI").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            if message.role == .user {
+                Text(message.text).textSelection(.enabled)
+            } else {
+                ForEach(Array(ChatSegment.split(message.text).enumerated()), id: \.offset) { _, segment in
+                    switch segment {
+                    case .text(let text):
+                        Text((try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text))
+                            .textSelection(.enabled)
+                    case .code(let sql):
+                        CodeBlock(sql: sql, insert: insert, run: run)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct CodeBlock: View {
+    let sql: String
+    let insert: (String) -> Void
+    let run: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(sql)
+                .font(Layout.Font.monoSmall)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Layout.barPadding)
+            Divider()
+            HStack(spacing: Layout.barPadding) {
+                Button("Insert") { insert(sql) }.help("Insert into the query editor")
+                Button("Run") { run(sql) }.help("Insert into the query editor and run it")
+                Spacer()
+                Button { Clipboard.copy(sql) } label: { Image(systemName: "doc.on.doc") }
+                    .buttonStyle(.borderless).help("Copy")
+            }
+            .controlSize(.small)
+            .padding(.horizontal, Layout.barPadding)
+            .padding(.vertical, Layout.barPadding / 2)
+        }
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: Layout.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: Layout.cornerRadius).strokeBorder(Color(nsColor: .separatorColor)))
+    }
+}
+
+/// Which model answers in the chat (and Ask AI), switchable right under the message field.
+private struct ModelPicker: View {
+    @Bindable private var ai = AIService.shared
+    private var models = BuiltInModels.shared
+
+    private var current: String {
+        let settings = ai.settings
+        let kind = settings.provider
+        let model = settings.model(kind, for: .generate)
+        switch kind {
+        case .builtIn: return model.isEmpty ? "Model on this Mac" : BuiltInModels.name(of: model)
+        case .anthropic: return kind.suggestedModels.first { $0.id == model }?.name ?? model
+        case .appleIntelligence: return "Apple Intelligence"
+        case .claudeCode: return "Claude Code"
+        case .codex: return "Codex"
+        case .ollama, .openAICompatible: return model.isEmpty ? kind.displayName : model
+        }
+    }
+
+    var body: some View {
+        Menu {
+            Section("On this Mac") {
+                ForEach(models.installed, id: \.id) { model in
+                    choice(BuiltInModels.name(of: model.id), kind: .builtIn, model: model.id)
+                }
+                if models.installed.isEmpty {
+                    SettingsLink { Text("Download a Model…") }
+                }
+                choice("Apple Intelligence", kind: .appleIntelligence, model: "")
+                    .disabled(AppleIntelligenceProvider.unavailableReason != nil)
+                if let ollama = ai.settings.models[AIProviderKind.ollama.rawValue], !ollama.isEmpty {
+                    choice("\(ollama) (Ollama)", kind: .ollama, model: ollama)
+                }
+            }
+            Section("Claude API") {
+                ForEach(AIProviderKind.anthropic.suggestedModels, id: \.id) { model in
+                    choice(model.name, kind: .anthropic, model: model.id)
+                }
+            }
+            if let openAI = ai.settings.models[AIProviderKind.openAICompatible.rawValue], !openAI.isEmpty {
+                Section("OpenAI-compatible") { choice(openAI, kind: .openAICompatible, model: openAI) }
+            }
+            Section("Installed tools") {
+                choice("Claude Code", kind: .claudeCode, model: ai.settings.models[AIProviderKind.claudeCode.rawValue] ?? "")
+                choice("Codex", kind: .codex, model: ai.settings.models[AIProviderKind.codex.rawValue] ?? "")
+            }
+            Divider()
+            SettingsLink { Text("Manage Models…") }
+        } label: {
+            Label(current, systemImage: "cpu").font(Layout.Font.small)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Model for the chat and Ask AI")
+        .onAppear { models.refresh() }
+    }
+
+    private func choice(_ title: String, kind: AIProviderKind, model: String) -> some View {
+        let selected = ai.settings.provider == kind && (model.isEmpty || ai.settings.model(kind, for: .generate) == model)
+        return Button {
+            ai.settings.provider = kind
+            if !model.isEmpty { ai.settings.models[kind.rawValue] = model }
+        } label: {
+            if selected { Label(title, systemImage: "checkmark") } else { Text(title) }
+        }
+    }
+}

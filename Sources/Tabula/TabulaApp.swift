@@ -20,6 +20,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DebugHooks.startKeyScript()
         #endif
     }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // llama.cpp aborts at exit if a model is still loaded on the GPU.
+        LocalModelRunner.shared.unload()
+    }
 }
 
 @main
@@ -262,7 +267,10 @@ struct WorkspaceCommands: Commands {
             Button("Console Log") { workspace?.showConsole.toggle() }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
-            Button("Row Details") { workspace?.showInspector.toggle() }
+            Button("AI Chat") { workspace?.toggleRightPanel(.ai) }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                .disabled(noWorkspace)
+            Button("Row Details") { workspace?.toggleRightPanel(.rowDetails) }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(noWorkspace)
             Divider()
@@ -347,9 +355,13 @@ struct WorkspaceCommands: Commands {
             Button("Beautify SQL") { query?.beautifyRequest += 1 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
+            Button("Ask AI…") { query?.askAIRequest += 1 }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(noWorkspace)
         }
 
-        CommandGroup(after: .appInfo) {
+        CommandGroup(replacing: .appInfo) {
+            Button("About Tabula") { AboutPanel.show() }
             Button("Check for Updates…") {
                 WindowRequests.request(WindowID.update)
                 openWindow(id: WindowID.update)

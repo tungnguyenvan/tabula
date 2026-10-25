@@ -114,8 +114,9 @@ final class SQLCompletionTests: XCTestCase {
         XCTAssertEqual(suggest("SELECT * FROM orders o JOIN dev.|").count, 3)
         // A known schema name is a schema anywhere, e.g. in the select list.
         XCTAssertEqual(suggest("SELECT dev.b|", schemas: ["dev"]), ["banks"])
-        // An alias still means columns.
+        // An alias still means columns, even when it is also a schema's name.
         XCTAssertEqual(suggest("SELECT o.| FROM orders o", schemas: ["dev"]), ["id", "total", "user_id"])
+        XCTAssertEqual(suggest("SELECT dev.| FROM orders dev", schemas: ["dev"]), ["id", "total", "user_id"])
     }
 
     func testColumnsOfTablesInOtherSchemas() {

@@ -27,3 +27,17 @@ final class ConnectTimeoutTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), 20)
     }
 }
+
+final class RefusedConnectionTests: XCTestCase {
+    /// A server that isn't running must say so, every time, not report a cancellation.
+    func testRefusedConnectionsReportTheRefusal() async throws {
+        for _ in 0..<3 {
+            do {
+                _ = try await RedisDriver.connect(ConnectionConfig(kind: .redis, host: "127.0.0.1", port: 1), password: nil)
+                XCTFail("expected a refusal")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.lowercased().contains("refused"), error.localizedDescription)
+            }
+        }
+    }
+}

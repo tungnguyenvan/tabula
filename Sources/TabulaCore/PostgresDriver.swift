@@ -72,6 +72,8 @@ public actor PostgresDriver: DatabaseDriver {
     }
 
     static func describe(_ error: any Error) -> String {
+        // Our own errors (timeouts, TLS setup) already read well.
+        if let database = error as? DatabaseError { return database.message }
         if let psql = error as? PSQLError {
             if let message = psql.serverInfo?[.message] {
                 var text = message
