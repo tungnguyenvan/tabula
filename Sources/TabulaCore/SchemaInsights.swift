@@ -49,6 +49,8 @@ public struct MetricsSample: Sendable {
     /// Point-in-time values worth charting (connections, memory…).
     public var gauges: [String: Double]
     public var tables: [TableStat]
+    /// MongoDB lists collections of documents.
+    public var tablesAreCollections = false
 
     public init(time: Date = Date(), groups: [Group], counters: [String: Double] = [:], gauges: [String: Double] = [:], tables: [TableStat] = []) {
         self.time = time
@@ -172,7 +174,7 @@ extension DatabaseDriver {
                 keys += order.compactMap { byID[$0] }
             }
             return keys
-        case .redis:
+        case .redis, .mongodb:
             return []
         }
     }
@@ -184,6 +186,7 @@ extension DatabaseDriver {
         case .postgres: return try await postgresMetrics()
         case .mysql: return try await mysqlMetrics(schema: schema)
         case .sqlite: return try await sqliteMetrics(schema: schema)
+        case .mongodb: return try await mongoMetrics(database: schema)
         case .redis: throw DatabaseError("Use RedisDriver.metrics() for Redis.")
         }
     }

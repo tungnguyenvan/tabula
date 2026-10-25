@@ -255,7 +255,7 @@ struct WorkspaceCommands: Commands {
             .disabled(noWorkspace)
             Button("Relationship Diagram") { workspace?.openDiagram() }
                 .keyboardShortcut("3", modifiers: [.command, .option])
-                .disabled(noWorkspace)
+                .disabled(noWorkspace || workspace?.config.kind.supportsDiagram == false)
             Button("Server Metrics") {
                 if let redis { redis.mode = .metrics } else { workspace?.openMetrics() }
             }

@@ -10,12 +10,26 @@ extension ConnectionConfig {
         var components = URLComponents()
         components.scheme = urlScheme
         components.host = resolvedHost
-        components.port = port
+        components.port = kind == .mongodb && srv == true ? nil : port
         if !user.isEmpty { components.user = user }
         if let password, !password.isEmpty { components.password = password }
         let path = kind == .redis ? (database.isEmpty ? "" : database) : database
         if !path.isEmpty { components.path = "/" + path }
-        if let parameter = tlsParameter { components.queryItems = [parameter] }
+        var parameters = tlsParameters
+        if kind == .mongodb, let authSource, !authSource.isEmpty { parameters.append(URLQueryItem(name: "authSource", value: authSource)) }
+        if !parameters.isEmpty { components.queryItems = parameters }
+        // A replica set lists its members, "a:27017,b:27017", which URLComponents won't take as a host.
+        if kind == .mongodb, resolvedHost.contains(",") {
+            let placeholder = "tabula.hosts.invalid"
+            components.host = placeholder
+            components.port = nil
+            // Members without their own port use the connection's, as the driver does.
+            let members = resolvedHost.split(separator: ",").map { member -> String in
+                let text = member.trimmingCharacters(in: .whitespaces)
+                return text.contains(":") ? text : "\(text):\(port)"
+            }
+            return components.string?.replacingOccurrences(of: placeholder, with: members.joined(separator: ",")) ?? ""
+        }
         return components.string ?? ""
     }
 
@@ -25,16 +39,21 @@ extension ConnectionConfig {
         case .mysql: "mysql"
         case .redis: tls == .disable ? "redis" : "rediss"
         case .sqlite: "file"
+        case .mongodb: srv == true ? "mongodb+srv" : "mongodb"
         }
     }
 
-    /// TLS settings in each client's own spelling; rediss:// already says it for Redis.
-    private var tlsParameter: URLQueryItem? {
-        guard tls != .disable else { return nil }
+    /// TLS settings in each client's own spelling; rediss:// and mongodb+srv:// already imply them.
+    private var tlsParameters: [URLQueryItem] {
+        guard tls != .disable else { return [] }
         switch kind {
-        case .postgres: return URLQueryItem(name: "sslmode", value: tls == .verifyFull ? "verify-full" : "require")
-        case .mysql: return URLQueryItem(name: "ssl-mode", value: tls == .verifyFull ? "VERIFY_IDENTITY" : "REQUIRED")
-        case .redis, .sqlite: return nil
+        case .postgres: return [URLQueryItem(name: "sslmode", value: tls == .verifyFull ? "verify-full" : "require")]
+        case .mysql: return [URLQueryItem(name: "ssl-mode", value: tls == .verifyFull ? "VERIFY_IDENTITY" : "REQUIRED")]
+        case .mongodb:
+            if srv == true { return tls == .verifyFull ? [] : [URLQueryItem(name: "tlsAllowInvalidCertificates", value: "true")] }
+            return [URLQueryItem(name: "tls", value: "true")]
+                + (tls == .verifyFull ? [] : [URLQueryItem(name: "tlsAllowInvalidCertificates", value: "true")])
+        case .redis, .sqlite: return []
         }
     }
 }

@@ -39,7 +39,7 @@ struct SidebarView: View {
                 let tables = model.filteredTables.filter { $0.kind == .table }
                 let views = model.filteredTables.filter { $0.kind == .view }
                 if !tables.isEmpty {
-                    Section { ForEach(tables) { row($0) } } header: { sectionHeader("Tables", count: tables.count) }
+                    Section { ForEach(tables) { row($0) } } header: { sectionHeader(model.config.kind.tablesTitle, count: tables.count) }
                 }
                 if !views.isEmpty {
                     Section { ForEach(views) { row($0) } } header: { sectionHeader("Views", count: views.count) }
@@ -53,14 +53,14 @@ struct SidebarView: View {
                     Section { ForEach(triggers) { routineRow($0) } } header: { sectionHeader("Triggers", count: triggers.count) }
                 }
                 if model.filteredTables.isEmpty && !model.loadingTables {
-                    Text(model.tableSearch.isEmpty ? "No tables" : "No matches")
+                    Text(model.tableSearch.isEmpty ? "No \(model.config.kind.tablesTitle.lowercased())" : "No matches")
                         .font(.callout).foregroundStyle(.tertiary)
                 }
             }
             .listStyle(.sidebar)
             .environment(\.defaultMinListRowHeight, 22)
             .contextMenu(forSelectionType: SidebarItem.self) { items in
-                if items.isEmpty { newRoutineButtons() }
+                if items.isEmpty, model.config.kind.supportsRoutines { newRoutineButtons() }
             } primaryAction: { items in
                 switch items.first {
                 case .table(let table): model.open(table)
@@ -73,7 +73,7 @@ struct SidebarView: View {
         .onChange(of: model.sidebarFilterFocusRequest) { _, _ in filterFocused = true }
         .confirmationDialog(dialogTitle, isPresented: Binding(get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }),
                             titleVisibility: .visible, presenting: pendingAction) { action in
-            Button(action.kind == .drop ? "Drop" : "Truncate", role: .destructive) {
+            Button(action.kind == .drop ? "Drop" : model.config.kind.truncateTitle, role: .destructive) {
                 Task { await run(action) }
             }
         } message: { action in
@@ -104,7 +104,7 @@ struct SidebarView: View {
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: model.config.kind == .mysql ? "cylinder" : "folder")
+                    Image(systemName: model.config.kind.schemaNoun == "Database" ? "cylinder" : "folder")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                     Text(model.selectedSchema.isEmpty ? "Select" : model.selectedSchema)
                         .font(.system(size: 12, weight: .medium)).lineLimit(1)
@@ -119,7 +119,7 @@ struct SidebarView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .help(model.config.kind == .mysql ? "Database" : "Schema")
+            .help(model.config.kind.schemaNoun)
         }
     }
 
@@ -133,8 +133,10 @@ struct SidebarView: View {
 
     private var dialogTitle: String {
         guard let action = pendingAction else { return "" }
-        let verb = action.kind == .drop ? "Drop" : "Truncate"
-        return "\(verb) \(action.table.kind == .view ? "view" : "table") “\(action.table.name)”?"
+        let kind = model.config.kind
+        if action.kind == .truncate && kind.isDocument { return "Delete all documents in “\(action.table.name)”?" }
+        let verb = action.kind == .drop ? "Drop" : kind.truncateTitle
+        return "\(verb) \(action.table.kind == .view ? "view" : kind.tableNoun) “\(action.table.name)”?"
     }
 
     private func row(_ table: TableRef) -> some View {
@@ -150,7 +152,7 @@ struct SidebarView: View {
                 Button("Open Data") { model.open(table, mode: .data) }
                 Button("Open Structure") { model.open(table, mode: .structure) }
                 Button("New Query") {
-                    model.newQueryTab(sql: "SELECT * FROM \(model.driver?.dialect.qualified(table) ?? table.name) LIMIT 100;")
+                    model.newQueryTab(sql: model.driver?.dialect.selectSample(table, limit: Defaults.sampleQueryLimit) ?? "")
                 }
                 Divider()
                 Button("Copy Name") {
@@ -158,10 +160,10 @@ struct SidebarView: View {
                 }
                 Divider()
                 if table.kind == .table {
-                    Button("Truncate…", role: .destructive) { pendingAction = PendingAction(kind: .truncate, table: table) }
+                    Button("\(model.config.kind.truncateTitle)…", role: .destructive) { pendingAction = PendingAction(kind: .truncate, table: table) }
                 }
                 Button("Drop…", role: .destructive) { pendingAction = PendingAction(kind: .drop, table: table) }
-                if table.kind == .table, model.config.kind != .redis {
+                if table.kind == .table, model.config.kind.supportsRoutines {
                     Divider()
                     Button("New Trigger on \(table.name)…") { model.newRoutine(.trigger, table: table.name) }
                 }
@@ -209,7 +211,7 @@ struct SidebarView: View {
                 Button { Task { await model.loadTables() } } label: { Image(systemName: "arrow.clockwise").font(.system(size: 11)) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help("Reload tables")
+                    .help("Reload \(model.config.kind.tablesTitle.lowercased())")
             }
             .padding(.horizontal, 10)
             .frame(height: 28)

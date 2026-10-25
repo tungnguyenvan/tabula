@@ -20,6 +20,7 @@ extension DatabaseKind {
         case .mysql: "cylinder"
         case .sqlite: "doc.text"
         case .redis: "square.stack.3d.up"
+        case .mongodb: "leaf"
         }
     }
 
@@ -29,6 +30,7 @@ extension DatabaseKind {
         case .mysql: "My"
         case .sqlite: "Sl"
         case .redis: "Re"
+        case .mongodb: "Mg"
         }
     }
 
@@ -38,6 +40,7 @@ extension DatabaseKind {
         case .mysql: Color(red: 0.0, green: 0.46, blue: 0.56)
         case .sqlite: Color(red: 0.3, green: 0.55, blue: 0.85)
         case .redis: Color(red: 0.84, green: 0.2, blue: 0.16)
+        case .mongodb: Color(red: 0.0, green: 0.53, blue: 0.29)
         }
     }
 }

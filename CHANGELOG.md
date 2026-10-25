@@ -5,9 +5,23 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Planned
-- MongoDB connections
 - SSH tunnels
 - Cancelling a running query
+
+## [0.4.0] - 2026-10-25
+
+### Added
+- **MongoDB connections**: host and port, replica set member lists, Atlas DNS seed lists (`mongodb+srv`), TLS, SCRAM authentication with an auth database. Copy Connection URL gives a `mongodb://` URL.
+- Databases in the sidebar's picker; collections and views as tables. Documents in the data grid, `_id` first, nested values inline, BSON types in Row Details.
+- Filtering: the filter builder writes the query document (numbers and ids match as typed or as text, text operators are case-insensitive, nested paths such as `address.city`), or write one by hand with `{ }`. Sorting, paging and a total count.
+- Editing keeps field types: a long stays a long, a date a date, a decimal a decimal. Commit sends `updateOne` / `deleteOne` / `insertOne` by `_id`, previewed with ⇧⌘S. A JSON document editor edits a whole document or inserts a new one.
+- The query editor runs MongoDB shell statements (`find`, `aggregate`, `countDocuments`, `distinct`, inserts, updates, deletes, `findOneAnd…`, indexes, `runCommand`, `show dbs`, `use`, …) with the shell's value syntax (`ObjectId`, `ISODate`, `NumberLong`, `NumberDecimal`, `UUID`, regular expressions, Extended JSON). Highlighting, Beautify, completion of collections, methods, fields and `$` operators, and the row limit as `.limit()`.
+- Structure shows fields sampled from the first 100 documents with the types seen, and indexes with their options.
+- Server metrics from `serverStatus` and `dbStats`, including the largest collections.
+- AI chat, Ask AI and Fix with AI write MongoDB shell commands for MongoDB connections, from collection and field names (never documents).
+
+### Changed
+- The relationship diagram and functions and triggers are hidden where a database has none (MongoDB).
 
 ## [0.3.1] - 2026-10-25
 

@@ -481,8 +481,11 @@ enum SQLHighlighter {
 
     /// Colors by token kind, from the same lexer the formatter and completion use, so an apostrophe
     /// in a comment can't start a "string" that runs on through the next lines.
-    private static func color(for token: SQLToken) -> NSColor? {
+    private static func color(for token: SQLToken, kind: DatabaseKind) -> NSColor? {
         switch token.kind {
+        case .word where kind.isDocument:
+            if token.text.hasPrefix("$") { return .systemPurple }
+            return MongoVocabulary.highlighted.contains(token.text) ? .systemPink : nil
         case .word: return SQLKeywords.set.contains(token.keyword) ? .systemPink : nil
         case .number: return .systemBlue
         case .string: return .systemOrange
@@ -505,7 +508,7 @@ enum SQLHighlighter {
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
         for token in SQLLexer.tokens(text, kind: kind) {
-            if let color = color(for: token) { storage.addAttribute(.foregroundColor, value: color, range: token.range) }
+            if let color = color(for: token, kind: kind) { storage.addAttribute(.foregroundColor, value: color, range: token.range) }
         }
         storage.endEditing()
         textView.typingAttributes = [.font: font, .foregroundColor: NSColor.textColor]

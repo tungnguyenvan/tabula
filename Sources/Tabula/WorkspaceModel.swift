@@ -263,7 +263,7 @@ final class WorkspaceModel {
 
     /// Opens (or switches to) the relationship diagram of the current schema.
     func openDiagram() {
-        guard let driver else { return }
+        guard let driver, config.kind.supportsDiagram else { return }
         if let existing = tabs.first(where: { if case .diagram(let model) = $0 { return model.schema == selectedSchema }; return false }) {
             selectedTabID = existing.id
             return
@@ -377,7 +377,9 @@ final class WorkspaceModel {
             return "\(aiName(key.table, kind: kind)).\(column) -> \(aiName(key.referencedTable, kind: kind)).\(target)"
         }
         let defaultSchema = kind == .sqlite ? nil : selectedSchema
-        return SQLPrompts.Schema(tables: (tables + extra).map(described), foreignKeys: focus == nil ? keys : [], defaultSchema: defaultSchema)
+        var schema = SQLPrompts.Schema(tables: (tables + extra).map(described), foreignKeys: focus == nil ? keys : [], defaultSchema: defaultSchema)
+        schema.isDocument = kind.isDocument
+        return schema
     }
 
     /// `schema.table`, quoting names that need it; SQLite's main database needs no prefix.
@@ -387,6 +389,8 @@ final class WorkspaceModel {
             name.range(of: "^[a-z_][a-z0-9_]*$", options: .regularExpression) != nil ? name : d.quoteIdentifier(name)
         }
         if kind == .sqlite && table.schema == "main" { return part(table.name) }
+        // Collections are named as the shell reaches them from the current database.
+        if kind.isDocument { return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name)" }
         return "\(part(table.schema)).\(part(table.name))"
     }
 

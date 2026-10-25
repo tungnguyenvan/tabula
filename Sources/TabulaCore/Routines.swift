@@ -96,7 +96,7 @@ extension DatabaseDriver {
                 RoutineInfo(kind: .trigger, schema: schema, name: row["name"] ?? "", table: row["tbl_name"],
                             detail: "ON \(row["tbl_name"] ?? "")")
             }
-        case .redis:
+        case .redis, .mongodb:
             return []
         }
     }
@@ -120,7 +120,7 @@ extension DatabaseDriver {
             let master = routine.schema == "temp" ? "sqlite_temp_master" : "\(d.quoteIdentifier(routine.schema)).sqlite_master"
             text = try await execute("SELECT sql FROM \(master) WHERE type = 'trigger' AND name = \(d.literal(routine.name))").records.first?["sql"]
                 .map { $0 + ";" }
-        case (.redis, _):
+        case (.redis, _), (.mongodb, _):
             text = nil
         }
         guard let text, !text.isEmpty else {
@@ -170,8 +170,8 @@ extension DatabaseDriver {
                 }
                 throw DatabaseError("\(error.localizedDescription)\nThe original \(routine.kind.displayName.lowercased()) was restored.")
             }
-        case (.redis, _):
-            throw DatabaseError("Redis has no routines.")
+        case (.redis, _), (.mongodb, _):
+            throw DatabaseError("\(kind.displayName) has no routines here.")
         }
     }
 

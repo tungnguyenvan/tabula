@@ -46,6 +46,11 @@ struct ConnectionListView: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .frame(minWidth: 680, minHeight: 420)
+        .onAppear {
+            #if DEBUG
+            if let id = DebugHooks.connectionToEdit, let config = appState.connection(id) { edit(config) }
+            #endif
+        }
         .sheet(item: $editing) { request in
             ConnectionFormView(config: request.config, isNew: request.isNew, password: request.password) { saved, password, connect in
                 appState.save(saved, password: password)
@@ -130,7 +135,7 @@ struct ConnectionListView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "cylinder.split.1x2").font(.system(size: 30, weight: .light)).foregroundStyle(.tertiary)
                     Text("No connections yet").font(.headline)
-                    Text("PostgreSQL · MySQL / MariaDB · SQLite").font(.callout).foregroundStyle(.secondary)
+                    Text("PostgreSQL · MySQL / MariaDB · SQLite · MongoDB · Redis").font(.callout).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

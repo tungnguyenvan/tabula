@@ -573,7 +573,8 @@ struct PromptEditor: View {
         VStack(alignment: .leading, spacing: Layout.barPadding) {
             Text("\(prompt.title) instructions").font(.headline)
             Text("Sent as the system prompt. {database} becomes the database's name (PostgreSQL, MySQL / MariaDB, SQLite). "
-                 + "The schema and your SQL are added after it automatically.")
+                 + "The schema and your SQL are added after it automatically. MongoDB connections use built-in shell prompts "
+                 + "unless you change this one.")
                 .font(.callout).foregroundStyle(.secondary)
             TextEditor(text: $text)
                 .font(Layout.Font.mono)

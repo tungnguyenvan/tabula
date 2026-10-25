@@ -12,6 +12,8 @@ public struct SQLDialect: Sendable {
             return "`" + name.replacingOccurrences(of: "`", with: "``") + "`"
         case .postgres, .sqlite, .redis:
             return "\"" + name.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        case .mongodb:
+            return MongoShell.quoted(name)
         }
     }
 
@@ -23,6 +25,7 @@ public struct SQLDialect: Sendable {
     }
 
     public func literal(_ value: String?) -> String {
+        if kind == .mongodb { return value.map(MongoShell.quoted) ?? "null" }
         guard let value else { return "NULL" }
         var escaped = value.replacingOccurrences(of: "'", with: "''")
         if kind == .mysql {
@@ -42,6 +45,7 @@ public struct SQLDialect: Sendable {
     }
 
     public func selectPage(_ request: TablePageRequest) -> String {
+        if kind == .mongodb { return MongoDialect.selectPage(request) }
         var sql = "SELECT * FROM \(qualified(request.table))" + whereClause(request.filter)
         if let orderBy = request.orderBy {
             sql += " ORDER BY \(quoteIdentifier(orderBy)) \(request.ascending ? "ASC" : "DESC")"
@@ -51,7 +55,8 @@ public struct SQLDialect: Sendable {
     }
 
     public func countRows(_ table: TableRef, filter: String?) -> String {
-        "SELECT COUNT(*) FROM \(qualified(table))" + whereClause(filter)
+        if kind == .mongodb { return MongoDialect.countRows(table, filter: filter) }
+        return "SELECT COUNT(*) FROM \(qualified(table))" + whereClause(filter)
     }
 
     /// Without a key nothing may match: an empty predicate would touch every row.
@@ -74,6 +79,7 @@ public struct SQLDialect: Sendable {
     }
 
     public func insert(_ table: TableRef, values: [(column: String, value: String?)]) -> String {
+        if kind == .mongodb { return MongoDialect.insert(table, values: values) }
         guard !values.isEmpty else {
             return kind == .mysql
                 ? "INSERT INTO \(qualified(table)) () VALUES ()"
@@ -84,11 +90,19 @@ public struct SQLDialect: Sendable {
         return "INSERT INTO \(qualified(table)) (\(columns)) VALUES (\(literals))"
     }
 
+    /// What the sidebar's "open in a query tab" puts in the editor.
+    public func selectSample(_ table: TableRef, limit: Int) -> String {
+        if kind == .mongodb { return MongoDialect.sample(table, limit: limit) }
+        return "SELECT * FROM \(qualified(table)) LIMIT \(limit);"
+    }
+
     public func truncate(_ table: TableRef) -> String {
-        kind == .sqlite ? "DELETE FROM \(qualified(table))" : "TRUNCATE TABLE \(qualified(table))"
+        if kind == .mongodb { return MongoDialect.truncate(table) }
+        return kind == .sqlite ? "DELETE FROM \(qualified(table))" : "TRUNCATE TABLE \(qualified(table))"
     }
 
     public func drop(_ table: TableRef) -> String {
-        "DROP \(table.kind == .view ? "VIEW" : "TABLE") \(qualified(table))"
+        if kind == .mongodb { return MongoDialect.drop(table) }
+        return "DROP \(table.kind == .view ? "VIEW" : "TABLE") \(qualified(table))"
     }
 }

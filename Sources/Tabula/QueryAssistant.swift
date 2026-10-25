@@ -34,7 +34,7 @@ final class QueryAssistant {
             do {
                 let sql = SQLPrompts.cleanSQL(try await AIService.shared.complete(await request()))
                 guard !Task.isCancelled else { return }
-                guard !sql.isEmpty else { error = "The model didn't return any SQL."; return }
+                guard !sql.isEmpty else { error = "The model returned nothing to insert."; return }
                 apply(sql)
                 prompt = ""
                 showPrompt = false
@@ -55,6 +55,8 @@ final class QueryAssistant {
 struct AIPromptBar: View {
     @Bindable var assistant: QueryAssistant
     let hasSelection: Bool
+    /// "SQL", or "MongoDB shell" for MongoDB.
+    var language = "SQL"
     let submit: () -> Void
     @FocusState private var focused: Bool
 
@@ -75,7 +77,7 @@ struct AIPromptBar: View {
     private var bar: some View {
         HStack(spacing: Layout.barPadding) {
             Image(systemName: "sparkles").foregroundStyle(.secondary)
-            TextField(hasSelection ? "How should the selected SQL change?" : "Describe the query you want",
+            TextField(hasSelection ? "How should the selected \(language) change?" : "Describe the query you want",
                       text: $assistant.prompt)
                 .textFieldStyle(.plain)
                 .focused($focused)
@@ -85,7 +87,7 @@ struct AIPromptBar: View {
                 ProgressView().controlSize(.small)
                 Button("Stop") { assistant.cancel() }
             } else {
-                Button(hasSelection ? "Edit" : "Write SQL", action: submit)
+                Button(hasSelection ? "Edit" : language == "SQL" ? "Write SQL" : "Write Query", action: submit)
                     .disabled(assistant.prompt.trimmingCharacters(in: .whitespaces).isEmpty)
                     .keyboardShortcut(.defaultAction)
             }

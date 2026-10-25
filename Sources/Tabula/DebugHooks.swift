@@ -5,7 +5,7 @@ import TabulaCore
 
 /// Debug-only automation for visual checks, driven by environment variables:
 /// - TABULA_DEBUG_OPEN: connection UUID to open at launch
-/// - TABULA_DEBUG_TABLE: table name to open once connected
+/// - TABULA_DEBUG_TABLE: table name to open once connected; TABULA_DEBUG_DOCUMENT: a row to open in the document editor (MongoDB)
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
@@ -18,6 +18,8 @@ enum DebugHooks {
     static var showAbout: Bool { environment["TABULA_DEBUG_ABOUT"] != nil }
 
     static var connectionToOpen: UUID? { connectionsToOpen.first }
+    /// TABULA_DEBUG_EDIT: a connection UUID whose editor opens on the welcome window.
+    static var connectionToEdit: UUID? { environment["TABULA_DEBUG_EDIT"].flatMap(UUID.init(uuidString:)) }
 
     /// TABULA_DEBUG_OPEN may list several ids separated by commas.
     static var connectionsToOpen: [UUID] {
@@ -71,6 +73,9 @@ enum DebugHooks {
                         Task { await tab.applyFilter() }
                     }
                 }
+            }
+            if let row = environment["TABULA_DEBUG_DOCUMENT"].flatMap(Int.init), let tab = model.selectedTableTab {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { tab.documentEditRequest = row }
             }
             if let row = environment["TABULA_DEBUG_INSPECT"].flatMap(Int.init) {
                 model.showInspector = true

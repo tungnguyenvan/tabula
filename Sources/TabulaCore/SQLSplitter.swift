@@ -24,6 +24,7 @@ public enum SQLSplitter {
     }
 
     public static func statements(in script: String, kind: DatabaseKind) -> [Statement] {
+        if kind == .mongodb { return MongoSplitter.statements(in: script) }
         let chars = Array(script)
         // UTF-16 offset of each character, so ranges can be reported in NSString units.
         var utf16Offsets: [Int] = []

@@ -25,6 +25,8 @@ public enum DriverFactory {
             return try await PostgresDriver.connect(config, password: password)
         case .mysql:
             return try await MySQLDriver.connect(config, password: password)
+        case .mongodb:
+            return try await MongoDriver.connect(config, password: password)
         case .redis:
             throw DatabaseError("Redis connections use RedisDriver, not the SQL driver interface.")
         }
@@ -54,6 +56,8 @@ extension DatabaseDriver {
             _ = try await execute("SET search_path TO " + path.map(d.quoteIdentifier).joined(separator: ", "))
         case .mysql:
             _ = try await execute("USE \(d.quoteIdentifier(schema))")
+        case .mongodb:
+            _ = try await execute("use \(schema)")
         case .sqlite, .redis:
             break
         }
@@ -61,6 +65,9 @@ extension DatabaseDriver {
 
     /// Server version as reported by the database, e.g. "PostgreSQL 16.11 on aarch64…".
     public func serverVersion() async -> String? {
+        if kind == .mongodb {
+            return (try? await execute("db.version()")).flatMap { $0.rows.first?.first ?? nil }.map { "MongoDB " + $0 }
+        }
         let sql = kind == .sqlite ? "SELECT 'SQLite ' || sqlite_version()" : "SELECT version()"
         guard let result = try? await execute(sql), let value = result.rows.first?.first ?? nil else { return nil }
         if kind == .mysql { return "MySQL " + value }
@@ -80,6 +87,18 @@ extension DatabaseDriver {
     /// Applies statements atomically, rolling back if any statement fails.
     public func applyInTransaction(_ statements: [String]) async throws {
         guard !statements.isEmpty else { return }
+        if kind == .mongodb {
+            // Multi-document transactions need a replica set; run the changes in order and say where it stopped.
+            for (index, statement) in statements.enumerated() {
+                do {
+                    _ = try await execute(statement)
+                } catch {
+                    let saved = index == 0 ? "" : " The \(index) change\(index == 1 ? "" : "s") before it were saved."
+                    throw DatabaseError("Change \(index + 1) of \(statements.count) failed: \(error.localizedDescription)\(saved)")
+                }
+            }
+            return
+        }
         _ = try await execute(dialect.beginTransaction)
         do {
             for statement in statements {
