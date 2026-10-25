@@ -205,7 +205,8 @@ struct QueryTabView: View {
         let kind = model.driver.kind
         model.assistant.run(for: workspace.config, request: {
             SQLPrompts.generate(description: description, current: target.selectedText,
-                                schema: await workspace.loadedAISchema(for: target.text), kind: kind)
+                                schema: await workspace.loadedAISchema(for: target.text), kind: kind,
+                instructions: AIService.shared.settings.instructions(.generate))
         }) { sql in handle.insert(sql, at: target) }
     }
 
@@ -213,7 +214,8 @@ struct QueryTabView: View {
         guard let statement = model.failedStatement, let error = model.error else { return }
         let kind = model.driver.kind
         model.assistant.run(for: workspace.config, request: {
-            SQLPrompts.fix(sql: statement, error: error, schema: await workspace.loadedAISchema(for: statement), kind: kind)
+            SQLPrompts.fix(sql: statement, error: error, schema: await workspace.loadedAISchema(for: statement), kind: kind,
+                instructions: AIService.shared.settings.instructions(.fix))
         }) { sql in
             handle.replace(statement, with: sql)
             model.clearFailure()
@@ -228,7 +230,8 @@ struct QueryTabView: View {
             // Columns only for the tables this statement uses (the rest by name, to keep typing fast); before
             // it names any, every table's columns, so the model doesn't invent some.
             let used = Set(SQLCompletion.tables(in: before + after, kind: kind).map { $0.name.lowercased() })
-            let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(focus: used.isEmpty ? nil : used), kind: kind)
+            let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(focus: used.isEmpty ? nil : used), kind: kind,
+                instructions: AIService.shared.settings.instructions(.inline))
             guard let reply = try? await AIService.shared.complete(request) else { return nil }
             let continuation = SQLPrompts.cleanContinuation(reply, before: before)
             return continuation.isEmpty ? nil : continuation

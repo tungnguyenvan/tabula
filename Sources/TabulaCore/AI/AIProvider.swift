@@ -62,6 +62,15 @@ public enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendabl
         }
     }
 
+    /// Reasoning effort levels the provider accepts, lowest first; empty when it has none.
+    public var effortLevels: [String] {
+        switch self {
+        case .anthropic, .claudeCode: ["low", "medium", "high", "xhigh", "max"]
+        case .codex, .openAICompatible: ["low", "medium", "high"]
+        case .builtIn, .appleIntelligence, .ollama: []
+        }
+    }
+
     /// Runs on this Mac, so suggestions can be asked for after a shorter pause.
     public var runsLocally: Bool { self == .builtIn || self == .appleIntelligence || self == .ollama }
 
@@ -105,12 +114,15 @@ public struct AIEndpoint: Sendable, Equatable {
     public var baseURL: String
     public var model: String
     public var apiKey: String
+    /// Reasoning effort, for providers that take one; nil leaves the provider's default.
+    public var effort: String?
 
-    public init(kind: AIProviderKind, baseURL: String = "", model: String = "", apiKey: String = "") {
+    public init(kind: AIProviderKind, baseURL: String = "", model: String = "", apiKey: String = "", effort: String? = nil) {
         self.kind = kind
         self.baseURL = baseURL.isEmpty ? kind.defaultBaseURL : baseURL
         self.model = model
         self.apiKey = apiKey
+        self.effort = effort
     }
 }
 
@@ -130,6 +142,10 @@ public struct AISettings: Codable, Equatable, Sendable {
     public var baseURLs: [String: String] = [:]
     public var models: [String: String] = [:]
     public var inlineModels: [String: String] = [:]
+    /// Per provider: reasoning effort for Ask AI, Fix and chat; missing means the provider's default.
+    public var efforts: [String: String] = [:]
+    /// Per prompt kind (raw value): the user's own system prompt; missing or empty means the default.
+    public var prompts: [String: String] = [:]
 
     public init() {}
 
@@ -148,7 +164,14 @@ public struct AISettings: Codable, Equatable, Sendable {
 
     public func endpoint(for purpose: AIRequest.Purpose, apiKey: String) -> AIEndpoint {
         let kind = provider(for: purpose)
-        return AIEndpoint(kind: kind, baseURL: baseURL(kind), model: model(kind, for: purpose), apiKey: apiKey)
+        // Suggestions while typing always use the provider's quickest setting.
+        let effort = purpose == .inline ? nil : efforts[kind.rawValue].flatMap { kind.effortLevels.contains($0) ? $0 : nil }
+        return AIEndpoint(kind: kind, baseURL: baseURL(kind), model: model(kind, for: purpose), apiKey: apiKey, effort: effort)
+    }
+
+    /// The user's own system prompt for `prompt`, or nil for the default.
+    public func instructions(_ prompt: SQLPrompts.PromptKind) -> String? {
+        prompts[prompt.rawValue].flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
     }
 
     // Settings saved by earlier builds may lack newer fields.
@@ -162,6 +185,8 @@ public struct AISettings: Codable, Equatable, Sendable {
         baseURLs = try c.decodeIfPresent([String: String].self, forKey: .baseURLs) ?? [:]
         models = try c.decodeIfPresent([String: String].self, forKey: .models) ?? [:]
         inlineModels = try c.decodeIfPresent([String: String].self, forKey: .inlineModels) ?? [:]
+        efforts = try c.decodeIfPresent([String: String].self, forKey: .efforts) ?? [:]
+        prompts = try c.decodeIfPresent([String: String].self, forKey: .prompts) ?? [:]
     }
 }
 
@@ -244,26 +269,59 @@ public enum SQLPrompts {
     /// Repeated in every instruction: unqualified names may resolve elsewhere than the user expects.
     static let tableNamesRule = "Write table names exactly as the schema lists them, keeping any schema prefix."
 
-    public static func generate(description: String, current: String?, schema: Schema, kind: DatabaseKind) -> AIRequest {
+    /// The system prompts, each editable in Settings › AI. `{database}` becomes the database's name
+    /// (PostgreSQL, MySQL / MariaDB, SQLite).
+    public enum PromptKind: String, CaseIterable, Identifiable, Sendable {
+        case chat, generate, fix, inline
+        public var id: String { rawValue }
+
+        public var title: String {
+            switch self {
+            case .chat: "Chat"
+            case .generate: "Ask AI"
+            case .fix: "Fix with AI"
+            case .inline: "Suggestions while typing"
+            }
+        }
+
+        public var defaultTemplate: String {
+            switch self {
+            case .chat:
+                return "You are the SQL assistant of a {database} database client. Answer briefly. Put every query in a "
+                    + "```sql fenced block. Use only tables and columns from the schema. \(tableNamesRule) You can't see the "
+                    + "data, only its structure; say so if a question needs the data."
+            case .generate:
+                return "You write {database} SQL for a database client. Use only tables and columns from the schema. "
+                    + "\(tableNamesRule) Reply with the SQL alone: no explanation, no Markdown fences. Use a comment line "
+                    + "(-- ...) only when something needs a short note."
+            case .fix:
+                return "You fix {database} SQL. \(tableNamesRule) Reply with the corrected SQL alone: no explanation, no Markdown fences."
+            case .inline:
+                return "You complete {database} SQL as the user types. \(tableNamesRule) Reply with only the characters to "
+                    + "insert at <cursor>, at most one line, nothing else. Reply with an empty message if nothing fits."
+            }
+        }
+    }
+
+    /// The instructions for a request: the user's own template if set, else the default.
+    static func instructions(_ prompt: PromptKind, custom: String?, kind: DatabaseKind) -> String {
+        let template = custom.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? prompt.defaultTemplate
+        return template.replacingOccurrences(of: "{database}", with: kind.displayName)
+    }
+
+    public static func generate(description: String, current: String?, schema: Schema, kind: DatabaseKind,
+                                instructions custom: String? = nil) -> AIRequest {
         var prompt = "Schema:\n\(schema.text)\n\n"
         if let current, !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             prompt += "Current SQL:\n\(current)\n\nChange it as follows: \(description)"
         } else {
             prompt += "Write SQL for: \(description)"
         }
-        return AIRequest(purpose: .generate, instructions: """
-            You write \(kind.displayName) SQL for a database client. Use only tables and columns from the schema. \
-            \(tableNamesRule) \
-            Reply with the SQL alone: no explanation, no Markdown fences. Use a comment line (-- ...) only when \
-            something needs a short note.
-            """, prompt: prompt)
+        return AIRequest(purpose: .generate, instructions: instructions(.generate, custom: custom, kind: kind), prompt: prompt)
     }
 
-    public static func fix(sql: String, error: String, schema: Schema, kind: DatabaseKind) -> AIRequest {
-        AIRequest(purpose: .generate, instructions: """
-            You fix \(kind.displayName) SQL. \(tableNamesRule) Reply with the corrected SQL alone: no explanation, \
-            no Markdown fences.
-            """, prompt: "Schema:\n\(schema.text)\n\nSQL:\n\(sql)\n\nThe server answered:\n\(redacted(error))")
+    public static func fix(sql: String, error: String, schema: Schema, kind: DatabaseKind, instructions custom: String? = nil) -> AIRequest {
+        AIRequest(purpose: .generate, instructions: instructions(.fix, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\nSQL:\n\(sql)\n\nThe server answered:\n\(redacted(error))")
     }
 
     /// Database errors can quote row values ("Key (email)=(an@example.com) already exists", "invalid input
@@ -283,7 +341,7 @@ public enum SQLPrompts {
 
     /// One turn of the chat panel: earlier turns, the editor's SQL and the schema come along.
     public static func chat(question: String, history: [(role: String, text: String)], editorSQL: String?,
-                            schema: Schema, kind: DatabaseKind) -> AIRequest {
+                            schema: Schema, kind: DatabaseKind, instructions custom: String? = nil) -> AIRequest {
         var prompt = "Schema:\n\(schema.text)\n\n"
         if let editorSQL, !editorSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             prompt += "SQL in the editor:\n\(editorSQL.prefix(Defaults.AI.chatEditorLength))\n\n"
@@ -292,24 +350,18 @@ public enum SQLPrompts {
             prompt += "Conversation so far:\n" + history.map { "\($0.role): \($0.text)" }.joined(separator: "\n\n") + "\n\n"
         }
         prompt += "User: \(question)"
-        return AIRequest(purpose: .generate, instructions: """
-            You are the SQL assistant of a \(kind.displayName) database client. Answer briefly. Put every query \
-            in a ```sql fenced block. Use only tables and columns from the schema. \(tableNamesRule) \
-            You can't see the data, only its structure; say so if a question needs the data.
-            """, prompt: prompt)
+        return AIRequest(purpose: .generate, instructions: instructions(.chat, custom: custom, kind: kind), prompt: prompt)
     }
 
     /// Asks for the text that continues `before`, placed before `after`. Only the text near the caret is
     /// sent, which keeps the request small and fast.
-    public static func inline(before: String, after: String, schema: Schema, kind: DatabaseKind) -> AIRequest {
+    public static func inline(before: String, after: String, schema: Schema, kind: DatabaseKind,
+                              instructions custom: String? = nil) -> AIRequest {
         let before = String(before.suffix(Defaults.AI.inlineContextLength)), after = String(after.prefix(Defaults.AI.inlineContextLength / 4))
         // For fill-in-the-middle models the schema rides along as SQL comments above the text.
         let header = schema.text.split(separator: "\n").map { "-- \($0)" }.joined(separator: "\n")
         let fill = AIRequest.Fill(prefix: header + "\n" + before, suffix: after)
-        return AIRequest(purpose: .inline, instructions: """
-            You complete \(kind.displayName) SQL as the user types. \(tableNamesRule) Reply with only the characters to insert at \
-            <cursor>, at most one line, nothing else. Reply with an empty message if nothing fits.
-            """, prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)", fill: fill)
+        return AIRequest(purpose: .inline, instructions: instructions(.inline, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)", fill: fill)
     }
 
     /// Removes Markdown fences and chatter that models add despite instructions.
@@ -354,8 +406,8 @@ public enum AIProviders {
         case .ollama: OllamaProvider(endpoint)
         case .openAICompatible: OpenAICompatibleProvider(endpoint)
         case .anthropic: AnthropicProvider(endpoint)
-        case .claudeCode: CLIProvider(tool: .claude, model: endpoint.model)
-        case .codex: CLIProvider(tool: .codex, model: endpoint.model)
+        case .claudeCode: CLIProvider(tool: .claude, model: endpoint.model, effort: endpoint.effort)
+        case .codex: CLIProvider(tool: .codex, model: endpoint.model, effort: endpoint.effort)
         }
     }
 }

@@ -13,6 +13,7 @@ final class WorkspaceModel {
         case query(QueryTabModel)
         case diagram(DiagramModel)
         case metrics(MetricsModel)
+        case routine(RoutineTabModel)
 
         var id: UUID {
             switch self {
@@ -20,6 +21,7 @@ final class WorkspaceModel {
             case .query(let model): model.id
             case .diagram(let model): model.id
             case .metrics(let model): model.id
+            case .routine(let model): model.id
             }
         }
 
@@ -29,6 +31,7 @@ final class WorkspaceModel {
             case .query(let model): model.title
             case .diagram(let model): model.title
             case .metrics: "Metrics"
+            case .routine(let model): model.title
             }
         }
     }
@@ -111,6 +114,39 @@ final class WorkspaceModel {
         return tables.filter { $0.name.localizedCaseInsensitiveContains(tableSearch) }
     }
 
+    /// Functions, procedures and triggers of the selected schema.
+    private(set) var routines: [RoutineInfo] = []
+
+    var filteredRoutines: [RoutineInfo] {
+        guard !tableSearch.isEmpty else { return routines }
+        return routines.filter { $0.name.localizedCaseInsensitiveContains(tableSearch) || ($0.table?.localizedCaseInsensitiveContains(tableSearch) ?? false) }
+    }
+
+    func loadRoutines() async {
+        guard let driver else { return }
+        // Not every account may read the catalog for routines; the list is simply empty then.
+        routines = (try? await driver.routines(in: selectedSchema)) ?? []
+    }
+
+    func openRoutine(_ routine: RoutineInfo) {
+        guard let driver else { return }
+        if let existing = tabs.first(where: { if case .routine(let model) = $0 { return model.routine?.id == routine.id }; return false }) {
+            selectedTabID = existing.id
+            return
+        }
+        let model = RoutineTabModel(routine: routine, driver: driver, workspace: self)
+        tabs.append(.routine(model))
+        selectedTabID = model.id
+    }
+
+    func newRoutine(_ kind: RoutineInfo.Kind, table: String? = nil) {
+        guard let driver else { return }
+        let model = RoutineTabModel(newKind: kind, template: driver.template(for: kind, schema: selectedSchema, table: table),
+                                    driver: driver, workspace: self)
+        tabs.append(.routine(model))
+        selectedTabID = model.id
+    }
+
     var selectedTab: Tab? { tabs.first { $0.id == selectedTabID } }
 
     var selectedTableTab: TableTabModel? {
@@ -177,6 +213,7 @@ final class WorkspaceModel {
         defer { loadingTables = false }
         do {
             tables = try await driver.tables(in: selectedSchema)
+            await loadRoutines()
             if tabs.contains(where: { if case .query = $0 { return true }; return false }) { prefetchColumns() }
             tablesError = nil
         } catch {
@@ -372,7 +409,7 @@ final class WorkspaceModel {
             if !model.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 closedTabs.append(.query(title: model.title, sql: model.sql))
             }
-        case .diagram, .metrics:
+        case .diagram, .metrics, .routine:
             break
         }
         if closedTabs.count > 20 { closedTabs.removeFirst() }

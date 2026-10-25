@@ -112,6 +112,8 @@ struct AISettingsView: View {
                 if usesBuiltIn { BuiltInModelsSection() }
                 if usesOllama { LocalModelsSection(ollama: ollama) }
 
+                PromptsSection()
+
                 Section {
                     Toggle("Allow on Production connections", isOn: $ai.settings.allowProduction)
                 }
@@ -178,10 +180,12 @@ private struct ProviderFields: View {
                 APIKeyField(kind: kind)
             }
             TextField("Model", text: modelBinding, prompt: Text(purpose == .inline ? "Same as Ask AI" : "e.g. gpt-4.1, or a LiteLLM model name"))
+            if purpose == .generate { EffortPicker(kind: kind) }
         case .anthropic:
             if showsShared { APIKeyField(kind: kind) }
             TextField("Model", text: modelBinding,
                       prompt: Text(purpose == .inline ? "Same as Ask AI; claude-haiku-5-5 is faster" : kind.defaultModel))
+            if purpose == .generate { EffortPicker(kind: kind) }
         case .claudeCode, .codex:
             Group {
                 if lookingForCLI {
@@ -199,6 +203,7 @@ private struct ProviderFields: View {
                 lookingForCLI = false
             }
             TextField("Model", text: modelBinding, prompt: Text("The tool's default"))
+            if purpose == .generate { EffortPicker(kind: kind) }
         }
     }
 }
@@ -555,5 +560,83 @@ private struct BuiltInModelsSection: View {
 
     private func size(_ bytes: Int64) -> String {
         bytes > 0 ? ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) : "Size unknown"
+    }
+}
+
+/// Edits one system prompt; empty or "Restore Default" goes back to Tabula's.
+struct PromptEditor: View {
+    let prompt: SQLPrompts.PromptKind
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Layout.barPadding) {
+            Text("\(prompt.title) instructions").font(.headline)
+            Text("Sent as the system prompt. {database} becomes the database's name (PostgreSQL, MySQL / MariaDB, SQLite). "
+                 + "The schema and your SQL are added after it automatically.")
+                .font(.callout).foregroundStyle(.secondary)
+            TextEditor(text: $text)
+                .font(Layout.Font.mono)
+                .frame(width: Layout.Settings.width, height: Layout.Settings.promptHeight)
+                .overlay(RoundedRectangle(cornerRadius: Layout.cornerRadius).strokeBorder(Color(nsColor: .separatorColor)))
+            HStack {
+                Button("Restore Default") { text = prompt.defaultTemplate }
+                    .disabled(text == prompt.defaultTemplate)
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save") {
+                    // The default is stored as "no override", so later improvements to it still apply.
+                    AIService.shared.settings.prompts[prompt.rawValue] = text == prompt.defaultTemplate ? nil : text
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(Layout.barPadding * 2)
+        .onAppear { text = AIService.shared.settings.instructions(prompt) ?? prompt.defaultTemplate }
+    }
+}
+
+/// Settings rows that open the prompt editor.
+struct PromptsSection: View {
+    @Bindable private var ai = AIService.shared
+    @State private var editing: SQLPrompts.PromptKind?
+
+    var body: some View {
+        Section {
+            ForEach(SQLPrompts.PromptKind.allCases) { prompt in
+                LabeledContent(prompt.title) {
+                    HStack {
+                        Text(ai.settings.instructions(prompt) == nil ? "Default" : "Custom").foregroundStyle(.secondary)
+                        Button("Edit…") { editing = prompt }
+                    }
+                }
+            }
+        } header: {
+            Text("Instructions")
+        } footer: {
+            Text("The system prompts Tabula sends. Change them to set a style, language or rules (for example: answer in Vietnamese, always add LIMIT).")
+        }
+        .sheet(item: $editing) { PromptEditor(prompt: $0) }
+    }
+}
+
+/// Reasoning effort for providers that take one. Higher thinks longer and costs more; suggestions while
+/// typing always use the quickest.
+struct EffortPicker: View {
+    let kind: AIProviderKind
+    @Bindable private var ai = AIService.shared
+
+    var body: some View {
+        if !kind.effortLevels.isEmpty {
+            Picker("Effort", selection: Binding(
+                get: { ai.settings.efforts[kind.rawValue] ?? "" },
+                set: { ai.settings.efforts[kind.rawValue] = $0.isEmpty ? nil : $0 })) {
+                Text("Default").tag("")
+                Divider()
+                ForEach(kind.effortLevels, id: \.self) { Text($0.capitalized).tag($0) }
+            }
+            .help("How much the model thinks before answering. Higher is slower and costs more.")
+        }
     }
 }

@@ -39,9 +39,36 @@ public enum SQLSplitter {
         var current = ""
         var segmentStart = 0
         var i = 0
+        // Bodies of MySQL routines and SQLite / MySQL triggers are BEGIN ... END blocks with their own
+        // semicolons; inside one, a ';' doesn't end the statement.
+        var blockDepth = 0
+        var words: [String] = []
+
+        func isWordCharacter(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "_" }
+
+        /// Tracks BEGIN / CASE ... END nesting, only inside CREATE TRIGGER / PROCEDURE / FUNCTION / EVENT.
+        func note(_ word: String) {
+            let word = word.uppercased()
+            words.append(word)
+            guard kind != .postgres, words.first == "CREATE",
+                  words.contains(where: { ["TRIGGER", "PROCEDURE", "FUNCTION", "EVENT"].contains($0) }) else { return }
+            let afterEnd = words.dropLast().last == "END"
+            switch word {
+            case "BEGIN", "CASE":
+                // "END CASE" closes a CASE that was already counted when it opened.
+                if !afterEnd { blockDepth += 1 }
+            case "IF", "LOOP", "WHILE", "REPEAT":
+                // END IF / END LOOP / ... close constructs that weren't counted, so undo that END's step.
+                if afterEnd { blockDepth += 1 }
+            case "END":
+                blockDepth = max(0, blockDepth - 1)
+            default:
+                break
+            }
+        }
 
         func flush() {
-            defer { current = ""; segmentStart = i + 1 }
+            defer { current = ""; segmentStart = i + 1; words = []; blockDepth = 0 }
             let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty && !isOnlyComments(trimmed, kind: kind) else { return }
             let leading = current.prefix(while: { $0.isWhitespace || $0.isNewline }).count
@@ -95,8 +122,14 @@ public enum SQLSplitter {
                 }
                 continue
             }
-            if c == ";" {
+            if c == ";" && blockDepth == 0 {
                 flush(); i += 1
+                continue
+            }
+            if isWordCharacter(c) {
+                var word = ""
+                while i < chars.count, isWordCharacter(chars[i]) { word.append(chars[i]); current.append(chars[i]); i += 1 }
+                note(word)
                 continue
             }
             current.append(c); i += 1

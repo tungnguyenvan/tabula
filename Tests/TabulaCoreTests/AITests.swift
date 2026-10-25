@@ -43,6 +43,31 @@ final class SQLPromptsTests: XCTestCase {
         XCTAssertTrue(request.instructions.contains("keeping any schema prefix"))
     }
 
+    func testCustomInstructions() {
+        let schema = SQLPrompts.Schema(tables: [])
+        let custom = SQLPrompts.chat(question: "hi", history: [], editorSQL: nil, schema: schema, kind: .mysql,
+                                     instructions: "Answer in Vietnamese. You help with {database}.")
+        XCTAssertEqual(custom.instructions, "Answer in Vietnamese. You help with MySQL / MariaDB.")
+        // Empty means the default.
+        let fallback = SQLPrompts.generate(description: "x", current: nil, schema: schema, kind: .postgres, instructions: "  ")
+        XCTAssertTrue(fallback.instructions.hasPrefix("You write PostgreSQL SQL"))
+        var settings = AISettings()
+        settings.prompts["fix"] = "Be terse."
+        XCTAssertEqual(settings.instructions(.fix), "Be terse.")
+        XCTAssertNil(settings.instructions(.chat))
+    }
+
+    func testEffortGoesToAskAINotToTyping() {
+        var settings = AISettings()
+        settings.provider = .anthropic
+        settings.efforts["anthropic"] = "xhigh"
+        XCTAssertEqual(settings.endpoint(for: .generate, apiKey: "").effort, "xhigh")
+        XCTAssertNil(settings.endpoint(for: .inline, apiKey: "").effort)
+        settings.efforts["anthropic"] = "bogus"
+        XCTAssertNil(settings.endpoint(for: .generate, apiKey: "").effort)
+        XCTAssertTrue(AIProviderKind.builtIn.effortLevels.isEmpty)
+    }
+
     func testErrorsAreRedactedBeforeTheyGoToAModel() {
         XCTAssertEqual(SQLPrompts.redacted(#"duplicate key value violates unique constraint "users_email_key" DETAIL: Key (email)=(an@example.com) already exists."#),
                        #"duplicate key value violates unique constraint "users_email_key" DETAIL: Key (email)=(…) already exists."#)
@@ -137,6 +162,10 @@ final class AIProviderTests: XCTestCase {
         XCTAssertEqual(body["model"] as? String, "claude-opus-5-5")
         XCTAssertEqual(body["system"] as? String, "Be brief.")
         XCTAssertNil(body["temperature"])
+        XCTAssertNil(body["output_config"])
+
+        _ = try await AnthropicProvider(AIEndpoint(kind: .anthropic, model: "claude-opus-5-5", apiKey: "k", effort: "high")).complete(request)
+        XCTAssertEqual((StubProtocol.lastBody?["output_config"] as? [String: String])?["effort"], "high")
     }
 
     func testAnthropicRefusalAndErrors() async {
@@ -161,6 +190,10 @@ final class AIProviderTests: XCTestCase {
         XCTAssertEqual(StubProtocol.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer key")
         let messages = try XCTUnwrap(StubProtocol.lastBody?["messages"] as? [[String: String]])
         XCTAssertEqual(messages.map { $0["role"] }, ["system", "user"])
+        XCTAssertNil(StubProtocol.lastBody?["reasoning_effort"])
+        _ = try await OpenAICompatibleProvider(AIEndpoint(kind: .openAICompatible, baseURL: "http://litellm.local:4000/v1",
+                                                          model: "o-test", effort: "medium")).complete(request)
+        XCTAssertEqual(StubProtocol.lastBody?["reasoning_effort"] as? String, "medium")
 
         _ = try await OllamaProvider(AIEndpoint(kind: .ollama, baseURL: "http://localhost:11434/", model: "qwen2.5-coder:1.5b")).complete(request)
         XCTAssertEqual(StubProtocol.lastRequest?.url?.absoluteString, "http://localhost:11434/v1/chat/completions")
@@ -210,7 +243,7 @@ final class ShellCommandTests: XCTestCase {
         }
         guard await CLIProvider.locate(tool) != nil else { throw XCTSkip("\(name) is not installed") }
         let schema = SQLPrompts.Schema(tables: [("orders", ["id", "customer_id", "total"])])
-        let reply = try await CLIProvider(tool: tool)
+        let reply = try await CLIProvider(tool: tool, effort: "low")
             .complete(SQLPrompts.generate(description: "count the orders", current: nil, schema: schema, kind: .postgres))
         let sql = SQLPrompts.cleanSQL(reply)
         XCTAssertTrue(sql.uppercased().contains("COUNT"), sql)

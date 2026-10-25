@@ -20,8 +20,20 @@ struct SidebarView: View {
             header
             // Arrow keys / single click browse in a reusable preview tab; Return or double-click opens for good.
             List(selection: Binding(
-                get: { model.selectedTableTab?.table },
-                set: { table in if let table { model.open(table, preview: true) } }
+                get: { () -> SidebarItem? in
+                    switch model.selectedTab {
+                    case .table(let table): return .table(table.table)
+                    case .routine(let routine): return routine.routine.map(SidebarItem.routine)
+                    default: return nil
+                    }
+                },
+                set: { item in
+                    switch item {
+                    case .table(let table): model.open(table, preview: true)
+                    case .routine(let routine): model.openRoutine(routine)
+                    case nil: break
+                    }
+                }
             )) {
                 // Selection mirrors the active tab, so switching tabs moves the highlight too.
                 let tables = model.filteredTables.filter { $0.kind == .table }
@@ -32,6 +44,14 @@ struct SidebarView: View {
                 if !views.isEmpty {
                     Section { ForEach(views) { row($0) } } header: { sectionHeader("Views", count: views.count) }
                 }
+                let functions = model.filteredRoutines.filter { $0.kind != .trigger }
+                let triggers = model.filteredRoutines.filter { $0.kind == .trigger }
+                if !functions.isEmpty {
+                    Section { ForEach(functions) { routineRow($0) } } header: { sectionHeader("Functions", count: functions.count) }
+                }
+                if !triggers.isEmpty {
+                    Section { ForEach(triggers) { routineRow($0) } } header: { sectionHeader("Triggers", count: triggers.count) }
+                }
                 if model.filteredTables.isEmpty && !model.loadingTables {
                     Text(model.tableSearch.isEmpty ? "No tables" : "No matches")
                         .font(.callout).foregroundStyle(.tertiary)
@@ -39,8 +59,14 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .environment(\.defaultMinListRowHeight, 22)
-            .contextMenu(forSelectionType: TableRef.self) { _ in } primaryAction: { tables in
-                if let table = tables.first { model.open(table) }
+            .contextMenu(forSelectionType: SidebarItem.self) { items in
+                if items.isEmpty { newRoutineButtons() }
+            } primaryAction: { items in
+                switch items.first {
+                case .table(let table): model.open(table)
+                case .routine(let routine): model.openRoutine(routine)
+                case nil: break
+                }
             }
             footer
         }
@@ -119,7 +145,7 @@ struct SidebarView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(table.kind == .view ? Color.purple : Color.accentColor)
         }
-        .tag(table)
+        .tag(SidebarItem.table(table))
             .contextMenu {
                 Button("Open Data") { model.open(table, mode: .data) }
                 Button("Open Structure") { model.open(table, mode: .structure) }
@@ -135,7 +161,31 @@ struct SidebarView: View {
                     Button("Truncate…", role: .destructive) { pendingAction = PendingAction(kind: .truncate, table: table) }
                 }
                 Button("Drop…", role: .destructive) { pendingAction = PendingAction(kind: .drop, table: table) }
+                if table.kind == .table, model.config.kind != .redis {
+                    Divider()
+                    Button("New Trigger on \(table.name)…") { model.newRoutine(.trigger, table: table.name) }
+                }
             }
+    }
+
+    private func routineRow(_ routine: RoutineInfo) -> some View {
+        RoutineRow(routine: routine)
+            .tag(SidebarItem.routine(routine))
+            .contextMenu {
+                Button("Open") { model.openRoutine(routine) }
+                Button("Copy Name") { Clipboard.copy(routine.name) }
+                Divider()
+                newRoutineButtons()
+            }
+    }
+
+    @ViewBuilder
+    private func newRoutineButtons() -> some View {
+        if model.driver?.supportsFunctions == true {
+            Button("New Function…") { model.newRoutine(.function) }
+            Button("New Procedure…") { model.newRoutine(.procedure) }
+        }
+        Button("New Trigger…") { model.newRoutine(.trigger) }
     }
 
     private var footer: some View {
@@ -179,4 +229,10 @@ struct SidebarView: View {
             actionError = error.localizedDescription
         }
     }
+}
+
+/// What a sidebar row stands for.
+enum SidebarItem: Hashable {
+    case table(TableRef)
+    case routine(RoutineInfo)
 }
