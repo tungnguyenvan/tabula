@@ -27,16 +27,21 @@ public enum MongoShell {
     /// Text for a grid cell: strings, numbers, ids and dates as plain text, everything else as `format` writes it.
     /// Edits read the text back in the type the field already had (see `MongoChanges`).
     public static func cell(_ value: Primitive) -> String? {
-        switch value {
-        case let string as String: return string
-        case is Null: return nil
-        case let int as Int: return String(int)
-        case let double as Double:
+        switch ValueKind(value) {
+        case .string: return (value as! String)
+        case .null: return nil
+        case .int32: return String(value as! Int32)
+        case .int64: return String(value as! Int)
+        case .double:
+            let double = value as! Double
             if double.isFinite, double == double.rounded(), let int = Int64(exactly: double), abs(int) < 1 << 53 { return String(int) }
             return number(double)
-        case let id as ObjectId: return id.hexString
-        case let decimal as Decimal128: return MongoDecimal.string(decimal)
-        case let date as Date: return isoText(date) ?? format(date)
+        case .objectId: return (value as! ObjectId).hexString
+        case .decimal: return MongoDecimal.string(value as! Decimal128)
+        case .date:
+            let date = value as! Date
+            return isoText(date) ?? format(date)
+        case .bool: return (value as! Bool) ? "true" : "false"
         default: return format(value)
         }
     }
@@ -52,6 +57,10 @@ public enum MongoShell {
     }
 
     public static func quoted(_ string: String) -> String {
+        // Most strings need no escapes; skip the per-character walk for them.
+        if !string.utf8.contains(where: { $0 < 0x20 || $0 == UInt8(ascii: "\"") || $0 == UInt8(ascii: "\\") }) {
+            return "\"" + string + "\""
+        }
         var output = "\""
         for scalar in string.unicodeScalars {
             switch scalar {
@@ -68,50 +77,37 @@ public enum MongoShell {
     }
 
     static func isIdentifier(_ name: String) -> Bool {
-        guard let first = name.unicodeScalars.first, first == "_" || first == "$" || (first.isASCII && first.properties.isAlphabetic) else {
-            return false
-        }
-        return name.unicodeScalars.allSatisfy { $0 == "_" || $0 == "$" || ($0.isASCII && ($0.properties.isAlphabetic || ("0"..."9").contains($0))) }
+        guard let first = name.utf8.first, MongoShellParser.isIdentifierStart(first) else { return false }
+        return name.utf8.allSatisfy(MongoShellParser.isIdentifierPart)
     }
 
     private static func write(_ value: Primitive, into output: inout String, indent: Int?) {
-        switch value {
-        case let document as Document:
-            writeDocument(document, into: &output, indent: indent)
-        case let string as String:
-            output += quoted(string)
-        case let int as Int32:
-            output += String(int)
-        case let int as Int:
-            output += "NumberLong(\(int))"
-        case let double as Double:
-            output += number(double)
-        case let bool as Bool:
-            output += bool ? "true" : "false"
-        case is Null:
-            output += "null"
-        case let id as ObjectId:
-            output += "ObjectId(\"\(id.hexString)\")"
-        case let date as Date:
-            output += dateText(date)
-        case let binary as Binary:
-            output += binaryText(binary)
-        case let regex as RegularExpression:
+        // One type lookup, then a single cast: trying `as` for each type in turn was most of the cost of a page.
+        switch ValueKind(value) {
+        case .document: writeDocument(value as! Document, into: &output, indent: indent)
+        case .string: output += quoted(value as! String)
+        case .int32: output += String(value as! Int32)
+        case .int64: output += "NumberLong(\(value as! Int))"
+        case .double: output += number(value as! Double)
+        case .bool: output += (value as! Bool) ? "true" : "false"
+        case .null: output += "null"
+        case .objectId: output += "ObjectId(\"\((value as! ObjectId).hexString)\")"
+        case .date: output += dateText(value as! Date)
+        case .binary: output += binaryText(value as! Binary)
+        case .regex:
+            let regex = value as! RegularExpression
             output += "/" + regex.pattern.replacingOccurrences(of: "/", with: "\\/") + "/" + regex.options
-        case let timestamp as Timestamp:
+        case .timestamp:
+            let timestamp = value as! Timestamp
             output += "Timestamp({ t: \(UInt32(bitPattern: timestamp.timestamp)), i: \(UInt32(bitPattern: timestamp.increment)) })"
-        case let decimal as Decimal128:
-            output += "NumberDecimal(\"\(MongoDecimal.string(decimal))\")"
-        case is MinKey:
-            output += "MinKey()"
-        case is MaxKey:
-            output += "MaxKey()"
-        case let code as JavaScriptCode:
-            output += "Code(\(quoted(code.code)))"
-        case let code as JavaScriptCodeWithScope:
+        case .decimal: output += "NumberDecimal(\"\(MongoDecimal.string(value as! Decimal128))\")"
+        case .minKey: output += "MinKey()"
+        case .maxKey: output += "MaxKey()"
+        case .code: output += "Code(\(quoted((value as! JavaScriptCode).code)))"
+        case .codeWithScope:
+            let code = value as! JavaScriptCodeWithScope
             output += "Code(\(quoted(code.code)), \(format(code.scope)))"
-        default:
-            output += quoted(String(describing: value))
+        case .other: output += quoted(String(describing: value))
         }
     }
 
@@ -152,7 +148,6 @@ public enum MongoShell {
         return text.contains(where: { $0 == "." || $0 == "e" || $0 == "E" }) ? text : text + ".0"
     }
 
-    private static let isoFormat = Date.ISO8601FormatStyle()
 
     static func dateText(_ date: Date) -> String {
         isoText(date).map { "ISODate(\"\($0)\")" } ?? "new Date(\(Int64((date.timeIntervalSince1970 * 1000).rounded())))"
@@ -160,13 +155,10 @@ public enum MongoShell {
 
     /// ISO 8601 with milliseconds, for years ISO can write (1–9999).
     static func isoText(_ date: Date) -> String? {
-        let year = Calendar(identifier: .gregorian).dateComponents(in: TimeZone(identifier: "UTC")!, from: date).year ?? 0
-        guard (1...9999).contains(year) else { return nil }
         // BSON dates are whole milliseconds; work from that integer so .678 doesn't print as .677.
-        let milliseconds = Int64((date.timeIntervalSince1970 * 1000).rounded())
-        let seconds = Int64((Double(milliseconds) / 1000).rounded(.down))
-        let text = Date(timeIntervalSince1970: Double(seconds)).formatted(isoFormat)
-        return text.dropLast() + String(format: ".%03lldZ", milliseconds - seconds * 1000)
+        let milliseconds = (date.timeIntervalSince1970 * 1000).rounded()
+        guard let exact = Int64(exactly: milliseconds) else { return nil }
+        return CivilTime.isoText(milliseconds: exact)
     }
 
     private static func binaryText(_ binary: Binary) -> String {
@@ -201,24 +193,24 @@ public enum MongoShell {
 
     /// BSON type name, as `$type` and Compass spell it.
     public static func typeName(_ value: Primitive) -> String {
-        switch value {
-        case let document as Document: document.isArray ? "array" : "object"
-        case is String: "string"
-        case is Int32: "int"
-        case is Int: "long"
-        case is Double: "double"
-        case is Bool: "bool"
-        case is Null: "null"
-        case is ObjectId: "objectId"
-        case is Date: "date"
-        case is Binary: "binData"
-        case is RegularExpression: "regex"
-        case is Timestamp: "timestamp"
-        case is Decimal128: "decimal"
-        case is MinKey: "minKey"
-        case is MaxKey: "maxKey"
-        case is JavaScriptCode, is JavaScriptCodeWithScope: "javascript"
-        default: "unknown"
+        switch ValueKind(value) {
+        case .document: (value as! Document).isArray ? "array" : "object"
+        case .string: "string"
+        case .int32: "int"
+        case .int64: "long"
+        case .double: "double"
+        case .bool: "bool"
+        case .null: "null"
+        case .objectId: "objectId"
+        case .date: "date"
+        case .binary: "binData"
+        case .regex: "regex"
+        case .timestamp: "timestamp"
+        case .decimal: "decimal"
+        case .minKey: "minKey"
+        case .maxKey: "maxKey"
+        case .code, .codeWithScope: "javascript"
+        case .other: "unknown"
         }
     }
 
@@ -239,6 +231,26 @@ public enum MongoShell {
             throw ParseError("Expected a document like { field: value }.")
         }
         return document
+    }
+}
+
+/// The BSON type of a value, found with one dictionary lookup of its dynamic type.
+enum ValueKind {
+    case document, string, int32, int64, double, bool, null, objectId, date, binary, regex, timestamp, decimal
+    case minKey, maxKey, code, codeWithScope, other
+
+    private static let kinds: [ObjectIdentifier: ValueKind] = [
+        ObjectIdentifier(Document.self): .document, ObjectIdentifier(String.self): .string, ObjectIdentifier(Int32.self): .int32,
+        ObjectIdentifier(Int.self): .int64, ObjectIdentifier(Double.self): .double, ObjectIdentifier(Bool.self): .bool,
+        ObjectIdentifier(Null.self): .null, ObjectIdentifier(ObjectId.self): .objectId, ObjectIdentifier(Date.self): .date,
+        ObjectIdentifier(Binary.self): .binary, ObjectIdentifier(RegularExpression.self): .regex,
+        ObjectIdentifier(Timestamp.self): .timestamp, ObjectIdentifier(Decimal128.self): .decimal,
+        ObjectIdentifier(MinKey.self): .minKey, ObjectIdentifier(MaxKey.self): .maxKey,
+        ObjectIdentifier(JavaScriptCode.self): .code, ObjectIdentifier(JavaScriptCodeWithScope.self): .codeWithScope,
+    ]
+
+    init(_ value: Primitive) {
+        self = Self.kinds[ObjectIdentifier(type(of: value))] ?? .other
     }
 }
 
@@ -713,6 +725,7 @@ enum MongoDates {
     /// ISO 8601 dates as the shell accepts them: with or without time, fraction and zone (no zone means UTC).
     static func parse(_ text: String) -> Date? {
         let text = text.trimmingCharacters(in: .whitespaces)
+        if let milliseconds = CivilTime.milliseconds(iso: text) { return Date(timeIntervalSince1970: Double(milliseconds) / 1000) }
         let formatter = ISO8601DateFormatter()
         formatter.timeZone = TimeZone(identifier: "UTC")
         let variants: [ISO8601DateFormatter.Options] = [
@@ -762,4 +775,16 @@ enum MongoBinary {
         }
         return data
     }
+}
+
+/// The documents behind a result's rows, written as shell text only when asked for (an edit, the document
+/// editor): writing every document of a large page up front cost as much as making its cells.
+public struct DocumentTexts: RandomAccessCollection, Sendable {
+    private let values: [Primitive]
+
+    init(_ values: [Primitive]) { self.values = values }
+
+    public var startIndex: Int { values.startIndex }
+    public var endIndex: Int { values.endIndex }
+    public subscript(position: Int) -> String { MongoShell.format(values[position]) }
 }

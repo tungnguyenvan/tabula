@@ -121,27 +121,14 @@ enum PostgresValueFormatter {
         return (sign == 0x4000 ? "-" : "") + integerPart + fraction
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
-    private static let dateTimeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return formatter
-    }()
+    /// Postgres counts dates from 2000-01-01.
+    private static let epochDays = Int64(epochOffset) / CivilTime.secondsPerDay
 
     private static func date(_ buffer: inout ByteBuffer) -> String {
         guard let days = buffer.readInteger(as: Int32.self) else { return "" }
         if days == Int32.max { return "infinity" }
         if days == Int32.min { return "-infinity" }
-        return dateFormatter.string(from: Date(timeIntervalSince1970: epochOffset + TimeInterval(days) * 86_400))
+        return CivilTime.dateText(days: epochDays + Int64(days))
     }
 
     private static func timestamp(_ buffer: inout ByteBuffer, withZone: Bool) -> String {
@@ -149,7 +136,7 @@ enum PostgresValueFormatter {
         if micros == Int64.max { return "infinity" }
         if micros == Int64.min { return "-infinity" }
         let (seconds, remainder) = floorDivide(micros, 1_000_000)
-        let text = dateTimeFormatter.string(from: Date(timeIntervalSince1970: epochOffset + TimeInterval(seconds)))
+        let text = CivilTime.dateTimeText(seconds: Int64(epochOffset) + seconds)
         return text + fractional(remainder) + (withZone ? "+00" : "")
     }
 

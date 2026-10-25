@@ -335,7 +335,7 @@ public actor MongoDriver: DatabaseDriver {
             var command: Document = ["distinct": collection, "key": field]
             if let filter = arguments.optionalDocument(1) { command["query"] = filter }
             let values = (try await self.command(command, in: database)["values"] as? Document)?.values ?? []
-            return QueryResult(columns: [field], rows: values.map { [MongoShell.cell($0)] }, documents: values.map { MongoShell.format($0) })
+            return QueryResult(columns: [field], rows: values.map { [MongoShell.cell($0)] }, documents: DocumentTexts(values))
         case "insertOne", "insert", "insertMany":
             let documents: [Document]
             if call.name == "insertOne" {
@@ -566,7 +566,7 @@ public actor MongoDriver: DatabaseDriver {
         }
         if documents.isEmpty, !order.isEmpty { columns = order }
         let rows = documents.map { document in columns.map { document[$0].flatMap(MongoShell.cell) } }
-        return QueryResult(columns: columns, rows: rows, affectedRows: affected, documents: documents.map { MongoShell.format($0) })
+        return QueryResult(columns: columns, rows: rows, affectedRows: affected, documents: DocumentTexts(documents))
     }
 }
 

@@ -221,10 +221,10 @@ public struct QueryResult: Sendable {
     public var duration: TimeInterval
     public var statement: String
     /// MongoDB: each row's whole document as shell text, which keeps the field types the cells don't show.
-    public var documents: [String]?
+    public var documents: DocumentTexts?
 
     public init(columns: [String] = [], rows: [[String?]] = [], affectedRows: Int? = nil, duration: TimeInterval = 0, statement: String = "",
-                documents: [String]? = nil) {
+                documents: DocumentTexts? = nil) {
         self.columns = columns
         self.rows = rows
         self.affectedRows = affectedRows

@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+- Faster MongoDB pages and results, found with the new benchmarks (`scripts/benchmark.sh`, [docs/benchmarks.md](docs/benchmarks.md)): a 5,000-document page loads in 43 ms instead of 136, a 50,000-document result in 0.42 s instead of 1.3, a commit of 100 edits in 25 ms instead of 41. Documents are written as text only when an edit needs them, and dates no longer go through the system's date formatter.
+- Reading shell values (the document editor, edits, filters) is 17 times faster; dates were parsed by trying several formatters.
+- PostgreSQL pages with date and timestamp columns are about 15% faster.
+
+### Fixed
+- PostgreSQL dates before 15 October 1582 showed in the Julian calendar, days off from what the server stores and `psql` shows; they now show in the proleptic Gregorian calendar, as PostgreSQL counts them.
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query

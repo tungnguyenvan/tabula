@@ -260,7 +260,7 @@ final class MongoIntegrationTests: XCTestCase {
         let update = try MongoChanges.update(people, row: .init(document: row, changes: ["age": "46", "name": "Bình B"]))
         try await driver.applyInTransaction([update])
         let after = try await driver.execute("db.people.find({ name: \"Bình B\" })")
-        XCTAssertTrue(after.documents?.first?.contains("age: NumberLong(46)") == true, after.documents?.description ?? "")
+        XCTAssertTrue(after.documents?.first?.contains("age: NumberLong(46)") == true, after.documents.map { Array($0).description } ?? "")
 
         // Replace and delete by _id.
         let replaced = try MongoChanges.replace(people, original: row, with: "{ name: \"Replaced\", n: 1 }")

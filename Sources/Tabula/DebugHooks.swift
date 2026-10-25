@@ -5,7 +5,8 @@ import TabulaCore
 
 /// Debug-only automation for visual checks, driven by environment variables:
 /// - TABULA_DEBUG_OPEN: connection UUID to open at launch
-/// - TABULA_DEBUG_TABLE: table name to open once connected; TABULA_DEBUG_DOCUMENT: a row to open in the document editor (MongoDB)
+/// - TABULA_DEBUG_TABLE: table name to open once connected; TABULA_DEBUG_DOCUMENT: a row to open in the document editor (MongoDB);
+///   TABULA_DEBUG_PAGE_SIZE: rows per page for that table
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
@@ -72,6 +73,14 @@ enum DebugHooks {
                         tab.showFilterBar = true
                         Task { await tab.applyFilter() }
                     }
+                }
+            }
+            if let size = environment["TABULA_DEBUG_PAGE_SIZE"].flatMap(Int.init) {
+                // The tab exists once the open has gone through, as for the filter above.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    guard let tab = model.selectedTableTab else { return }
+                    tab.pageSize = size
+                    Task { await tab.reload() }
                 }
             }
             if let row = environment["TABULA_DEBUG_DOCUMENT"].flatMap(Int.init), let tab = model.selectedTableTab {
