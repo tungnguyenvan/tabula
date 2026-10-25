@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Functions, procedures and triggers** in the sidebar (PostgreSQL, MySQL; triggers on SQLite): view, edit and save the definition, create new ones from a template, delete. Saving never loses a routine: transactional where the database allows, and on MySQL the original is restored if the new definition fails.
+- AI: an **Effort** setting for models that reason (Claude Opus / Sonnet / Haiku 5.5, Claude Code, Codex, OpenAI reasoning models), in the chat panel and in Settings. Suggestions while typing always use the quickest.
+- AI: **editable system prompts** for chat, Ask AI, Fix with AI and suggestions (Settings › AI › Instructions, or the chat's menu).
+
+### Fixed
+- Scripts containing `CREATE TRIGGER`, `CREATE PROCEDURE` or `CREATE FUNCTION` with a `BEGIN … END` body (SQLite, MySQL) are no longer split at the semicolons inside the body.
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query

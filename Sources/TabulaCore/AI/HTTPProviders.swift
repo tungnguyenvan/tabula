@@ -26,7 +26,11 @@ public struct AnthropicProvider: AIProvider {
             "fallbacks": "default",
         ]
         // Inline suggestions must come back while the user is still looking at the caret.
-        if request.purpose == .inline { body["output_config"] = ["effort": "low"] }
+        if request.purpose == .inline {
+            body["output_config"] = ["effort": "low"]
+        } else if let effort = endpoint.effort {
+            body["output_config"] = ["effort": effort]
+        }
         http.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: http)
@@ -57,11 +61,13 @@ public struct OpenAICompatibleProvider: AIProvider {
         http.httpMethod = "POST"
         http.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if !endpoint.apiKey.isEmpty { http.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization") }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model,
             "max_tokens": request.maxTokens,
             "messages": [["role": "system", "content": request.instructions], ["role": "user", "content": request.prompt]],
         ]
+        // OpenAI reasoning models (and LiteLLM, which maps it for others) take this.
+        if let effort = endpoint.effort { body["reasoning_effort"] = effort }
         http.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: http)

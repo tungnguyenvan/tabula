@@ -59,6 +59,10 @@ Free, no usage limits, keyboard-first.</p>
 - Open another connection from the database button in the toolbar, or from the Connections window: it joins the current window instead of replacing it.
 - With two or more open, a column at the left edge of the window lists them. Hover for the name and address, click to switch, or use ⌃⌘] / ⌃⌘[. Each connection keeps its own tabs and state.
 
+**Functions and triggers**
+- Functions, procedures and triggers are listed in the sidebar (PostgreSQL, MySQL; triggers on SQLite). Click one to see its definition, edit it and save with ⌘S; start a new one from the sidebar's context menu.
+- Saving is safe: Postgres functions use `CREATE OR REPLACE`; Postgres and SQLite triggers are dropped and recreated in one transaction; MySQL, which can't do DDL in a transaction, gets the original back if the new definition fails.
+
 **Browsing**
 - A schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter. Picking a schema also makes it the default for queries (`search_path` on Postgres, `USE` on MySQL), so `SELECT * FROM transactions` finds `dev.transactions`.
 - Equal-width tabs. Browsing the sidebar with the arrow keys reuses a single preview tab; press Return or double-click to keep a table open in its own tab.
@@ -218,7 +222,8 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 
 AI is off until you turn it on in **Settings › AI** (⌘,). Then:
 
-- **AI chat** (⌥⌘A, or the chat button in the toolbar) opens a conversation in the panel on the right, next to Row Details. Ask for queries, explanations or changes to the SQL in the editor; it remembers the conversation for that connection. Every query in an answer has **Insert**, **Run** and copy buttons. The model menu under the message field switches between downloaded models, Apple Intelligence, Claude Opus 5.5 / Sonnet 5.5 / Haiku 5.5, your OpenAI-compatible model, Claude Code and Codex.
+- **AI chat** (⌥⌘A, or the chat button in the toolbar) opens a conversation in the panel on the right, next to Row Details. Ask for queries, explanations or changes to the SQL in the editor; it remembers the conversation for that connection. Every query in an answer has **Insert**, **Run** and copy buttons. The model menu under the message field switches between downloaded models, Apple Intelligence, Claude Opus 5.5 / Sonnet 5.5 / Haiku 5.5, your OpenAI-compatible model, Claude Code and Codex, and for models that reason (Claude, Claude Code, Codex, OpenAI reasoning models) an **Effort** menu sets how long they think, from Low to Max.
+- **Your own instructions:** each system prompt (chat, Ask AI, Fix with AI, suggestions) can be edited in Settings › AI › Instructions, for example to answer in Vietnamese or to always add a LIMIT. `{database}` stands for the database's name; Restore Default brings Tabula's back.
 
 In a query tab:
 

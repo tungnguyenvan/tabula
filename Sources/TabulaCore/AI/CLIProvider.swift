@@ -10,10 +10,12 @@ public struct CLIProvider: AIProvider {
 
     let tool: Tool
     let model: String
+    let effort: String?
 
-    public init(tool: Tool, model: String = "") {
+    public init(tool: Tool, model: String = "", effort: String? = nil) {
         self.tool = tool
         self.model = model
+        self.effort = effort
     }
 
     /// The tool's path: as the login shell resolves it, else from the usual install locations (an npm
@@ -52,6 +54,7 @@ public struct CLIProvider: AIProvider {
             // The prompt goes in on stdin: arguments are visible to every local user in `ps`.
             var arguments = ["-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "json"]
             if !model.isEmpty { arguments += ["--model", model] }
+            if let effort { arguments += ["--effort", effort] }
             let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
                                                     input: request.prompt, directory: directory, timeout: Defaults.AI.generateTimeout)
             for line in output.stdout.split(whereSeparator: \.isNewline).reversed() {
@@ -65,6 +68,7 @@ public struct CLIProvider: AIProvider {
             let answer = directory.appendingPathComponent("answer.txt")
             var arguments = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", answer.path]
             if !model.isEmpty { arguments += ["--model", model] }
+            if let effort { arguments += ["-c", "model_reasoning_effort=\"\(effort)\""] }
             arguments.append("-")  // read the prompt from stdin
             let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
                                                     input: request.instructions + "\n\n" + request.prompt,

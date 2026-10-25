@@ -36,7 +36,8 @@ final class AIChatModel {
             defer { busy = false }
             do {
                 let schema = await workspace.loadedAISchema(for: [editorSQL ?? "", question].joined(separator: "\n"))
-                let request = SQLPrompts.chat(question: question, history: history, editorSQL: editorSQL, schema: schema, kind: kind)
+                let request = SQLPrompts.chat(question: question, history: history, editorSQL: editorSQL, schema: schema, kind: kind,
+                instructions: AIService.shared.settings.instructions(.chat))
                 let reply = try await AIService.shared.complete(request)
                 guard !Task.isCancelled else { return }
                 messages.append(Message(role: .assistant, text: reply.trimmingCharacters(in: .whitespacesAndNewlines)))
@@ -90,6 +91,7 @@ struct AIChatView: View {
     let workspace: WorkspaceModel
     @Bindable var chat: AIChatModel
     @FocusState private var inputFocused: Bool
+    @State private var editingInstructions = false
 
     private var queryTab: QueryTabModel? {
         if case .query(let query) = workspace.selectedTab { return query }
@@ -125,6 +127,7 @@ struct AIChatView: View {
             Divider()
             composer
         }
+        .sheet(isPresented: $editingInstructions) { PromptEditor(prompt: .chat) }
     }
 
     private var emptyState: some View {
@@ -141,7 +144,10 @@ struct AIChatView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding / 2) {
             input
-            ModelPicker()
+            HStack(spacing: Layout.barPadding) {
+                ModelPicker()
+                ChatEffortPicker()
+            }
         }
         .padding(Layout.Chat.padding)
         .onAppear { inputFocused = true }
@@ -164,6 +170,7 @@ struct AIChatView: View {
             }
             Menu {
                 Button("Clear Conversation") { chat.clear() }
+                Button("Edit Chat Instructions…") { editingInstructions = true }
                 SettingsLink { Text("AI Settings…") }
             } label: { Image(systemName: "ellipsis.circle") }
             .menuStyle(.borderlessButton)
@@ -313,6 +320,32 @@ private struct ModelPicker: View {
             if !model.isEmpty { ai.settings.models[kind.rawValue] = model }
         } label: {
             if selected { Label(title, systemImage: "checkmark") } else { Text(title) }
+        }
+    }
+}
+
+/// Effort for the chat's model, when it takes one (recent Claude models, Claude Code, Codex, OpenAI reasoning).
+private struct ChatEffortPicker: View {
+    @Bindable private var ai = AIService.shared
+
+    var body: some View {
+        let kind = ai.settings.provider
+        if !kind.effortLevels.isEmpty {
+            Menu {
+                Picker("Effort", selection: Binding(
+                    get: { ai.settings.efforts[kind.rawValue] ?? "" },
+                    set: { ai.settings.efforts[kind.rawValue] = $0.isEmpty ? nil : $0 })) {
+                    Text("Default").tag("")
+                    ForEach(kind.effortLevels, id: \.self) { Text($0.capitalized).tag($0) }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Label("Effort: \((ai.settings.efforts[kind.rawValue] ?? "default").capitalized)", systemImage: "gauge.with.dots.needle.50percent")
+                    .font(Layout.Font.small)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("How much the model thinks before answering. Higher is slower and costs more.")
         }
     }
 }

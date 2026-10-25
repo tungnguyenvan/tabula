@@ -161,6 +161,7 @@ struct WorkspaceView: View {
                 case .query(let query): QueryTabView(model: query, workspace: model).id(query.id)
                 case .diagram(let diagram): DiagramView(model: diagram) { model.open($0) }.id(diagram.id)
                 case .metrics(let metrics): MetricsView(model: metrics).id(metrics.id)
+                case .routine(let routine): RoutineTabView(model: routine, workspace: model).id(routine.id)
                 }
             } else {
                 EmptyWorkspaceView(model: model)
@@ -302,6 +303,7 @@ private struct TabButton: View {
         case .query: "chevron.left.forwardslash.chevron.right"
         case .diagram: "point.3.connected.trianglepath.dotted"
         case .metrics: "gauge.with.dots.needle.33percent"
+        case .routine(let model): RoutineRow.symbol(model.routine?.kind ?? model.newKind)
         }
     }
 

@@ -197,3 +197,92 @@ final class UseSchemaTests: XCTestCase {
         await driver.close()
     }
 }
+
+/// Viewing and editing functions and triggers.
+final class RoutineTests: XCTestCase {
+    func testSQLiteTriggers() async throws {
+        let driver = try SQLiteDriver(path: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).db").path)
+        _ = try await driver.executeScript("""
+            CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT, updated TEXT);
+            CREATE TRIGGER touch AFTER UPDATE ON items BEGIN UPDATE items SET updated = 'yes' WHERE id = NEW.id; END;
+            """)
+        let routines = try await driver.routines(in: "main")
+        XCTAssertEqual(routines.map(\.name), ["touch"])
+        let trigger = try XCTUnwrap(routines.first)
+        XCTAssertEqual(trigger.table, "items")
+        let original = try await driver.definition(of: trigger)
+        XCTAssertTrue(original.hasPrefix("CREATE TRIGGER touch"), original)
+
+        // A broken definition changes nothing.
+        do {
+            try await driver.replace(trigger, original: original, with: "CREATE TRIGGER touch AFTER UPDATE ON nowhere BEGIN SELECT 1; END;")
+            XCTFail("expected an error")
+        } catch {}
+        let unchanged = try await driver.definition(of: trigger)
+        XCTAssertEqual(unchanged, original)
+
+        try await driver.replace(trigger, original: original, with: "CREATE TRIGGER touch AFTER UPDATE ON items BEGIN UPDATE items SET updated = 'v2' WHERE id = NEW.id; END;")
+        _ = try await driver.execute("INSERT INTO items (id, name) VALUES (1, 'a')")
+        _ = try await driver.execute("UPDATE items SET name = 'b' WHERE id = 1")
+        let updated = try await driver.execute("SELECT updated FROM items").rows.first?.first
+        XCTAssertEqual(updated, "v2")
+        _ = try await driver.execute(driver.dropStatement(for: trigger))
+        let after = try await driver.routines(in: "main")
+        XCTAssertTrue(after.isEmpty)
+    }
+
+    func testPostgresFunctionsAndTriggers() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_PG_PORT not set")
+        }
+        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"), password: "tabula")
+        _ = try await driver.executeScript("""
+            DROP SCHEMA IF EXISTS tabula_routines CASCADE;
+            CREATE SCHEMA tabula_routines;
+            CREATE TABLE tabula_routines.items (id int, touched text);
+            CREATE FUNCTION tabula_routines.add_one(n integer) RETURNS integer LANGUAGE sql AS $$ SELECT n + 1 $$;
+            CREATE FUNCTION tabula_routines.touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.touched := 'v1'; RETURN NEW; END $$;
+            CREATE TRIGGER touch_items BEFORE INSERT ON tabula_routines.items FOR EACH ROW EXECUTE FUNCTION tabula_routines.touch();
+            """)
+        let routines = try await driver.routines(in: "tabula_routines")
+        XCTAssertEqual(Set(routines.map(\.displayName)), ["add_one(n integer)", "touch()", "touch_items"])
+        let addOne = try XCTUnwrap(routines.first { $0.name == "add_one" })
+        let definition = try await driver.definition(of: addOne)
+        XCTAssertTrue(definition.contains("CREATE OR REPLACE FUNCTION tabula_routines.add_one"), definition)
+        try await driver.replace(addOne, original: definition, with: definition.replacingOccurrences(of: "n + 1", with: "n + 2"))
+        let two = try await driver.execute("SELECT tabula_routines.add_one(1)").rows.first?.first
+        XCTAssertEqual(two, "3")
+
+        let trigger = try XCTUnwrap(routines.first { $0.kind == .trigger })
+        XCTAssertEqual(trigger.detail, "BEFORE INSERT ON items")
+        let triggerDefinition = try await driver.definition(of: trigger)
+        XCTAssertTrue(triggerDefinition.hasPrefix("CREATE TRIGGER touch_items BEFORE INSERT"), triggerDefinition)
+        try await driver.replace(trigger, original: triggerDefinition, with: triggerDefinition.replacingOccurrences(of: "BEFORE INSERT", with: "BEFORE INSERT OR UPDATE"))
+        let changed = try await driver.routines(in: "tabula_routines").first { $0.kind == .trigger }
+        XCTAssertEqual(changed?.detail, "BEFORE INSERT OR UPDATE ON items")
+        _ = try await driver.execute("DROP SCHEMA tabula_routines CASCADE")
+        await driver.close()
+    }
+
+    func testMySQLRestoresTheOriginalWhenANewDefinitionFails() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MYSQL_PORT not set")
+        }
+        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .mysql, port: port, user: "root", database: "tabula", tls: .require), password: "tabula")
+        _ = try await driver.execute("DROP FUNCTION IF EXISTS tabula_add_one")
+        _ = try await driver.execute("CREATE FUNCTION tabula_add_one(n INT) RETURNS INT DETERMINISTIC RETURN n + 1")
+        let all = try await driver.routines(in: "tabula")
+        let routine = try XCTUnwrap(all.first { $0.name == "tabula_add_one" })
+        let original = try await driver.definition(of: routine)
+        do {
+            try await driver.replace(routine, original: original, with: "CREATE FUNCTION tabula_add_one(n INT) RETURNS INT DETERMINISTIC RETURN nonsense(")
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("restored"), error.localizedDescription)
+        }
+        let still = try await driver.execute("SELECT tabula_add_one(1)").rows.first?.first
+        XCTAssertEqual(still, "2")
+        _ = try await driver.execute("DROP FUNCTION tabula_add_one")
+        await driver.close()
+    }
+}

@@ -34,6 +34,11 @@ enum DebugHooks {
             for table in model.tables { model.open(table) }
             for _ in 0..<count { model.newQueryTab() }
         }
+        if let name = environment["TABULA_DEBUG_ROUTINE"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                if let routine = model.routines.first(where: { $0.name == name }) { model.openRoutine(routine) }
+            }
+        }
         if let question = environment["TABULA_DEBUG_CHAT"] {
             model.rightPanel = .ai
             model.showInspector = true

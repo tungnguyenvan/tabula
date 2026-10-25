@@ -73,3 +73,29 @@ final class StatementAtCursorTests: XCTestCase {
         XCTAssertEqual(SQLSplitter.statement(at: 0, in: "  ", kind: .postgres), nil)
     }
 }
+
+final class RoutineSplittingTests: XCTestCase {
+    func testTriggerAndProcedureBodiesStayWhole() {
+        let sqlite = """
+            CREATE TABLE t (id INTEGER, v TEXT);
+            CREATE TRIGGER touch AFTER UPDATE ON t BEGIN UPDATE t SET v = 'x' WHERE id = NEW.id; SELECT 1; END;
+            SELECT * FROM t;
+            """
+        XCTAssertEqual(SQLSplitter.split(sqlite, kind: .sqlite).count, 3)
+        let mysql = """
+            CREATE PROCEDURE p(IN n INT)
+            BEGIN
+                IF n > 0 THEN
+                    SELECT CASE WHEN n > 10 THEN 'big' ELSE 'small' END;
+                END IF;
+                WHILE n > 0 DO SET n = n - 1; END WHILE;
+            END;
+            CALL p(3);
+            """
+        let statements = SQLSplitter.split(mysql, kind: .mysql)
+        XCTAssertEqual(statements.count, 2, statements.joined(separator: "\n---\n"))
+        XCTAssertTrue(statements[0].hasSuffix("END"))
+        // Ordinary BEGIN (a transaction) still ends at its semicolon.
+        XCTAssertEqual(SQLSplitter.split("BEGIN; UPDATE t SET v = 1; COMMIT;", kind: .sqlite).count, 3)
+    }
+}
