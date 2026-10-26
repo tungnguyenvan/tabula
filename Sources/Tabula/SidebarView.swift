@@ -9,6 +9,22 @@ struct SidebarView: View {
     /// A database to open once the user agrees to lose unsaved edits.
     @State private var pendingDatabase: String?
     @FocusState private var filterFocused: Bool
+    /// Groups the user collapsed (comma-separated `Group` names), remembered across launches and connections.
+    @AppStorage("SidebarCollapsedGroups") private var collapsedGroups = ""
+
+    /// The sidebar's groups, which collapse like those in Finder: the chevron shows when hovering a group's title.
+    enum Group: String { case tables, views, functions, triggers }
+
+    private func expanded(_ group: Group) -> Binding<Bool> {
+        Binding {
+            // While filtering, every group shows its matches.
+            !model.tableSearch.isEmpty || !collapsedGroups.split(separator: ",").contains(Substring(group.rawValue))
+        } set: { open in
+            var collapsed = Set(collapsedGroups.split(separator: ",").map(String.init))
+            if open { collapsed.remove(group.rawValue) } else { collapsed.insert(group.rawValue) }
+            collapsedGroups = collapsed.sorted().joined(separator: ",")
+        }
+    }
 
     struct PendingAction: Identifiable {
         enum Kind { case truncate, drop }
@@ -41,18 +57,24 @@ struct SidebarView: View {
                 let tables = model.filteredTables.filter { $0.kind == .table }
                 let views = model.filteredTables.filter { $0.kind == .view }
                 if !tables.isEmpty {
-                    Section { ForEach(tables) { row($0) } } header: { sectionHeader(model.config.kind.tablesTitle, count: tables.count) }
+                    Section(isExpanded: expanded(.tables)) { ForEach(tables) { row($0) } } header: {
+                        sectionHeader(model.config.kind.tablesTitle, count: tables.count)
+                    }
                 }
                 if !views.isEmpty {
-                    Section { ForEach(views) { row($0) } } header: { sectionHeader("Views", count: views.count) }
+                    Section(isExpanded: expanded(.views)) { ForEach(views) { row($0) } } header: { sectionHeader("Views", count: views.count) }
                 }
                 let functions = model.filteredRoutines.filter { $0.kind != .trigger }
                 let triggers = model.filteredRoutines.filter { $0.kind == .trigger }
                 if !functions.isEmpty {
-                    Section { ForEach(functions) { routineRow($0) } } header: { sectionHeader("Functions", count: functions.count) }
+                    Section(isExpanded: expanded(.functions)) { ForEach(functions) { routineRow($0) } } header: {
+                        sectionHeader("Functions", count: functions.count)
+                    }
                 }
                 if !triggers.isEmpty {
-                    Section { ForEach(triggers) { routineRow($0) } } header: { sectionHeader("Triggers", count: triggers.count) }
+                    Section(isExpanded: expanded(.triggers)) { ForEach(triggers) { routineRow($0) } } header: {
+                        sectionHeader("Triggers", count: triggers.count)
+                    }
                 }
                 if model.filteredTables.isEmpty && !model.loadingTables {
                     Text(model.tableSearch.isEmpty ? "No \(model.config.kind.tablesTitle.lowercased())" : "No matches")
