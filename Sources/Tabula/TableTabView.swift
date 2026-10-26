@@ -46,7 +46,8 @@ struct TableTabView: View {
                         let value: String? = if case .value(let text) = model.cell(row: row, column: column) { text } else { nil }
                         Task { await model.filter(equalTo: value, column: column) }
                     },
-                    onDuplicate: model.canInsert ? { model.duplicateRows($0) } : nil
+                    onDuplicate: model.canInsert ? { model.duplicateRows($0) } : nil,
+                    onAddRow: model.canInsert ? { model.addRow() } : nil
                 )
                 .overlay { if model.loading && model.rows.isEmpty { ProgressView().controlSize(.small) } }
             case .structure:
@@ -94,7 +95,7 @@ struct TableTabView: View {
             if model.mode == .data {
                 HStack(spacing: 2) {
                     let noun = model.driver.kind.rowNoun
-                    BarButton(symbol: "plus", help: "Add \(noun)") { model.addRow() }
+                    BarButton(symbol: "plus", help: "Add \(noun) (or double-click below the \(noun)s)") { model.addRow() }
                         .disabled(!model.canInsert)
                     BarButton(symbol: "minus", help: "Delete selected \(noun)s (⌫)") { model.deleteRows(selection); selection = [] }
                         .disabled(selection.isEmpty || !(model.canEditExisting || selection.contains { $0 >= model.rows.count }))
