@@ -5,6 +5,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Added
+- Double-click the empty space below the rows of a table to add a row, as the + button does.
 - **Open the other databases of a PostgreSQL server** from the same connection: a Database picker above the schema picker in the sidebar lists the databases your login may connect to, and choosing one moves the window there. Query tabs keep their SQL, tabs of the old database's tables close (Tabula asks first if they hold unsaved edits), and the toolbar shows `database.schema`. The saved connection keeps its database. The new database is connected first: if it can't be opened, nothing in the window changes and the sidebar says why. The AI chat starts over in the new database.
 
 ### Changed

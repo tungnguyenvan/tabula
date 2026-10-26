@@ -43,6 +43,8 @@ struct DataGridView: NSViewRepresentable {
     var onRestore: ((IndexSet) -> Void)?
     var onFilterByValue: ((_ row: Int, _ column: Int) -> Void)?
     var onDuplicate: ((IndexSet) -> Void)?
+    /// Double-clicking the empty space below the last row adds a row, like the bar's + button.
+    var onAddRow: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -507,6 +509,17 @@ final class GridTableView: NSTableView {
 
     @objc func copy(_ sender: Any?) {
         coordinator?.copySelection()
+    }
+
+    /// A double-click in the empty space below the rows adds a row. Table views send no double action
+    /// there, so it is caught here.
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2, let onAddRow = coordinator?.parent.onAddRow,
+           row(at: convert(event.locationInWindow, from: nil)) < 0 {
+            onAddRow()
+            return
+        }
+        super.mouseDown(with: event)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

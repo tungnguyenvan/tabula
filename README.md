@@ -96,6 +96,7 @@ Free, no usage limits, keyboard-first.</p>
 - Filter builder (column, operator, value), with AND or OR between conditions (AND binds tighter, as in SQL), or a hand-written `WHERE` clause. "Filter by This Value" is in the cell context menu.
 - Sorting, filtering or paging asks first if it would throw away uncommitted edits.
 - Spreadsheet-style keyboard control: arrow keys and Tab move between cells, Return edits, typing replaces the value, Space shows the full value (JSON is pretty-printed).
+- Add a row with + or by double-clicking the empty space below the rows; typing starts in the first column to fill.
 - Copy rows as TSV, with or without headers, or copy a single cell. Export CSV, TSV, JSON or SQL `INSERT`.
 
 **Editing**
