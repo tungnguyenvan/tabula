@@ -4,13 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
-### Fixed
-- **Zooming the relationship diagram quit the app** (the zoom buttons or a pinch on the trackpad). Keeping the zoom between 30% and 200% re-set the value in a way that repeated without end.
-- **The AI chat could show "Thinking…" for minutes, and Stop didn't stop it.** Before asking the model, the chat loaded the columns of up to 300 tables one by one, which on a remote or large database (or MongoDB, where each collection is sampled) took very long, and it couldn't be cancelled. Now the tables a question or the editor's SQL names are loaded first, the rest only for up to 3 seconds; Stop ends the answer at once, so the next message can go out; and the chat says "Reading the schema…" until the request is sent. Ask AI and Fix with AI wait less for the same reason.
-
 ### Planned
 - SSH tunnels
 - Cancelling a running query
+
+## [0.4.5] - 2026-10-26
+
+### Fixed
+- **Zooming the relationship diagram quit the app** (the zoom buttons or a pinch on the trackpad). Keeping the zoom between 30% and 200% re-set the value in a way that repeated without end.
+- **The AI chat could show "Thinking…" for minutes, and Stop didn't stop it.** Before asking the model, the chat loaded the columns of up to 300 tables one by one, which on a remote or large database (or MongoDB, where each collection is sampled) took very long, and it couldn't be cancelled. Now the tables a question or the editor's SQL names are loaded first, the rest only for up to 3 seconds; Stop ends the answer at once, so the next message can go out; and the chat says "Reading the schema…" until the request is sent. Ask AI and Fix with AI wait less for the same reason.
 
 ## [0.4.4] - 2026-10-26
 
