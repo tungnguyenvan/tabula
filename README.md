@@ -90,6 +90,7 @@ Free, no usage limits, keyboard-first.</p>
 
 **Browsing**
 - A schema (Postgres) or database (MySQL) switcher, and a table and view list you can filter. Picking a schema also makes it the default for queries (`search_path` on Postgres, `USE` on MySQL), so `SELECT * FROM transactions` finds `dev.transactions`.
+- Collapse the sidebar's Tables, Views, Functions and Triggers groups with the chevron on each group's title, as in Finder; Tabula remembers which are collapsed.
 - Equal-width tabs. Browsing the sidebar with the arrow keys reuses a single preview tab; press Return or double-click to keep a table open in its own tab.
 - Command palette (⌘P) to jump to any table, open tab, schema or action.
 
