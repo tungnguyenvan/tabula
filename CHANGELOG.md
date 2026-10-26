@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+- **The app is 61 MB instead of 104 MB once installed**, and the download 24 MB instead of 31. It now ships without symbol tables, which only debuggers use; nothing else changes.
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query
