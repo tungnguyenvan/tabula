@@ -136,12 +136,12 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Size and resource use
 
-Measured on a Mac with Apple M2 and macOS 26.1, memory with an optimized build of 0.4.0 and sizes with the current build. Sizes are in decimal megabytes, as Finder and GitHub show them. A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
+Measured on a Mac with Apple M2 and macOS 26.1, memory with an optimized build of 0.4.0 and sizes with 0.4.4. Sizes are in decimal megabytes, as Finder and GitHub show them. A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
 
 | | |
 | --- | --- |
-| Download | 23.8 MB (ZIP). 30.5 MB in 0.4.0, 27.5 MB in 0.3.1, 19.3 MB in 0.2.1. |
-| Installed | 61 MB: the app 37 MB and llama.cpp, which runs local models, 23 MB. One universal app for Apple silicon and Intel. The app ships without the symbol tables that only debuggers use; with them, 0.4.3 took 104 MB. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
+| Download | 23.8 MB (ZIP), 27.1 MB (DMG). 30.5 MB in 0.4.0, 27.5 MB in 0.3.1, 19.3 MB in 0.2.1. |
+| Installed | 61 MB: the app 37 MB and llama.cpp, which runs local models, 23 MB. One universal app for Apple silicon and Intel. Since 0.4.4 the app ships without the symbol tables that only debuggers use; with them, 0.4.3 took 104 MB. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
 | Memory, Connections window only | 28 MB |
 | Memory, one Postgres table open (300 rows) | 81 MB |
 | Memory, one MongoDB collection open (300 documents) | 79 MB |
@@ -289,6 +289,8 @@ Add a connection of type **MongoDB**.
 - **`{ }`** opens the selected document as JSON for nested edits (replaced as a whole, matched by `_id`); the document-plus button inserts a new one.
 - **Structure** lists the fields found in the first 100 documents with the types seen, and the indexes with their keys and options (unique, sparse, TTL, partial).
 
+<p align="center"><img src="docs/screenshots/mongodb-document.png" width="560" alt="The JSON document editor: a whole order with ObjectId, NumberDecimal and ISODate values"></p>
+
 **Query editor**
 
 Write MongoDB shell statements, one per line or separated by `;`. A statement may continue on the next line with `.sort(…)` and the like.
@@ -300,6 +302,8 @@ db.orders.aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }, { $sort: { 
 db.customers.updateMany({ vip: true }, { $set: { tier: "gold" } })
 db.getCollection("audit log").countDocuments({ at: { $gte: ISODate("2026-01-01") } })
 ```
+
+<p align="center"><img src="docs/screenshots/mongodb-query.png" width="820" alt="An aggregation in the MongoDB query editor, with its results and the console log"></p>
 
 - Collection methods: `find` / `findOne` (with `sort`, `skip`, `limit`, `projection`, `hint`, `collation`, `count()`, `explain()`), `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `insertOne` / `insertMany`, `updateOne` / `updateMany` / `replaceOne`, `deleteOne` / `deleteMany`, `findOneAndUpdate` / `Replace` / `Delete`, `createIndex(es)`, `dropIndex(es)`, `getIndexes`, `drop`, `renameCollection`, `stats`.
 - Database methods: `runCommand`, `adminCommand`, `getCollectionNames`, `getCollectionInfos`, `createCollection`, `createView`, `dropDatabase`, `stats`, `serverStatus`, `version`, `currentOp`, `getUsers`, `getRoles`, `getSiblingDB("other")`; and `show dbs`, `show collections`, `show users`, `use <db>`.
