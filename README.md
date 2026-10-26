@@ -2,12 +2,12 @@
 
 <h1 align="center">Tabula</h1>
 
-<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.0/Tabula-demo.mp4">Demo video</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
 <p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b> and <b>Redis</b>.<br>
 Free, no usage limits, keyboard-first.</p>
 
-<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.0/Tabula-demo.mp4"><img src="docs/screenshots/demo-poster.jpg" width="900" alt="Demo video, 44 seconds: the AI chat answering from a query it ran, Ask AI in the editor, suggestions while typing, filtering and MongoDB, all in the real app"></a><br>
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4"><img src="docs/screenshots/demo-poster.jpg" width="900" alt="Demo video, 44 seconds: the AI chat answering from a query it ran, Ask AI in the editor, suggestions while typing, filtering and MongoDB, all in the real app"></a><br>
 <sub>The demo video (44 s, MP4): Tabula driven by real clicks and keys.</sub></p>
 
 <p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a Redis and a PostgreSQL connection open, browsing a table with the row details panel"></p>
