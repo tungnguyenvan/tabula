@@ -35,6 +35,8 @@ mkdir -p "$PUBLIC/shots" "$(dirname "$OUT")"
 cp docs/screenshots/*.png "$PUBLIC/shots/"
 sips -s format png Resources/AppIcon.icns --out "$PUBLIC/icon.png" >/dev/null
 for name in chat inline filter; do cp -R "$RECORDINGS/$name" "$PUBLIC/$name"; done
+# Music and effects are synthesized, so the video has no third-party audio.
+node demo/audio/make-audio.mjs "$PUBLIC/audio"
 
 # Remotion's own headless Chrome fails to start in some setups (its helpers can't find their ICU data);
 # the installed Google Chrome works, so it is used when present.

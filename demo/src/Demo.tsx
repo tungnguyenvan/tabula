@@ -1,6 +1,8 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Audio,
+  Sequence,
   Easing,
   Img,
   Series,
@@ -25,6 +27,13 @@ const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const ease = Easing.inOut(Easing.cubic);
 
 // MARK: Building blocks
+
+/// A sound effect (scripts: demo/audio/make-audio.mjs) played at a frame of the scene.
+const Sfx: React.FC<{ at: number; name: string; volume?: number }> = ({ at, name, volume = 1 }) => (
+  <Sequence from={Math.round(at)} durationInFrames={45} layout="none">
+    <Audio src={staticFile(`audio/${name}.wav`)} volume={volume} />
+  </Sequence>
+);
 
 /// Moving light behind every scene, so nothing sits still.
 const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,6 +62,7 @@ const Enter: React.FC<{ duration: number; children: React.ReactNode }> = ({ dura
   const leave = interpolate(frame, [duration - 8, duration], [1, 0], clamp);
   return (
     <AbsoluteFill style={{ opacity: Math.min(enter * 1.5, 1) * leave, transform: `scale(${0.9 + 0.1 * enter})` }}>
+      <Sfx at={0} name="whoosh" volume={0.63} />
       {children}
     </AbsoluteFill>
   );
@@ -66,6 +76,7 @@ const Title: React.FC<{ text: string; sub?: string; at?: number; top?: number }>
   const subIn = spring({ frame: frame - at - words.length * 3 - 4, fps, config: { damping: 200 } });
   return (
     <div style={{ position: "absolute", top, left: 0, right: 0, textAlign: "center", zIndex: 10 }}>
+      <Sfx at={at + 2} name="pop" volume={0.42} />
       <div style={{ fontSize: 60, fontWeight: 800, letterSpacing: -1.5, textShadow: "0 8px 30px rgba(0,0,0,0.6)" }}>
         {words.map((word, index) => {
           const pop = spring({ frame: frame - at - index * 3, fps, config: { damping: 12, stiffness: 200 } });
@@ -158,6 +169,7 @@ const Stage: React.FC<{
       </div>
       {children}
       {cursor && <Cursor path={cursor} clicks={clicks} zoom={view.zoom} width={width} height={height} />}
+      {clicks.map((click) => <Sfx key={click} at={click} name="click" volume={1.0} />)}
     </div>
     </div>
   );
@@ -223,10 +235,11 @@ const Connections: React.FC<{ duration: number }> = ({ duration }) => (
 );
 
 /// Keys pressed, shown as keycaps.
-const Keys: React.FC<{ keys: string[]; label: string; show: boolean }> = ({ keys, label, show }) => {
+const Keys: React.FC<{ keys: string[]; label: string; from: number; to: number }> = ({ keys, label, from, to }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  if (!show) return null;
+  const sound = <Sfx at={from} name="keycap" volume={1.0} />;
+  if (frame < from || frame >= to) return sound;
   return (
     <div style={{ position: "absolute", bottom: 46, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", gap: 14, zIndex: 20 }}>
       {keys.map((key) => (
@@ -235,7 +248,8 @@ const Keys: React.FC<{ keys: string[]; label: string; show: boolean }> = ({ keys
           {key}
         </div>
       ))}
-      <div style={{ fontSize: 30, fontWeight: 600, marginLeft: 10, textShadow: "0 4px 16px rgba(0,0,0,0.7)", opacity: spring({ frame, fps, config: { damping: 200 } }) }}>{label}</div>
+      <div style={{ fontSize: 30, fontWeight: 600, marginLeft: 10, textShadow: "0 4px 16px rgba(0,0,0,0.7)", opacity: spring({ frame: frame - from, fps, config: { damping: 200 } }) }}>{label}</div>
+      {sound}
     </div>
   );
 };
@@ -254,6 +268,8 @@ const Suggestion: React.FC<{ show: boolean; from: number }> = ({ show, from }) =
     </div>
   );
 };
+
+const typed = "SELECT name, price FROM products ORDER BY ";
 
 const Inline: React.FC<{ duration: number }> = ({ duration }) => {
   const frame = useCurrentFrame();
@@ -276,8 +292,12 @@ const Inline: React.FC<{ duration: number }> = ({ duration }) => {
           ]}>
           <Suggestion show={frame >= 84 && frame < 131} from={84} />
         </Stage>
-        <Keys keys={["⇥"]} label="Tab accepts the suggestion" show={frame >= 124 && frame < 156} />
-        <Keys keys={["⌘", "↩"]} label="Run" show={frame >= 160 && frame < 192} />
+        <Keys keys={["⇥"]} label="Tab accepts the suggestion" from={124} to={156} />
+        <Keys keys={["⌘", "↩"]} label="Run" from={160} to={192} />
+        {/* A key for each character typed, "SELECT name, price FROM products ORDER BY ", frames 16–66. */}
+        {Array.from({ length: typed.length }, (_, index) => (
+          <Sfx key={index} at={16 + (index * 50) / typed.length} name={`key${(index % 4) + 1}`} volume={typed[index] === " " ? 0.6 : 0.85} />
+        ))}
       </Enter>
     </Background>
   );
@@ -313,6 +333,7 @@ const Mongo: React.FC<{ duration: number }> = ({ duration }) => {
     <Background>
       <Enter duration={duration}>
         <Title text="MongoDB, natively" sub="Documents in a grid. Types kept when you edit." />
+        <Sfx at={54} name="pop" volume={0.7} />
         <Stage src={() => "shots/mongodb.png"} aspect={1520 / 2600}
           camera={[{ at: 0, x: 0.45, y: 0.4, zoom: 1.15 }, { at: 30, x: 0.35, y: 0.25, zoom: 1.6 }, { at: 50, x: 0.35, y: 0.8, zoom: 1.6 }, { at: 70, x: 0.5, y: 0.5, zoom: fit }]}
           cursor={[{ at: 4, x: 0.6, y: 0.5 }, { at: 26, x: 0.3, y: 0.21 }, { at: 48, x: 0.3515, y: 0.98 }]}
@@ -342,6 +363,7 @@ const Montage: React.FC<{ duration: number }> = ({ duration }) => {
     <Background>
       <Enter duration={duration}>
         <Title text="And everything around it" />
+        {[4, 10, 16].map((at) => <Sfx key={at} at={at} name="pop" volume={0.56} />)}
         <div style={{ position: "absolute", top: 320, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 40, perspective: 1600 }}>
           {tiles.map((tile, index) => {
             const pop = spring({ frame: frame - 4 - index * 6, fps, config: { damping: 13, stiffness: 150 } });
@@ -392,6 +414,8 @@ const AI: React.FC<{ duration: number }> = ({ duration }) => {
           cursor={[{ at: 4, x: 0.6, y: 0.6 }, { at: 22, x: 0.8, y: 0.948 }, { at: 32, x: 0.961, y: 0.947 }, { at: 120, x: 0.95, y: 0.8 }, { at: 180, x: 0.93, y: 0.56 }, { at: 245, x: 0.842, y: 0.698 }]}
           clicks={[24, 34]} />
         <Badge text="⏩  Sped up" show={frame >= 44 && frame < 104} />
+        <Sfx at={104} name="pop" volume={0.56} />
+        <Sfx at={122} name="chime" volume={0.77} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, textAlign: "center", fontSize: 22, color: "rgba(255,255,255,0.7)", zIndex: 20,
           padding: "40px 0 16px", background: "linear-gradient(transparent, rgba(7,8,12,0.92) 55%)" }}>
           Claude Code shown · also Codex, Claude API, OpenAI-compatible, Ollama, Apple Intelligence, or a model on your Mac
@@ -410,6 +434,7 @@ const Outro: React.FC = () => {
     <Background>
       <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
         <Img src={staticFile("icon.png")} style={{ width: 150, height: 150, transform: `scale(${icon})` }} />
+        <Sfx at={18} name="chime" volume={0.7} />
         <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula" top={10} at={4} /></div>
         <div style={{ fontSize: 34, color: "rgba(255,255,255,0.8)", opacity: spring({ frame: frame - 12, fps, config: { damping: 200 } }) }}>
           Free · Native · No account, no telemetry
@@ -437,6 +462,10 @@ const scenes: { duration: number; render: (duration: number) => React.ReactNode 
 export const demoDuration = scenes.reduce((total, scene) => total + scene.duration, 0);
 
 export const Demo: React.FC = () => (
+  <>
+  {/* Fades in, sits under the effects, fades out with the last scene. */}
+  <Audio src={staticFile("audio/music.wav")}
+    volume={(frame) => interpolate(frame, [0, 15, demoDuration - 45, demoDuration], [0, 0.9, 0.9, 0], clamp)} />
   <Series>
     {scenes.map((scene, index) => (
       <Series.Sequence key={index} durationInFrames={scene.duration}>
@@ -444,4 +473,5 @@ export const Demo: React.FC = () => (
       </Series.Sequence>
     ))}
   </Series>
+  </>
 );
