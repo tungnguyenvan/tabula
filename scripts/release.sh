@@ -36,7 +36,8 @@ lipo -info "$APP/Contents/MacOS/Tabula"
 codesign --verify --deep --strict --verbose=2 "$APP"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 [ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")" = "$VERSION" ]
-if nm "$APP/Contents/MacOS/Tabula" | grep -q DebugHooks; then
+# The shipped binary has no symbol table, so look for debug code in its symbols (dSYM).
+if nm "dist/Tabula.app.dSYM/Contents/Resources/DWARF/Tabula" | grep -q DebugHooks; then
   echo "Release binary contains debug hooks" >&2; exit 1
 fi
 
@@ -67,6 +68,8 @@ if [ -n "${SIGN_IDENTITY:-}" ]; then codesign --force --sign "$SIGN_IDENTITY" --
 awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md > "$OUT/RELEASE_NOTES.md"
 
 (cd "$OUT" && shasum -a 256 "$NAME.dmg" "$NAME.zip" > SHA256SUMS.txt)
+# Symbols for reading crash reports from this build; not part of the GitHub release.
+ditto -c -k --keepParent "dist/Tabula.app.dSYM" "$OUT/$NAME.dSYM.zip"
 
 step "Done"
 ls -lh "$OUT"

@@ -134,12 +134,12 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Size and resource use
 
-Measured on a Mac with Apple M2 and macOS 26.1, with an optimized build of 0.4.0. Sizes are in decimal megabytes, as Finder and GitHub show them. A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
+Measured on a Mac with Apple M2 and macOS 26.1, memory with an optimized build of 0.4.0 and sizes with the current build. Sizes are in decimal megabytes, as Finder and GitHub show them. A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
 
 | | |
 | --- | --- |
-| Download | 30.5 MB (ZIP). Earlier: 27.5 MB in 0.3.1, 19.3 MB in 0.2.1. |
-| Installed | 104 MB: the app 79 MB and llama.cpp, which runs local models, 24.5 MB. 0.3.1 was 93 MB; the 11 MB since then is MongoDB support (the MongoKitten driver, BSON and Tabula's own MongoDB code). One universal app for Apple silicon and Intel. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
+| Download | 23.8 MB (ZIP). 30.5 MB in 0.4.0, 27.5 MB in 0.3.1, 19.3 MB in 0.2.1. |
+| Installed | 61 MB: the app 37 MB and llama.cpp, which runs local models, 23 MB. One universal app for Apple silicon and Intel. The app ships without the symbol tables that only debuggers use; with them, 0.4.3 took 104 MB. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
 | Memory, Connections window only | 28 MB |
 | Memory, one Postgres table open (300 rows) | 81 MB |
 | Memory, one MongoDB collection open (300 documents) | 79 MB |
