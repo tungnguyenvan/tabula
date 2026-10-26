@@ -175,7 +175,7 @@ final class WorkspaceModel {
             DebugHooks.workspaceConnected(self)
             #endif
         } catch {
-            status = .failed(error.localizedDescription)
+            status = .failed(PasswordEscapes.message(for: error, password: password))
         }
     }
 

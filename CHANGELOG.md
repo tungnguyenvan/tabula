@@ -4,6 +4,12 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- Paste a connection URL into the Host field to fill in the whole form, password included (`postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and TablePlus URLs with their name, tag and TLS settings).
+
+### Fixed
+- Passwords copied from a dashboard that shows them URL-escaped (`%3F` for `?`, `%7C` for `|`) failed with "authentication failed" ([#11](https://github.com/tungnguyenvan/tabula/issues/11)). The connection form now offers to decode such a password, and a failed login points at the escapes.
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query
