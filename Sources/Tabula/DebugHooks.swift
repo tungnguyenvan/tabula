@@ -9,6 +9,8 @@ import TabulaCore
 ///   TABULA_DEBUG_PAGE_SIZE: rows per page for that table
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab; TABULA_DEBUG_QUERY_THEN: more SQL to run a moment later
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
+/// - TABULA_DEBUG_RECORD: directory that receives the workspace window as numbered JPEG frames
+///   (TABULA_DEBUG_RECORD_FPS a second, default 10), e.g. for the demo video (scripts/render-demo.sh)
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
 /// - TABULA_DEBUG_AI_ALLOW_PRODUCTION: allow AI on Production connections; TABULA_DEBUG_APPROVE: answer the chat's query approval
 /// - TABULA_DEBUG_CHAT_DEMO (a question) / TABULA_DEBUG_ASK_DEMO: play a made-up streamed answer with reasoning
@@ -294,6 +296,23 @@ enum DebugHooks {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 print("WIDTH requested", width, "got", window.frame.width, "min", window.minSize.width)
                 fflush(stdout)
+            }
+        }
+    }
+
+    /// Records the workspace window as frame-00001.jpg, frame-00002.jpg… at a steady rate.
+    static func startRecording() {
+        guard let directory = environment["TABULA_DEBUG_RECORD"] else { return }
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let fps = environment["TABULA_DEBUG_RECORD_FPS"].flatMap(Double.init) ?? 10
+        var frame = 0
+        Timer.scheduledTimer(withTimeInterval: 1 / fps, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                guard let window = targetWindow, let rep = windowServerImage(window) ?? cachedImage(window),
+                      let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return }
+                frame += 1
+                let name = String(format: "frame-%05d.jpg", frame)
+                try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
             }
         }
     }

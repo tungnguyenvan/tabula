@@ -1,0 +1,15 @@
+{
+  "name": "tabula-demo",
+  "private": true,
+  "description": "Tabula's demo video, made with Remotion. Render with scripts/render-demo.sh.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts TabulaDemo"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.534",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.534"
+  }
+}
