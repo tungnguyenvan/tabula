@@ -164,28 +164,36 @@ final class WorkspaceModel {
     func connect() async {
         status = .connecting
         do {
-            let log = log
-            let driver = LoggingDriver(try await DriverFactory.connect(config, password: password)) { entry in
-                Task { @MainActor in log.append(entry) }
-            }
-            self.driver = driver
-            status = .connected
-            connectedAt = Date()
-            serverVersion = await driver.serverVersion()
-            currentDatabase = await driver.currentDatabase()
-            databases = (try? await driver.serverDatabases()) ?? []
-            schemas = (try? await driver.schemas()) ?? []
-            let preferred = (try? await driver.defaultSchema()) ?? ""
-            selectedSchema = schemas.contains(preferred) ? preferred : (schemas.first ?? preferred)
-            await applySchema()
-            await loadTables()
-            if tabs.isEmpty && !restoringQueryTabs { newQueryTab() }
+            await setUp(try await openDriver(config))
+            if tabs.isEmpty { newQueryTab() }
             #if DEBUG
             DebugHooks.workspaceConnected(self)
             #endif
         } catch {
             status = .failed(PasswordEscapes.message(for: error, password: password))
         }
+    }
+
+    private func openDriver(_ config: ConnectionConfig) async throws -> LoggingDriver {
+        let log = log
+        return LoggingDriver(try await DriverFactory.connect(config, password: password)) { entry in
+            Task { @MainActor in log.append(entry) }
+        }
+    }
+
+    /// Makes `driver` the window's connection and loads what the sidebar shows.
+    private func setUp(_ driver: LoggingDriver) async {
+        self.driver = driver
+        status = .connected
+        connectedAt = Date()
+        serverVersion = await driver.serverVersion()
+        currentDatabase = await driver.currentDatabase()
+        databases = (try? await driver.serverDatabases()) ?? []
+        schemas = (try? await driver.schemas()) ?? []
+        let preferred = (try? await driver.defaultSchema()) ?? ""
+        selectedSchema = schemas.contains(preferred) ? preferred : (schemas.first ?? preferred)
+        await applySchema()
+        await loadTables()
     }
 
     func reconnect() async {
@@ -211,44 +219,52 @@ final class WorkspaceModel {
         }
     }
 
+    /// The database being opened, while the window still shows the old one; nil otherwise.
+    private(set) var openingDatabase: String?
+
     /// Moves the window to another database on the same server (PostgreSQL, where a connection reaches one
-    /// database). Query tabs keep their SQL; tabs showing the old database's tables and routines close.
-    /// The saved connection is unchanged. If the database can't be opened, the window goes back to the old one.
+    /// database). The new database is connected first, so if it can't be opened nothing changes. Then query
+    /// tabs keep their SQL, tabs showing the old database's tables and routines close, and the AI chat starts
+    /// over, since its answers were about the old database. The saved connection is unchanged.
     func openDatabase(_ name: String) async {
-        guard name != currentDatabase else { return }
-        let queries = tabs.compactMap { tab -> (title: String, sql: String)? in
-            if case .query(let model) = tab { return (model.title, model.sql) }
-            return nil
+        guard name != currentDatabase, openingDatabase == nil, driver != nil else { return }
+        openingDatabase = name
+        defer { openingDatabase = nil }
+        var target = config
+        target.database = name
+        let newDriver: LoggingDriver
+        do {
+            newDriver = try await openDriver(target)
+        } catch {
+            tablesError = "Couldn't open \(name): \(PasswordEscapes.message(for: error, password: password))"
+            return
         }
-        let previous = config.database
-        // The query tabs come back below instead of a new empty one.
-        restoringQueryTabs = !queries.isEmpty
-        defer { restoringQueryTabs = false }
-        await switchDatabase(to: name)
-        var failure: String?
-        if case .failed(let message) = status {
-            failure = "Couldn't open \(name): \(message)"
-            await switchDatabase(to: previous)
-        }
-        if let driver, !queries.isEmpty {
-            tabs = queries.map { .query(QueryTabModel(title: $0.title, sql: $0.sql, driver: driver, workspace: self)) }
-            selectedTabID = tabs.first?.id
-            prefetchColumns()
-        }
-        if let failure { tablesError = failure }
-    }
 
-    private var restoringQueryTabs = false
-
-    private func switchDatabase(to name: String) async {
+        var queries: [(title: String, sql: String)] = []
+        for tab in tabs {
+            guard case .query(let model) = tab else { continue }
+            model.assistant.cancel()
+            queries.append((model.title, model.sql))
+        }
         await disconnect()
+        config = target
         tabs.removeAll()
         selectedTabID = nil
         previewTabID = nil
-        closedTabs.removeAll()
+        // Closed tables belonged to the old database; closed queries can come back.
+        closedTabs.removeAll { if case .table = $0 { return true }; return false }
         inspectedRows = []
-        config.database = name
-        await connect()
+        schemaTableCache = [:]
+        loadingSchemaTables = []
+        chat.clear()
+        await setUp(newDriver)
+        if queries.isEmpty {
+            newQueryTab()
+        } else {
+            tabs = queries.map { .query(QueryTabModel(title: $0.title, sql: $0.sql, driver: newDriver, workspace: self)) }
+            selectedTabID = tabs.first?.id
+            prefetchColumns()
+        }
     }
 
     func selectSchema(_ schema: String) async {
@@ -272,11 +288,15 @@ final class WorkspaceModel {
         loadingTables = true
         defer { loadingTables = false }
         do {
-            tables = try await driver.tables(in: selectedSchema)
+            let loaded = try await driver.tables(in: selectedSchema)
+            // The window may have moved to another database meanwhile.
+            guard driver === self.driver else { return }
+            tables = loaded
             await loadRoutines()
             if tabs.contains(where: { if case .query = $0 { return true }; return false }) { prefetchColumns() }
             tablesError = nil
         } catch {
+            guard driver === self.driver else { return }
             tables = []
             tablesError = error.localizedDescription
         }
@@ -389,7 +409,9 @@ final class WorkspaceModel {
               let name = schemas.first(where: { $0.caseInsensitiveCompare(schema) == .orderedSame }) else { return nil }
         loadingSchemaTables.insert(key)
         Task {
-            schemaTableCache[key] = (try? await driver.tables(in: name).map(\.name)) ?? []
+            let names = (try? await driver.tables(in: name).map(\.name)) ?? []
+            guard driver === self.driver else { return }
+            schemaTableCache[key] = names
             completionVersion += 1
             loadingSchemaTables.remove(key)
         }

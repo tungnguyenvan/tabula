@@ -481,7 +481,7 @@ struct ConnectionInfoPopover: View {
         } else {
             rows.append(("Host", "\(config.host):\(config.port)"))
             if !config.user.isEmpty { rows.append(("User", config.user)) }
-            let databaseLabel = config.kind == .postgres ? "Schema" : "Database"
+            let databaseLabel = config.kind == .postgres ? "Database.Schema" : "Database"
             if let location { rows.append((databaseLabel, location)) }
             rows.append(("TLS", config.tls.displayName))
         }

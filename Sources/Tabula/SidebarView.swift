@@ -104,9 +104,11 @@ struct SidebarView: View {
         }
         VStack(spacing: Layout.Sidebar.pickerSpacing) {
             if !model.databases.isEmpty {
-                picker(model.databases, selected: model.currentDatabase ?? "", icon: "cylinder", help: "Database") { name in
+                picker(model.databases, selected: model.openingDatabase ?? model.currentDatabase ?? "", icon: "cylinder", help: "Database") { name in
                     if model.hasUnsavedChanges { pendingDatabase = name } else { Task { await model.openDatabase(name) } }
                 }
+                // One switch at a time: the window keeps the old database until the new one is open.
+                .disabled(model.openingDatabase != nil)
             }
             if model.config.kind != .sqlite || model.schemas.count > 1 {
                 picker(model.schemas, selected: model.selectedSchema,
