@@ -471,6 +471,8 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 
 **Hero image.** `swift scripts/make-hero.swift <window.png> docs/screenshots/hero.png` puts a window screenshot (taken with `TABULA_DEBUG_SNAPSHOT`, sized with `TABULA_DEBUG_WIDTH` / `TABULA_DEBUG_HEIGHT`) on the gradient background.
 
+**Demo video.** `scripts/render-demo.sh` renders `dist/demo/tabula-demo.mp4` with [Remotion](https://www.remotion.dev) (project in `demo/`, `npm run studio` there to preview). It uses the screenshots in `docs/screenshots` and a recording of the AI chat made with `TABULA_DEBUG_RECORD`; the script's header shows the command.
+
 <!-- /source-only -->
 
 ## Roadmap and known limitations

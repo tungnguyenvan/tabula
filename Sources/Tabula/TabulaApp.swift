@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #if DEBUG
         DebugHooks.startSnapshots()
+        DebugHooks.startRecording()
         DebugHooks.startKeyScript()
         #endif
     }
