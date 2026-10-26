@@ -10,10 +10,15 @@ import {
   spring,
   staticFile,
   useCurrentFrame,
-  useVideoConfig,
 } from "remotion";
 
-export const FPS = 30;
+/// Rendered at 60 frames a second, so camera moves and the pointer are smooth; everything below is timed in
+/// thirtieths of a second (`useFrame`), the rate the app was recorded at.
+export const FPS = 60;
+const unit = 30;
+const scale = FPS / unit;
+/// The current moment in thirtieths of a second (fractional at 60 frames a second).
+const useFrame = () => useCurrentFrame() / scale;
 
 /// Everything shown is Tabula itself, recorded from a debug build driven by real clicks and keys
 /// (scripts/render-demo.sh lists the commands), plus README screenshots for the montage.
@@ -40,13 +45,13 @@ const ease = Easing.inOut(Easing.cubic);
 
 /// A sound (demo/audio/make-audio.mjs) at a frame of the scene.
 const Sfx: React.FC<{ at: number; name: string; volume?: number }> = ({ at, name, volume = 1 }) => (
-  <Sequence from={Math.round(at)} durationInFrames={50} layout="none">
+  <Sequence from={Math.round(at * scale)} durationInFrames={50 * scale} layout="none">
     <Audio src={staticFile(`audio/${name}.wav`)} volume={volume} />
   </Sequence>
 );
 
 const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const x = 30 + Math.sin(frame / 50) * 12;
   const y = Math.cos(frame / 70) * 10;
   return (
@@ -58,8 +63,8 @@ const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 /// Scenes come in with a gentle zoom and leave with a fade.
 const Enter: React.FC<{ duration: number; children: React.ReactNode }> = ({ duration, children }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
+  const fps = unit;
   const enter = spring({ frame, fps, config: { damping: 20, stiffness: 140 } });
   const leave = interpolate(frame, [duration - 8, duration], [1, 0], clamp);
   return (
@@ -71,8 +76,8 @@ const Enter: React.FC<{ duration: number; children: React.ReactNode }> = ({ dura
 
 /// A title whose words rise in one after another.
 const Title: React.FC<{ text: string; sub?: string; at?: number; top?: number }> = ({ text, sub, at = 0, top = 48 }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
+  const fps = unit;
   const words = text.split(" ");
   const subIn = spring({ frame: frame - at - words.length * 3 - 4, fps, config: { damping: 200 } });
   return (
@@ -122,12 +127,14 @@ const Recording: React.FC<{
   duration: number;
   children?: React.ReactNode;
 }> = ({ name, events, timeline, camera, duration, children }) => {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   const scenes = timeline.map((pair) => pair[0]), recorded = timeline.map((pair) => pair[1]);
   const source = interpolate(frame, scenes, recorded, clamp);
   // The scene frame a recorded frame shows at; input during a cut part lands at its end.
   const sceneFrame = (recordedFrame: number) => interpolate(recordedFrame, recorded, scenes, clamp);
-  const view = along(camera, frame);
+  const keyed = along(camera, frame);
+  // A slow breath on top of the camera's moves, so the picture never sits dead still while someone types.
+  const view = { ...keyed, zoom: keyed.zoom * (1 + 0.015 * Math.sin(frame / 45)) };
   const width = stageWidth, height = stageWidth * windowAspect;
   const viewport = 1080 - viewportTop;
   const dx = -(view.x - 0.5) * width * view.zoom, dy = -(view.y - 0.5) * height * view.zoom;
@@ -175,7 +182,7 @@ const Pointer: React.FC<{
   width: number;
   height: number;
 }> = ({ events, source, sceneFrame, zoom, width, height }) => {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   if (events.length === 0) return null;
   const glide = 10; // recorded frames spent travelling to the next position
   let x = events[0].x!, y = events[0].y!;
@@ -215,7 +222,7 @@ const Pointer: React.FC<{
 
 /// A note at the bottom (sped-up waits, keys pressed).
 const Caption: React.FC<{ from: number; to: number; children: React.ReactNode }> = ({ from, to, children }) => {
-  const frame = useCurrentFrame();
+  const frame = useFrame();
   if (frame < from || frame >= to) return null;
   const fade = interpolate(frame, [from, from + 6, to - 6, to], [0, 1, 1, 0], clamp);
   return (
@@ -240,8 +247,8 @@ const Key: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const kinds = ["PostgreSQL", "MySQL", "SQLite", "MongoDB", "Redis"];
 
 const Intro: React.FC<{ duration: number }> = ({ duration }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
+  const fps = unit;
   const icon = spring({ frame, fps, config: { damping: 14, stiffness: 120 } });
   const leave = interpolate(frame, [duration - 10, duration], [1, 0], clamp);
   return (
@@ -273,36 +280,36 @@ type SceneProps = { duration: number; events: InputEvent[] };
 /// beside it.
 const chatX = 1.0 + 40 / (stageWidth * 1.55) - 960 / (stageWidth * 1.55);
 
-/// Recorded at 15 frames a second: the chat button at 103, the field at 127, typing 144–186, Return at 197, the
-/// assistant's query at 333, its answer streaming 436–484. The waits for the model are sped up.
+/// Recorded at 30 frames a second: the chat button at 209, the field at 262, typing 289–389, Return at 408, the
+/// assistant's query at 638, its answer streaming 858–905. The waits for the model are sped up.
 const Chat: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="Ask your data anything" sub="The AI chat runs read-only queries and answers from the real data" />
       <Recording name="chat" events={events} duration={duration}
-        timeline={[[0, 92], [22, 103], [56, 127], [70, 142], [126, 186], [140, 197], [168, 333], [182, 436], [236, 484], [duration, 500]]}
+        timeline={[[0, 195], [14, 209], [60, 262], [75, 287], [142, 389], [154, 408], [178, 638], [196, 858], [236, 905], [duration, 925]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: fit },
           { at: 30, x: chatX, y: 0.72, zoom: 1.55 },
-          { at: 136, x: chatX, y: 0.72, zoom: 1.55 },
-          { at: 170, x: chatX, y: 0.42, zoom: 1.55 },
+          { at: 150, x: chatX, y: 0.72, zoom: 1.55 },
+          { at: 178, x: chatX, y: 0.42, zoom: 1.55 },
           { at: 236, x: chatX, y: 0.52, zoom: 1.55 },
           { at: duration, x: chatX, y: 0.55, zoom: 1.55 },
         ]} />
-      <Caption from={142} to={232}>Waiting for the model, sped up</Caption>
-      <Sfx at={182} name="chime" volume={0.7} />
+      <Caption from={156} to={196}>Waiting for the model, sped up</Caption>
+      <Sfx at={196} name="chime" volume={0.7} />
     </Enter>
   </Background>
 );
 
-/// Recorded at 15 frames a second, with the conversation saved from the scene before: Run on the answer's query
-/// at 130 puts it in the editor and runs it.
+/// Recorded at 30 frames a second, with the conversation saved from the scene before: Run on the answer's query
+/// at 277 puts it in the editor and runs it.
 const ChatRun: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="Run it in one click" sub="The query goes to the editor and runs, next to the conversation" />
       <Recording name="chatrun" events={events} duration={duration}
-        timeline={[[0, 104], [52, 130], [duration, 130 + (duration - 52) / 2]]}
+        timeline={[[0, 232], [45, 277], [duration, 327]]}
         camera={[
           { at: 0, x: 0.8, y: 0.62, zoom: 1.5 },
           { at: 46, x: 0.8, y: 0.68, zoom: 1.5 },
@@ -313,13 +320,13 @@ const ChatRun: React.FC<SceneProps> = ({ duration, events }) => (
   </Background>
 );
 
-/// Recorded at 15 frames a second: Ask AI at 106, typing 129–161, Return at 177, the SQL written 266–281, Run at 564.
+/// Recorded at 30 frames a second: Ask AI at 211, typing 256–324, Return at 346, the SQL written 544–572, Run at 1111.
 const Ask: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="Ask AI, right in the editor" sub="Describe the query, Tabula writes the SQL" />
       <Recording name="ask" events={events} duration={duration}
-        timeline={[[0, 92], [26, 106], [52, 127], [100, 161], [118, 177], [140, 264], [170, 282], [178, 556], [196, 565], [duration, 580]]}
+        timeline={[[0, 195], [16, 211], [45, 254], [100, 324], [118, 346], [138, 540], [168, 572], [176, 1098], [189, 1111], [duration, 1150]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: fit },
           { at: 24, x: 0.45, y: 0.28, zoom: 1.9 },
@@ -332,34 +339,34 @@ const Ask: React.FC<SceneProps> = ({ duration, events }) => (
   </Background>
 );
 
-/// Recorded at 15 frames a second: typing 105–131, the grey suggestion at 149, Tab at 273, ⌘↩ at 306, results at 314.
+/// Recorded at 30 frames a second: typing 211–273, the grey suggestion at 307, Tab at 553, ⌘↩ at 616, results at 617.
 const Inline: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="Suggestions as you type" sub="A model running on your Mac finishes the line" />
       <Recording name="inline" events={events} duration={duration}
-        timeline={[[0, 98], [14, 105], [60, 131], [74, 149], [78, 151], [118, 160], [119, 270], [128, 274], [150, 304], [160, 314], [duration, 335]]}
+        timeline={[[0, 205], [8, 211], [70, 273], [104, 307], [118, 321], [119, 545], [127, 553], [150, 576], [190, 616], [duration, 621]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: fit },
           { at: 16, x: 0.36, y: 0.3, zoom: 2.1 },
-          { at: 60, x: 0.5, y: 0.3, zoom: 2.1 },
-          { at: 80, x: 0.57, y: 0.4, zoom: 1.4 },
-          { at: 160, x: 0.57, y: 0.4, zoom: 1.4 },
-          { at: 178, x: 0.5, y: 0.5, zoom: fit },
-          { at: duration, x: 0.42, y: 0.4, zoom: 1.1 },
+          { at: 70, x: 0.5, y: 0.3, zoom: 2.1 },
+          { at: 100, x: 0.57, y: 0.4, zoom: 1.4 },
+          { at: 186, x: 0.57, y: 0.4, zoom: 1.4 },
+          { at: 205, x: 0.5, y: 0.5, zoom: fit },
+          { at: duration, x: 0.45, y: 0.45, zoom: 1.0 },
         ]}>
-        <SuggestionMark from={78} to={124} />
+        <SuggestionMark from={104} to={127} />
       </Recording>
-      <Caption from={120} to={150}><Key>Tab</Key> accepts the suggestion</Caption>
-      <Caption from={150} to={180}><Key>⌘</Key><Key>Return</Key> runs it</Caption>
+      <Caption from={124} to={160}><Key>Tab</Key> accepts the suggestion</Caption>
+      <Caption from={180} to={212}><Key>⌘</Key><Key>Return</Key> runs it</Caption>
     </Enter>
   </Background>
 );
 
 /// An outline around the grey suggestion, where it sits in the recorded window, labelled AI.
 const SuggestionMark: React.FC<{ from: number; to: number }> = ({ from, to }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
+  const fps = unit;
   if (frame < from || frame >= to) return null;
   const pop = spring({ frame: frame - from, fps, config: { damping: 16, stiffness: 160 } });
   const glow = 0.6 + 0.4 * Math.sin((frame - from) / 5);
@@ -371,45 +378,47 @@ const SuggestionMark: React.FC<{ from: number; to: number }> = ({ from, to }) =>
   );
 };
 
-/// Recorded at 15 frames a second: the filter button at 103, SQL at 126, the field at 146, typing, Return at 181.
+/// Recorded at 30 frames a second: the filter button at 208, SQL at 253, the field at 292, typing 319–336, Return at
+/// 358, results at 363.
 const Filter: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="Filter on the server" sub="With the builder, or a plain WHERE clause" />
       <Recording name="filter" events={events} duration={duration}
-        timeline={[[0, 94], [14, 103], [44, 126], [70, 146], [112, 181], [122, 188], [duration, 202]]}
+        timeline={[[0, 194], [14, 208], [50, 253], [80, 292], [100, 318], [118, 336], [140, 358], [duration, 388]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: fit },
-          { at: 14, x: 0.4, y: 0.82, zoom: 1.7 },
-          { at: 34, x: 0.53, y: 0.22, zoom: 1.8 },
-          { at: 118, x: 0.53, y: 0.22, zoom: 1.8 },
+          { at: 14, x: 0.4, y: 0.82, zoom: 1.5 },
+          { at: 30, x: 0.5, y: 0.5, zoom: fit },
+          { at: 48, x: 0.6, y: 0.24, zoom: 1.6 },
+          { at: 146, x: 0.6, y: 0.24, zoom: 1.6 },
           { at: duration, x: 0.5, y: 0.5, zoom: fit },
         ]} />
     </Enter>
   </Background>
 );
 
-/// Recorded at 15 frames a second: the first document at 99, the JSON button at 121, the editor open from 123.
+/// Recorded at 30 frames a second: the first document at 208, the JSON button at 250, the editor open from 253.
 const Mongo: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="MongoDB, natively" sub="Documents in a grid, types kept when you edit" />
       <Recording name="mongo" events={events} duration={duration}
-        timeline={[[0, 89], [14, 99], [40, 121], [duration, 142]]}
+        timeline={[[0, 194], [14, 208], [56, 250], [duration, 299]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: fit },
           { at: 14, x: 0.4, y: 0.25, zoom: 1.5 },
-          { at: 38, x: 0.38, y: 0.8, zoom: 1.5 },
-          { at: 60, x: 0.5, y: 0.5, zoom: fit },
+          { at: 22, x: 0.4, y: 0.25, zoom: 1.5 },
+          { at: 46, x: 0.5, y: 0.5, zoom: fit },
         ]} />
-      <Sfx at={44} name="tink" volume={0.5} />
+      <Sfx at={58} name="tink" volume={0.5} />
     </Enter>
   </Background>
 );
 
 const Montage: React.FC<{ duration: number }> = ({ duration }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
+  const fps = unit;
   const tiles = [
     { src: "shots/redis.png", label: "Redis keys and console" },
     { src: "shots/diagram.png", label: "Relationship diagrams" },
@@ -439,8 +448,8 @@ const Montage: React.FC<{ duration: number }> = ({ duration }) => {
 };
 
 const Outro: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const frame = useFrame();
+  const fps = unit;
   const icon = spring({ frame, fps, config: { damping: 14, stiffness: 130 } });
   const button = spring({ frame: frame - 18, fps, config: { damping: 16, stiffness: 150 } });
   return (
@@ -466,23 +475,23 @@ const scenes: { duration: number; render: (duration: number, props: DemoProps) =
   { duration: 260, render: (d, p) => <Chat duration={d} events={p.events.chat ?? []} /> },
   { duration: 95, render: (d, p) => <ChatRun duration={d} events={p.events.chatrun ?? []} /> },
   { duration: 225, render: (d, p) => <Ask duration={d} events={p.events.ask ?? []} /> },
-  { duration: 195, render: (d, p) => <Inline duration={d} events={p.events.inline ?? []} /> },
-  { duration: 150, render: (d, p) => <Filter duration={d} events={p.events.filter ?? []} /> },
+  { duration: 225, render: (d, p) => <Inline duration={d} events={p.events.inline ?? []} /> },
+  { duration: 170, render: (d, p) => <Filter duration={d} events={p.events.filter ?? []} /> },
   { duration: 105, render: (d, p) => <Mongo duration={d} events={p.events.mongo ?? []} /> },
   { duration: 85, render: (d) => <Montage duration={d} /> },
   { duration: 90, render: () => <Outro /> },
 ];
 
-export const demoDuration = scenes.reduce((total, scene) => total + scene.duration, 0);
+export const demoDuration = scenes.reduce((total, scene) => total + scene.duration, 0) * scale;
 
 export const Demo: React.FC<DemoProps> = (props) => (
   <>
     {/* Fades in, sits under the effects, fades out with the last scene. */}
     <Audio src={staticFile("audio/music.wav")}
-      volume={(frame) => interpolate(frame, [0, 20, demoDuration - 50, demoDuration], [0, 0.85, 0.85, 0], clamp)} />
+      volume={(frame) => interpolate(frame, [0, 20 * scale, demoDuration - 50 * scale, demoDuration], [0, 0.85, 0.85, 0], clamp)} />
     <Series>
       {scenes.map((scene, index) => (
-        <Series.Sequence key={index} durationInFrames={scene.duration}>
+        <Series.Sequence key={index} durationInFrames={scene.duration * scale}>
           {scene.render(scene.duration, props)}
         </Series.Sequence>
       ))}
