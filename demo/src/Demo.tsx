@@ -193,7 +193,7 @@ const Intro: React.FC<{ duration: number }> = ({ duration }) => {
         <Img src={staticFile("icon.png")} style={{ width: 200, height: 200, transform: `scale(${icon}) rotate(${(1 - icon) * -25}deg)` }} />
         <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula" top={10} at={6} /></div>
         <div style={{ fontSize: 34, color: "rgba(255,255,255,0.8)", opacity: spring({ frame: frame - 16, fps, config: { damping: 200 } }) }}>
-          The fast, native database client for macOS
+          The native database client for macOS, with AI that knows your data
         </div>
         <div style={{ display: "flex", gap: 14, marginTop: 36 }}>
           {kinds.map((kind, index) => {
@@ -222,26 +222,62 @@ const Connections: React.FC<{ duration: number }> = ({ duration }) => (
   </Background>
 );
 
-const Query: React.FC<{ duration: number }> = ({ duration }) => {
-  // Recorded at 15 frames a second: typing from frame 65 to 112, ⌘↩ at 118, results from 127.
-  const source = timeline([[0, 50], [20, 64], [116, 112], [124, 117], [130, 127], [duration, 150]]);
+/// Keys pressed, shown as keycaps.
+const Keys: React.FC<{ keys: string[]; label: string; show: boolean }> = ({ keys, label, show }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  if (!show) return null;
+  return (
+    <div style={{ position: "absolute", bottom: 46, left: 0, right: 0, display: "flex", justifyContent: "center", alignItems: "center", gap: 14, zIndex: 20 }}>
+      {keys.map((key) => (
+        <div key={key} style={{ minWidth: 76, height: 76, padding: "0 18px", borderRadius: 14, background: "linear-gradient(#3a3d46, #24262c)", border: "1px solid rgba(255,255,255,0.22)",
+          boxShadow: "0 6px 0 #15161a, 0 14px 30px rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: 600 }}>
+          {key}
+        </div>
+      ))}
+      <div style={{ fontSize: 30, fontWeight: 600, marginLeft: 10, textShadow: "0 4px 16px rgba(0,0,0,0.7)", opacity: spring({ frame, fps, config: { damping: 200 } }) }}>{label}</div>
+    </div>
+  );
+};
+
+/// A glowing outline around the grey suggestion (its place in the recorded window), labelled AI.
+const Suggestion: React.FC<{ show: boolean; from: number }> = ({ show, from }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  if (!show) return null;
+  const pop = spring({ frame: frame - from, fps, config: { damping: 12, stiffness: 180 } });
+  const glow = 0.6 + 0.4 * Math.sin((frame - from) / 4);
+  return (
+    <div style={{ position: "absolute", left: "47.4%", top: "15.2%", width: "46.2%", height: "3.2%", borderRadius: 8, zIndex: 4,
+      border: `3px solid ${accent}`, boxShadow: `0 0 ${24 * glow}px ${accent}`, opacity: pop, transform: `scale(${0.9 + 0.1 * pop})` }}>
+      <div style={{ position: "absolute", right: -2, top: -34, fontSize: 18, fontWeight: 700, padding: "3px 10px", borderRadius: 7, background: accent }}>AI</div>
+    </div>
+  );
+};
+
+const Inline: React.FC<{ duration: number }> = ({ duration }) => {
+  const frame = useCurrentFrame();
+  // Recorded at 15 frames a second: typing from 107 to 132, the grey suggestion at 151, Tab at 286, ⌘↩ at 318,
+  // results from 325. The wait before Tab is cut.
+  const source = timeline([[0, 100], [16, 107], [66, 132], [78, 150], [84, 152], [130, 160], [131, 284], [140, 288], [170, 316], [176, 326], [duration, 345]]);
   return (
     <Background>
       <Enter duration={duration}>
-        <Title text="Write SQL. Run it." sub="Highlighting, completion and results in milliseconds" />
-        <Stage src={(f) => recording("query", source(f))} aspect={1520 / 2600}
+        <Title text="AI suggestions as you type" sub="A model running on your Mac finishes the line. Tab accepts it." />
+        <Stage src={(f) => recording("inline", source(f))} aspect={1520 / 2600}
           camera={[
             { at: 0, x: 0.5, y: 0.5, zoom: fit },
-            { at: 22, x: 0.36, y: 0.2, zoom: 2.1 },
-            { at: 110, x: 0.42, y: 0.2, zoom: 2.1 },
-            { at: 126, x: 0.3, y: 0.18, zoom: 2.3 },
-            { at: 146, x: 0.5, y: 0.5, zoom: fit },
-            { at: duration, x: 0.42, y: 0.42, zoom: 1.25 },
-          ]}
-          cursor={[{ at: 4, x: 0.6, y: 0.5 }, { at: 18, x: 0.32, y: 0.17 }, { at: 100, x: 0.32, y: 0.17 }, { at: 124, x: 0.205, y: 0.124 }, { at: 165, x: 0.3, y: 0.45 }]}
-          clicks={[18, 126]} />
-        <Badge text="⌘↩  Run" show={frame >= 124 && frame < 160} />
+            { at: 18, x: 0.36, y: 0.3, zoom: 2.2 },
+            { at: 66, x: 0.5, y: 0.3, zoom: 2.2 },
+            { at: 86, x: 0.57, y: 0.4, zoom: 1.4 },
+            { at: 168, x: 0.57, y: 0.4, zoom: 1.4 },
+            { at: 186, x: 0.5, y: 0.5, zoom: fit },
+            { at: duration, x: 0.4, y: 0.35, zoom: 1.15 },
+          ]}>
+          <Suggestion show={frame >= 84 && frame < 131} from={84} />
+        </Stage>
+        <Keys keys={["⇥"]} label="Tab accepts the suggestion" show={frame >= 124 && frame < 156} />
+        <Keys keys={["⌘", "↩"]} label="Run" show={frame >= 160 && frame < 192} />
       </Enter>
     </Background>
   );
@@ -388,12 +424,13 @@ const Outro: React.FC = () => {
 
 const scenes: { duration: number; render: (duration: number) => React.ReactNode }[] = [
   { duration: 75, render: (d) => <Intro duration={d} /> },
+  // AI first: the chat that looks things up, then suggestions while typing.
+  { duration: 320, render: (d) => <AI duration={d} /> },
+  { duration: 220, render: (d) => <Inline duration={d} /> },
   { duration: 85, render: (d) => <Connections duration={d} /> },
-  { duration: 200, render: (d) => <Query duration={d} /> },
   { duration: 120, render: (d) => <Filter duration={d} /> },
   { duration: 120, render: (d) => <Mongo duration={d} /> },
   { duration: 90, render: (d) => <Montage duration={d} /> },
-  { duration: 320, render: (d) => <AI duration={d} /> },
   { duration: 90, render: () => <Outro /> },
 ];
 

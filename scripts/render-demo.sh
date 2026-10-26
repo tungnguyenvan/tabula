@@ -7,9 +7,11 @@
 #   chat    the AI chat answering (10 fps):
 #           TABULA_DEBUG_OPEN=<MongoDB connection> TABULA_DEBUG_AI_PROVIDER=claudeCode TABULA_DEBUG_RECORD=…/chat
 #           TABULA_DEBUG_CHAT="Which order status brings in the most revenue? Check the real data and answer with a table."
-#   query   typing and running SQL (15 fps):
-#           TABULA_DEBUG_OPEN=<PostgreSQL connection> TABULA_DEBUG_RECORD=…/query TABULA_DEBUG_RECORD_FPS=15
-#           TABULA_DEBUG_KEYS="wait:1500;slow:SELECT name, price FROM products WHERE price > 800 ORDER BY price DESC;wait:500;cmd+return;wait:2500"
+#   inline  typing with AI suggestions, Tab to accept, ⌘↩ to run (15 fps):
+#           TABULA_DEBUG_OPEN=<PostgreSQL connection> TABULA_DEBUG_AI_PROVIDER=claudeCode TABULA_DEBUG_AI_INLINE_PROVIDER=builtIn
+#           TABULA_DEBUG_RECORD=…/inline TABULA_DEBUG_RECORD_FPS=15
+#           TABULA_DEBUG_KEYS="wait:4000;slow:SELECT name, price FROM products ORDER BY ;wait:9000;tab;wait:1500;cmd+return;wait:3000"
+#           (needs a model downloaded in Settings › AI; the first suggestion waits for it to load)
 #   filter  a table being filtered (15 fps):
 #           TABULA_DEBUG_OPEN=<PostgreSQL connection> TABULA_DEBUG_TABLE=products TABULA_DEBUG_FILTER="price|≥|850"
 #           TABULA_DEBUG_FILTER_DELAY=3.5 TABULA_DEBUG_RECORD=…/filter TABULA_DEBUG_RECORD_FPS=15
@@ -23,7 +25,7 @@ RECORDINGS="${RECORDINGS:-/tmp/tabula-rec}"
 PUBLIC="demo/public"
 OUT="dist/demo/tabula-demo.mp4"
 
-for name in chat query filter; do
+for name in chat inline filter; do
   [ -f "$RECORDINGS/$name/frame-00001.jpg" ] || {
     echo "No $name recording in $RECORDINGS/$name (see the comment at the top of this script)." >&2; exit 1; }
 done
@@ -32,7 +34,7 @@ rm -rf "$PUBLIC"
 mkdir -p "$PUBLIC/shots" "$(dirname "$OUT")"
 cp docs/screenshots/*.png "$PUBLIC/shots/"
 sips -s format png Resources/AppIcon.icns --out "$PUBLIC/icon.png" >/dev/null
-for name in chat query filter; do cp -R "$RECORDINGS/$name" "$PUBLIC/$name"; done
+for name in chat inline filter; do cp -R "$RECORDINGS/$name" "$PUBLIC/$name"; done
 
 # Remotion's own headless Chrome fails to start in some setups (its helpers can't find their ICU data);
 # the installed Google Chrome works, so it is used when present.
