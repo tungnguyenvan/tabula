@@ -16,6 +16,8 @@ final class AIChatModel {
         var thoughtFor: TimeInterval?
         /// Still arriving.
         var streaming = false
+        /// Gathering the schema, before the request goes out.
+        var preparing = false
     }
 
     private(set) var messages: [Message] = []
@@ -40,19 +42,15 @@ final class AIChatModel {
         error = nil
         busy = true
         let kind = workspace.driver?.kind ?? workspace.config.kind
-        let reply = Message(role: .assistant, text: "", streaming: true)
+        let reply = Message(role: .assistant, text: "", streaming: true, preparing: true)
         messages.append(reply)
+        replyID = reply.id
         task = Task {
-            defer {
-                busy = false
-                update(reply.id) { $0.streaming = false }
-                // Nothing came back (an error before the first token): no empty bubble.
-                if let index = messages.firstIndex(where: { $0.id == reply.id }), messages[index].text.isEmpty, messages[index].thinking.isEmpty {
-                    messages.remove(at: index)
-                }
-            }
+            defer { finish(reply.id) }
             do {
                 let schema = await workspace.loadedAISchema(for: [editorSQL ?? "", question].joined(separator: "\n"))
+                try Task.checkCancellation()
+                update(reply.id) { $0.preparing = false }
                 let request = SQLPrompts.chat(question: question, history: history, editorSQL: editorSQL, schema: schema, kind: kind,
                 instructions: AIService.shared.settings.instructions(.chat))
                 try await receive(AIService.shared.stream(request), into: reply.id)
@@ -122,8 +120,26 @@ final class AIChatModel {
         change(&messages[index])
     }
 
+    /// The answer being written, if any.
+    private var replyID: UUID?
+
+    /// Ends an answer: it stops showing progress, and one that never got any text disappears. Runs when the
+    /// answer completes or fails, and right away on Stop, even if the request is slow to give up.
+    private func finish(_ id: UUID) {
+        if replyID == id {
+            replyID = nil
+            busy = false
+        }
+        update(id) { $0.streaming = false; $0.preparing = false }
+        if let index = messages.firstIndex(where: { $0.id == id }), messages[index].text.isEmpty, messages[index].thinking.isEmpty {
+            messages.remove(at: index)
+        }
+    }
+
     func stop() {
         task?.cancel()
+        task = nil
+        if let replyID { finish(replyID) }
         busy = false
     }
 
@@ -309,7 +325,10 @@ private struct MessageView: View {
                         Label(thinkingTitle, systemImage: "brain").font(.callout).foregroundStyle(.secondary)
                     }
                 } else if message.streaming && message.text.isEmpty {
-                    HStack { ProgressView().controlSize(.small); Text("Thinking…").foregroundStyle(.secondary) }
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text(message.preparing ? "Reading the schema…" : "Thinking…").foregroundStyle(.secondary)
+                    }
                 }
                 ForEach(Array(ChatSegment.split(message.text).enumerated()), id: \.offset) { _, segment in
                     switch segment {

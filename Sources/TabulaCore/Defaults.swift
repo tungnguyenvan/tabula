@@ -82,6 +82,9 @@ public enum Defaults {
         public static let generateMaxTokens = 16000
         public static let inlineTimeout: Double = 15
         public static let generateTimeout: Double = 120
+        /// Seconds a request waits for columns that aren't loaded yet, beyond the tables it names; on a slow or
+        /// large database the rest of the schema goes without columns rather than holding the request up.
+        public static let schemaWait: Double = 3
         /// Built-in local models (llama.cpp): tokens of context, prompt batch size, buffer for one token's
         /// text, and how long an unused model stays in memory.
         public static let localContextLength: UInt32 = 8192
