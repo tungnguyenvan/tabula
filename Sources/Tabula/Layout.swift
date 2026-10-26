@@ -112,6 +112,9 @@ enum Layout {
         static let minWidth: CGFloat = 180
         static let idealWidth: CGFloat = 230
         static let maxWidth: CGFloat = 400
+        /// Space around the database and schema pickers at the top, and between the two.
+        static let pickerPadding: CGFloat = 8
+        static let pickerSpacing: CGFloat = 2
     }
 
     enum Inspector {

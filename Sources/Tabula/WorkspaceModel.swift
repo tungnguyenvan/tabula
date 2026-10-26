@@ -36,7 +36,10 @@ final class WorkspaceModel {
         }
     }
 
-    let config: ConnectionConfig
+    /// The saved connection, with the database the window switched to (PostgreSQL), which isn't saved.
+    private(set) var config: ConnectionConfig
+    /// The saved connection's id, which identifies the window whatever database it is in.
+    nonisolated let connectionID: UUID
     private let password: String?
     private(set) var driver: (any DatabaseDriver)?
     private(set) var status: Status = .connecting
@@ -44,6 +47,9 @@ final class WorkspaceModel {
     private(set) var connectedAt: Date?
 
     var schemas: [String] = []
+    /// PostgreSQL: the server's databases this login may open, and the one the window is in.
+    private(set) var databases: [String] = []
+    private(set) var currentDatabase: String?
     var selectedSchema: String = ""
     private(set) var tables: [TableRef] = [] {
         // Reloading tables (refresh, schema switch, DDL) drops what completion knew; loads still in flight
@@ -106,6 +112,7 @@ final class WorkspaceModel {
 
     init(config: ConnectionConfig, password: String?) {
         self.config = config
+        self.connectionID = config.id
         self.password = password
     }
 
@@ -165,12 +172,14 @@ final class WorkspaceModel {
             status = .connected
             connectedAt = Date()
             serverVersion = await driver.serverVersion()
+            currentDatabase = await driver.currentDatabase()
+            databases = (try? await driver.serverDatabases()) ?? []
             schemas = (try? await driver.schemas()) ?? []
             let preferred = (try? await driver.defaultSchema()) ?? ""
             selectedSchema = schemas.contains(preferred) ? preferred : (schemas.first ?? preferred)
             await applySchema()
             await loadTables()
-            if tabs.isEmpty { newQueryTab() }
+            if tabs.isEmpty && !restoringQueryTabs { newQueryTab() }
             #if DEBUG
             DebugHooks.workspaceConnected(self)
             #endif
@@ -189,6 +198,57 @@ final class WorkspaceModel {
     func disconnect() async {
         await driver?.close()
         driver = nil
+    }
+
+    /// Tabs whose edits would be lost by leaving the database: changed rows or an unsaved routine.
+    var hasUnsavedChanges: Bool {
+        tabs.contains { tab in
+            switch tab {
+            case .table(let model): model.hasChanges
+            case .routine(let model): model.hasChanges
+            case .query, .diagram, .metrics: false
+            }
+        }
+    }
+
+    /// Moves the window to another database on the same server (PostgreSQL, where a connection reaches one
+    /// database). Query tabs keep their SQL; tabs showing the old database's tables and routines close.
+    /// The saved connection is unchanged. If the database can't be opened, the window goes back to the old one.
+    func openDatabase(_ name: String) async {
+        guard name != currentDatabase else { return }
+        let queries = tabs.compactMap { tab -> (title: String, sql: String)? in
+            if case .query(let model) = tab { return (model.title, model.sql) }
+            return nil
+        }
+        let previous = config.database
+        // The query tabs come back below instead of a new empty one.
+        restoringQueryTabs = !queries.isEmpty
+        defer { restoringQueryTabs = false }
+        await switchDatabase(to: name)
+        var failure: String?
+        if case .failed(let message) = status {
+            failure = "Couldn't open \(name): \(message)"
+            await switchDatabase(to: previous)
+        }
+        if let driver, !queries.isEmpty {
+            tabs = queries.map { .query(QueryTabModel(title: $0.title, sql: $0.sql, driver: driver, workspace: self)) }
+            selectedTabID = tabs.first?.id
+            prefetchColumns()
+        }
+        if let failure { tablesError = failure }
+    }
+
+    private var restoringQueryTabs = false
+
+    private func switchDatabase(to name: String) async {
+        await disconnect()
+        tabs.removeAll()
+        selectedTabID = nil
+        previewTabID = nil
+        closedTabs.removeAll()
+        inspectedRows = []
+        config.database = name
+        await connect()
     }
 
     func selectSchema(_ schema: String) async {

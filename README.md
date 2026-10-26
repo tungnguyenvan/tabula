@@ -74,6 +74,7 @@ Free, no usage limits, keyboard-first.</p>
 - Copy a connection as a URL (`postgresql://user@host:5432/db?sslmode=require`), with or without the password, from the connection's context menu.
 - **Paste a connection URL** into Host (`postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and the URLs TablePlus copies) and every field fills in, the password too. Escaped characters are decoded, so `p%3Fss` becomes `p?ss`.
 - A password that still holds URL escapes, as some dashboards show them (`%3F` for `?`), gets a **Decode** button, and a failed login says when escapes are the likely cause.
+- **Every database on a PostgreSQL server** from one connection: the sidebar's Database picker lists those your login may open, and choosing one moves the window there. Query tabs keep their SQL; the saved connection doesn't change.
 
 **Several connections in one window**
 - Open another connection from the database button in the toolbar, or from the Connections window: it joins the current window instead of replacing it.

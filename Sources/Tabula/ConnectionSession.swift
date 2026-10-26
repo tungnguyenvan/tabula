@@ -10,7 +10,7 @@ enum OpenConnection: Identifiable {
 
     nonisolated var id: UUID {
         switch self {
-        case .sql(let model): model.config.id
+        case .sql(let model): model.connectionID
         case .redis(let model): model.config.id
         }
     }

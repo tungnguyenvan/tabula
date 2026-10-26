@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Open the other databases of a PostgreSQL server** from the same connection: a Database picker above the schema picker in the sidebar lists the databases your login may connect to, and choosing one moves the window there. Query tabs keep their SQL, tabs of the old database's tables close (Tabula asks first if they hold unsaved edits), and the toolbar shows `database.schema`. The saved connection keeps its database. If the database can't be opened, the window stays where it was and says why.
+
 ### Changed
 - **The app is 61 MB instead of 104 MB once installed**, and the download 24 MB instead of 31. It now ships without symbol tables, which only debuggers use; nothing else changes.
 
