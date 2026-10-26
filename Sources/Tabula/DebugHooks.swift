@@ -260,7 +260,16 @@ enum DebugHooks {
             guard let window = NSApp.windows.first(where: { $0.isVisible && $0.sheetParent == nil }) else { return }
             let height = environment["TABULA_DEBUG_HEIGHT"].flatMap(Double.init) ?? window.contentLayoutRect.height
             window.setContentSize(NSSize(width: width, height: height))
+            moveToRetinaScreen(window)
         }
+    }
+
+    /// Screenshots for the README are taken at 2x: with a sized window, move it to a Retina screen if one is attached.
+    private static func moveToRetinaScreen(_ window: NSWindow) {
+        guard (window.screen?.backingScaleFactor ?? 1) < 2,
+              let screen = NSScreen.screens.first(where: { $0.backingScaleFactor >= 2 }) else { return }
+        let visible = screen.visibleFrame
+        window.setFrameTopLeftPoint(NSPoint(x: visible.minX, y: visible.maxY))
     }
 
     private static func checkMinimumWidth() {
@@ -269,6 +278,7 @@ enum DebugHooks {
             guard let window = targetWindow else { return }
             let height = environment["TABULA_DEBUG_HEIGHT"].flatMap(Double.init) ?? window.contentLayoutRect.height
             window.setContentSize(NSSize(width: width, height: height))
+            moveToRetinaScreen(window)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 print("WIDTH requested", width, "got", window.frame.width, "min", window.minSize.width)
                 fflush(stdout)
