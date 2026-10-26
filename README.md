@@ -2,10 +2,13 @@
 
 <h1 align="center">Tabula</h1>
 
-<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest">Download</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.0/Tabula-demo.mp4">Demo video</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
 <p align="center">A fast, native macOS client for <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b> and <b>Redis</b>.<br>
 Free, no usage limits, keyboard-first.</p>
+
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.0/Tabula-demo.mp4"><img src="docs/screenshots/demo-poster.jpg" width="900" alt="Demo video, 44 seconds: the AI chat answering from a query it ran, Ask AI in the editor, suggestions while typing, filtering and MongoDB, all in the real app"></a><br>
+<sub>The demo video (44 s, MP4): Tabula driven by real clicks and keys.</sub></p>
 
 <p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a Redis and a PostgreSQL connection open, browsing a table with the row details panel"></p>
 
@@ -471,7 +474,7 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 
 **Hero image.** `swift scripts/make-hero.swift <window.png> docs/screenshots/hero.png` puts a window screenshot (taken with `TABULA_DEBUG_SNAPSHOT`, sized with `TABULA_DEBUG_WIDTH` / `TABULA_DEBUG_HEIGHT`) on the gradient background.
 
-**Demo video.** `scripts/render-demo.sh` renders `dist/demo/tabula-demo.mp4` with [Remotion](https://www.remotion.dev) (project in `demo/`, `npm run studio` there to preview). It shows recordings of a debug build driven by real clicks and keys (`TABULA_DEBUG_KEYS` with `click:x,y` tokens, recorded with `TABULA_DEBUG_RECORD`; the script's header shows the commands) and the screenshots in `docs/screenshots`. The music and sound effects are synthesized by `demo/audio/make-audio.mjs`, so the video contains no third-party audio.
+**Demo video.** `scripts/render-demo.sh` renders `dist/demo/tabula-demo.mp4` with [Remotion](https://www.remotion.dev) (project in `demo/`, `npm run studio` there to preview). It shows recordings of a debug build driven by real clicks and keys (`TABULA_DEBUG_KEYS` with `click:x,y` tokens, recorded with `TABULA_DEBUG_RECORD`; the script's header shows the commands) and the screenshots in `docs/screenshots`. The music and sound effects are synthesized by `demo/audio/make-audio.mjs`, so the video contains no third-party audio. The script also writes the README's poster (`docs/screenshots/demo-poster.jpg`); the video itself is attached to a release (`gh release upload <tag> dist/demo/tabula-demo.mp4` renamed `Tabula-demo.mp4`), which the poster links to.
 
 <!-- /source-only -->
 
