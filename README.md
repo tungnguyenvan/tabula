@@ -471,7 +471,7 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 
 **Hero image.** `swift scripts/make-hero.swift <window.png> docs/screenshots/hero.png` puts a window screenshot (taken with `TABULA_DEBUG_SNAPSHOT`, sized with `TABULA_DEBUG_WIDTH` / `TABULA_DEBUG_HEIGHT`) on the gradient background.
 
-**Demo video.** `scripts/render-demo.sh` renders `dist/demo/tabula-demo.mp4` with [Remotion](https://www.remotion.dev) (project in `demo/`, `npm run studio` there to preview). It uses the screenshots in `docs/screenshots` and recordings of a debug build made with `TABULA_DEBUG_RECORD` (the script's header shows the commands). The music and sound effects are synthesized by `demo/audio/make-audio.mjs`, so the video contains no third-party audio.
+**Demo video.** `scripts/render-demo.sh` renders `dist/demo/tabula-demo.mp4` with [Remotion](https://www.remotion.dev) (project in `demo/`, `npm run studio` there to preview). It shows recordings of a debug build driven by real clicks and keys (`TABULA_DEBUG_KEYS` with `click:x,y` tokens, recorded with `TABULA_DEBUG_RECORD`; the script's header shows the commands) and the screenshots in `docs/screenshots`. The music and sound effects are synthesized by `demo/audio/make-audio.mjs`, so the video contains no third-party audio.
 
 <!-- /source-only -->
 

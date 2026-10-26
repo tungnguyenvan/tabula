@@ -9,6 +9,7 @@ import TabulaCore
 ///   TABULA_DEBUG_PAGE_SIZE: rows per page for that table
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab; TABULA_DEBUG_QUERY_THEN: more SQL to run a moment later
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
+/// - TABULA_DEBUG_KEYS: scripted input, e.g. "wait:500;slow:SELECT 1;cmd+return;click:0.2,0.12" (see startKeyScript)
 /// - TABULA_DEBUG_RECORD: directory that receives the workspace window as numbered JPEG frames
 ///   (TABULA_DEBUG_RECORD_FPS a second, default 10), e.g. for the demo video (scripts/render-demo.sh)
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
@@ -174,9 +175,44 @@ enum DebugHooks {
                             window.makeFirstResponder(editor)
                         }
                         for event in events(for: "type:\(character)", window: window) { NSApp.postEvent(event, atStart: false) }
+                        logEvent(character == " " ? "space" : "key")
                     }
                 }
                 delay += Double(token.count - 5) * typingInterval + 0.3
+                continue
+            }
+            // click:x,y / dclick:x,y / move:x,y: the mouse at a point of the window, given as fractions of its width and
+            // height from the top left. The events go through the window as real ones would.
+            if let kind = ["click", "dclick", "move"].first(where: { token.hasPrefix($0 + ":") }) {
+                let numbers = token.dropFirst(kind.count + 1).split(separator: ",").compactMap { Double($0) }
+                guard numbers.count == 2 else { continue }
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    guard let window = targetWindow else { return }
+                    if !window.isKeyWindow {
+                        NSApp.activate(ignoringOtherApps: true)
+                        window.makeKeyAndOrderFront(nil)
+                    }
+                    WorkspaceRegistry.makeActiveForTesting(window)
+                    // Fractions of the whole window, as recorded frames show it (title bar and toolbar included).
+                    let point = NSPoint(x: numbers[0] * window.frame.width, y: (1 - numbers[1]) * window.frame.height)
+                    func post(_ type: NSEvent.EventType, clicks: Int) {
+                        guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
+                                                             pressure: type == .leftMouseDown ? 1 : 0) else { return }
+                        NSApp.postEvent(event, atStart: false)
+                    }
+                    post(.mouseMoved, clicks: 0)
+                    if kind != "move" {
+                        post(.leftMouseDown, clicks: 1)
+                        post(.leftMouseUp, clicks: 1)
+                    }
+                    if kind == "dclick" {
+                        post(.leftMouseDown, clicks: 2)
+                        post(.leftMouseUp, clicks: 2)
+                    }
+                    logEvent(kind, x: numbers[0], y: numbers[1])
+                }
+                delay += 0.6
                 continue
             }
             if token.hasPrefix("snap:") {
@@ -197,6 +233,7 @@ enum DebugHooks {
                 WorkspaceRegistry.makeActiveForTesting(window)
                 print("KEY", token, "→ first responder:", String(describing: window.firstResponder.map { type(of: $0) }))
                 let events = events(for: token, window: window)
+                if !token.hasPrefix("type:") { logEvent("keycap") }
                 if let down = events.first, down.modifierFlags.contains(.command) {
                     // AppKit's key-equivalent order (window, then main menu), which an inactive app skips.
                     NSApp.mainMenu?.update()
@@ -331,17 +368,51 @@ enum DebugHooks {
     }
 
     /// Records the workspace window as frame-00001.jpg, frame-00002.jpg… at a steady rate.
+    /// The last frame recorded, so scripted input can say when it happened.
+    private static var recordedFrame = 0
+    /// Scripted input while recording: what happened, at which frame, where (fractions of the window, from the top
+    /// left). Written to events.json next to the frames, so the demo video can draw the cursor and play sounds there.
+    private static var recordedEvents: [[String: Any]] = []
+
+    private static func logEvent(_ kind: String, x: Double? = nil, y: Double? = nil) {
+        guard let directory = environment["TABULA_DEBUG_RECORD"] else { return }
+        var event: [String: Any] = ["frame": recordedFrame, "kind": kind]
+        if let x, let y { event["x"] = x; event["y"] = y }
+        recordedEvents.append(event)
+        if let data = try? JSONSerialization.data(withJSONObject: recordedEvents, options: [.prettyPrinted]) {
+            try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent("events.json"))
+        }
+    }
+
+    /// A sheet is a window of its own; draw it over the window's picture where it sits, so recordings show it.
+    private static func withSheet(_ rep: NSBitmapImageRep, of window: NSWindow) -> NSBitmapImageRep {
+        guard let sheet = window.attachedSheet, let sheetRep = windowServerImage(sheet) ?? cachedImage(sheet),
+              let canvas = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: rep.pixelsWide, pixelsHigh: rep.pixelsHigh,
+                                            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: canvas) else { return rep }
+        let scale = CGFloat(rep.pixelsWide) / window.frame.width
+        let origin = NSPoint(x: (sheet.frame.minX - window.frame.minX) * scale, y: (sheet.frame.minY - window.frame.minY) * scale)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        rep.draw(in: NSRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh))
+        // Over, not copy: the sheet's rounded corners are transparent.
+        sheetRep.draw(in: NSRect(origin: origin, size: NSSize(width: sheet.frame.width * scale, height: sheet.frame.height * scale)),
+                      from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: false, hints: nil)
+        NSGraphicsContext.restoreGraphicsState()
+        return canvas
+    }
+
     static func startRecording() {
         guard let directory = environment["TABULA_DEBUG_RECORD"] else { return }
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let fps = environment["TABULA_DEBUG_RECORD_FPS"].flatMap(Double.init) ?? 10
-        var frame = 0
         Timer.scheduledTimer(withTimeInterval: 1 / fps, repeats: true) { _ in
             MainActor.assumeIsolated {
                 guard let window = targetWindow, let rep = windowServerImage(window) ?? cachedImage(window),
-                      let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return }
-                frame += 1
-                let name = String(format: "frame-%05d.jpg", frame)
+                      let data = withSheet(rep, of: window).representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return }
+                recordedFrame += 1
+                let name = String(format: "frame-%05d.jpg", recordedFrame)
                 try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
             }
         }
