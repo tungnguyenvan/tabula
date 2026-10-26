@@ -1,3 +1,4 @@
+import BSON
 import Foundation
 
 /// Tools the chat assistant can use while it answers.
@@ -142,7 +143,12 @@ public enum AgentReadOnly {
     private static func sqlViolation(_ statement: String, kind: DatabaseKind) -> String? {
         let statements = SQLSplitter.split(statement, kind: kind)
         guard statements.count == 1 else { return "Run one statement at a time." }
-        let words = SQLLexer.tokens(statement, kind: kind).filter { $0.kind == .word }
+        let tokens = SQLLexer.tokens(statement, kind: kind)
+        // Where Tabula's lexer and the server could read the text differently, it isn't run: comments (MySQL
+        // runs /*! … */ and doesn't take --x as one) and backslashes (escape rules differ by server and setting).
+        if tokens.contains(where: { $0.kind == .comment }) { return "Write the statement without comments." }
+        if statement.contains("\\") { return "Write the statement without backslashes." }
+        let words = tokens.filter { $0.kind == .word }
         guard let first = words.first?.keyword, firstWords.contains(first) else {
             return "Only SELECT, WITH, EXPLAIN, SHOW and DESCRIBE statements can run; this one may change data."
         }
@@ -158,8 +164,16 @@ public enum AgentReadOnly {
                 return "\(token.keyword) at the top level writes or locks rows, so the statement can't run."
             }
         }
-        if let call = words.first(where: { blockedFunctions.contains($0.keyword) }) {
-            return "\(call.text) acts on the server, so the statement can't run."
+        // A quoted name ("set_config", `GET_LOCK`) calls the same function.
+        let names = tokens.compactMap { token -> String? in
+            switch token.kind {
+            case .word: return token.keyword
+            case .quotedIdentifier: return String(token.text.dropFirst().dropLast()).uppercased()
+            default: return nil
+            }
+        }
+        if let name = names.first(where: { blockedFunctions.contains($0) }) {
+            return "\(name.lowercased()) acts on the server, so the statement can't run."
         }
         return nil
     }
@@ -186,11 +200,24 @@ public enum AgentReadOnly {
             guard let method = statement.method, readMethods.contains(method) else {
                 return "Only find, findOne, aggregate, countDocuments, estimatedDocumentCount, distinct and getIndexes can run."
             }
-            if method == "aggregate", text.contains("$out") || text.contains("$merge") {
-                return "$out and $merge write to a collection, so the pipeline can't run."
+            // The parsed keys, so escapes ("\u0024out") can't hide a stage.
+            if let key = statement.calls.flatMap(\.arguments).lazy.compactMap(blockedKey).first {
+                return "\(key) \(key == "$out" || key == "$merge" ? "writes to a collection" : "runs code on the server"), so the command can't run."
             }
             return nil
         }
+    }
+
+    /// Stages that write, and operators that run JavaScript on the server.
+    private static let blockedKeys: Set<String> = ["$out", "$merge", "$where", "$function", "$accumulator"]
+
+    private static func blockedKey(in value: Primitive) -> String? {
+        guard let document = value as? Document else { return nil }
+        for pair in document.pairs {
+            if blockedKeys.contains(pair.key) { return pair.key }
+            if let found = blockedKey(in: pair.value) { return found }
+        }
+        return nil
     }
 }
 
@@ -213,7 +240,10 @@ public struct AgentToolbox: Sendable {
             _ = try await driver.execute("SET statement_timeout = \(Defaults.AI.agentQueryTimeout * 1000)")
         case .mysql:
             _ = try await driver.execute("SET SESSION TRANSACTION READ ONLY")
-            _ = try? await driver.execute("SET SESSION max_execution_time = \(Defaults.AI.agentQueryTimeout * 1000)")
+            // MySQL counts milliseconds, MariaDB seconds; each server knows only its own variable.
+            if (try? await driver.execute("SET SESSION max_execution_time = \(Defaults.AI.agentQueryTimeout * 1000)")) == nil {
+                _ = try? await driver.execute("SET SESSION max_statement_time = \(Defaults.AI.agentQueryTimeout)")
+            }
         case .sqlite:
             _ = try await driver.execute("PRAGMA query_only = ON")
         case .mongodb, .redis:
@@ -293,8 +323,31 @@ public struct AgentToolbox: Sendable {
     private func runQuery(_ query: String) async throws -> String {
         if let violation = AgentReadOnly.violation(query, kind: driver.kind) { return "Refused: \(violation)" }
         let limited = driver.dialect.applyingRowLimit(query, limit: Defaults.AI.agentRowLimit + 1)
-        let result = try await driver.execute(limited)
-        return Self.text(of: result)
+        return Self.text(of: try await runReadOnly(limited))
+    }
+
+    /// Runs in a read-only transaction of its own on PostgreSQL and MySQL, which a statement can't switch back
+    /// to read-write, whatever got past `AgentReadOnly`. The connection's session defaults (`prepare`) could be
+    /// changed by a statement; a transaction started for each query can't.
+    func runReadOnly(_ statement: String) async throws -> QueryResult {
+        let begin: String
+        switch driver.kind {
+        case .postgres: begin = "BEGIN READ ONLY"
+        case .mysql: begin = "START TRANSACTION READ ONLY"
+        case .sqlite, .mongodb, .redis: return try await driver.execute(statement)
+        }
+        _ = try await driver.execute(begin)
+        do {
+            if driver.kind == .postgres {
+                _ = try await driver.execute("SET LOCAL statement_timeout = \(Defaults.AI.agentQueryTimeout * 1000)")
+            }
+            let result = try await driver.execute(statement)
+            _ = try? await driver.execute("ROLLBACK")
+            return result
+        } catch {
+            _ = try? await driver.execute("ROLLBACK")
+            throw error
+        }
     }
 
     /// Rows as tab-separated text, cut to the row, cell and total limits.

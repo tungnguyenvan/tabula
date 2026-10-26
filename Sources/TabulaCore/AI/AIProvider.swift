@@ -188,7 +188,9 @@ public struct AISettings: Codable, Equatable, Sendable {
         inlineSuggestions = try c.decodeIfPresent(Bool.self, forKey: .inlineSuggestions) ?? true
         inlineProvider = try? c.decodeIfPresent(AIProviderKind.self, forKey: .inlineProvider)
         allowProduction = try c.decodeIfPresent(Bool.self, forKey: .allowProduction) ?? false
-        assistantQueries = try c.decodeIfPresent(Bool.self, forKey: .assistantQueries) ?? true
+        // Settings from before the chat had tools were saved under "rows are never sent": queries stay off
+        // until the user turns them on.
+        assistantQueries = try c.decodeIfPresent(Bool.self, forKey: .assistantQueries) ?? false
         baseURLs = try c.decodeIfPresent([String: String].self, forKey: .baseURLs) ?? [:]
         models = try c.decodeIfPresent([String: String].self, forKey: .models) ?? [:]
         inlineModels = try c.decodeIfPresent([String: String].self, forKey: .inlineModels) ?? [:]

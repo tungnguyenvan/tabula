@@ -75,6 +75,26 @@ final class AgentReadOnlyTests: XCTestCase {
         }
     }
 
+    /// Ways around the check found in review: quoted function names, comments MySQL runs, backslash escapes.
+    func testSQLCheckBypassesAreRefused() {
+        XCTAssertNotNil(AgentReadOnly.violation("SELECT \"set_config\"('default_transaction_read_only', 'off', false)", kind: .postgres))
+        XCTAssertNotNil(AgentReadOnly.violation("SELECT pg_catalog.\"pg_terminate_backend\"(1)", kind: .postgres))
+        XCTAssertNotNil(AgentReadOnly.violation("SELECT `GET_LOCK`('x', 0)", kind: .mysql))
+        XCTAssertNotNil(AgentReadOnly.violation("SELECT 1 /*! , SLEEP(5) */", kind: .mysql))
+        XCTAssertNotNil(AgentReadOnly.violation("SELECT 1 --x\n, SLEEP(5)", kind: .mysql))
+        XCTAssertNotNil(AgentReadOnly.violation("SELECT E'\\'', set_config('a', 'b', false), ''", kind: .postgres))
+        XCTAssertNotNil(AgentReadOnly.violation("SELECT 'a\\'' , SLEEP(5) -- '", kind: .mysql))
+    }
+
+    func testMongoEscapesAreReadBeforeTheCheck() {
+        let out = AgentReadOnly.violation("db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])", kind: .mongodb)
+        XCTAssertEqual(out, "$out writes to a collection, so the command can't run.")
+        let merge = AgentReadOnly.violation("db.orders.aggregate([{ \"\\x24merge\": { into: \"copy\" } }])", kind: .mongodb)
+        XCTAssertEqual(merge, "$merge writes to a collection, so the command can't run.")
+        let where_ = AgentReadOnly.violation("db.orders.find({ $where: \"true\" })", kind: .mongodb)
+        XCTAssertEqual(where_, "$where runs code on the server, so the command can't run.")
+    }
+
     func testMongoReads() {
         for command in ["db.orders.find({ status: \"paid\" }).sort({ total: -1 })",
                         "db.orders.aggregate([{ $group: { _id: \"$status\", n: { $sum: 1 } } }])",
@@ -84,7 +104,12 @@ final class AgentReadOnlyTests: XCTestCase {
         }
         for command in ["db.orders.deleteMany({})", "db.orders.updateOne({}, { $set: { a: 1 } })", "db.orders.drop()",
                         "db.orders.aggregate([{ $match: {} }, { $out: \"copy\" }])", "db.dropDatabase()",
-                        "db.runCommand({ drop: \"orders\" })", "use admin", "db.orders.find(); db.orders.drop()"] {
+                        "db.runCommand({ drop: \"orders\" })", "use admin", "db.orders.find(); db.orders.drop()",
+                        // Escapes are decoded by the parser, so they can't hide a stage.
+                        "db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])",
+                        "db.orders.aggregate([{ $match: {} }, { \"\\x24merge\": { into: \"copy\" } }])",
+                        "db.orders.find({ $where: \"sleep(100) || true\" })",
+                        "db.orders.aggregate([{ $addFields: { x: { $function: { body: \"function() {}\", args: [], lang: \"js\" } } } }])"] {
             XCTAssertNotNil(AgentReadOnly.violation(command, kind: .mongodb), command)
         }
     }
@@ -164,6 +189,38 @@ final class AgentToolboxTests: XCTestCase {
         let toolbox = AgentToolbox(driver: driver, currentSchema: "public")
         let result = await toolbox.run(AgentToolCall(tool: .runQuery, query: "SELECT 1 AS one"))
         XCTAssertEqual(result, "1 row:\none\n1")
+
+        // Even past the check, each query's own read-only transaction can't be switched back to read-write.
+        _ = try await driver.execute("SET default_transaction_read_only = off")
+        for statement in ["SELECT set_config('transaction_read_only', 'off', true)",
+                          "CREATE TABLE tabula_agent_probe (id int)"] {
+            do {
+                _ = try await toolbox.runReadOnly(statement)
+                XCTFail("Ran in the agent's transaction: \(statement)")
+            } catch {}
+        }
+        let after = try await driver.execute("SELECT to_regclass('public.tabula_agent_probe') IS NULL")
+        XCTAssertEqual(after.rows.first?.first ?? nil, "true")
+        await driver.close()
+    }
+
+    func testMySQLAgentQueriesAreReadOnly() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MYSQL_PORT not set")
+        }
+        let config = ConnectionConfig(kind: .mysql, port: port, user: "tabula", database: "tabula", tls: .require)
+        let driver = try await DriverFactory.connect(config, password: "tabula")
+        try await AgentToolbox.prepare(driver)
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "tabula")
+        let before = try await driver.execute("SELECT count(*) FROM employees").rows.first?.first ?? nil
+        // The session default can be changed by a statement, the per-query read-only transaction can't.
+        _ = try await driver.execute("SET SESSION TRANSACTION READ WRITE")
+        do {
+            _ = try await toolbox.runReadOnly("INSERT INTO employees (name) VALUES ('agent probe')")
+            XCTFail("The agent's transaction accepted a write")
+        } catch {}
+        let after = try await driver.execute("SELECT count(*) FROM employees").rows.first?.first ?? nil
+        XCTAssertEqual(after, before)
         await driver.close()
     }
 
@@ -207,6 +264,26 @@ final class ChatStoreTests: XCTestCase {
         try store.save(many, for: connection)
         XCTAssertEqual(store.load(connection).count, Defaults.AI.savedConversations)
         XCTAssertEqual(store.load(connection).first?.title, "\(Defaults.AI.savedConversations + 4)")
+
+        // One unreadable message or conversation is skipped; the rest load.
+        let file = base.appendingPathComponent("Chats/\(connection.uuidString).json")
+        var json = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [[String: Any]]
+        var first = json[0]
+        var firstMessages = first["messages"] as! [[String: Any]]
+        firstMessages[0]["role"] = "system-from-a-later-version"
+        first["messages"] = firstMessages
+        json[0] = first
+        json.append(["title": "no id"])
+        try JSONSerialization.data(withJSONObject: json).write(to: file)
+        let lossy = store.load(connection)
+        XCTAssertEqual(lossy.count, Defaults.AI.savedConversations)
+        XCTAssertEqual(lossy.first?.messages.count, 2)
+
+        // A file that can't be read at all is kept aside, not overwritten by the next save.
+        try Data("not json".utf8).write(to: file)
+        XCTAssertEqual(store.load(connection), [])
+        let kept = try FileManager.default.contentsOfDirectory(atPath: base.appendingPathComponent("Chats").path)
+        XCTAssertTrue(kept.contains { $0.hasPrefix("\(connection.uuidString).unreadable-") }, "\(kept)")
 
         try store.save([], for: connection)
         XCTAssertEqual(store.load(connection), [])

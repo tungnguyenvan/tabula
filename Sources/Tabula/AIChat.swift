@@ -61,8 +61,12 @@ final class AIChatModel {
     func delete(_ id: UUID) {
         if id == currentID { newConversation() }
         conversations.removeAll { $0.id == id }
+        deleted.insert(id)
         persist()
     }
+
+    /// Conversations deleted here, so merging with the file (below) doesn't bring them back.
+    private var deleted: Set<UUID> = []
 
     /// Writes the current conversation into the saved list.
     private func save() {
@@ -74,6 +78,10 @@ final class AIChatModel {
     }
 
     private func persist() {
+        // Another window with this connection may have saved conversations of its own meanwhile.
+        let known = Set(conversations.map(\.id)).union(deleted)
+        conversations += store.load(connectionID).filter { !known.contains($0.id) }
+        conversations.sort { $0.updated > $1.updated }
         do {
             try store.save(conversations, for: connectionID)
         } catch {
@@ -127,12 +135,15 @@ final class AIChatModel {
                                                   instructions: AIService.shared.settings.instructions(.chat),
                                                   tools: last ? nil : tools, steps: steps)
                     try await receive(AIService.shared.stream(request), into: reply)
+                    // A cancelled stream ends without an error; a stopped answer must not go on to use a tool.
+                    try Task.checkCancellation()
+                    guard self.run == run else { throw CancellationError() }
                     guard !last, let call = messages.first(where: { $0.id == reply })
                         .flatMap({ AgentProtocol.call(in: $0.text) }) else { break }
                     // What the model wrote before the request stays; the request shows as a tool step.
                     update(reply) { $0.text = AgentProtocol.visibleText($0.text) }
                     finish(reply)
-                    let result = try await use(call, workspace: workspace, canQuery: canQuery, askFirst: askFirst)
+                    let result = try await use(call, workspace: workspace, canQuery: canQuery, askFirst: askFirst, run: run)
                     steps.append((call, result))
                     save()
                 }
@@ -143,7 +154,7 @@ final class AIChatModel {
     }
 
     /// Runs a tool call, after asking when it is a Production query, and shows it in the conversation.
-    private func use(_ call: AgentToolCall, workspace: WorkspaceModel, canQuery: Bool, askFirst: Bool) async throws -> String {
+    private func use(_ call: AgentToolCall, workspace: WorkspaceModel, canQuery: Bool, askFirst: Bool, run: UUID) async throws -> String {
         let isQuery = call.tool == .runQuery
         let step = Message(role: .tool, text: "", tool: .init(call: call, status: isQuery && askFirst ? .awaitingApproval : .running))
         messages.append(step)
@@ -156,12 +167,20 @@ final class AIChatModel {
             return done(.denied, "Refused: queries are turned off in Settings › AI. Answer from the structure.")
         }
         if isQuery && askFirst {
-            let allowed = await withCheckedContinuation { continuation in approval = (step.id, continuation) }
+            let allowed = await withCheckedContinuation { continuation in
+                // Stopped meanwhile: answer at once instead of waiting for a button that is gone.
+                guard self.run == run, !Task.isCancelled else { return continuation.resume(returning: false) }
+                if let earlier = approval { earlier.continuation.resume(returning: false) }
+                approval = (step.id, continuation)
+            }
             try Task.checkCancellation()
+            guard self.run == run else { throw CancellationError() }
             guard allowed else { return done(.denied, "The user didn't allow this query. Answer without it, or suggest it as SQL.") }
             update(step.id) { $0.tool?.status = .running }
         }
         let toolbox = try await workspace.agentToolbox()
+        try Task.checkCancellation()
+        guard self.run == run else { throw CancellationError() }
         let result = await toolbox.run(call)
         try Task.checkCancellation()
         return done(.done, result)
@@ -420,6 +439,9 @@ struct AIChatView: View {
                  ? "Write or explain queries, find tables, or change the SQL in the editor. The AI sees table and column names, keys and the editor's SQL, and can run read-only queries to look at the data\(workspace.config.tag == .production ? " after you allow each one" : ""). Earlier conversations are under the title above."
                  : "Write or explain queries, find tables, or change the SQL in the editor. The AI sees table and column names, keys and the editor's SQL, never rows. Earlier conversations are under the title above.")
                 .font(.callout).foregroundStyle(.secondary)
+            if !AIService.shared.settings.assistantQueries && AIService.shared.refusal(for: workspace.config) == nil {
+                SettingsLink { Text("Let the AI run read-only queries…") }
+            }
             if AIService.shared.refusal(for: workspace.config) != nil {
                 SettingsLink { Text("Turn on AI in Settings…") }
             }

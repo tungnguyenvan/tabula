@@ -72,6 +72,15 @@ public struct ChatConversation: Identifiable, Equatable, Codable, Sendable {
         self.messages = messages
     }
 
+    // A message this version can't read (a newer kind, a damaged entry) is skipped, not the whole conversation.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "New Chat"
+        updated = try c.decodeIfPresent(Date.self, forKey: .updated) ?? .distantPast
+        messages = (try c.decodeIfPresent([Lossy<ChatMessage>].self, forKey: .messages) ?? []).compactMap(\.value)
+    }
+
     /// The first question, shortened, names the conversation.
     public static func title(for messages: [ChatMessage]) -> String {
         let question = messages.first { $0.role == .user }?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -97,11 +106,17 @@ public struct ChatStore: Sendable {
         directory.appendingPathComponent("\(connection.uuidString).json")
     }
 
-    /// Newest first; a missing or unreadable file is an empty history.
+    /// Newest first. Conversations that can't be read are skipped. A file that can't be read at all is moved
+    /// aside (`….unreadable-<time>.json`) rather than overwritten by the next save.
     public func load(_ connection: UUID) -> [ChatConversation] {
-        guard let data = try? Data(contentsOf: fileURL(connection)),
-              let conversations = try? Self.decoder.decode([ChatConversation].self, from: data) else { return [] }
-        return conversations.sorted { $0.updated > $1.updated }
+        let url = fileURL(connection)
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        guard let entries = try? Self.decoder.decode([Lossy<ChatConversation>].self, from: data) else {
+            let aside = directory.appendingPathComponent("\(connection.uuidString).unreadable-\(Int(Date().timeIntervalSince1970)).json")
+            try? FileManager.default.moveItem(at: url, to: aside)
+            return []
+        }
+        return entries.compactMap(\.value).sorted { $0.updated > $1.updated }
     }
 
     /// Keeps the newest `Defaults.AI.savedConversations`; an empty list removes the file.
@@ -132,4 +147,13 @@ public struct ChatStore: Sendable {
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }()
+}
+
+/// Decodes a value, or nil when it can't be read, so one bad element doesn't fail the whole list.
+private struct Lossy<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        value = try? Value(from: decoder)
+    }
 }
