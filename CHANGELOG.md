@@ -4,6 +4,12 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Planned
+- SSH tunnels
+- Cancelling a running query
+
+## [0.4.2] - 2026-10-26
+
 ### Added
 - **AI answers stream in** as the model writes them, in the chat panel, Ask AI and Fix with AI, for every provider that can: the Claude API, OpenAI-compatible servers, Ollama, models running in Tabula, Apple Intelligence, Claude Code and Codex.
 - Codex shares a summary of its reasoning, shown like the others' thinking; the notes it writes between steps go with it, and only its final message is the answer.
@@ -19,10 +25,6 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - Running a script whose last result had different columns and fewer rows than the first could quit the app.
 - A MongoDB connection through a DNS seed list showed a port in the connection list; it now says "DNS seed list".
 - PostgreSQL dates before 15 October 1582 showed in the Julian calendar, days off from what the server stores and `psql` shows; they now show in the proleptic Gregorian calendar, as PostgreSQL counts them.
-
-### Planned
-- SSH tunnels
-- Cancelling a running query
 
 ## [0.4.1] - 2026-10-25
 
