@@ -5,7 +5,7 @@
 # frames plus events.json, the clicks and keys with their frames), made with TABULA_DEBUG_KEYS scripts whose
 # click:x,y tokens post real mouse events to the window. The montage uses docs/screenshots. Recordings live in
 # $RECORDINGS (default /tmp/tabula-rec); each was made with
-#   TABULA_DATA_DIR=<test connections> TABULA_DEBUG_WIDTH=1300 TABULA_DEBUG_HEIGHT=760 TABULA_DEBUG_RECORD_FPS=15
+#   TABULA_DATA_DIR=<test connections> TABULA_DEBUG_WIDTH=1300 TABULA_DEBUG_HEIGHT=760 (30 frames a second)
 #   TABULA_DEBUG_RECORD=$RECORDINGS/<name> .build/debug/Tabula
 # and:
 #   chat     MongoDB, TABULA_DEBUG_AI_PROVIDER=claudeCode (start with no saved conversations), TABULA_DEBUG_KEYS=

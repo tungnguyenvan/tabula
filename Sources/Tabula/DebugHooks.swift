@@ -11,7 +11,7 @@ import TabulaCore
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
 /// - TABULA_DEBUG_KEYS: scripted input, e.g. "wait:500;slow:SELECT 1;cmd+return;click:0.2,0.12" (see startKeyScript)
 /// - TABULA_DEBUG_RECORD: directory that receives the workspace window as numbered JPEG frames
-///   (TABULA_DEBUG_RECORD_FPS a second, default 10), e.g. for the demo video (scripts/render-demo.sh)
+///   (TABULA_DEBUG_RECORD_FPS a second, default 30), e.g. for the demo video (scripts/render-demo.sh)
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
 /// - TABULA_DEBUG_AI_ALLOW_PRODUCTION: allow AI on Production connections; TABULA_DEBUG_APPROVE: answer the chat's query approval
 /// - TABULA_DEBUG_CHAT_DEMO (a question) / TABULA_DEBUG_ASK_DEMO: play a made-up streamed answer with reasoning
@@ -367,55 +367,45 @@ enum DebugHooks {
         }
     }
 
-    /// Records the workspace window as frame-00001.jpg, frame-00002.jpg… at a steady rate.
-    /// The last frame recorded, so scripted input can say when it happened.
-    private static var recordedFrame = 0
+    /// The recording in progress, if any.
+    private static var recorder: WindowRecorder?
+
     /// Scripted input while recording: what happened, at which frame, where (fractions of the window, from the top
     /// left). Written to events.json next to the frames, so the demo video can draw the cursor and play sounds there.
     private static var recordedEvents: [[String: Any]] = []
 
     private static func logEvent(_ kind: String, x: Double? = nil, y: Double? = nil) {
-        guard let directory = environment["TABULA_DEBUG_RECORD"] else { return }
-        var event: [String: Any] = ["frame": recordedFrame, "kind": kind]
+        guard let recorder else { return }
+        var event: [String: Any] = ["frame": recorder.currentFrame, "kind": kind]
         if let x, let y { event["x"] = x; event["y"] = y }
         recordedEvents.append(event)
         if let data = try? JSONSerialization.data(withJSONObject: recordedEvents, options: [.prettyPrinted]) {
-            try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent("events.json"))
+            try? data.write(to: recorder.directory.appendingPathComponent("events.json"))
         }
     }
 
-    /// A sheet is a window of its own; draw it over the window's picture where it sits, so recordings show it.
-    private static func withSheet(_ rep: NSBitmapImageRep, of window: NSWindow) -> NSBitmapImageRep {
-        guard let sheet = window.attachedSheet, let sheetRep = windowServerImage(sheet) ?? cachedImage(sheet),
-              let canvas = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: rep.pixelsWide, pixelsHigh: rep.pixelsHigh,
-                                            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-              let context = NSGraphicsContext(bitmapImageRep: canvas) else { return rep }
-        let scale = CGFloat(rep.pixelsWide) / window.frame.width
-        let origin = NSPoint(x: (sheet.frame.minX - window.frame.minX) * scale, y: (sheet.frame.minY - window.frame.minY) * scale)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        rep.draw(in: NSRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh))
-        // Over, not copy: the sheet's rounded corners are transparent.
-        sheetRep.draw(in: NSRect(origin: origin, size: NSSize(width: sheet.frame.width * scale, height: sheet.frame.height * scale)),
-                      from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: false, hints: nil)
-        NSGraphicsContext.restoreGraphicsState()
-        return canvas
-    }
-
+    /// TABULA_DEBUG_RECORD: records the workspace window as frame-00001.jpg… at TABULA_DEBUG_RECORD_FPS (default 30).
     static func startRecording() {
         guard let directory = environment["TABULA_DEBUG_RECORD"] else { return }
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        let fps = environment["TABULA_DEBUG_RECORD_FPS"].flatMap(Double.init) ?? 10
-        Timer.scheduledTimer(withTimeInterval: 1 / fps, repeats: true) { _ in
+        let fps = environment["TABULA_DEBUG_RECORD_FPS"].flatMap(Double.init) ?? 30
+        let recorder = WindowRecorder(directory: URL(fileURLWithPath: directory), fps: fps)
+        self.recorder = recorder
+        // Which windows to capture is read on the main thread; capturing and encoding happen on the recorder's own
+        // queue, so they neither slow the app down nor fall behind it.
+        Timer.scheduledTimer(withTimeInterval: 1 / (fps * 2), repeats: true) { _ in
             MainActor.assumeIsolated {
-                guard let window = targetWindow, let rep = windowServerImage(window) ?? cachedImage(window),
-                      let data = withSheet(rep, of: window).representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else { return }
-                recordedFrame += 1
-                let name = String(format: "frame-%05d.jpg", recordedFrame)
-                try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
+                guard let window = targetWindow else { return }
+                var sheet: WindowRecorder.Target.Sheet?
+                if let attached = window.attachedSheet {
+                    sheet = .init(id: CGWindowID(attached.windowNumber),
+                                  origin: CGPoint(x: attached.frame.minX - window.frame.minX, y: attached.frame.minY - window.frame.minY),
+                                  size: attached.frame.size)
+                }
+                recorder.target = .init(id: CGWindowID(window.windowNumber), size: window.frame.size, sheet: sheet)
             }
         }
+        recorder.start()
     }
 
     static func startSnapshots() {
@@ -458,6 +448,97 @@ enum DebugHooks {
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: rep)
         return rep
+    }
+}
+#endif
+
+#if DEBUG
+import ImageIO
+import UniformTypeIdentifiers
+
+/// Captures a window (and any sheet on it) at a steady rate on a queue of its own. Frames are numbered by the clock,
+/// not by captures: frame n shows the window at (n - 1) / fps seconds, and a capture that runs late fills the frames
+/// it missed with the picture before, so recordings play back at the speed things happened.
+final class WindowRecorder: @unchecked Sendable {
+    struct Target {
+        struct Sheet {
+            var id: CGWindowID
+            /// From the window's bottom left, in points.
+            var origin: CGPoint
+            var size: CGSize
+        }
+        var id: CGWindowID
+        var size: CGSize
+        var sheet: Sheet?
+    }
+
+    let directory: URL
+    private let fps: Double
+    private let started = Date()
+    private let queue = DispatchQueue(label: "app.tabula.debug.recorder", qos: .userInitiated)
+    private let lock = NSLock()
+    private var _target: Target?
+    private var timer: DispatchSourceTimer?
+    private var written = 0
+    private var last: Data?
+
+    init(directory: URL, fps: Double) {
+        self.directory = directory
+        self.fps = fps
+    }
+
+    var target: Target? {
+        get { lock.withLock { _target } }
+        set { lock.withLock { _target = newValue } }
+    }
+
+    /// The frame showing this moment.
+    var currentFrame: Int { Int(Date().timeIntervalSince(started) * fps) + 1 }
+
+    func start() {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now(), repeating: 1 / fps, leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in self?.capture() }
+        timer.resume()
+        self.timer = timer
+    }
+
+    private typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+    private static let create: CreateImage? = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage")
+        .map { unsafeBitCast($0, to: CreateImage.self) }
+
+    private static func image(of id: CGWindowID) -> CGImage? {
+        // kCGWindowListOptionIncludingWindow = 1 << 3, kCGWindowImageBoundsIgnoreFraming = 1 << 0
+        create?(.null, 1 << 3, id, 1 << 0)?.takeRetainedValue()
+    }
+
+    private func capture() {
+        let frame = currentFrame
+        guard frame > written, let target, let window = Self.image(of: target.id) else { return }
+        var picture = window
+        if let sheet = target.sheet, let sheetImage = Self.image(of: sheet.id),
+           let context = CGContext(data: nil, width: window.width, height: window.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+            // Over the window, keeping the sheet's transparent rounded corners.
+            let scale = CGFloat(window.width) / target.size.width
+            context.draw(window, in: CGRect(x: 0, y: 0, width: window.width, height: window.height))
+            context.draw(sheetImage, in: CGRect(x: sheet.origin.x * scale, y: sheet.origin.y * scale,
+                                                width: sheet.size.width * scale, height: sheet.size.height * scale))
+            picture = context.makeImage() ?? window
+        }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return }
+        CGImageDestinationAddImage(destination, picture, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { return }
+        // Frames missed while this one was taken show the picture before.
+        for missed in (written + 1)..<frame { write(last ?? data as Data, frame: missed) }
+        write(data as Data, frame: frame)
+        written = frame
+        last = data as Data
+    }
+
+    private func write(_ data: Data, frame: Int) {
+        try? data.write(to: directory.appendingPathComponent(String(format: "frame-%05d.jpg", frame)))
     }
 }
 #endif
