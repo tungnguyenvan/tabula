@@ -48,7 +48,10 @@ struct ConnectionListView: View {
         .frame(minWidth: 680, minHeight: 420)
         .onAppear {
             #if DEBUG
-            if let id = DebugHooks.connectionToEdit, let config = appState.connection(id) { edit(config) }
+            if let id = DebugHooks.connectionToEdit, let config = appState.connection(id) {
+                DebugHooks.resizeConnectionsWindow()
+                edit(config)
+            }
             #endif
         }
         .sheet(item: $editing) { request in

@@ -129,6 +129,8 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
             return "\(userPart)\(host):\(port) · db\(database.isEmpty ? "0" : database)"
         }
         let dbPart = database.isEmpty ? "" : "/\(database)"
+        // A DNS seed list names no port; the servers' ports come from DNS.
+        if kind == .mongodb && srv == true { return "\(userPart)\(host)\(dbPart) · DNS seed list" }
         return "\(userPart)\(host):\(port)\(dbPart)"
     }
 }

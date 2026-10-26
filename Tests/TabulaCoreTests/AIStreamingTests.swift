@@ -240,6 +240,24 @@ final class CLIEventsTests: XCTestCase {
         XCTAssertEqual(failed.events.failure, "quota")
     }
 
+    /// Runs the installed Codex (TABULA_TEST_CODEX=1), which costs a small request.
+    func testCodexStreamsLive() async throws {
+        guard ProcessInfo.processInfo.environment["TABULA_TEST_CODEX"] != nil else { throw XCTSkip("TABULA_TEST_CODEX not set") }
+        let provider = CLIProvider(tool: .codex, effort: "high")
+        var thinking = "", text = ""
+        for try await event in provider.stream(AIRequest(purpose: .generate, instructions: "Reply with SQL only.",
+                                                        prompt: "Tables: customers(id, name), orders(id, customer_id, total, status). Think it through, then write the top 5 customers by paid order value.")) {
+            switch event {
+            case .thinking(let piece): thinking += piece
+            case .text(let piece): text += piece
+            }
+        }
+        XCTAssertTrue(text.uppercased().contains("SELECT"), text)
+        XCTAssertFalse(thinking.isEmpty, "expected Codex's reasoning summary")
+        let reply = try await provider.complete(AIRequest(purpose: .generate, instructions: "Reply with SQL only.", prompt: "Count the rows of table t."))
+        XCTAssertTrue(reply.uppercased().contains("COUNT"), reply)
+    }
+
     /// Runs the installed Claude Code (TABULA_TEST_CLAUDE_CODE=1), which costs a small request.
     func testClaudeCodeStreamsLive() async throws {
         guard ProcessInfo.processInfo.environment["TABULA_TEST_CLAUDE_CODE"] != nil else { throw XCTSkip("TABULA_TEST_CLAUDE_CODE not set") }

@@ -272,6 +272,8 @@ Choose where the model runs:
 
 Add a connection of type **MongoDB**.
 
+<p align="center"><img src="docs/screenshots/mongodb-connection.png" width="520" alt="A MongoDB connection to an Atlas cluster: DNS seed list, user, database, auth database and TLS"></p>
+
 - **Host and port**, or several hosts (`a:27017,b:27017`) for a replica set; if the first is down, the next is tried. For Atlas and other DNS seed lists, turn on **DNS seed list (mongodb+srv)** and enter the cluster's host name; TLS is then on by default. Tabula looks the seed list up with the Mac's resolver and refuses servers outside the seed's domain, so a spoofed DNS answer can't redirect the connection. Options published in the seed list's TXT record are not read; set the auth database yourself if it isn't `admin`.
 - **User and password** are optional. **Auth database** is where the user is defined (`authSource`), `admin` when left empty. **Database** is the one to open first (`test` when empty); every database you may list appears in the sidebar's picker.
 - Authentication is SCRAM-SHA-1 or SCRAM-SHA-256, chosen with the server. X.509, LDAP and Kerberos aren't supported.
