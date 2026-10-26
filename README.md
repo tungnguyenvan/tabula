@@ -22,7 +22,7 @@ Free, no usage limits, keyboard-first.</p>
 
 <p align="center"><img src="docs/screenshots/mongodb.png" width="900" alt="A MongoDB collection in the grid, with typed fields in the row details panel"></p>
 
-> ### ✨ New in 0.3: an AI assistant that can run entirely on your Mac
+> ### ✨ New in 0.5: an AI assistant that looks things up in your database, on your Mac or with the AI you already use
 >
 > - **Chat about your database** in the panel on the right (⌥⌘A). Ask for a query in plain words and get SQL you can **Insert**, **Run** or copy. The model knows your tables, columns, keys and schemas, so it writes `dev.transactions`, not a guess.
 > - **An assistant that looks things up:** it describes tables and runs read-only queries on its own read-only connection to answer from the real data ("which status brings in the most revenue?"), with every step shown. On Production it asks before each query. Conversations are saved per connection, to open again later.
@@ -60,7 +60,7 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Features
 
-**AI assistant** (new in 0.3, see [AI assistant](#ai-assistant))
+**AI assistant** (new in 0.3, tools and saved chats in 0.5; see [AI assistant](#ai-assistant))
 - Chat panel with tools (describe tables, run read-only queries) and saved conversations, Ask AI (⌘K), Fix with AI, and model-written suggestions while typing.
 - Models that run inside Tabula, Apple Intelligence, Claude, OpenAI-compatible APIs, Ollama, Claude Code or Codex.
 
@@ -137,12 +137,12 @@ Free, no usage limits, keyboard-first.</p>
 
 ## Size and resource use
 
-Measured on a Mac with Apple M2 and macOS 26.1, memory with an optimized build of 0.4.0 and sizes with 0.4.4. Sizes are in decimal megabytes, as Finder and GitHub show them. A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
+Measured on a Mac with Apple M2 and macOS 26.1, memory with an optimized build of 0.4.0 and sizes with 0.5.0. Sizes are in decimal megabytes, as Finder and GitHub show them. A model running in Tabula adds roughly its file size in memory while it is loaded (about 0.5 GB for Qwen2.5 Coder 0.5B), and is released after five minutes without use.
 
 | | |
 | --- | --- |
-| Download | 23.8 MB (ZIP), 27.1 MB (DMG). 30.5 MB in 0.4.0, 27.5 MB in 0.3.1, 19.3 MB in 0.2.1. |
-| Installed | 61 MB: the app 37 MB and llama.cpp, which runs local models, 23 MB. One universal app for Apple silicon and Intel. Since 0.4.4 the app ships without the symbol tables that only debuggers use; with them, 0.4.3 took 104 MB. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
+| Download | 24.0 MB (ZIP), 27.4 MB (DMG). 30.5 MB in 0.4.0, 27.5 MB in 0.3.1, 19.3 MB in 0.2.1. |
+| Installed | 62 MB: the app 37 MB and llama.cpp, which runs local models, 23 MB. One universal app for Apple silicon and Intel. Since 0.4.4 the app ships without the symbol tables that only debuggers use; with them, 0.4.3 took 104 MB. Models you download are stored separately, in `~/Library/Application Support/Tabula/Models`. |
 | Memory, Connections window only | 28 MB |
 | Memory, one Postgres table open (300 rows) | 81 MB |
 | Memory, one MongoDB collection open (300 documents) | 79 MB |
@@ -256,6 +256,9 @@ AI is off until you turn it on in **Settings › AI** (⌘,). Then:
   - At most 50 rows of each result, with long values cut, go to the model.
   - On **Production** connections the chat asks before each query (**Allow** / **Don't Allow**).
   - **Let the chat run read-only queries** in Settings › AI turns them on or off; without them the assistant looks up only the structure. It is on for new setups, and off if you had turned on AI before the chat could run queries, until you turn it on.
+
+<p align="center"><img src="docs/screenshots/ai-tools.png" width="820" alt="The chat answering from the real data: it ran an aggregate on MongoDB, shown as a step above the answer"></p>
+
 - **Your own instructions:** each system prompt (chat, Ask AI, Fix with AI, suggestions) can be edited in Settings › AI › Instructions, for example to answer in Vietnamese or to always add a LIMIT. `{database}` stands for the database's name; Restore Default brings Tabula's back.
 
 In a query tab:
