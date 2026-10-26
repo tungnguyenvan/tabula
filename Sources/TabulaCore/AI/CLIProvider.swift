@@ -74,6 +74,8 @@ public struct CLIProvider: AIProvider {
             case .codex:
                 let answer = directory.appendingPathComponent("answer.txt")
                 var arguments = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--json", "--output-last-message", answer.path]
+                // Codex shares a summary of its reasoning only when asked; suggestions while typing don't show it.
+                if request.purpose != .inline { arguments += ["-c", "model_reasoning_summary=\"detailed\""] }
                 if !model.isEmpty { arguments += ["--model", model] }
                 if let effort { arguments += ["-c", "model_reasoning_effort=\"\(effort)\""] }
                 arguments.append("-")

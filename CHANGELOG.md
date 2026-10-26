@@ -6,6 +6,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ### Added
 - **AI answers stream in** as the model writes them, in the chat panel, Ask AI and Fix with AI, for every provider that can: the Claude API, OpenAI-compatible servers, Ollama, models running in Tabula, Apple Intelligence, Claude Code and Codex.
+- Codex shares a summary of its reasoning, shown like the others' thinking; the notes it writes between steps go with it, and only its final message is the answer.
 - **The model's thinking** shows above its answer while it reasons, then folds into "Thought for N s" (click to open it again). Claude models send a summary of their reasoning; DeepSeek-R1, Qwen3 and other models that reason in `<think>` tags or a `reasoning` field show theirs too. Ask AI and Fix with AI show the latest line of the reasoning, then of the SQL being written.
 
 ### Changed
@@ -16,6 +17,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ### Fixed
 - **The app could quit unexpectedly with the AI or Row Details panel open**, typically when sending a chat message or dragging a divider: SwiftUI's split views (query editor and results, console, structure, Redis) and the panel kept asking the window to recompute constraints until AppKit stopped the app. These split views are now AppKit's own, and remember where you put the divider.
 - Running a script whose last result had different columns and fewer rows than the first could quit the app.
+- A MongoDB connection through a DNS seed list showed a port in the connection list; it now says "DNS seed list".
 - PostgreSQL dates before 15 October 1582 showed in the Julian calendar, days off from what the server stores and `psql` shows; they now show in the proleptic Gregorian calendar, as PostgreSQL counts them.
 
 ### Planned
