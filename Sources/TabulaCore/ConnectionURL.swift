@@ -11,7 +11,8 @@ extension ConnectionConfig {
         components.scheme = urlScheme
         components.host = resolvedHost
         components.port = kind == .mongodb && srv == true ? nil : port
-        if !user.isEmpty { components.user = user }
+        // URLComponents leaves ":" in a user name, where it would start the password.
+        if !user.isEmpty { components.percentEncodedUser = user.addingPercentEncoding(withAllowedCharacters: Self.userCharacters) }
         if let password, !password.isEmpty { components.password = password }
         let path = kind == .redis ? (database.isEmpty ? "" : database) : database
         if !path.isEmpty { components.path = "/" + path }
@@ -33,6 +34,8 @@ extension ConnectionConfig {
         return components.string ?? ""
     }
 
+    private static let userCharacters = CharacterSet.urlUserAllowed.subtracting(CharacterSet(charactersIn: ":@"))
+
     private var urlScheme: String {
         switch kind {
         case .postgres: "postgresql"
@@ -45,7 +48,8 @@ extension ConnectionConfig {
 
     /// TLS settings in each client's own spelling; rediss:// and mongodb+srv:// already imply them.
     private var tlsParameters: [URLQueryItem] {
-        guard tls != .disable else { return [] }
+        // A seed list means TLS unless the URL says otherwise.
+        if tls == .disable { return kind == .mongodb && srv == true ? [URLQueryItem(name: "tls", value: "false")] : [] }
         switch kind {
         case .postgres: return [URLQueryItem(name: "sslmode", value: tls == .verifyFull ? "verify-full" : "require")]
         case .mysql: return [URLQueryItem(name: "ssl-mode", value: tls == .verifyFull ? "VERIFY_IDENTITY" : "REQUIRED")]
@@ -53,7 +57,9 @@ extension ConnectionConfig {
             if srv == true { return tls == .verifyFull ? [] : [URLQueryItem(name: "tlsAllowInvalidCertificates", value: "true")] }
             return [URLQueryItem(name: "tls", value: "true")]
                 + (tls == .verifyFull ? [] : [URLQueryItem(name: "tlsAllowInvalidCertificates", value: "true")])
-        case .redis, .sqlite: return []
+        // rediss:// alone means a verified certificate, as in redis-cli and redis-py.
+        case .redis: return tls == .verifyFull ? [] : [URLQueryItem(name: "ssl_cert_reqs", value: "none")]
+        case .sqlite: return []
         }
     }
 }

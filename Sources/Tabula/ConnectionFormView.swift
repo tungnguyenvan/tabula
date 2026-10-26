@@ -49,8 +49,9 @@ struct ConnectionFormView: View {
                         TextField("Host", text: $config.host, prompt: Text(hostPrompt))
                             .help("Paste a connection URL, such as postgresql://user:password@host:5432/db, to fill in every field.")
                             .onChange(of: config.host) { old, host in
-                                // A paste arrives at once; typing "postgres://" key by key must stay typing.
-                                if host.count - old.count > 1 { applyURL(host) }
+                                // Typing "postgres://…" key by key, or deleting from the end, must stay typing.
+                                let typed = host.count == old.count + 1 && host.hasPrefix(old)
+                                if !typed && !old.hasPrefix(host) { applyURL(host, replacing: old) }
                             }
                         if config.kind == .mongodb {
                             Toggle("DNS seed list (mongodb+srv)", isOn: srv)
@@ -125,16 +126,22 @@ struct ConnectionFormView: View {
     }
 
     /// Fills the form from a connection URL pasted into the Host field.
-    private func applyURL(_ text: String) {
+    private func applyURL(_ text: String, replacing oldHost: String) {
         guard text.contains("://"), let (parsed, parsedPassword) = ConnectionConfig.parse(url: text) else { return }
         var filled = parsed
         filled.id = config.id
         if filled.name.isEmpty { filled.name = config.name }
         if filled.tag == ConnectionConfig().tag { filled.tag = config.tag }
         filled.connectTimeout = config.connectTimeout
+        let kindBeforeURL = config.kind
         if filled.kind != config.kind { applyingURL = true }
         config = filled
-        if let parsedPassword { password = parsedPassword }
+        // A URL without a password keeps the saved one only for the same server; it isn't sent to another.
+        if let parsedPassword {
+            password = parsedPassword
+        } else if filled.host != oldHost || filled.kind != kindBeforeURL {
+            password = ""
+        }
         testState = .idle
     }
 

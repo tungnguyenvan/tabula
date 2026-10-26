@@ -30,7 +30,7 @@ final class FilterRuleTests: XCTestCase {
         XCTAssertEqual(pg.url(password: "p@ss/word"), "postgresql://ann:p%40ss%2Fword@db.example.com:5432/shop?sslmode=verify-full")
         XCTAssertEqual(ConnectionConfig(kind: .mysql, host: "", user: "root", tls: .require).url(),
                        "mysql://root@127.0.0.1:3306?ssl-mode=REQUIRED")
-        XCTAssertEqual(ConnectionConfig(kind: .redis, host: "cache", database: "2", tls: .require).url(), "rediss://cache:6379/2")
+        XCTAssertEqual(ConnectionConfig(kind: .redis, host: "cache", database: "2", tls: .require).url(), "rediss://cache:6379/2?ssl_cert_reqs=none")
         XCTAssertEqual(ConnectionConfig(kind: .sqlite, filePath: "/tmp/a b.db").url(), "file:///tmp/a%20b.db")
     }
 
