@@ -82,7 +82,7 @@ final class WorkspaceModel {
         var id: String { rawValue }
     }
     var rightPanel: RightPanel = .rowDetails
-    let chat = AIChatModel()
+    let chat: AIChatModel
 
     /// Shows `panel` on the right, or hides the panel if it is already showing it.
     func toggleRightPanel(_ panel: RightPanel) {
@@ -114,6 +114,7 @@ final class WorkspaceModel {
         self.config = config
         self.connectionID = config.id
         self.password = password
+        chat = AIChatModel(connectionID: config.id)
     }
 
     var filteredTables: [TableRef] {
@@ -206,6 +207,36 @@ final class WorkspaceModel {
     func disconnect() async {
         await driver?.close()
         driver = nil
+        await agentDriver?.close()
+        agentDriver = nil
+    }
+
+    /// The chat assistant's own connection: read-only where the server allows it, so its queries can't change
+    /// data or interfere with the user's transactions. Opened on first use; its statements show in the console.
+    private var agentDriver: LoggingDriver?
+    private var agentSchema: String?
+
+    func agentToolbox() async throws -> AgentToolbox {
+        let driver: LoggingDriver
+        if let agentDriver {
+            driver = agentDriver
+        } else {
+            driver = try await openDriver(config)
+            do {
+                try await AgentToolbox.prepare(driver)
+            } catch {
+                await driver.close()
+                throw error
+            }
+            agentDriver = driver
+            agentSchema = nil
+        }
+        // Unqualified names resolve as in the user's queries.
+        if agentSchema != selectedSchema {
+            try? await driver.useSchema(selectedSchema)
+            agentSchema = selectedSchema
+        }
+        return AgentToolbox(driver: driver, currentSchema: selectedSchema)
     }
 
     /// Tabs whose edits would be lost by leaving the database: changed rows or an unsaved routine.
@@ -256,7 +287,7 @@ final class WorkspaceModel {
         inspectedRows = []
         schemaTableCache = [:]
         loadingSchemaTables = []
-        chat.clear()
+        chat.newConversation()
         await setUp(newDriver)
         if queries.isEmpty {
             newQueryTab()

@@ -71,8 +71,12 @@ struct AISettingsView: View {
         Form {
             Section {
                 Toggle("Use AI to write and complete SQL", isOn: $ai.settings.enabled)
+                Toggle("Let the chat run read-only queries", isOn: $ai.settings.assistantQueries)
+                    .disabled(!ai.settings.enabled)
             } footer: {
-                Text("Only table and column names, keys and the SQL in the editor are sent, never rows from your tables.")
+                Text("Table and column names, keys and the SQL in the editor are sent. With read-only queries on, the chat "
+                     + "can also run SELECT statements (or MongoDB reads) and sees up to \(Defaults.AI.agentRowLimit) rows of "
+                     + "each result; on Production connections it asks you first. Ask AI, Fix with AI and suggestions never see rows.")
             }
 
             if ai.settings.enabled {

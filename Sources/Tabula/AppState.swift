@@ -9,6 +9,11 @@ final class AppState {
         guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else { return ConnectionStore() }
         return ConnectionStore(directory: URL(fileURLWithPath: directory), keychainService: "app.tabula.connections.test")
     }()
+    /// Saved AI conversations, next to the connections (in TABULA_DATA_DIR when that is set).
+    nonisolated static let chatStore: ChatStore = {
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else { return ChatStore() }
+        return ChatStore(base: URL(fileURLWithPath: directory))
+    }()
     private(set) var connections: [ConnectionConfig] = []
     var lastError: String?
     /// Keychain calls run here, in order, and off the main thread: macOS may block them while it asks
@@ -90,6 +95,7 @@ final class AppState {
     func delete(_ id: UUID) {
         connections.removeAll { $0.id == id }
         setPassword(nil, for: id)
+        Self.chatStore.remove(id)
         persist()
     }
 

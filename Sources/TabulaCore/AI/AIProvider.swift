@@ -141,6 +141,9 @@ public struct AISettings: Codable, Equatable, Sendable {
     public var inlineProvider: AIProviderKind?
     /// Production connections never send anything unless this is on.
     public var allowProduction = false
+    /// The chat assistant may run read-only queries and see their results (at most `Defaults.AI.agentRowLimit` rows).
+    /// It can always look up the structure. On Production connections each query needs the user's approval.
+    public var assistantQueries = true
     /// Per provider (keyed by raw value): server address, model for Ask AI, model for suggestions.
     public var baseURLs: [String: String] = [:]
     public var models: [String: String] = [:]
@@ -185,6 +188,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         inlineSuggestions = try c.decodeIfPresent(Bool.self, forKey: .inlineSuggestions) ?? true
         inlineProvider = try? c.decodeIfPresent(AIProviderKind.self, forKey: .inlineProvider)
         allowProduction = try c.decodeIfPresent(Bool.self, forKey: .allowProduction) ?? false
+        assistantQueries = try c.decodeIfPresent(Bool.self, forKey: .assistantQueries) ?? true
         baseURLs = try c.decodeIfPresent([String: String].self, forKey: .baseURLs) ?? [:]
         models = try c.decodeIfPresent([String: String].self, forKey: .models) ?? [:]
         inlineModels = try c.decodeIfPresent([String: String].self, forKey: .inlineModels) ?? [:]
@@ -302,8 +306,7 @@ public enum SQLPrompts {
             switch self {
             case .chat:
                 return "You are the SQL assistant of a {database} database client. Answer briefly. Put every query in a "
-                    + "```sql fenced block. Use only tables and columns from the schema. \(tableNamesRule) You can't see the "
-                    + "data, only its structure; say so if a question needs the data."
+                    + "```sql fenced block. Use only tables and columns from the schema. \(tableNamesRule)"
             case .generate:
                 return "You write {database} SQL for a database client. Use only tables and columns from the schema. "
                     + "\(tableNamesRule) Reply with the SQL alone: no explanation, no Markdown fences. Use a comment line "
@@ -326,7 +329,7 @@ extension SQLPrompts.PromptKind {
         case .chat:
             return "You are the MongoDB assistant of a database client. Answer briefly. Put every command in a ```javascript "
                 + "fenced block. \(SQLPrompts.shellRule) Use only collections and fields from the schema. \(SQLPrompts.collectionNamesRule) "
-                + "You can't see the data, only its structure (fields sampled from documents); say so if a question needs the data."
+                + "The schema's fields are sampled from documents."
         case .generate:
             return "You write MongoDB shell commands for a database client. \(SQLPrompts.shellRule) Use only collections and fields "
                 + "from the schema. \(SQLPrompts.collectionNamesRule) Reply with the commands alone: no explanation, no Markdown "
@@ -407,8 +410,11 @@ extension SQLPrompts {
     }
 
     /// One turn of the chat panel: earlier turns, the editor's SQL and the schema come along.
+    /// `tools` describes the assistant's tools (`AgentProtocol.instructions`); `steps` are the tool calls made
+    /// for this question so far, with their results. Without tools, the model is told to answer.
     public static func chat(question: String, history: [(role: String, text: String)], editorSQL: String?,
-                            schema: Schema, kind: DatabaseKind, instructions custom: String? = nil) -> AIRequest {
+                            schema: Schema, kind: DatabaseKind, instructions custom: String? = nil,
+                            tools: String? = nil, steps: [(call: AgentToolCall, result: String)] = []) -> AIRequest {
         var prompt = "Schema:\n\(schema.text)\n\n"
         if let editorSQL, !editorSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             prompt += "\(language(kind)) in the editor:\n\(editorSQL.prefix(Defaults.AI.chatEditorLength))\n\n"
@@ -417,7 +423,17 @@ extension SQLPrompts {
             prompt += "Conversation so far:\n" + history.map { "\($0.role): \($0.text)" }.joined(separator: "\n\n") + "\n\n"
         }
         prompt += "User: \(question)"
-        return AIRequest(purpose: .generate, instructions: instructions(.chat, custom: custom, kind: kind), prompt: prompt)
+        if !steps.isEmpty {
+            prompt += "\n\nYour tool calls for this question so far:"
+            for step in steps {
+                prompt += "\n\n```tool\n\(step.call.json)\n```\nResult:\n\(step.result)"
+            }
+            prompt += tools == nil ? "\n\nNo more tools now: answer the user with what you found."
+                : "\n\nContinue: use another tool, or answer the user."
+        }
+        var system = instructions(.chat, custom: custom, kind: kind)
+        if let tools { system += "\n\n" + tools }
+        return AIRequest(purpose: .generate, instructions: system, prompt: prompt)
     }
 
     /// Asks for the text that continues `before`, placed before `after`. Only the text near the caret is

@@ -100,6 +100,19 @@ public enum Defaults {
         public static let localGenerateTokens = 1024
         /// Earlier chat messages sent with each question, and characters of the editor's SQL.
         public static let chatHistoryMessages = 12
+        /// The chat assistant's tools: model turns per answer, rows and characters a query result may send,
+        /// and how much of an earlier answer's tool results later questions still see.
+        public static let agentMaxSteps = 8
+        public static let agentRowLimit = 50
+        public static let agentCellLength = 200
+        public static let agentResultLength = 6000
+        public static let agentHistoryResultLength = 1500
+        /// Seconds a query the assistant runs may take (PostgreSQL and MySQL stop it after that).
+        public static let agentQueryTimeout = 15
+        /// Conversations kept per connection; older ones are dropped.
+        public static let savedConversations = 50
+        /// Characters of the first question that name a saved conversation.
+        public static let conversationTitleLength = 60
         /// Seconds between screen updates while an answer streams in (each token would redraw too often).
         public static let streamRefreshInterval: Double = 0.05
         /// Characters of the reasoning or SQL shown under the Ask AI bar while the model works.
