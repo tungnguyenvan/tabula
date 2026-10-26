@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Renders the demo video to dist/demo/tabula-demo.mp4 with Remotion (demo/).
+# Renders the demo video to dist/demo/tabula-demo.mp4 with Remotion (demo/), and the README's poster for it
+# (docs/screenshots/demo-poster.jpg). The video itself is attached to a GitHub release, which the README links to.
 #
 # The video shows Tabula driven by real input: recordings of a debug build (TABULA_DEBUG_RECORD, numbered JPEG
 # frames plus events.json, the clicks and keys with their frames), made with TABULA_DEBUG_KEYS scripts whose
@@ -49,5 +50,8 @@ node demo/audio/make-audio.mjs "$PUBLIC/audio"
 BROWSER="${BROWSER:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 BROWSER_FLAG=()
 [ -x "$BROWSER" ] && BROWSER_FLAG=(--browser-executable="$BROWSER")
-(cd demo && npm ci --no-audit --no-fund && npx remotion render src/index.ts TabulaDemo "../$OUT" "${BROWSER_FLAG[@]}")
+(cd demo && npm ci --no-audit --no-fund && npx remotion render src/index.ts TabulaDemo "../$OUT" "${BROWSER_FLAG[@]}" \
+  && npx remotion still src/index.ts Poster "../dist/demo/poster.png" "${BROWSER_FLAG[@]}")
+# The README shows this frame, with a play button, linking to the video.
+sips -s format jpeg -s formatOptions 82 dist/demo/poster.png --out docs/screenshots/demo-poster.jpg >/dev/null
 ls -lh "$OUT"

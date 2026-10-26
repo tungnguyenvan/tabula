@@ -17,8 +17,14 @@ import {
 export const FPS = 60;
 const unit = 30;
 const scale = FPS / unit;
+/// A fixed moment for a still picture of a scene (the README's poster), in thirtieths of a second.
+const StillFrame = React.createContext<number | null>(null);
 /// The current moment in thirtieths of a second (fractional at 60 frames a second).
-const useFrame = () => useCurrentFrame() / scale;
+const useFrame = () => {
+  const still = React.useContext(StillFrame);
+  const frame = useCurrentFrame();
+  return still ?? frame / scale;
+};
 
 /// Everything shown is Tabula itself, recorded from a debug build driven by real clicks and keys
 /// (scripts/render-demo.sh lists the commands), plus README screenshots for the montage.
@@ -481,6 +487,13 @@ const scenes: { duration: number; render: (duration: number, props: DemoProps) =
   { duration: 85, render: (d) => <Montage duration={d} /> },
   { duration: 90, render: () => <Outro /> },
 ];
+
+/// The README's poster: the chat scene at the moment its answer and table are in.
+export const PosterFrame: React.FC<DemoProps> = ({ events }) => (
+  <StillFrame.Provider value={236}>
+    <Chat duration={260} events={events.chat ?? []} />
+  </StillFrame.Provider>
+);
 
 export const demoDuration = scenes.reduce((total, scene) => total + scene.duration, 0) * scale;
 
