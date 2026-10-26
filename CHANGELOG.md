@@ -4,15 +4,17 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Planned
+- SSH tunnels
+- Cancelling a running query
+
+## [0.5.1] - 2026-10-26
+
 ### Added
 - Collapse and expand the sidebar's groups (Tables or Collections, Views, Functions, Triggers) with the chevron that appears when hovering a group's title, as in Finder ([#36](https://github.com/tungnguyenvan/tabula/issues/36)). Tabula remembers which groups are collapsed; while the filter has text, every group shows its matches.
 
 ### Fixed
 - Tables in AI chat answers showed as rows of pipes; they now show as tables, with a header row, the columns aligned as the Markdown says, and a sideways scroll when wide ([#27](https://github.com/tungnguyenvan/tabula/issues/27)).
-
-### Planned
-- SSH tunnels
-- Cancelling a running query
 
 ## [0.5.0] - 2026-10-26
 
