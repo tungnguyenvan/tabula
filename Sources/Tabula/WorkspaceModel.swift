@@ -423,22 +423,33 @@ final class WorkspaceModel {
     func loadedAISchema(for sql: String) async -> SQLPrompts.Schema {
         guard let driver else { return aiSchema() }
         let generation = cacheGeneration
-        var wanted = Array(tables.prefix(Defaults.completionPrefetchLimit))
-        for named in SQLCompletion.tables(in: sql, kind: driver.kind) {
-            guard let schemaName = named.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame,
-                  let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame }) else { continue }
-            wanted.append(TableRef(schema: schema, name: named.name))
+        // Tables the text names come first and are always loaded; the others only while time allows.
+        var named: [TableRef] = []
+        var extra: [TableRef] = []
+        for reference in SQLCompletion.tables(in: sql, kind: driver.kind) {
+            if let schemaName = reference.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame {
+                guard let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame }) else { continue }
+                let table = TableRef(schema: schema, name: reference.name)
+                named.append(table)
+                extra.append(table)
+            } else if let table = tables.first(where: { $0.name.caseInsensitiveCompare(reference.name) == .orderedSame }) {
+                named.append(table)
+            }
         }
-        for table in wanted where columnCache[Self.columnKey(table)] == nil {
+        let others = tables.prefix(Defaults.completionPrefetchLimit).filter { table in !named.contains(table) }
+        let deadline = ContinuousClock.now + .seconds(Defaults.AI.schemaWait)
+        for (index, table) in (named + others).enumerated() where columnCache[Self.columnKey(table)] == nil {
+            // Stop (the user cancelled) or run out of time: send what is known.
+            if Task.isCancelled || (index >= named.count && ContinuousClock.now >= deadline) { break }
             let columns = (try? await driver.columns(of: table)) ?? []
             guard generation == cacheGeneration else { return aiSchema() }
             columnCache[Self.columnKey(table)] = columns
         }
-        if foreignKeyCache == nil {
+        if foreignKeyCache == nil, !Task.isCancelled, ContinuousClock.now < deadline {
             let keys = (try? await driver.foreignKeys(in: selectedSchema)) ?? []
             if generation == cacheGeneration { foreignKeyCache = keys }
         }
-        return aiSchema(extra: wanted.filter { $0.schema != selectedSchema })
+        return aiSchema(extra: extra)
     }
 
     /// The schema as the AI sees it: names written as SQL needs them (schema-qualified), column types,
