@@ -143,6 +143,13 @@ enum DebugHooks {
     /// "wait:2000;cmd+f;type:Nội;return;esc;down;right;return;type:x;tab". Also logs the menu bar once.
     private static let typingInterval = 0.05
 
+    private static func firstView<T: NSView>(of type: T.Type, in view: NSView?) -> T? {
+        guard let view else { return nil }
+        if let match = view as? T { return match }
+        for subview in view.subviews { if let match = firstView(of: type, in: subview) { return match } }
+        return nil
+    }
+
     static func startKeyScript() {
         dumpMenus()
         guard let script = environment["TABULA_DEBUG_KEYS"] else { return }
@@ -157,6 +164,15 @@ enum DebugHooks {
                 for (index, character) in token.dropFirst(5).enumerated() {
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay + Double(index) * typingInterval) {
                         guard let window = targetWindow else { return }
+                        if !window.isKeyWindow {
+                            NSApp.activate(ignoringOtherApps: true)
+                            window.makeKeyAndOrderFront(nil)
+                        }
+                        WorkspaceRegistry.makeActiveForTesting(window)
+                        // Typing goes to the SQL editor when nothing that takes text has focus.
+                        if !(window.firstResponder is NSTextView), let editor = firstView(of: SQLTextView.self, in: window.contentView) {
+                            window.makeFirstResponder(editor)
+                        }
                         for event in events(for: "type:\(character)", window: window) { NSApp.postEvent(event, atStart: false) }
                     }
                 }
