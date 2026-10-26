@@ -6,6 +6,8 @@ struct SidebarView: View {
     @Bindable var model: WorkspaceModel
     @State private var pendingAction: PendingAction?
     @State private var actionError: String?
+    /// A database to open once the user agrees to lose unsaved edits.
+    @State private var pendingDatabase: String?
     @FocusState private var filterFocused: Bool
 
     struct PendingAction: Identifiable {
@@ -81,6 +83,13 @@ struct SidebarView: View {
                  ? "This is a PRODUCTION connection. This cannot be undone."
                  : "This cannot be undone.")
         }
+        .confirmationDialog("Open “\(pendingDatabase ?? "")”?", isPresented: Binding(
+            get: { pendingDatabase != nil }, set: { if !$0 { pendingDatabase = nil } }
+        ), titleVisibility: .visible, presenting: pendingDatabase) { name in
+            Button("Discard Changes and Open") { Task { await model.openDatabase(name) } }
+        } message: { _ in
+            Text("Tabs with unsaved changes close when the window moves to another database.")
+        }
         .alert("Operation failed", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK") { actionError = nil }
         } message: {
@@ -93,34 +102,51 @@ struct SidebarView: View {
         if let color = model.config.tag.color {
             Rectangle().fill(color).frame(height: 3)
         }
-        if model.config.kind != .sqlite || model.schemas.count > 1 {
-            Menu {
-                ForEach(model.schemas, id: \.self) { schema in
-                    Button {
-                        Task { await model.selectSchema(schema) }
-                    } label: {
-                        if schema == model.selectedSchema { Label(schema, systemImage: "checkmark") } else { Text(schema) }
-                    }
+        VStack(spacing: Layout.Sidebar.pickerSpacing) {
+            if !model.databases.isEmpty {
+                picker(model.databases, selected: model.openingDatabase ?? model.currentDatabase ?? "", icon: "cylinder", help: "Database") { name in
+                    if model.hasUnsavedChanges { pendingDatabase = name } else { Task { await model.openDatabase(name) } }
                 }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: model.config.kind.schemaNoun == "Database" ? "cylinder" : "folder")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                    Text(model.selectedSchema.isEmpty ? "Select" : model.selectedSchema)
-                        .font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 9)).foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 5))
-                .contentShape(Rectangle())
+                // One switch at a time: the window keeps the old database until the new one is open.
+                .disabled(model.openingDatabase != nil)
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .help(model.config.kind.schemaNoun)
+            if model.config.kind != .sqlite || model.schemas.count > 1 {
+                picker(model.schemas, selected: model.selectedSchema,
+                       icon: model.config.kind.schemaNoun == "Database" ? "cylinder" : "folder",
+                       help: model.config.kind.schemaNoun) { schema in
+                    Task { await model.selectSchema(schema) }
+                }
+            }
         }
+        .padding(.vertical, Layout.Sidebar.pickerPadding)
+    }
+
+    private func picker(_ items: [String], selected: String, icon: String, help: String,
+                        choose: @escaping (String) -> Void) -> some View {
+        Menu {
+            ForEach(items, id: \.self) { item in
+                Button {
+                    choose(item)
+                } label: {
+                    if item == selected { Label(item, systemImage: "checkmark") } else { Text(item) }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(selected.isEmpty ? "Select" : selected)
+                    .font(.system(size: 12, weight: .medium)).lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .help(help)
     }
 
     private func sectionHeader(_ title: String, count: Int) -> some View {

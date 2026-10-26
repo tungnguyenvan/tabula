@@ -25,6 +25,44 @@ final class DriverIntegrationTests: XCTestCase {
         await driver.close()
     }
 
+    func testPostgresDatabases() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_PG_PORT not set")
+        }
+        let config = ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula")
+        let driver = try await DriverFactory.connect(config, password: "tabula")
+        _ = try? await driver.execute("CREATE DATABASE tabula_switch_test")
+        let databases = try await driver.serverDatabases()
+        XCTAssertTrue(databases.contains("tabula"), "\(databases)")
+        XCTAssertTrue(databases.contains("tabula_switch_test"), "\(databases)")
+        XCTAssertFalse(databases.contains("template0"))
+        XCTAssertEqual(databases, databases.sorted())
+        let current = await driver.currentDatabase()
+        XCTAssertEqual(current, "tabula")
+        await driver.close()
+
+        var other = config
+        other.database = "tabula_switch_test"
+        let switched = try await DriverFactory.connect(other, password: "tabula")
+        let switchedCurrent = await switched.currentDatabase()
+        XCTAssertEqual(switchedCurrent, "tabula_switch_test")
+        await switched.close()
+
+        let cleanup = try await DriverFactory.connect(config, password: "tabula")
+        _ = try? await cleanup.execute("DROP DATABASE tabula_switch_test")
+        await cleanup.close()
+
+        // Other engines list their databases as schemas.
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-\(UUID().uuidString).sqlite").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let sqlite = try SQLiteDriver(path: path)
+        let sqliteDatabases = try await sqlite.serverDatabases()
+        let sqliteCurrent = await sqlite.currentDatabase()
+        XCTAssertEqual(sqliteDatabases, [])
+        XCTAssertNil(sqliteCurrent)
+        await sqlite.close()
+    }
+
     func testPostgres() async throws {
         guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
             throw XCTSkip("TABULA_TEST_PG_PORT not set")

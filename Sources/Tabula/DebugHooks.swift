@@ -30,9 +30,16 @@ enum DebugHooks {
         (environment["TABULA_DEBUG_OPEN"] ?? "").split(separator: ",").compactMap { UUID(uuidString: String($0)) }
     }
 
+    private static var switchedDatabase = false
+
     static func workspaceConnected(_ model: WorkspaceModel) {
         if environment["TABULA_DEBUG_PALETTE"] != nil { model.showPalette = true }
         if environment["TABULA_DEBUG_CONSOLE"] != nil { model.showConsole = true }
+        // TABULA_DEBUG_DATABASE: move the window to this database once connected (PostgreSQL).
+        if let database = environment["TABULA_DEBUG_DATABASE"], !switchedDatabase {
+            switchedDatabase = true
+            Task { await model.openDatabase(database) }
+        }
         checkMinimumWidth()
         if environment["TABULA_DEBUG_DIAGRAM"] != nil { model.openDiagram() }
         if environment["TABULA_DEBUG_METRICS"] != nil { model.openMetrics() }

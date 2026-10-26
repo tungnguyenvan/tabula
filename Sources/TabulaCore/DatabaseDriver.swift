@@ -63,6 +63,24 @@ extension DatabaseDriver {
         }
     }
 
+    /// The other databases on the server this login may open (PostgreSQL, where a connection reaches one
+    /// database). Empty for the rest: MySQL and MongoDB list their databases as schemas.
+    public func serverDatabases() async throws -> [String] {
+        guard kind == .postgres else { return [] }
+        let result = try await execute("""
+            SELECT datname FROM pg_database
+            WHERE datallowconn AND NOT datistemplate AND has_database_privilege(datname, 'CONNECT')
+            ORDER BY datname
+            """)
+        return result.rows.compactMap { $0.first ?? nil }
+    }
+
+    /// The database this connection is in (PostgreSQL); nil for the others.
+    public func currentDatabase() async -> String? {
+        guard kind == .postgres else { return nil }
+        return (try? await execute("SELECT current_database()")).flatMap { $0.rows.first?.first ?? nil }
+    }
+
     /// Server version as reported by the database, e.g. "PostgreSQL 16.11 on aarch64…".
     public func serverVersion() async -> String? {
         if kind == .mongodb {

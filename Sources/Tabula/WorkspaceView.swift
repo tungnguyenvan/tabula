@@ -88,7 +88,7 @@ struct WorkspaceView: View {
         }
         .toolbar {
             ConnectionPillItem(pill: ConnectionPill(config: model.config, status: model.status,
-                                                    location: model.selectedSchema.isEmpty ? nil : model.selectedSchema,
+                                                    location: location,
                                                     serverVersion: model.serverVersion, connectedAt: model.connectedAt,
                                                     onReconnect: { Task { await model.reconnect() } }))
             ToolbarItem(placement: .navigation) {
@@ -164,6 +164,12 @@ struct WorkspaceView: View {
             // minimum, which would stop the window from getting narrower than the widest row.
             .frame(minWidth: 0, maxWidth: .infinity)
         }
+    }
+
+    /// "database.schema" on PostgreSQL, where both can change; the schema (or database) elsewhere.
+    private var location: String? {
+        let parts = [model.currentDatabase, model.selectedSchema].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: ".")
     }
 
     private var console: some View {
@@ -475,7 +481,7 @@ struct ConnectionInfoPopover: View {
         } else {
             rows.append(("Host", "\(config.host):\(config.port)"))
             if !config.user.isEmpty { rows.append(("User", config.user)) }
-            let databaseLabel = config.kind == .postgres ? "Schema" : "Database"
+            let databaseLabel = config.kind == .postgres ? "Database.Schema" : "Database"
             if let location { rows.append((databaseLabel, location)) }
             rows.append(("TLS", config.tls.displayName))
         }
