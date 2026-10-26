@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+- Tables in AI chat answers showed as rows of pipes; they now show as tables, with a header row, the columns aligned as the Markdown says, and a sideways scroll when wide ([#27](https://github.com/tungnguyenvan/tabula/issues/27)).
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query

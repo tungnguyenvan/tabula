@@ -307,34 +307,6 @@ final class AIChatModel {
     }
 }
 
-/// Text and fenced SQL blocks of an answer, so code gets Insert / Run / Copy.
-enum ChatSegment: Equatable {
-    case text(String)
-    case code(String)
-
-    static func split(_ reply: String) -> [ChatSegment] {
-        var segments: [ChatSegment] = []
-        var rest = Substring(reply)
-        while let open = rest.range(of: "```") {
-            let before = rest[..<open.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
-            if !before.isEmpty { segments.append(.text(before)) }
-            var body = rest[open.upperBound...]
-            // Skip the language tag on the fence line.
-            if let newline = body.firstIndex(of: "\n") { body = body[body.index(after: newline)...] }
-            guard let close = body.range(of: "```") else {
-                segments.append(.code(body.trimmingCharacters(in: .whitespacesAndNewlines)))
-                return segments
-            }
-            let code = body[..<close.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
-            if !code.isEmpty { segments.append(.code(code)) }
-            rest = body[close.upperBound...]
-        }
-        let tail = rest.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tail.isEmpty { segments.append(.text(tail)) }
-        return segments
-    }
-}
-
 struct AIChatView: View {
     let workspace: WorkspaceModel
     @Bindable var chat: AIChatModel
@@ -551,6 +523,8 @@ private struct MessageView: View {
                             .textSelection(.enabled)
                     case .code(let sql):
                         CodeBlock(sql: sql, insert: insert, run: run)
+                    case .table(let table):
+                        TableBlock(table: table)
                     }
                 }
             }
@@ -629,6 +603,48 @@ private struct ToolStepView: View {
         case .listTables: return "list.bullet.rectangle"
         case .describeTable: return "tablecells"
         case .runQuery: return "play.rectangle"
+        }
+    }
+}
+
+/// A Markdown table from an answer, as a grid with a header row; wide tables scroll sideways.
+private struct TableBlock: View {
+    let table: MarkdownTable
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            Grid(alignment: .leading, horizontalSpacing: Layout.barPadding * 2, verticalSpacing: Layout.barPadding / 2) {
+                GridRow {
+                    ForEach(Array(table.header.enumerated()), id: \.offset) { column, title in
+                        Self.text(title).fontWeight(.semibold)
+                            .gridColumnAlignment(Self.alignment(table.alignments[column]))
+                    }
+                }
+                Divider().gridCellUnsizedAxes(.horizontal)
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
+                    GridRow {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in Self.text(cell) }
+                    }
+                }
+            }
+            .textSelection(.enabled)
+            .padding(Layout.barPadding)
+        }
+        .scrollIndicators(.automatic)
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: Layout.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: Layout.cornerRadius).strokeBorder(Color(nsColor: .separatorColor)))
+    }
+
+    private static func text(_ markdown: String) -> Text {
+        Text((try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+             ?? AttributedString(markdown))
+    }
+
+    private static func alignment(_ alignment: MarkdownTable.Alignment) -> HorizontalAlignment {
+        switch alignment {
+        case .leading: .leading
+        case .center: .center
+        case .trailing: .trailing
         }
     }
 }
