@@ -2,8 +2,10 @@
 //
 //   node demo/audio/make-audio.mjs <directory>
 //
-// music.wav: an upbeat electronic loop (118 BPM, Am–F–C–G) with pads, bass, an arpeggio and drums.
-// Effects: click (mouse), key1–key4 (typing), keycap (Tab, ⌘↩), whoosh (scene changes), pop (titles), chime (answers).
+// music.wav: calm and airy, in the manner of product videos: warm major-seventh chords on a soft electric
+// piano, a mallet arpeggio, a pad, a sub bass and a light shaker, with a stereo echo for space (96 BPM).
+// Effects, all quiet: click (mouse), key1–key4 (typing), keycap (Tab, ⌘↩), tink (titles, windows),
+// chime (an answer arriving).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -12,7 +14,7 @@ const directory = process.argv[2] ?? "public/audio";
 mkdirSync(directory, { recursive: true });
 
 // A fixed seed, so every render sounds the same.
-let seed = 7;
+let seed = 11;
 const random = () => {
   seed = (seed * 1664525 + 1013904223) >>> 0;
   return seed / 4294967296;
@@ -21,15 +23,15 @@ const noise = () => random() * 2 - 1;
 
 const buffer = (seconds) => [new Float32Array(Math.ceil(seconds * rate)), new Float32Array(Math.ceil(seconds * rate))];
 
-const writeWav = (name, [left, right]) => {
+const writeWav = (name, [left, right], peakTarget = 0.89) => {
   const frames = left.length;
   const data = Buffer.alloc(44 + frames * 4);
   data.write("RIFF", 0);
   data.writeUInt32LE(36 + frames * 4, 4);
   data.write("WAVEfmt ", 8);
   data.writeUInt32LE(16, 16);
-  data.writeUInt16LE(1, 20); // PCM
-  data.writeUInt16LE(2, 22); // stereo
+  data.writeUInt16LE(1, 20);
+  data.writeUInt16LE(2, 22);
   data.writeUInt32LE(rate, 24);
   data.writeUInt32LE(rate * 4, 28);
   data.writeUInt16LE(4, 32);
@@ -38,7 +40,7 @@ const writeWav = (name, [left, right]) => {
   data.writeUInt32LE(frames * 4, 40);
   let peak = 0;
   for (let i = 0; i < frames; i++) peak = Math.max(peak, Math.abs(left[i]), Math.abs(right[i]));
-  const gain = peak > 0.89 ? 0.89 / peak : 1;
+  const gain = peak > 0 ? peakTarget / peak : 1;
   for (let i = 0; i < frames; i++) {
     data.writeInt16LE(Math.round(Math.max(-1, Math.min(1, left[i] * gain)) * 32767), 44 + i * 4);
     data.writeInt16LE(Math.round(Math.max(-1, Math.min(1, right[i] * gain)) * 32767), 46 + i * 4);
@@ -48,7 +50,6 @@ const writeWav = (name, [left, right]) => {
 
 const midi = (note) => 440 * Math.pow(2, (note - 69) / 12);
 
-/// Adds a voice to the buffer from `start` for `length` seconds, panned (-1 left … 1 right).
 const add = ([left, right], start, length, pan, sample) => {
   const from = Math.floor(start * rate);
   const count = Math.floor(length * rate);
@@ -62,129 +63,117 @@ const add = ([left, right], start, length, pan, sample) => {
 
 // MARK: Music
 
-const bpm = 118;
+const bpm = 96;
 const beat = 60 / bpm;
 const bar = beat * 4;
-const seconds = 42;
+const seconds = 50;
 const music = buffer(seconds);
 const bars = Math.ceil(seconds / bar);
-// Am, F, C, G: roots and chord tones (MIDI).
+// Fmaj7, Am7, Dm9, B♭maj7: roots and voicings (MIDI), warm and open.
 const chords = [
-  { root: 45, notes: [57, 60, 64] },
-  { root: 41, notes: [53, 57, 60] },
-  { root: 48, notes: [55, 60, 64] },
-  { root: 43, notes: [55, 59, 62] },
+  { root: 41, notes: [57, 60, 64, 65] },
+  { root: 45, notes: [55, 60, 64, 67] },
+  { root: 38, notes: [57, 60, 64, 65] },
+  { root: 46, notes: [57, 62, 65, 69] },
 ];
 
-const soft = (t, frequency) => Math.sin(2 * Math.PI * frequency * t) + 0.3 * Math.sin(4 * Math.PI * frequency * t) + 0.12 * Math.sin(6 * Math.PI * frequency * t);
+/// A soft electric piano: a sine with a quiet bell partial, decaying slowly.
+const piano = (frequency, gain) => (t) =>
+  (Math.sin(2 * Math.PI * frequency * t) + 0.18 * Math.sin(2 * Math.PI * frequency * 3.01 * t) * Math.exp(-t * 6)) *
+  Math.min(1, t / 0.008) * Math.exp(-t * 1.6) * gain;
+
+/// A mallet: a pure tone with a short wooden partial.
+const mallet = (frequency, gain) => (t) =>
+  (Math.sin(2 * Math.PI * frequency * t) + 0.35 * Math.sin(2 * Math.PI * frequency * 4 * t) * Math.exp(-t * 40)) *
+  Math.min(1, t / 0.004) * Math.exp(-t * 7) * gain;
 
 for (let index = 0; index < bars; index++) {
   const chord = chords[index % chords.length];
   const start = index * bar;
-  // Pad: three notes, each two slightly detuned voices, slow in and out.
+  // Piano: the chord on beat one and, softer, on the "and" of two.
+  for (const [offset, gain] of [[0, 0.05], [beat * 1.5, 0.03]]) {
+    chord.notes.forEach((note, voice) => add(music, start + offset + voice * 0.012, bar, (voice - 1.5) * 0.3, piano(midi(note), gain)));
+  }
+  // Pad: the chord an octave up, breathing in and out under everything.
   for (const note of chord.notes) {
-    for (const detune of [-0.07, 0.07]) {
-      const frequency = midi(note + detune);
-      add(music, start, bar + 0.3, detune < 0 ? -0.5 : 0.5, (t) => {
-        const envelope = Math.min(1, t / 0.35) * Math.min(1, Math.max(0, (bar + 0.3 - t) / 0.4));
-        return soft(t, frequency) * envelope * 0.028;
-      });
-    }
+    const frequency = midi(note + 12);
+    add(music, start, bar + 0.5, 0, (t) =>
+      (Math.sin(2 * Math.PI * frequency * t) + Math.sin(2 * Math.PI * frequency * 1.003 * t)) *
+      Math.sin(Math.PI * Math.min(1, t / (bar + 0.5))) * 0.006);
   }
-  // Bass: eighth notes on the root, from the second bar.
+  // Sub bass: the root, held, from the second bar.
   if (index >= 1) {
+    const frequency = midi(chord.root - 12);
+    add(music, start, bar, 0, (t) => Math.sin(2 * Math.PI * frequency * t) * Math.min(1, t / 0.05) * Math.exp(-t * 0.6) * 0.09);
+  }
+  // Mallet arpeggio in eighths, from the third bar, up the chord and back.
+  if (index >= 2) {
+    const order = [0, 1, 2, 3, 2, 1, 2, 3];
     for (let step = 0; step < 8; step++) {
-      const frequency = midi(chord.root - 12 + (step % 4 === 3 ? 12 : 0));
-      add(music, start + (step * beat) / 2, beat / 2, 0, (t) => Math.tanh(1.6 * Math.sin(2 * Math.PI * frequency * t)) * Math.exp(-t * 7) * 0.13);
+      const note = chord.notes[order[step]] + 12;
+      add(music, start + (step * beat) / 2, 0.6, step % 2 === 0 ? -0.4 : 0.4, mallet(midi(note), step === 0 ? 0.045 : 0.03));
     }
   }
-  // Arpeggio: sixteenths up the chord, an octave higher, from the second bar; lifts in the last bars.
-  if (index >= 1) {
-    const pattern = [0, 1, 2, 1, 0, 2, 1, 2];
-    for (let step = 0; step < 16; step++) {
-      const note = chord.notes[pattern[step % pattern.length]] + 12 + (index >= bars - 4 && step % 4 === 0 ? 12 : 0);
-      const frequency = midi(note);
-      add(music, start + (step * beat) / 4, 0.25, step % 2 === 0 ? -0.35 : 0.35, (t) => {
-        const triangle = (2 / Math.PI) * Math.asin(Math.sin(2 * Math.PI * frequency * t));
-        return triangle * Math.exp(-t * 18) * 0.06;
-      });
-    }
-  }
-  // Drums: kick on every beat from the second bar, hats on the off-beats from the third, a clap on 2 and 4 from the fifth.
-  for (let step = 0; step < 4; step++) {
-    const at = start + step * beat;
-    if (index >= 1) {
-      add(music, at, 0.35, 0, (t) => Math.sin(2 * Math.PI * (45 * t + (80 / 18) * (1 - Math.exp(-t * 18)))) * Math.exp(-t * 9) * 0.5);
-    }
-    if (index >= 2) {
+  // A light shaker on the off-beats and a soft low pulse on one and three, from the fifth bar.
+  if (index >= 4) {
+    for (let step = 0; step < 8; step++) {
       let last = 0;
-      add(music, at + beat / 2, 0.06, 0.4, (t) => {
+      add(music, start + (step * beat) / 2, 0.08, 0.3, (t) => {
         const value = noise();
         const high = value - last;
         last = value;
-        return high * Math.exp(-t * 70) * 0.06;
+        return high * Math.exp(-t * 60) * (step % 2 === 1 ? 0.018 : 0.008);
       });
     }
-    if (index >= 4 && (step === 1 || step === 3)) {
-      add(music, at, 0.2, -0.1, (t) => (noise() * 0.7 + Math.sin(2 * Math.PI * 190 * t) * 0.3) * Math.exp(-t * 22) * 0.12);
+    for (const step of [0, 2]) {
+      add(music, start + step * beat, 0.3, 0, (t) => Math.sin(2 * Math.PI * (52 * t + (40 / 25) * (1 - Math.exp(-t * 25)))) * Math.exp(-t * 12) * 0.12);
     }
   }
 }
 
-// Ducks everything but the kick a little on each beat, for the pumping feel of the genre.
+// A stereo echo (dotted eighth, left and right in turn) gives the room.
+const delay = Math.floor(beat * 0.75 * rate);
+for (let i = delay; i < music[0].length; i++) {
+  music[0][i] += music[1][i - delay] * 0.28;
+  music[1][i] += music[0][i - delay] * 0.28;
+}
 for (let i = 0; i < music[0].length; i++) {
-  const t = i / rate;
-  const sinceBeat = t % beat;
-  const duck = t >= bar ? 1 - 0.35 * Math.exp(-sinceBeat * 9) : 1;
-  music[0][i] = Math.tanh(music[0][i] * 1.4 * duck);
-  music[1][i] = Math.tanh(music[1][i] * 1.4 * duck);
+  music[0][i] = Math.tanh(music[0][i] * 1.2);
+  music[1][i] = Math.tanh(music[1][i] * 1.2);
 }
 writeWav("music.wav", music);
 
 // MARK: Effects
 
-const effect = (name, length, sample, pan = 0) => {
+const effect = (name, length, sample, peak) => {
   const sound = buffer(length);
-  add(sound, 0, length, pan, sample);
-  writeWav(name, sound);
+  add(sound, 0, length, 0, sample);
+  writeWav(name, sound, peak);
 };
 
-// Mouse click: a short bright tick with a little body.
-effect("click.wav", 0.06, (t) => (noise() * Math.exp(-t * 400) * 0.5 + Math.sin(2 * Math.PI * 2400 * t) * Math.exp(-t * 180) * 0.4 + Math.sin(2 * Math.PI * 600 * t) * Math.exp(-t * 90) * 0.3));
+// Mouse click: a small, soft tick, like a trackpad.
+effect("click.wav", 0.05, (t) => (Math.sin(2 * Math.PI * 1500 * t) * Math.exp(-t * 260) + noise() * Math.exp(-t * 900) * 0.25), 0.35);
 
-// Typing: four slightly different keys, so a run of them doesn't sound mechanical.
+// Typing: four soft keys, slightly different, so a run of them doesn't sound mechanical.
 for (let index = 1; index <= 4; index++) {
-  const pitch = 0.85 + random() * 0.3;
-  let last = 0;
-  effect(`key${index}.wav`, 0.07, (t) => {
-    const value = noise();
-    const bright = value - last;
-    last = value;
-    return bright * Math.exp(-t * 260) * 0.45 + Math.sin(2 * Math.PI * 170 * pitch * t) * Math.exp(-t * 60) * 0.35;
-  });
-}
-
-// A bigger key (Tab, ⌘↩): a deeper thock.
-effect("keycap.wav", 0.14, (t) => noise() * Math.exp(-t * 160) * 0.35 + Math.sin(2 * Math.PI * 120 * t) * Math.exp(-t * 35) * 0.6);
-
-// Whoosh: noise through a filter that opens and closes, swelling in and out.
-{
+  const pitch = 0.9 + random() * 0.2;
   let low = 0;
-  effect("whoosh.wav", 0.5, (t) => {
-    const shape = Math.sin((Math.PI * t) / 0.5);
-    const cutoff = 0.02 + 0.25 * shape;
-    low += cutoff * (noise() - low);
-    return low * shape * shape * 1.6;
-  });
+  effect(`key${index}.wav`, 0.05, (t) => {
+    low += 0.35 * (noise() - low);
+    return low * Math.exp(-t * 320) * 0.6 + Math.sin(2 * Math.PI * 220 * pitch * t) * Math.exp(-t * 120) * 0.4;
+  }, 0.22);
 }
 
-// Pop: a quick falling blip for titles and windows appearing.
-effect("pop.wav", 0.12, (t) => Math.sin(2 * Math.PI * (500 * t + 400 * (1 - Math.exp(-t * 40)) / 40)) * Math.exp(-t * 30) * 0.5);
+// Tab, ⌘↩: a rounder key.
+effect("keycap.wav", 0.12, (t) => Math.sin(2 * Math.PI * 150 * t) * Math.exp(-t * 45) + noise() * Math.exp(-t * 400) * 0.15, 0.32);
 
-// Chime: two bell notes, for an answer arriving.
-effect("chime.wav", 1.2, (t) => {
-  const bell = (frequency, delay) => (t < delay ? 0 : (Math.sin(2 * Math.PI * frequency * (t - delay)) + 0.4 * Math.sin(2 * Math.PI * frequency * 2.76 * (t - delay))) * Math.exp(-(t - delay) * 4));
-  return (bell(midi(76), 0) + bell(midi(83), 0.09)) * 0.22;
-});
+// Tink: a gentle glassy note for titles and windows appearing.
+effect("tink.wav", 0.6, (t) => (Math.sin(2 * Math.PI * midi(88) * t) + 0.3 * Math.sin(2 * Math.PI * midi(88) * 2.7 * t) * Math.exp(-t * 20)) * Math.exp(-t * 9), 0.18);
+
+// Chime: two soft bell notes, a fifth apart, for an answer arriving.
+effect("chime.wav", 1.6, (t) => {
+  const bell = (frequency, start) => (t < start ? 0 : (Math.sin(2 * Math.PI * frequency * (t - start)) + 0.25 * Math.sin(2 * Math.PI * frequency * 2.76 * (t - start)) * Math.exp(-(t - start) * 8)) * Math.exp(-(t - start) * 3.2));
+  return bell(midi(79), 0) + bell(midi(86), 0.11);
+}, 0.3);
 
 console.log(`Wrote music.wav (${seconds} s) and effects to ${directory}`);
