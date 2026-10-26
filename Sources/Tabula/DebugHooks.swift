@@ -22,6 +22,8 @@ enum DebugHooks {
     static var connectionToOpen: UUID? { connectionsToOpen.first }
     /// TABULA_DEBUG_EDIT: a connection UUID whose editor opens on the welcome window.
     static var connectionToEdit: UUID? { environment["TABULA_DEBUG_EDIT"].flatMap(UUID.init(uuidString:)) }
+    /// TABULA_DEBUG_FORM_HOST: text entered in that editor's Host field, as if pasted (e.g. a connection URL).
+    static var formHost: String? { environment["TABULA_DEBUG_FORM_HOST"] }
 
     /// TABULA_DEBUG_OPEN may list several ids separated by commas.
     static var connectionsToOpen: [UUID] {

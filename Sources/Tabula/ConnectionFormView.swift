@@ -10,6 +10,8 @@ struct ConnectionFormView: View {
     let onCancel: () -> Void
 
     @State private var testState: TestState = .idle
+    /// Set while a pasted URL fills the form, so changing the type doesn't reset the port and TLS it set.
+    @State private var applyingURL = false
 
     enum TestState: Equatable {
         case idle, testing, success(String), failure(String)
@@ -23,6 +25,7 @@ struct ConnectionFormView: View {
                         ForEach(DatabaseKind.allCases) { Text($0.displayName).tag($0) }
                     }
                     .onChange(of: config.kind) { old, new in
+                        if applyingURL { applyingURL = false; return }
                         if config.port == old.defaultPort || config.port == 0 { config.port = new.defaultPort }
                         if new == .mysql && config.tls == .disable { config.tls = .require }
                         if new != .mongodb { config.srv = nil; config.authSource = nil }
@@ -44,6 +47,12 @@ struct ConnectionFormView: View {
                 } else {
                     Section("Server") {
                         TextField("Host", text: $config.host, prompt: Text(hostPrompt))
+                            .help("Paste a connection URL, such as postgresql://user:password@host:5432/db, to fill in every field.")
+                            .onChange(of: config.host) { old, host in
+                                // Typing "postgres://…" key by key, or deleting from the end, must stay typing.
+                                let typed = host.count == old.count + 1 && host.hasPrefix(old)
+                                if !typed && !old.hasPrefix(host) { applyURL(host, replacing: old) }
+                            }
                         if config.kind == .mongodb {
                             Toggle("DNS seed list (mongodb+srv)", isOn: srv)
                                 .help("For hosts such as cluster0.example.mongodb.net (MongoDB Atlas). The port comes from DNS.")
@@ -53,16 +62,16 @@ struct ConnectionFormView: View {
                         }
                         if config.kind == .redis {
                             TextField("User", text: $config.user, prompt: Text("optional (ACL user, Redis 6+)"))
-                            SecureField("Password", text: $password, prompt: Text("optional"))
+                            passwordField(prompt: "optional")
                             TextField("Database", text: $config.database, prompt: Text("0"))
                         } else if config.kind == .mongodb {
                             TextField("User", text: $config.user, prompt: Text("optional"))
-                            SecureField("Password", text: $password, prompt: Text("optional"))
+                            passwordField(prompt: "optional")
                             TextField("Database", text: $config.database, prompt: Text(Defaults.Mongo.defaultDatabase))
                             TextField("Auth database", text: authSource, prompt: Text(Defaults.Mongo.authDatabase))
                         } else {
                             TextField("User", text: $config.user)
-                            SecureField("Password", text: $password)
+                            passwordField(prompt: nil)
                             TextField("Database", text: $config.database, prompt: Text(config.kind == .postgres ? "defaults to the user name" : "optional"))
                         }
                         Picker("TLS", selection: $config.tls) {
@@ -91,6 +100,49 @@ struct ConnectionFormView: View {
         }
         .frame(width: 520)
         .navigationTitle(isNew ? "New Connection" : "Edit Connection")
+        #if DEBUG
+        .onAppear {
+            if let host = DebugHooks.formHost { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { config.host = host } }
+        }
+        #endif
+    }
+
+    /// The password, with a way to decode it when it holds URL escapes (`%3F` for `?`): some dashboards show
+    /// passwords that way, and the server would get the escapes as they are.
+    @ViewBuilder
+    private func passwordField(prompt: String?) -> some View {
+        SecureField("Password", text: $password, prompt: prompt.map { Text($0) })
+        if let decoded = PasswordEscapes.decoded(password) {
+            LabeledContent {
+                Button("Decode") { password = decoded }
+                    .help("Replaces each %xx escape with the character it stands for, such as %3F with ?.")
+            } label: {
+                Label("This password contains URL escapes such as %3F. If you copied it from a URL or a dashboard, decode it.",
+                      systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Fills the form from a connection URL pasted into the Host field.
+    private func applyURL(_ text: String, replacing oldHost: String) {
+        guard text.contains("://"), let (parsed, parsedPassword) = ConnectionConfig.parse(url: text) else { return }
+        var filled = parsed
+        filled.id = config.id
+        if filled.name.isEmpty { filled.name = config.name }
+        if filled.tag == ConnectionConfig().tag { filled.tag = config.tag }
+        filled.connectTimeout = config.connectTimeout
+        let kindBeforeURL = config.kind
+        if filled.kind != config.kind { applyingURL = true }
+        config = filled
+        // A URL without a password keeps the saved one only for the same server; it isn't sent to another.
+        if let parsedPassword {
+            password = parsedPassword
+        } else if filled.host != oldHost || filled.kind != kindBeforeURL {
+            password = ""
+        }
+        testState = .idle
     }
 
     private var isValid: Bool {
@@ -159,7 +211,7 @@ struct ConnectionFormView: View {
             let text = version.map { String($0.prefix(Layout.versionLength)) } ?? "Connected"
             testState = .success(text)
         } catch {
-            testState = .failure(error.localizedDescription)
+            testState = .failure(PasswordEscapes.message(for: error, password: password))
         }
     }
 

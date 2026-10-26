@@ -72,6 +72,8 @@ Free, no usage limits, keyboard-first.</p>
 - Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
 - Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
 - Copy a connection as a URL (`postgresql://user@host:5432/db?sslmode=require`), with or without the password, from the connection's context menu.
+- **Paste a connection URL** into Host (`postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and the URLs TablePlus copies) and every field fills in, the password too. Escaped characters are decoded, so `p%3Fss` becomes `p?ss`.
+- A password that still holds URL escapes, as some dashboards show them (`%3F` for `?`), gets a **Decode** button, and a failed login says when escapes are the likely cause.
 
 **Several connections in one window**
 - Open another connection from the database button in the toolbar, or from the Connections window: it joins the current window instead of replacing it.
