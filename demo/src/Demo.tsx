@@ -13,147 +13,193 @@ import {
 
 export const FPS = 30;
 
-/// Every picture is a real screenshot or recording of Tabula (scripts/render-demo.sh copies them into public/).
+/// Every picture is Tabula itself: README screenshots and recordings of a debug build (scripts/render-demo.sh).
 const font = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif";
 const accent = "#4f8cff";
-const frameWidth = 1440;
-const fade = 12;
+const stageWidth = 1640;
+/// Where the camera's frame starts, under the titles.
+const viewportTop = 175;
+/// The zoom that shows a whole 1300×760 window in that frame.
+const fit = 0.92;
+const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
+const ease = Easing.inOut(Easing.cubic);
 
-/// Fades a scene in and out at its edges.
-const useSceneOpacity = (duration: number) => {
+// MARK: Building blocks
+
+/// Moving light behind every scene, so nothing sits still.
+const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const frame = useCurrentFrame();
-  return interpolate(frame, [0, fade, duration - fade, duration], [0, 1, 1, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const x = 30 + Math.sin(frame / 40) * 12;
+  const y = Math.cos(frame / 55) * 10;
+  return (
+    <AbsoluteFill
+      style={{
+        background: `radial-gradient(ellipse at ${x}% ${y}%, #23345a 0%, #0d1018 55%, #07080c 100%)`,
+        fontFamily: font,
+        color: "white",
+        overflow: "hidden",
+      }}
+    >
+      {children}
+    </AbsoluteFill>
+  );
 };
 
-const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <AbsoluteFill
-    style={{
-      background: "radial-gradient(ellipse at 30% 0%, #1d2a44 0%, #0d1018 55%, #08090d 100%)",
-      fontFamily: font,
-      color: "white",
-    }}
-  >
-    {children}
-  </AbsoluteFill>
-);
-
-/// The title and one line under it, sliding in.
-const Caption: React.FC<{ title: string; text: string; delay?: number }> = ({ title, text, delay = 0 }) => {
+/// Scenes come in with a quick zoom and leave with a fade.
+const Enter: React.FC<{ duration: number; children: React.ReactNode }> = ({ duration, children }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const enter = spring({ frame: frame - delay, fps, config: { damping: 200 } });
+  const enter = spring({ frame, fps, config: { damping: 18, stiffness: 160 } });
+  const leave = interpolate(frame, [duration - 8, duration], [1, 0], clamp);
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 56,
-        left: 0,
-        right: 0,
-        textAlign: "center",
-        opacity: enter,
-        transform: `translateY(${(1 - enter) * 24}px)`,
-      }}
-    >
-      <div style={{ fontSize: 54, fontWeight: 700, letterSpacing: -1 }}>{title}</div>
-      <div style={{ fontSize: 28, marginTop: 10, color: "rgba(255,255,255,0.72)" }}>{text}</div>
+    <AbsoluteFill style={{ opacity: Math.min(enter * 1.5, 1) * leave, transform: `scale(${0.9 + 0.1 * enter})` }}>
+      {children}
+    </AbsoluteFill>
+  );
+};
+
+/// A title whose words pop in one after another.
+const Title: React.FC<{ text: string; sub?: string; at?: number; top?: number }> = ({ text, sub, at = 0, top = 48 }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const words = text.split(" ");
+  const subIn = spring({ frame: frame - at - words.length * 3 - 4, fps, config: { damping: 200 } });
+  return (
+    <div style={{ position: "absolute", top, left: 0, right: 0, textAlign: "center", zIndex: 10 }}>
+      <div style={{ fontSize: 60, fontWeight: 800, letterSpacing: -1.5, textShadow: "0 8px 30px rgba(0,0,0,0.6)" }}>
+        {words.map((word, index) => {
+          const pop = spring({ frame: frame - at - index * 3, fps, config: { damping: 12, stiffness: 200 } });
+          return (
+            <span key={index} style={{ display: "inline-block", marginRight: 16, opacity: Math.min(pop * 2, 1), transform: `translateY(${(1 - pop) * 40}px) scale(${0.6 + 0.4 * pop})` }}>
+              {word}
+            </span>
+          );
+        })}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 28, marginTop: 8, color: "rgba(255,255,255,0.75)", opacity: subIn, transform: `translateY(${(1 - subIn) * 14}px)` }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 };
 
-/// A screenshot in a soft shadow, slowly moving toward `zoom` around `origin`.
-const Shot: React.FC<{ src: string; duration: number; zoom?: number; origin?: string }> = ({
-  src,
-  duration,
-  zoom = 1.08,
-  origin = "50% 50%",
-}) => {
+type Point = { at: number; x: number; y: number };
+type Camera = { at: number; x: number; y: number; zoom: number };
+
+/// Interpolates keyframes; before the first and after the last they hold.
+const along = <T extends { at: number }>(keys: T[], frame: number, fields: (keyof T)[]): T => {
+  if (frame <= keys[0].at) return keys[0];
+  for (let index = 1; index < keys.length; index++) {
+    const from = keys[index - 1], to = keys[index];
+    if (frame <= to.at) {
+      const t = ease((frame - from.at) / Math.max(1, to.at - from.at));
+      const result = { ...to };
+      for (const field of fields) {
+        (result[field] as number) = (from[field] as number) + ((to[field] as number) - (from[field] as number)) * t;
+      }
+      return result;
+    }
+  }
+  return keys[keys.length - 1];
+};
+
+/// The macOS arrow, with a ring where it clicks.
+const Cursor: React.FC<{ path: Point[]; clicks: number[]; zoom: number; width: number; height: number }> = ({ path, clicks, zoom, width, height }) => {
   const frame = useCurrentFrame();
-  const scale = interpolate(frame, [0, duration], [1, zoom], { easing: Easing.inOut(Easing.quad) });
+  const at = along(path, frame, ["x", "y"]);
+  const appear = interpolate(frame, [path[0].at - 6, path[0].at], [0, 1], clamp);
+  const pressed = clicks.some((click) => frame >= click && frame < click + 5);
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 200,
-        left: (1920 - frameWidth) / 2,
-        width: frameWidth,
-        height: 820,
-        borderRadius: 18,
-        overflow: "hidden",
-        boxShadow: "0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)",
-        background: "#1b1b1d",
-      }}
-    >
-      <Img
-        src={staticFile(src)}
-        style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", transform: `scale(${scale})`, transformOrigin: origin }}
-      />
+    <div style={{ position: "absolute", left: at.x * width, top: at.y * height, transform: `scale(${1 / zoom})`, transformOrigin: "0 0", opacity: appear, zIndex: 5 }}>
+      {clicks.map((click) => {
+        const t = (frame - click) / 16;
+        if (t < 0 || t > 1) return null;
+        return (
+          <div key={click} style={{
+            position: "absolute", left: -40 * t - 4, top: -40 * t - 4, width: 80 * t + 8, height: 80 * t + 8, borderRadius: "50%",
+            border: `4px solid ${accent}`, opacity: 1 - t, background: "rgba(79,140,255,0.18)",
+          }} />
+        );
+      })}
+      <svg width="44" height="44" viewBox="0 0 24 24" style={{ transform: `scale(${pressed ? 0.85 : 1})`, filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.5))" }}>
+        <path d="M3 2 L3 19 L7.5 14.8 L10.4 21.5 L13.2 20.3 L10.4 13.8 L16.5 13.8 Z" fill="black" stroke="white" strokeWidth="1.4" strokeLinejoin="round" />
+      </svg>
     </div>
   );
 };
 
-const ShotScene: React.FC<{
-  src: string;
-  title: string;
-  text: string;
-  duration: number;
-  zoom?: number;
-  origin?: string;
-  next?: string;
-}> = ({ src, title, text, duration, zoom, origin, next }) => {
+/// A window of the app on the stage. The camera moves and zooms toward points of the picture; the cursor and
+/// any overlays live in the picture's coordinates, so they follow it.
+const Stage: React.FC<{
+  src: (frame: number) => string;
+  aspect: number;
+  camera: Camera[];
+  cursor?: Point[];
+  clicks?: number[];
+  top?: number;
+  children?: React.ReactNode;
+}> = ({ src, aspect, camera, cursor, clicks = [], top = viewportTop, children }) => {
   const frame = useCurrentFrame();
-  const switchAt = duration / 2;
-  const second = next ? interpolate(frame, [switchAt - 8, switchAt + 8], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 0;
+  const view = along(camera, frame, ["x", "y", "zoom"]);
+  const width = stageWidth, height = stageWidth * aspect;
+  const viewport = 1080 - top;
+  const dx = -(view.x - 0.5) * width * view.zoom, dy = -(view.y - 0.5) * height * view.zoom;
+  // The camera works inside a frame below the titles, so zooming in never covers them.
   return (
-    <Background>
-      <AbsoluteFill style={{ opacity: useSceneOpacity(duration) }}>
-        <Caption title={title} text={text} delay={4} />
-        <AbsoluteFill style={{ opacity: 1 - second }}>
-          <Shot src={src} duration={duration} zoom={zoom} origin={origin} />
-        </AbsoluteFill>
-        {next && (
-          <AbsoluteFill style={{ opacity: second }}>
-            <Shot src={next} duration={duration} zoom={zoom} origin={origin} />
-          </AbsoluteFill>
-        )}
-      </AbsoluteFill>
-    </Background>
+    <div style={{ position: "absolute", left: 0, top, width: 1920, height: viewport, overflow: "hidden" }}>
+    <div style={{
+      position: "absolute", left: (1920 - width) / 2, top: (viewport - height) / 2, width, height,
+      transform: `translate(${dx}px, ${dy}px) scale(${view.zoom})`, transformOrigin: "50% 50%",
+    }}>
+      <div style={{ position: "absolute", inset: 0, borderRadius: 16, overflow: "hidden", boxShadow: "0 40px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.1)" }}>
+        <Img src={staticFile(src(frame))} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />
+      </div>
+      {children}
+      {cursor && <Cursor path={cursor} clicks={clicks} zoom={view.zoom} width={width} height={height} />}
+    </div>
+    </div>
   );
 };
+
+/// Recorded frames: frame-00001.jpg… in public/<folder>.
+const recording = (folder: string, frame: number) => `${folder}/frame-${String(Math.max(1, Math.round(frame))).padStart(5, "0")}.jpg`;
+
+/// Maps the scene's frame to a recorded frame through (scene frame, recorded frame) pairs, linearly in between.
+const timeline = (pairs: [number, number][]) => (frame: number) =>
+  interpolate(frame, pairs.map((pair) => pair[0]), pairs.map((pair) => pair[1]), clamp);
+
+const Badge: React.FC<{ text: string; show: boolean }> = ({ text, show }) =>
+  show ? (
+    <div style={{ position: "absolute", left: 40, bottom: 40, zIndex: 20, fontSize: 26, fontWeight: 600, padding: "10px 18px", borderRadius: 12, background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.15)" }}>
+      {text}
+    </div>
+  ) : null;
+
+// MARK: Scenes
 
 const kinds = ["PostgreSQL", "MySQL", "SQLite", "MongoDB", "Redis"];
 
 const Intro: React.FC<{ duration: number }> = ({ duration }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const icon = spring({ frame, fps, config: { damping: 12 } });
-  const title = spring({ frame: frame - 10, fps, config: { damping: 200 } });
+  const icon = spring({ frame, fps, config: { damping: 9, stiffness: 140 } });
+  const leave = interpolate(frame, [duration - 10, duration], [1, 0], clamp);
+  const zoomOut = interpolate(frame, [duration - 10, duration], [1, 1.6], clamp);
   return (
     <Background>
-      <AbsoluteFill style={{ opacity: useSceneOpacity(duration), alignItems: "center", justifyContent: "center" }}>
-        <Img src={staticFile("icon.png")} style={{ width: 220, height: 220, transform: `scale(${icon})` }} />
-        <div style={{ fontSize: 110, fontWeight: 800, letterSpacing: -3, marginTop: 24, opacity: title }}>Tabula</div>
-        <div style={{ fontSize: 36, color: "rgba(255,255,255,0.75)", marginTop: 8, opacity: title }}>
-          A fast, native database client for macOS
+      <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", opacity: leave, transform: `scale(${zoomOut})` }}>
+        <Img src={staticFile("icon.png")} style={{ width: 200, height: 200, transform: `scale(${icon}) rotate(${(1 - icon) * -25}deg)` }} />
+        <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula" top={10} at={6} /></div>
+        <div style={{ fontSize: 34, color: "rgba(255,255,255,0.8)", opacity: spring({ frame: frame - 16, fps, config: { damping: 200 } }) }}>
+          The fast, native database client for macOS
         </div>
-        <div style={{ display: "flex", gap: 16, marginTop: 44 }}>
+        <div style={{ display: "flex", gap: 14, marginTop: 36 }}>
           {kinds.map((kind, index) => {
-            const chip = spring({ frame: frame - 24 - index * 5, fps, config: { damping: 200 } });
+            const chip = spring({ frame: frame - 22 - index * 3, fps, config: { damping: 11, stiffness: 180 } });
             return (
-              <div
-                key={kind}
-                style={{
-                  fontSize: 26,
-                  padding: "10px 22px",
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  opacity: chip,
-                  transform: `translateY(${(1 - chip) * 16}px)`,
-                }}
-              >
+              <div key={kind} style={{ fontSize: 26, padding: "10px 22px", borderRadius: 999, background: "rgba(255,255,255,0.09)", border: "1px solid rgba(255,255,255,0.16)", opacity: Math.min(chip * 2, 1), transform: `translateY(${(1 - chip) * 50}px) scale(${chip})` }}>
                 {kind}
               </div>
             );
@@ -164,109 +210,175 @@ const Intro: React.FC<{ duration: number }> = ({ duration }) => {
   );
 };
 
-/// The recorded chat (about 10 frames a second): the question, the wait (sped up), the tool step and the answer.
-const recorded = { sent: 12, waitEnd: 164, answered: 204 };
+const Connections: React.FC<{ duration: number }> = ({ duration }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Every database, one app" sub="PostgreSQL · MySQL · SQLite · MongoDB · Redis" />
+      {/* Double-clicking the connection dives into it. */}
+      <Stage src={() => "shots/connections.png"} aspect={960 / 1440}
+        camera={[{ at: 0, x: 0.5, y: 0.5, zoom: 0.78 }, { at: 40, x: 0.55, y: 0.35, zoom: 1.05 }, { at: 62, x: 0.47, y: 0.29, zoom: 1.25 }, { at: duration, x: 0.47, y: 0.29, zoom: 4 }]}
+        cursor={[{ at: 6, x: 0.85, y: 0.8 }, { at: 40, x: 0.47, y: 0.29 }]} clicks={[50, 55]} />
+    </Enter>
+  </Background>
+);
 
-const sourceFrame = (frame: number) => {
-  if (frame < 90) return 1 + Math.floor(frame / 3);
-  if (frame < 150) return Math.round(interpolate(frame, [90, 150], [31, recorded.waitEnd]));
-  if (frame < 270) return Math.min(recorded.answered, recorded.waitEnd + Math.floor((frame - 150) / 3));
-  return recorded.answered;
-};
-
-const AIScene: React.FC<{ duration: number }> = ({ duration }) => {
+const Query: React.FC<{ duration: number }> = ({ duration }) => {
+  // Recorded at 15 frames a second: typing from frame 65 to 112, ⌘↩ at 118, results from 127.
+  const source = timeline([[0, 50], [20, 64], [116, 112], [124, 117], [130, 127], [duration, 150]]);
   const frame = useCurrentFrame();
-  const zoom = interpolate(frame, [20, 75], [1, 1.75], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.inOut(Easing.cubic),
-  });
-  const n = String(sourceFrame(frame)).padStart(5, "0");
-  const fastForward = frame >= 90 && frame < 150;
-  const step = frame < 90 ? 0 : frame < 165 ? 1 : 2;
-  const captions = [
-    { title: "Ask about your data", text: "In plain words, in the chat next to your tables" },
-    { title: "It looks things up", text: "A read-only query, on a read-only connection of its own" },
-    { title: "And answers from the real data", text: "Every step shown. On Production, it asks before each query" },
-  ];
   return (
     <Background>
-      <AbsoluteFill style={{ opacity: useSceneOpacity(duration) }}>
-        <Caption key={step} title={captions[step].title} text={captions[step].text} delay={[4, 90, 165][step]} />
-        <div
-          style={{
-            position: "absolute",
-            top: 200,
-            left: (1920 - frameWidth) / 2,
-            width: frameWidth,
-            height: 820,
-            borderRadius: 18,
-            overflow: "hidden",
-            boxShadow: "0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)",
-            background: "#1b1b1d",
-          }}
-        >
-          <Img
-            src={staticFile(`chat/frame-${n}.jpg`)}
-            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", transform: `scale(${zoom})`, transformOrigin: "100% 42%" }}
-          />
-          {fastForward && (
-            <div
-              style={{
-                position: "absolute",
-                left: 24,
-                bottom: 24,
-                fontSize: 24,
-                padding: "8px 16px",
-                borderRadius: 10,
-                background: "rgba(0,0,0,0.65)",
-              }}
-            >
-              ⏩ Sped up
-            </div>
-          )}
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            bottom: 18,
-            left: 0,
-            right: 0,
-            textAlign: "center",
-            fontSize: 22,
-            color: "rgba(255,255,255,0.55)",
-          }}
-        >
-          Claude Code shown · also Codex, the Claude API, OpenAI-compatible servers, Ollama, Apple Intelligence or a model on your Mac
-        </div>
-      </AbsoluteFill>
+      <Enter duration={duration}>
+        <Title text="Write SQL. Run it." sub="Highlighting, completion and results in milliseconds" />
+        <Stage src={(f) => recording("query", source(f))} aspect={1520 / 2600}
+          camera={[
+            { at: 0, x: 0.5, y: 0.5, zoom: fit },
+            { at: 22, x: 0.36, y: 0.2, zoom: 2.1 },
+            { at: 110, x: 0.42, y: 0.2, zoom: 2.1 },
+            { at: 126, x: 0.3, y: 0.18, zoom: 2.3 },
+            { at: 146, x: 0.5, y: 0.5, zoom: fit },
+            { at: duration, x: 0.42, y: 0.42, zoom: 1.25 },
+          ]}
+          cursor={[{ at: 4, x: 0.6, y: 0.5 }, { at: 18, x: 0.32, y: 0.17 }, { at: 100, x: 0.32, y: 0.17 }, { at: 124, x: 0.205, y: 0.124 }, { at: 165, x: 0.3, y: 0.45 }]}
+          clicks={[18, 126]} />
+        <Badge text="⌘↩  Run" show={frame >= 124 && frame < 160} />
+      </Enter>
     </Background>
   );
 };
 
-const Outro: React.FC<{ duration: number }> = ({ duration }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const enter = spring({ frame, fps, config: { damping: 200 } });
+const Filter: React.FC<{ duration: number }> = ({ duration }) => {
+  // Recorded at 15 frames a second: the filter applies at frame 53.
+  const source = timeline([[0, 34], [36, 52], [42, 54], [duration, 54 + (duration - 42) / 2]]);
   return (
     <Background>
-      <AbsoluteFill style={{ opacity: useSceneOpacity(duration), alignItems: "center", justifyContent: "center" }}>
-        <Img src={staticFile("icon.png")} style={{ width: 160, height: 160, opacity: enter }} />
-        <div style={{ fontSize: 84, fontWeight: 800, letterSpacing: -2, marginTop: 20, opacity: enter }}>Tabula</div>
-        <div style={{ fontSize: 34, color: "rgba(255,255,255,0.78)", marginTop: 12, opacity: enter }}>
+      <Enter duration={duration}>
+        <Title text="Filter millions of rows" sub="On the server, with a builder or plain WHERE" />
+        <Stage src={(f) => recording("filter", source(f))} aspect={1520 / 2600}
+          camera={[
+            { at: 0, x: 0.5, y: 0.5, zoom: fit },
+            { at: 30, x: 0.38, y: 0.85, zoom: 1.7 },
+            { at: 50, x: 0.6, y: 0.15, zoom: 2.0 },
+            { at: 85, x: 0.75, y: 0.17, zoom: 2.0 },
+            { at: duration, x: 0.5, y: 0.5, zoom: fit },
+          ]}
+          cursor={[{ at: 4, x: 0.6, y: 0.6 }, { at: 30, x: 0.357, y: 0.979 }, { at: 62, x: 0.93, y: 0.129 }, { at: duration, x: 0.8, y: 0.4 }]}
+          clicks={[32, 66]} />
+      </Enter>
+    </Background>
+  );
+};
+
+const Mongo: React.FC<{ duration: number }> = ({ duration }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const sheet = spring({ frame: frame - 54, fps, config: { damping: 14, stiffness: 160 } });
+  return (
+    <Background>
+      <Enter duration={duration}>
+        <Title text="MongoDB, natively" sub="Documents in a grid. Types kept when you edit." />
+        <Stage src={() => "shots/mongodb.png"} aspect={1520 / 2600}
+          camera={[{ at: 0, x: 0.45, y: 0.4, zoom: 1.15 }, { at: 30, x: 0.35, y: 0.25, zoom: 1.6 }, { at: 50, x: 0.35, y: 0.8, zoom: 1.6 }, { at: 70, x: 0.5, y: 0.5, zoom: fit }]}
+          cursor={[{ at: 4, x: 0.6, y: 0.5 }, { at: 26, x: 0.3, y: 0.21 }, { at: 48, x: 0.3515, y: 0.98 }]}
+          clicks={[28, 50]}>
+          {frame >= 54 && (
+            <div style={{ position: "absolute", left: "50%", top: "48%", width: 760, height: 570, marginLeft: -380, marginTop: -285, zIndex: 4,
+              transform: `scale(${0.4 + 0.6 * sheet})`, opacity: Math.min(sheet * 2, 1), borderRadius: 18, overflow: "hidden",
+              boxShadow: "0 30px 100px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.12)" }}>
+              <Img src={staticFile("shots/mongodb-document.png")} style={{ width: "100%", height: "100%" }} />
+            </div>
+          )}
+        </Stage>
+      </Enter>
+    </Background>
+  );
+};
+
+const Montage: React.FC<{ duration: number }> = ({ duration }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const tiles = [
+    { src: "shots/redis.png", label: "Redis keys & console" },
+    { src: "shots/diagram.png", label: "Relationship diagrams" },
+    { src: "shots/metrics.png", label: "Live server metrics" },
+  ];
+  return (
+    <Background>
+      <Enter duration={duration}>
+        <Title text="And everything around it" />
+        <div style={{ position: "absolute", top: 320, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 40, perspective: 1600 }}>
+          {tiles.map((tile, index) => {
+            const pop = spring({ frame: frame - 4 - index * 6, fps, config: { damping: 13, stiffness: 150 } });
+            const drift = interpolate(frame, [0, duration], [0, -20], clamp);
+            const grow = interpolate(frame, [20, duration], [1, 1.05], clamp);
+            return (
+              <div key={tile.src} style={{ width: 540, opacity: Math.min(pop * 2, 1), transform: `translateY(${(1 - pop) * 300 + drift}px) rotateY(${(index - 1) * -14 * pop}deg) scale(${(0.8 + 0.2 * pop) * grow})` }}>
+                <div style={{ borderRadius: 14, overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1)" }}>
+                  <Img src={staticFile(tile.src)} style={{ width: "100%", display: "block" }} />
+                </div>
+                <div style={{ textAlign: "center", fontSize: 30, fontWeight: 600, marginTop: 22 }}>{tile.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </Enter>
+    </Background>
+  );
+};
+
+const AI: React.FC<{ duration: number }> = ({ duration }) => {
+  const frame = useCurrentFrame();
+  // Recorded at 10 frames a second: sent at 12, the tool step at 164, the answer done by 204.
+  const source = timeline([[0, 1], [36, 13], [44, 15], [104, 164], [122, 175], [150, 183], [190, 204]]);
+  const step = frame < 44 ? 0 : frame < 112 ? 1 : 2;
+  const titles = [
+    { text: "Ask your data anything", sub: "The AI chat sits next to your tables" },
+    { text: "It runs the query", sub: "Read-only, on its own read-only connection" },
+    { text: "And answers from real data", sub: "Every step shown. On Production it asks first." },
+  ];
+  return (
+    <Background>
+      <Enter duration={duration}>
+        <Title key={step} text={titles[step].text} sub={titles[step].sub} at={[0, 44, 112][step]} />
+        <Stage src={(f) => recording("chat", source(f))} aspect={1520 / 2600}
+          camera={[
+            { at: 0, x: 0.5, y: 0.5, zoom: fit },
+            { at: 30, x: 0.86, y: 0.75, zoom: 2.0 },
+            { at: 50, x: 0.86, y: 0.42, zoom: 2.0 },
+            { at: 104, x: 0.86, y: 0.42, zoom: 2.0 },
+            { at: 130, x: 0.86, y: 0.45, zoom: 2.2 },
+            { at: 165, x: 0.885, y: 0.52, zoom: 2.7 },
+            { at: 215, x: 0.885, y: 0.52, zoom: 2.7 },
+            { at: 250, x: 0.85, y: 0.69, zoom: 2.4 },
+            { at: 285, x: 0.85, y: 0.69, zoom: 2.4 },
+            { at: duration, x: 0.6, y: 0.5, zoom: fit },
+          ]}
+          cursor={[{ at: 4, x: 0.6, y: 0.6 }, { at: 22, x: 0.8, y: 0.948 }, { at: 32, x: 0.961, y: 0.947 }, { at: 120, x: 0.95, y: 0.8 }, { at: 180, x: 0.93, y: 0.56 }, { at: 245, x: 0.842, y: 0.698 }]}
+          clicks={[24, 34]} />
+        <Badge text="⏩  Sped up" show={frame >= 44 && frame < 104} />
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, textAlign: "center", fontSize: 22, color: "rgba(255,255,255,0.7)", zIndex: 20,
+          padding: "40px 0 16px", background: "linear-gradient(transparent, rgba(7,8,12,0.92) 55%)" }}>
+          Claude Code shown · also Codex, Claude API, OpenAI-compatible, Ollama, Apple Intelligence, or a model on your Mac
+        </div>
+      </Enter>
+    </Background>
+  );
+};
+
+const Outro: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const icon = spring({ frame, fps, config: { damping: 10, stiffness: 150 } });
+  const button = spring({ frame: frame - 18, fps, config: { damping: 11, stiffness: 160 } });
+  return (
+    <Background>
+      <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
+        <Img src={staticFile("icon.png")} style={{ width: 150, height: 150, transform: `scale(${icon})` }} />
+        <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula" top={10} at={4} /></div>
+        <div style={{ fontSize: 34, color: "rgba(255,255,255,0.8)", opacity: spring({ frame: frame - 12, fps, config: { damping: 200 } }) }}>
           Free · Native · No account, no telemetry
         </div>
-        <div
-          style={{
-            marginTop: 48,
-            fontSize: 32,
-            padding: "16px 32px",
-            borderRadius: 14,
-            background: accent,
-            fontWeight: 600,
-            opacity: spring({ frame: frame - 15, fps, config: { damping: 200 } }),
-          }}
-        >
+        <div style={{ marginTop: 40, fontSize: 34, padding: "16px 34px", borderRadius: 14, background: accent, fontWeight: 700, transform: `scale(${button})`, boxShadow: `0 10px 40px ${accent}88` }}>
           github.com/tungnguyenvan/tabula
         </div>
       </AbsoluteFill>
@@ -275,50 +387,14 @@ const Outro: React.FC<{ duration: number }> = ({ duration }) => {
 };
 
 const scenes: { duration: number; render: (duration: number) => React.ReactNode }[] = [
-  { duration: 135, render: (d) => <Intro duration={d} /> },
-  {
-    duration: 150,
-    render: (d) => (
-      <ShotScene duration={d} src="shots/connections.png" title="All your databases"
-        text="Tag connections Production, paste a URL to fill the form, passwords in the Keychain" zoom={1.04} />
-    ),
-  },
-  {
-    duration: 150,
-    render: (d) => (
-      <ShotScene duration={d} src="shots/data.png" title="A grid that keeps up"
-        text="Paged, sorted and filtered on the server, edited inline, with row details" origin="30% 20%" />
-    ),
-  },
-  {
-    duration: 150,
-    render: (d) => (
-      <ShotScene duration={d} src="shots/query.png" title="An editor for real SQL"
-        text="Highlighting, completion, Beautify, and a console of every statement" origin="40% 10%" />
-    ),
-  },
-  {
-    duration: 180,
-    render: (d) => (
-      <ShotScene duration={d} src="shots/mongodb.png" next="shots/mongodb-query.png" title="MongoDB, natively"
-        text="Collections in the grid, types kept on edit, the shell in the query editor" origin="40% 20%" />
-    ),
-  },
-  {
-    duration: 135,
-    render: (d) => (
-      <ShotScene duration={d} src="shots/redis.png" title="Redis too" text="Keys, values and a console, by database" origin="30% 30%" />
-    ),
-  },
-  {
-    duration: 165,
-    render: (d) => (
-      <ShotScene duration={d} src="shots/diagram.png" next="shots/metrics.png" title="See the whole schema"
-        text="Relationship diagrams and live server metrics" />
-    ),
-  },
-  { duration: 420, render: (d) => <AIScene duration={d} /> },
-  { duration: 165, render: (d) => <Outro duration={d} /> },
+  { duration: 75, render: (d) => <Intro duration={d} /> },
+  { duration: 85, render: (d) => <Connections duration={d} /> },
+  { duration: 200, render: (d) => <Query duration={d} /> },
+  { duration: 120, render: (d) => <Filter duration={d} /> },
+  { duration: 120, render: (d) => <Mongo duration={d} /> },
+  { duration: 90, render: (d) => <Montage duration={d} /> },
+  { duration: 320, render: (d) => <AI duration={d} /> },
+  { duration: 90, render: () => <Outro /> },
 ];
 
 export const demoDuration = scenes.reduce((total, scene) => total + scene.duration, 0);

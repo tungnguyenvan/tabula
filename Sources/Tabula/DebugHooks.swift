@@ -110,9 +110,10 @@ enum DebugHooks {
         if let name = environment["TABULA_DEBUG_TABLE"], let table = model.tables.first(where: { $0.name == name }) {
             model.open(table, mode: environment["TABULA_DEBUG_MODE"] == "structure" ? .structure : .data)
             if let tab = model.selectedTableTab, let filter = environment["TABULA_DEBUG_FILTER"] {
-                // "column|operator|value", e.g. "city|contains|Nội"
+                // "column|operator|value", e.g. "city|contains|Nội"; TABULA_DEBUG_FILTER_DELAY: seconds before it applies
                 let parts = filter.components(separatedBy: "|")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                let delay = environment["TABULA_DEBUG_FILTER_DELAY"].flatMap(Double.init) ?? 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     if parts.count == 3, let op = FilterRule.Operator(rawValue: parts[1]) {
                         tab.filterRules = [FilterRule(column: parts[0], op: op, value: parts[2])]
                         tab.showFilterBar = true
@@ -140,6 +141,8 @@ enum DebugHooks {
 
     /// TABULA_DEBUG_KEYS: ";"-separated key presses replayed through the normal event path, e.g.
     /// "wait:2000;cmd+f;type:Nội;return;esc;down;right;return;type:x;tab". Also logs the menu bar once.
+    private static let typingInterval = 0.05
+
     static func startKeyScript() {
         dumpMenus()
         guard let script = environment["TABULA_DEBUG_KEYS"] else { return }
@@ -147,6 +150,17 @@ enum DebugHooks {
         for token in script.components(separatedBy: ";") where !token.isEmpty {
             if token.hasPrefix("wait:") {
                 delay += (Double(token.dropFirst(5)) ?? 0) / 1000
+                continue
+            }
+            // slow:<text> types one character at a time, as a person would (for recordings).
+            if token.hasPrefix("slow:") {
+                for (index, character) in token.dropFirst(5).enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay + Double(index) * typingInterval) {
+                        guard let window = targetWindow else { return }
+                        for event in events(for: "type:\(character)", window: window) { NSApp.postEvent(event, atStart: false) }
+                    }
+                }
+                delay += Double(token.count - 5) * typingInterval + 0.3
                 continue
             }
             if token.hasPrefix("snap:") {
