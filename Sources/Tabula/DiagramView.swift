@@ -20,9 +20,13 @@ final class DiagramModel {
     private(set) var loading = false
     var error: String?
     var selected: String?
-    var zoom: CGFloat = 1 {
-        didSet { zoom = min(Self.maxZoom, max(Self.minZoom, zoom)) }
+    /// Kept between `minZoom` and `maxZoom`. The setter clamps: a `didSet` that assigns `zoom` again calls
+    /// itself without end in an @Observable class, which crashed the app on the first zoom.
+    var zoom: CGFloat {
+        get { scale }
+        set { scale = min(Self.maxZoom, max(Self.minZoom, newValue)) }
     }
+    private var scale: CGFloat = 1
     static let minZoom: CGFloat = 0.3
     static let maxZoom: CGFloat = 2
     static let zoomStep: CGFloat = 0.15
