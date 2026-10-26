@@ -4,15 +4,18 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Planned
+- SSH tunnels
+- Cancelling a running query
+
+## [0.4.3] - 2026-10-26
+
 ### Added
 - Paste a connection URL into the Host field to fill in the whole form, password included (`postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and TablePlus URLs with their name, tag and TLS settings).
 
 ### Fixed
 - Passwords copied from a dashboard that shows them URL-escaped (`%3F` for `?`, `%7C` for `|`) failed with "authentication failed" ([#11](https://github.com/tungnguyenvan/tabula/issues/11)). The connection form now offers to decode such a password, and a failed login points at the escapes.
-
-### Planned
-- SSH tunnels
-- Cancelling a running query
+- Copy as URL kept too little to paste back the same connection: a Redis connection with TLS but no certificate check now adds `ssl_cert_reqs=none`, a DNS seed list without TLS adds `tls=false`, and a `:` or `@` in the user name is escaped.
 
 ## [0.4.2] - 2026-10-26
 
