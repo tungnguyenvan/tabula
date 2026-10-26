@@ -38,7 +38,8 @@ enum AboutPanel {
         add("Your data\n", bold: true)
         add("Connections are stored on this Mac and passwords in the Keychain. Tabula talks only to your databases, "
             + "to GitHub for updates, and, if you turn it on, to your AI provider, which receives table, collection and "
-            + "field names and your queries, never rows or documents. No telemetry, no account.\n", color: .secondaryLabelColor)
+            + "field names and your queries, plus the results of read-only queries the chat runs if you allow it (Settings › AI). "
+            + "No telemetry, no account.\n", color: .secondaryLabelColor)
 
         if let repositoryURL {
             add("Website", link: repositoryURL)

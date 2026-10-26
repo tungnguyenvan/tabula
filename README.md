@@ -25,12 +25,13 @@ Free, no usage limits, keyboard-first.</p>
 > ### ✨ New in 0.3: an AI assistant that can run entirely on your Mac
 >
 > - **Chat about your database** in the panel on the right (⌥⌘A). Ask for a query in plain words and get SQL you can **Insert**, **Run** or copy. The model knows your tables, columns, keys and schemas, so it writes `dev.transactions`, not a guess.
+> - **An assistant that looks things up:** it describes tables and runs read-only queries on its own read-only connection to answer from the real data ("which status brings in the most revenue?"), with every step shown. On Production it asks before each query. Conversations are saved per connection, to open again later.
 > - **Suggestions as you type**, written by the model in grey after the cursor; Tab accepts. With a small model on your Mac they arrive in under 100 ms.
 > - **Ask AI** (⌘K) to write or change SQL in the editor, and **Fix with AI** when a statement fails.
 > - **Answers stream in, with the model's thinking:** watch the reasoning and then the SQL arrive token by token, from Claude, Claude Code, Codex, OpenAI-compatible servers, Ollama or a model on your Mac.
 > - **Runs inside Tabula, offline.** Download a light model from Settings (Qwen2.5 Coder from 490 MB, Llama 3.2), add any GGUF file, or paste a link. Nothing else to install.
 > - **Or use what you already have:** Apple Intelligence, Claude (Opus 5.5, Sonnet 5.5, Haiku 5.5), any OpenAI-compatible API such as LiteLLM, Ollama, or the Claude Code and Codex tools on your Mac. A different model can handle suggestions while typing.
-> - **Private by design:** table and column names and your SQL are sent, never the rows in your tables. Off for Production connections unless you allow it.
+> - **You decide what it sees:** table and column names and your SQL are sent; rows only from the read-only queries the chat runs if you turn them on, at most 50 per query. Off for Production connections unless you allow it.
 >
 > [How it works →](#ai-assistant)
 
@@ -60,7 +61,7 @@ Free, no usage limits, keyboard-first.</p>
 ## Features
 
 **AI assistant** (new in 0.3, see [AI assistant](#ai-assistant))
-- Chat panel, Ask AI (⌘K), Fix with AI, and model-written suggestions while typing.
+- Chat panel with tools (describe tables, run read-only queries) and saved conversations, Ask AI (⌘K), Fix with AI, and model-written suggestions while typing.
 - Models that run inside Tabula, Apple Intelligence, Claude, OpenAI-compatible APIs, Ollama, Claude Code or Codex.
 
 **MongoDB** (new in 0.4, see [MongoDB](#mongodb))
@@ -248,7 +249,13 @@ Delete **Tabula** from Applications. To also remove saved connections, delete `~
 
 AI is off until you turn it on in **Settings › AI** (⌘,). Then:
 
-- **AI chat** (⌥⌘A, or the chat button in the toolbar) opens a conversation in the panel on the right, next to Row Details. Ask for queries, explanations or changes to the SQL in the editor; it remembers the conversation for that connection. Answers stream in as the model writes them, and when the model shares its reasoning it shows above the answer while it thinks, then folds into "Thought for N s". Every query in an answer has **Insert**, **Run** and copy buttons. The model menu under the message field switches between downloaded models, Apple Intelligence, Claude Opus 5.5 / Sonnet 5.5 / Haiku 5.5, your OpenAI-compatible model, Claude Code and Codex, and for models that reason (Claude, Claude Code, Codex, OpenAI reasoning models) an **Effort** menu sets how long they think, from Low to Max.
+- **AI chat** (⌥⌘A, or the chat button in the toolbar) opens a conversation in the panel on the right, next to Row Details. Ask for queries, explanations or changes to the SQL in the editor; conversations are saved on this Mac per connection: the title at the top of the panel lists earlier ones to open again or delete, and the pencil button starts a new one. Answers stream in as the model writes them, and when the model shares its reasoning it shows above the answer while it thinks, then folds into "Thought for N s". Every query in an answer has **Insert**, **Run** and copy buttons. The model menu under the message field switches between downloaded models, Apple Intelligence, Claude Opus 5.5 / Sonnet 5.5 / Haiku 5.5, your OpenAI-compatible model, Claude Code and Codex, and for models that reason (Claude, Claude Code, Codex, OpenAI reasoning models) an **Effort** menu sets how long they think, from Low to Max.
+- **Tools in the chat:** to answer, the assistant can list tables, describe a table (columns, indexes, foreign keys) and run a read-only query, and each step shows in the conversation (click it to see the query and result). It works the same with every provider, including Claude Code and Codex, which keep their own tools off: Tabula runs the steps. Queries:
+  - Only reads run: one `SELECT`, `WITH … SELECT`, `EXPLAIN`, `SHOW` or `DESCRIBE`, without comments, backslashes or server functions such as `pg_terminate_backend`; on MongoDB `find`, `aggregate` (without `$out` / `$merge`), `countDocuments`, `distinct`, without `$where` / `$function`. Anything else is refused, and the assistant writes it as SQL for you to run instead.
+  - They run on a separate connection, each in a read-only transaction of its own (PostgreSQL, MySQL) or with SQLite's `query_only`, limited to 15 seconds (PostgreSQL, MySQL, MariaDB), so they can't change data or touch your open transactions. They appear in the console log.
+  - At most 50 rows of each result, with long values cut, go to the model.
+  - On **Production** connections the chat asks before each query (**Allow** / **Don't Allow**).
+  - **Let the chat run read-only queries** in Settings › AI turns them on or off; without them the assistant looks up only the structure. It is on for new setups, and off if you had turned on AI before the chat could run queries, until you turn it on.
 - **Your own instructions:** each system prompt (chat, Ask AI, Fix with AI, suggestions) can be edited in Settings › AI › Instructions, for example to answer in Vietnamese or to always add a LIMIT. `{database}` stands for the database's name; Restore Default brings Tabula's back.
 
 In a query tab:
@@ -270,7 +277,7 @@ Choose where the model runs:
 | Claude API | Anthropic | API key; the model defaults to `claude-opus-5-5`, and a faster one (such as `claude-haiku-5-5`) can be set for suggestions |
 | Claude Code, Codex | Your installed command-line agent, with its own sign-in | Installed and signed in once in Terminal. Tabula finds them on your shell's PATH or the usual install locations, and runs them without tools (Claude Code) or in a read-only sandbox (Codex). Too slow for suggestions while typing. |
 
-**What is sent:** the table and column names of the current schema, the SQL in the editor around the cursor (or the selection), and for Fix with AI the error message with any quoted values removed (database errors can quote row values, such as a duplicate key). Rows from your tables are never sent. Prompts reach the command-line agents on standard input, not as arguments other users of the Mac could see. AI is off for Production-tagged connections unless you allow it in Settings. API keys are stored in the login Keychain.
+**What is sent:** the table and column names of the current schema, the SQL in the editor around the cursor (or the selection), and for Fix with AI the error message with any quoted values removed (database errors can quote row values, such as a duplicate key). Rows are sent only as results of the read-only queries the chat runs (at most 50 per query, and only with that setting on); Ask AI, Fix with AI and suggestions never see rows. Conversations are stored on this Mac in `~/Library/Application Support/Tabula/Chats` and deleted with their connection. Prompts reach the command-line agents on standard input, not as arguments other users of the Mac could see. AI is off for Production-tagged connections unless you allow it in Settings. API keys are stored in the login Keychain.
 
 ## MongoDB
 

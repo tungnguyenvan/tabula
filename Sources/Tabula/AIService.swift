@@ -31,6 +31,10 @@ final class AIService {
             loaded.baseURLs[provider.rawValue] = environment["TABULA_DEBUG_AI_URL"]
             loaded.models[provider.rawValue] = environment["TABULA_DEBUG_AI_MODEL"]
             loaded.inlineModels[provider.rawValue] = environment["TABULA_DEBUG_AI_MODEL"]
+            // TABULA_DEBUG_AI_ALLOW_PRODUCTION: try the assistant on a Production-tagged test connection.
+            if environment["TABULA_DEBUG_AI_ALLOW_PRODUCTION"] != nil { loaded.allowProduction = true }
+            // TABULA_DEBUG_AI_QUERIES=0 tries the chat without queries; otherwise they are on.
+            loaded.assistantQueries = environment["TABULA_DEBUG_AI_QUERIES"] != "0"
         }
         #endif
         settings = loaded

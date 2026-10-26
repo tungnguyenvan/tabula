@@ -82,7 +82,7 @@ final class WorkspaceModel {
         var id: String { rawValue }
     }
     var rightPanel: RightPanel = .rowDetails
-    let chat = AIChatModel()
+    let chat: AIChatModel
 
     /// Shows `panel` on the right, or hides the panel if it is already showing it.
     func toggleRightPanel(_ panel: RightPanel) {
@@ -114,6 +114,7 @@ final class WorkspaceModel {
         self.config = config
         self.connectionID = config.id
         self.password = password
+        chat = AIChatModel(connectionID: config.id)
     }
 
     var filteredTables: [TableRef] {
@@ -204,8 +205,62 @@ final class WorkspaceModel {
     }
 
     func disconnect() async {
+        // An answer in progress would go on using the closed connection (and open another).
+        chat.stop()
+        agentGeneration += 1
+        agentOpening?.cancel()
+        agentOpening = nil
+        let agent = agentDriver
+        agentDriver = nil
         await driver?.close()
         driver = nil
+        await agent?.close()
+    }
+
+    /// The chat assistant's own connection: read-only where the server allows it, so its queries can't change
+    /// data or interfere with the user's transactions. Opened on first use; its statements show in the console.
+    private var agentDriver: LoggingDriver?
+    private var agentSchema: String?
+    /// The agent's connection being opened; callers meanwhile wait for the same one.
+    private var agentOpening: Task<LoggingDriver, any Error>?
+    /// Bumped by `disconnect`, so a connection that finishes opening for the old database is closed, not kept.
+    private var agentGeneration = 0
+
+    func agentToolbox() async throws -> AgentToolbox {
+        let generation = agentGeneration
+        let driver: LoggingDriver
+        if let agentDriver {
+            driver = agentDriver
+        } else {
+            let target = config
+            let opening = agentOpening ?? Task {
+                let opened = try await openDriver(target)
+                do {
+                    try await AgentToolbox.prepare(opened)
+                    try Task.checkCancellation()
+                } catch {
+                    await opened.close()
+                    throw error
+                }
+                return opened
+            }
+            agentOpening = opening
+            let opened = try await opening.value
+            guard generation == agentGeneration else {
+                await opened.close()
+                throw CancellationError()
+            }
+            agentOpening = nil
+            agentDriver = opened
+            agentSchema = nil
+            driver = opened
+        }
+        // Unqualified names resolve as in the user's queries.
+        if agentSchema != selectedSchema {
+            try await driver.useSchema(selectedSchema)
+            agentSchema = selectedSchema
+        }
+        return AgentToolbox(driver: driver, currentSchema: selectedSchema)
     }
 
     /// Tabs whose edits would be lost by leaving the database: changed rows or an unsaved routine.
@@ -256,7 +311,7 @@ final class WorkspaceModel {
         inspectedRows = []
         schemaTableCache = [:]
         loadingSchemaTables = []
-        chat.clear()
+        chat.newConversation()
         await setUp(newDriver)
         if queries.isEmpty {
             newQueryTab()

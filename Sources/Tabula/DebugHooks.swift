@@ -10,6 +10,7 @@ import TabulaCore
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab; TABULA_DEBUG_QUERY_THEN: more SQL to run a moment later
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
+/// - TABULA_DEBUG_AI_ALLOW_PRODUCTION: allow AI on Production connections; TABULA_DEBUG_APPROVE: answer the chat's query approval
 /// - TABULA_DEBUG_CHAT_DEMO (a question) / TABULA_DEBUG_ASK_DEMO: play a made-up streamed answer with reasoning
 @MainActor
 enum DebugHooks {
@@ -73,6 +74,17 @@ enum DebugHooks {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                 let editor: String? = if case .query(let query) = model.selectedTab { query.sql } else { nil }
                 model.chat.send(workspace: model, editorSQL: editor)
+            }
+            // TABULA_DEBUG_APPROVE=1 (or 0): answer the first Production query a few seconds after it asks,
+            // so a snapshot can show the question.
+            if let allow = environment["TABULA_DEBUG_APPROVE"] {
+                Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
+                    MainActor.assumeIsolated {
+                        guard let step = model.chat.messages.last(where: { $0.tool?.status == .awaitingApproval }) else { return }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { model.chat.answer(step.id, allow: allow == "1") }
+                        timer.invalidate()
+                    }
+                }
             }
         }
         if let prompt = environment["TABULA_DEBUG_ASK"], case .query(let query) = model.tabs.first {
