@@ -92,6 +92,12 @@ enum Layout {
         static let width: CGFloat = 250
     }
 
+    enum ConnectionForm {
+        static let width: CGFloat = 520
+        /// Lines the pasted connection string grows to before it scrolls.
+        static let stringLines = 2...6
+    }
+
     enum Rail {
         static let width: CGFloat = 48
         static let itemSize: CGFloat = 34

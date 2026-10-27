@@ -10,6 +10,13 @@ struct ConnectionListView: View {
     @State private var selection: UUID?
     @State private var editing: EditRequest?
     @State private var pendingDelete: ConnectionConfig?
+    /// The New from Connection String sheet, with the text it opens with (pasted into the list).
+    @State private var connectionString: ConnectionStringRequest?
+
+    struct ConnectionStringRequest: Identifiable {
+        let id = UUID()
+        var text = ""
+    }
 
     struct EditRequest: Identifiable {
         let id = UUID()
@@ -48,6 +55,10 @@ struct ConnectionListView: View {
         .frame(minWidth: 680, minHeight: 420)
         .onAppear {
             #if DEBUG
+            if let text = DebugHooks.connectionString {
+                DebugHooks.resizeConnectionsWindow()
+                connectionString = ConnectionStringRequest(text: text)
+            }
             if let id = DebugHooks.connectionToEdit, let config = appState.connection(id) {
                 DebugHooks.resizeConnectionsWindow()
                 edit(config)
@@ -61,6 +72,15 @@ struct ConnectionListView: View {
                 if connect { open(saved.id) }
             } onCancel: {
                 editing = nil
+            }
+        }
+        .sheet(item: $connectionString) { request in
+            ConnectionStringSheet(text: request.text) { config, password in
+                connectionString = nil
+                // The form opens once this sheet has gone; two sheets can't show at once.
+                DispatchQueue.main.async { editing = EditRequest(config: config, isNew: true, password: password ?? "") }
+            } onCancel: {
+                connectionString = nil
             }
         }
         .confirmationDialog("Delete “\(pendingDelete?.displayName ?? "")”?", isPresented: Binding(
@@ -116,6 +136,10 @@ struct ConnectionListView: View {
                 .keyboardShortcut("n", modifiers: .command)
                 WelcomeAction(symbol: "doc.badge.plus", title: "Open SQLite File…", shortcut: "⌘O") { openSQLiteFile() }
                     .keyboardShortcut("o", modifiers: .command)
+                WelcomeAction(symbol: "link.badge.plus", title: "New from Connection String…", shortcut: "⇧⌘N") {
+                    connectionString = ConnectionStringRequest()
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
@@ -155,6 +179,8 @@ struct ConnectionListView: View {
                 .contextMenu(forSelectionType: UUID.self) { _ in } primaryAction: { ids in
                     if let id = ids.first { open(id) }
                 }
+                // Edit > Paste with the list focused: a copied connection string becomes a new connection.
+                .onPasteCommand(of: [.plainText]) { providers in pasteConnectionString(providers) }
             }
             if let error = appState.lastError {
                 Text(error).font(.caption).foregroundStyle(.red).padding(6)
@@ -190,6 +216,15 @@ struct ConnectionListView: View {
 
     private func open(_ id: UUID) {
         ConnectionRouter.open(id, appState: appState, openWindow: openWindow)
+    }
+
+    /// Opens the New from Connection String sheet with the pasted text, so what was read can be checked first.
+    private func pasteConnectionString(_ providers: [NSItemProvider]) {
+        guard let provider = providers.first else { return }
+        _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+            let text = (object as? NSString).map(String.init) ?? ""
+            DispatchQueue.main.async { connectionString = ConnectionStringRequest(text: text) }
+        }
     }
 
     private func openSQLiteFile() {

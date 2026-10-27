@@ -29,6 +29,10 @@ enum DebugHooks {
     static var connectionToEdit: UUID? { environment["TABULA_DEBUG_EDIT"].flatMap(UUID.init(uuidString:)) }
     /// TABULA_DEBUG_FORM_HOST: text entered in that editor's Host field, as if pasted (e.g. a connection URL).
     static var formHost: String? { environment["TABULA_DEBUG_FORM_HOST"] }
+    /// TABULA_DEBUG_CONNECTION_STRING: open New from Connection String with this text, as if pasted into the list;
+    /// TABULA_DEBUG_CONNECTION_STRING_CONTINUE: then press Continue.
+    static var connectionString: String? { environment["TABULA_DEBUG_CONNECTION_STRING"] }
+    static var continuesConnectionString: Bool { environment["TABULA_DEBUG_CONNECTION_STRING_CONTINUE"] != nil }
 
     /// TABULA_DEBUG_OPEN may list several ids separated by commas.
     static var connectionsToOpen: [UUID] {

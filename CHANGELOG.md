@@ -12,6 +12,10 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - `.sql` files open from Finder (Open With, or dropped on the Dock icon) into the frontmost connection, or into the next connection to connect. Tabula doesn't make itself their default app.
   - Read and write errors are reported; they used to be ignored.
   - In table tabs, ⌘S still commits and ⇧⌘S still previews the changes.
+- **Create a connection from a connection string** ([#45](https://github.com/tungnguyenvan/tabula/issues/45)).
+  - **New from Connection String…** (⇧⌘N) in the Connections window, or paste (⌘V) into the connection list.
+  - A summary shows what was read; **Continue** fills in the New Connection form.
+  - Besides URLs, Tabula now reads JDBC URLs (with `user` and `password` options), libpq `key=value` strings and semicolon-separated strings (`Server=…;Uid=…`, Npgsql's `Host=…;Username=…`), in this sheet and in the Host field.
 
 ### Changed
 - Clicking anywhere on a sidebar group's title row now collapses or expands it, and its chevron is always shown, so the count beside it no longer jumps when the pointer passes over ([#41](https://github.com/tungnguyenvan/tabula/issues/41)).
