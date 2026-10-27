@@ -26,8 +26,6 @@ export type WhatsNewProps = { events: Partial<Record<Name, InputEvent[]>> };
 
 /// The Connections window was recorded at 1000×640.
 const connectionsAspect = 1280 / 2000;
-/// Its capture has about 34 white pixels at each corner (2000 wide); this radius covers them.
-const connectionsCorner = 44 / 2000;
 /// The zoom that shows that whole window under the titles.
 const connectionsFit = 0.84;
 /// Puts the window's right edge, where the AI panel is, near the right of the picture at this zoom.
@@ -172,7 +170,7 @@ const ConnString: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="Paste a connection string" sub="URLs, JDBC or key=value pairs: Tabula fills in the form" />
-      <Recording name={file("connstring")} events={events} duration={duration} pointer="clicks" aspect={connectionsAspect} corner={connectionsCorner}
+      <Recording name={file("connstring")} events={events} duration={duration} pointer="clicks" aspect={connectionsAspect} shape="connections"
         timeline={[[0, 150], [16, 166], [43, 220], [64, 262], [106, 346], [duration, 425]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: connectionsFit },
