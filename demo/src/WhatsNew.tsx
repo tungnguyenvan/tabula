@@ -19,6 +19,7 @@ import {
 } from "./Demo";
 
 /// What's new from 0.5.0 to 0.5.4, each feature in the real app (scripts/render-whats-new.sh lists the recordings).
+/// Chat scenes use the current development composer, explicitly labelled because it is not in release 0.5.4.
 /// The pointer shows only where it clicks. Timed in thirtieths of a second, as in Demo.tsx.
 export const whatsNewRecordings = ["tools", "history", "state", "sidebar", "sqlfile", "connstring"] as const;
 type Name = (typeof whatsNewRecordings)[number];
@@ -75,53 +76,45 @@ const Intro: React.FC<{ duration: number }> = ({ duration }) => {
 
 type SceneProps = { duration: number; events: InputEvent[] };
 
-/// Recorded at 30 frames a second: the chat button at 181, the field at 235, typing 262–325, Return at 332, the
-/// query step at 506–539, the answer streaming 829–905. The waits for the model are sped up.
-const Tools: React.FC<SceneProps> = ({ duration, events }) => {
-  const zoom = 1.6;
-  return (
-    <Background>
-      <Enter duration={duration}>
-        <Title text="The AI chat looks it up" sub="It runs read-only queries, shows each step, and answers with a table" />
-        <Recording name={file("tools")} events={events} duration={duration} pointer="clicks"
-          timeline={[[0, 166], [15, 181], [42, 235], [55, 262], [87, 325], [94, 332], [108, 500], [124, 540], [136, 815], [181, 905], [duration, 929]]}
-          camera={[
-            { at: 0, x: 0.5, y: 0.5, zoom: fit },
-            { at: 18, x: 0.5, y: 0.5, zoom: fit },
-            { at: 38, x: rightEdge(zoom), y: 0.7, zoom },
-            { at: 98, x: rightEdge(zoom), y: 0.7, zoom },
-            { at: 122, x: rightEdge(zoom), y: 0.3, zoom },
-            { at: 181, x: rightEdge(zoom), y: 0.42, zoom },
-            { at: duration, x: rightEdge(zoom), y: 0.44, zoom },
-          ]} />
-        <Caption from={98} to={136}>Waiting for the model, sped up</Caption>
-        <Sfx at={136} name="chime" volume={0.7} />
-      </Enter>
-    </Background>
-  );
-};
+/// Actual saved conversation, reopened in the current UI with a 520-point inspector: chat at 181,
+/// query disclosure at 244, collapsed again at 337. This is not a simulated live AI answer.
+const Tools: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="See what the AI looked up" sub="Read-only queries, visible steps and answers in tables" />
+      <Recording name={file("tools")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 166], [15, 181], [62, 244], [112, 294], [155, 337], [duration, 387]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.5, zoom: fit },
+          { at: 24, x: 0.5, y: 0.5, zoom: fit },
+          { at: 54, x: rightEdge(1.15), y: 0.45, zoom: 1.15 },
+          { at: 150, x: rightEdge(1.15), y: 0.45, zoom: 1.15 },
+          { at: duration, x: 0.5, y: 0.5, zoom: fit },
+        ]} />
+      <Caption from={24} to={58}>A real saved conversation, reopened</Caption>
+    </Enter>
+  </Background>
+);
 
-/// Recorded at 30 frames a second, after reopening the connection: the chat button at 181 (the last conversation
-/// is back), the title at 244 (earlier ones), ↓ ↓ Return at 292–355, the query step opened at 418.
-const History: React.FC<SceneProps> = ({ duration, events }) => {
-  const zoom = 1.75;
-  return (
-    <Background>
-      <Enter duration={duration}>
-        <Title text="Conversations are kept" sub="Pick up an earlier one from the title, even after quitting" />
-        <Recording name={file("history")} events={events} duration={duration} pointer="clicks"
-          timeline={[[0, 166], [15, 181], [47, 244], [71, 292], [86, 322], [102, 355], [134, 418], [duration, 449]]}
-          camera={[
-            { at: 0, x: 0.5, y: 0.5, zoom: fit },
-            { at: 18, x: 0.5, y: 0.5, zoom: fit },
-            { at: 40, x: rightEdge(zoom), y: 0.34, zoom },
-            { at: duration, x: rightEdge(zoom), y: 0.4, zoom },
-          ]} />
-        <Caption from={70} to={106}><Key>↓</Key><Key>↓</Key><Key>Return</Key> opens it</Caption>
-      </Enter>
-    </Background>
-  );
-};
+/// Current chat UI, widened for legible model and effort labels. History menu at 244; Escape at 328;
+/// New Chat at 376; composer focus at 434; then typing an unsent draft.
+const History: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Keep your conversations" sub="Reopen earlier chats, or start fresh in the new composer" />
+      <Recording name={file("history")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 224], [20, 244], [62, 328], [86, 376], [115, 434], [128, 460], [duration, 508]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.5, zoom: fit },
+          { at: 25, x: rightEdge(1.1), y: 0.4, zoom: 1.1 },
+          { at: 78, x: rightEdge(1.1), y: 0.4, zoom: 1.1 },
+          { at: 113, x: rightEdge(1.1), y: 0.7, zoom: 1.1 },
+          { at: duration, x: rightEdge(1.1), y: 0.7, zoom: 1.1 },
+        ]} />
+      <Caption from={117} to={duration}>New composer · current development build</Caption>
+    </Enter>
+  </Background>
+);
 
 /// Recorded after closing the connection, so the empty window really has no connection. Opening PostgreSQL at
 /// frame 304 restores all four tabs; the Orders tab is selected at 398 and the file tab at 470.

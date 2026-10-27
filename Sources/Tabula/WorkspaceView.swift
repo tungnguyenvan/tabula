@@ -84,6 +84,14 @@ struct WorkspaceWindow: View {
 struct WorkspaceView: View {
     @Bindable var model: WorkspaceModel
 
+    private var recordingInspectorWidth: CGFloat? {
+        #if DEBUG
+        return DebugHooks.inspectorWidth.map { CGFloat($0) }
+        #else
+        return nil
+        #endif
+    }
+
     var body: some View {
         detail
         .inspector(isPresented: $model.showInspector) {
@@ -100,7 +108,9 @@ struct WorkspaceView: View {
                 case .ai: AIChatView(workspace: model, chat: model.chat)
                 }
             }
-            .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
+            .inspectorColumnWidth(min: recordingInspectorWidth ?? Layout.Inspector.minWidth,
+                                   ideal: recordingInspectorWidth ?? Layout.Inspector.idealWidth,
+                                   max: recordingInspectorWidth ?? Layout.Inspector.maxWidth)
         }
         .navigationTitle(model.config.displayName)
         .toolbar {
