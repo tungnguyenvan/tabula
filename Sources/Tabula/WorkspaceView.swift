@@ -8,6 +8,7 @@ struct WorkspaceWindow: View {
     @Environment(AppState.self) private var appState
     @State private var session = ConnectionSession()
     @State private var openedInitial = false
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     var body: some View {
         HStack(spacing: 0) {
@@ -25,67 +26,83 @@ struct WorkspaceWindow: View {
         .onDisappear { session.closeAll() }
     }
 
+    /// One split view for as long as the window shows connections; switching connections changes what is in its
+    /// columns and toolbar. A split view per connection crashed AppKit: after a SQL, then a Redis, then a SQL one,
+    /// a toolbar separator was left half-registered and removing it threw (#53).
     @ViewBuilder
     private var activeConnection: some View {
-        switch session.active {
-        case .sql(let model):
-            WorkspaceView(model: model).id(model.config.id)
-        case .redis(let model):
-            RedisWorkspaceView(model: model).id(model.config.id)
-        case nil:
-            if let connectionID, !openedInitial {
-                if appState.connection(connectionID) == nil {
-                    ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
-                                           description: Text("It may have been deleted."))
-                } else {
-                    ProgressView()
+        if let active = session.active {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                switch active {
+                case .sql(let model):
+                    SidebarView(model: model).id(model.config.id)
+                        .navigationSplitViewColumnWidth(min: Layout.Sidebar.minWidth, ideal: Layout.Sidebar.idealWidth, max: Layout.Sidebar.maxWidth)
+                case .redis(let model):
+                    RedisSidebar(model: model).id(model.config.id)
+                        .navigationSplitViewColumnWidth(min: Layout.Sidebar.redisMinWidth, ideal: Layout.Sidebar.redisIdealWidth, max: Layout.Sidebar.redisMaxWidth)
                 }
+            } detail: {
+                switch active {
+                case .sql(let model): WorkspaceView(model: model).id(model.config.id)
+                case .redis(let model): RedisWorkspaceView(model: model).id(model.config.id)
+                }
+            }
+            .overlay(alignment: .top) {
+                if case .sql(let model) = active, model.showPalette {
+                    ZStack(alignment: .top) {
+                        Color.black.opacity(0.001).onTapGesture { model.showPalette = false }
+                        CommandPaletteView(model: model).padding(.top, 60)
+                    }
+                }
+            }
+        } else {
+            emptyWindow
+        }
+    }
+
+    /// No connection open: the one the window was opened for is on its way, or a list to pick one from.
+    @ViewBuilder
+    private var emptyWindow: some View {
+        if let connectionID, !openedInitial {
+            if appState.connection(connectionID) == nil {
+                ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
+                                       description: Text("It may have been deleted."))
             } else {
-                ConnectionPicker { id in
-                    guard let config = appState.connection(id) else { return }
-                    Task { await session.open(config, appState: appState) }
-                }
+                ProgressView()
+            }
+        } else {
+            ConnectionPicker { id in
+                guard let config = appState.connection(id) else { return }
+                Task { await session.open(config, appState: appState) }
             }
         }
     }
 }
 
+/// A SQL connection's detail column (tabs, inspector) and toolbar items, in its window's split view; its sidebar is
+/// `SidebarView`.
 struct WorkspaceView: View {
     @Bindable var model: WorkspaceModel
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(model: model)
-                .navigationSplitViewColumnWidth(min: Layout.Sidebar.minWidth, ideal: Layout.Sidebar.idealWidth, max: Layout.Sidebar.maxWidth)
-        } detail: {
-            detail
-                .inspector(isPresented: $model.showInspector) {
-                    VStack(spacing: 0) {
-                        Picker("Panel", selection: $model.rightPanel) {
-                            ForEach(WorkspaceModel.RightPanel.allCases) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .padding(Layout.barPadding)
-                        Divider()
-                        switch model.rightPanel {
-                        case .rowDetails: RowInspectorView(model: model)
-                        case .ai: AIChatView(workspace: model, chat: model.chat)
-                        }
-                    }
-                    .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
+        detail
+        .inspector(isPresented: $model.showInspector) {
+            VStack(spacing: 0) {
+                Picker("Panel", selection: $model.rightPanel) {
+                    ForEach(WorkspaceModel.RightPanel.allCases) { Text($0.rawValue).tag($0) }
                 }
-        }
-        .navigationTitle(model.config.displayName)
-        .overlay(alignment: .top) {
-            if model.showPalette {
-                ZStack(alignment: .top) {
-                    Color.black.opacity(0.001).onTapGesture { model.showPalette = false }
-                    CommandPaletteView(model: model).padding(.top, 60)
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(Layout.barPadding)
+                Divider()
+                switch model.rightPanel {
+                case .rowDetails: RowInspectorView(model: model)
+                case .ai: AIChatView(workspace: model, chat: model.chat)
                 }
             }
+            .inspectorColumnWidth(min: Layout.Inspector.minWidth, ideal: Layout.Inspector.idealWidth, max: Layout.Inspector.maxWidth)
         }
+        .navigationTitle(model.config.displayName)
         .toolbar {
             ConnectionPillItem(pill: ConnectionPill(config: model.config, status: model.status,
                                                     location: location,

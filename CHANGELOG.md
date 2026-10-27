@@ -5,6 +5,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Fixed
+- Tabula could quit unexpectedly in a window that had held SQL and Redis connections in turn, when its last connection was closed or its toolbar changed (macOS 26: "Cannot unregister separator item"). Each window now keeps one sidebar and inspector layout for all its connections ([#53](https://github.com/tungnguyenvan/tabula/issues/53)).
 - The Connections window's **New from Connection String…** button wrapped onto three lines; it is now **Connection String…**, on one line ([#50](https://github.com/tungnguyenvan/tabula/issues/50)).
 - In the AI chat, an expanded query step showed the rows it returned with their columns run together; they now line up ([#48](https://github.com/tungnguyenvan/tabula/issues/48)).
 

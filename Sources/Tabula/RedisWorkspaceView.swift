@@ -58,16 +58,12 @@ enum RedisFormat {
     }
 }
 
+/// A Redis connection's detail column and toolbar items, in its window's split view; its sidebar is `RedisSidebar`.
 struct RedisWorkspaceView: View {
     @Bindable var model: RedisWorkspaceModel
 
     var body: some View {
-        NavigationSplitView {
-            RedisSidebar(model: model)
-                .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 320)
-        } detail: {
-            detail
-        }
+        detail
         .navigationTitle(model.config.displayName)
         .toolbar {
             ConnectionPillItem(pill: ConnectionPill(config: model.config, status: model.status, location: "db\(model.database)",
@@ -124,7 +120,7 @@ struct RedisWorkspaceView: View {
 }
 
 /// Sidebar: the server's databases with their key counts.
-private struct RedisSidebar: View {
+struct RedisSidebar: View {
     @Bindable var model: RedisWorkspaceModel
 
     var body: some View {
