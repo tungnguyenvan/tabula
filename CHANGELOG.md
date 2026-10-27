@@ -4,6 +4,12 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Planned
+- SSH tunnels
+- Cancelling a running query
+
+## [0.5.4] - 2026-10-27
+
 ### Added
 - **Each connection picks up where you left off** ([#57](https://github.com/tungnguyenvan/tabula/issues/57)).
   - Opening it again brings back its query tabs: their SQL, including unsaved edits, and the `.sql` files they are tied to.
@@ -16,10 +22,6 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ### Fixed
 - Saving a connection replaced its Keychain password item, which could discard the permission already granted to Tabula. Tabula now updates the existing item in place and deletes it only when the password is cleared ([#59](https://github.com/tungnguyenvan/tabula/issues/59)).
-
-### Planned
-- SSH tunnels
-- Cancelling a running query
 
 ## [0.5.3] - 2026-10-27
 
