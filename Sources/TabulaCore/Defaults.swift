@@ -20,6 +20,8 @@ public enum Defaults {
     public static let completionPrefetchLimit = 300
     /// Queries remembered in a workspace's history.
     public static let historyLimit = 200
+    /// Seconds between saves of an open workspace's tabs (when they changed), so a crash loses little.
+    public static let workspaceStateSaveInterval: Double = 10
     /// Rows the sidebar's "New Query" asks for.
     public static let sampleQueryLimit = 100
     /// Entries kept in the console log; older ones are dropped.

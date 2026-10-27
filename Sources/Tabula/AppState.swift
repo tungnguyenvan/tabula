@@ -96,6 +96,7 @@ final class AppState {
         connections.removeAll { $0.id == id }
         setPassword(nil, for: id)
         Self.chatStore.remove(id)
+        WorkspaceModel.stateStore.remove(id)
         persist()
     }
 

@@ -125,9 +125,17 @@ struct SettingsView: View {
 
 private struct GeneralSettingsView: View {
     @State private var automatic = Updater.shared.automaticallyChecks
+    @AppStorage(WorkspaceModel.restoresStateKey) private var restoresState = true
 
     var body: some View {
         Form {
+            Section("Connections") {
+                Toggle("Reopen tabs when connecting", isOn: $restoresState)
+                    // Off forgets what was kept, not only stops keeping it.
+                    .onChange(of: restoresState) { _, on in if !on { WorkspaceModel.stateStore.removeAll() } }
+                Text("Opening a connection brings back its query tabs (with their SQL), open tables, schema and query history. They are kept on this Mac only. Tabula never reconnects by itself at launch.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Updates") {
                 Toggle("Automatically check for updates", isOn: $automatic)
                     .onChange(of: automatic) { _, value in Updater.shared.automaticallyChecks = value }
