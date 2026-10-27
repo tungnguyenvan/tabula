@@ -88,8 +88,8 @@ struct QueryTabView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help("Query history")
-            BarButton(symbol: "folder", help: "Open .sql file") { openSQL() }
-            BarButton(symbol: "square.and.arrow.down", help: "Save as .sql file") { saveSQL() }
+            BarButton(symbol: "folder", help: "Open .sql File (⌘O)") { workspace.chooseSQLFiles() }
+            BarButton(symbol: "square.and.arrow.down", help: "Save .sql File (⌘S)") { model.save() }
 
             if model.running { ProgressView().controlSize(.mini) }
             Spacer(minLength: 0)
@@ -256,20 +256,5 @@ struct QueryTabView: View {
                                               columns: { workspace.columnNames(of: $0) }, allColumns: workspace.knownColumnNames,
                                               tablesInSchema: { workspace.tableNames(inSchema: $0) })
         return (context.partialRange, items)
-    }
-
-    private func saveSQL() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "\(model.title).sql"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        try? model.sql.write(to: url, atomically: true, encoding: .utf8)
-    }
-
-    private func openSQL() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url, let text = try? String(contentsOf: url, encoding: .utf8) else { return }
-        model.sql = text
-        model.title = url.deletingPathExtension().lastPathComponent
     }
 }

@@ -77,8 +77,9 @@ final class ConnectionSession {
         guard let index = connections.firstIndex(where: { $0.id == id }) else { return }
         let connection = connections[index]
         if connection.hasUnsavedChanges, !Confirmation.ask(
-            "Close “\(connection.config.displayName)” and discard uncommitted changes?",
-            detail: "Commit them (⌘S) first if you want to keep them.", action: "Discard and Close") { return }
+            "Close “\(connection.config.displayName)” and discard unsaved changes?",
+            detail: "Commit changed rows and save edited .sql files (⌘S) first if you want to keep them.",
+            action: "Discard and Close") { return }
         connections.remove(at: index)
         if activeID == id { activeID = connections.isEmpty ? nil : connections[min(index, connections.count - 1)].id }
         Task { await connection.disconnect() }

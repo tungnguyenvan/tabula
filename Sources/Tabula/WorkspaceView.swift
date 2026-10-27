@@ -329,8 +329,11 @@ private struct TabButton: View {
     }
 
     private var hasChanges: Bool {
-        if case .table(let model) = tab { return model.hasChanges }
-        return false
+        switch tab {
+        case .table(let model): model.hasChanges
+        case .query(let model): model.isEdited
+        default: false
+        }
     }
 
     var body: some View {

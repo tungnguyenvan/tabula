@@ -123,7 +123,8 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 - **Suggestions as you type:** table names after `FROM` / `JOIN` and after `schema.`, a table's columns after `alias.`, and keywords plus columns (of the tables the statement uses, or of every table before one is named). The best match appears in grey after the cursor; press Tab to accept it. ⎋ (or ⌃Space) shows the full list.
 - **Limit:** SELECTs without a `LIMIT` get one (300 rows by default, or 100 to 5,000, or none), so an accidental full-table query stays small. Statements that already limit themselves, writes and `FOR UPDATE` are left alone.
 - **Beautify** (⇧⌘I) formats the selection or the whole editor: one clause per line, select items and conditions on their own lines, subqueries indented. Strings and comments are kept as written.
-- Comment toggling (⌘/), query history, and opening or saving `.sql` files.
+- Comment toggling (⌘/) and query history.
+- **.sql files:** open them with ⌘O, or from Finder (Open With, or drop one on the Dock icon). Tabula offers itself for `.sql` files but never makes itself their default app. The tab takes the file's name and shows a dot while it has unsaved edits. ⌘S saves the file and ⇧⌘S saves a copy under a new name. Closing a tab with unsaved edits asks whether to save. Opening a file that's already open selects its tab.
 
 **Console log**
 - ⇧⌘C (or the console button in the toolbar) opens a panel under the tabs listing every statement Tabula sent to the server: time, SQL, rows returned or affected, duration and errors. The app's own catalog queries are hidden unless you ask for them. Copy the log as a SQL script, or clear it.
@@ -365,12 +366,12 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 
 | Area | Shortcuts |
 | --- | --- |
-| Tabs and windows | ⌘T new query · ⌘W close tab (or the window if no tabs are open) · ⇧⌘T reopen closed tab · ⌘1…⌘8 go to tab, ⌘9 last tab · ⌃Tab or ⇧⌘] next tab · ⌃⇧Tab or ⇧⌘[ previous tab · ⌘P open anything · ⇧⌘K connections · ⌃⌘] / ⌃⌘[ next / previous connection |
+| Tabs and windows | ⌘T new query · ⌘W close tab (or the window if no tabs are open) · ⇧⌘T reopen closed tab · ⌘O open .sql files · ⌘1…⌘8 go to tab, ⌘9 last tab · ⌃Tab or ⇧⌘] next tab · ⌃⇧Tab or ⇧⌘[ previous tab · ⌘P open anything · ⇧⌘K connections · ⌃⌘] / ⌃⌘[ next / previous connection |
 | Browsing | ⌥⌘F filter tables · ↑↓ preview a table, ↩ or double-click to keep it open · ⌥⌘1 / ⌥⌘2 Data / Structure · ⌥⌘3 diagram · ⌥⌘4 metrics · ⌘F filter rows (press again to focus the filter) · ⌘R refresh · ⌘[ / ⌘] previous / next page · ⌥⌘0 row details · ⇧⌘C console log |
 | Data grid | ← → ↑ ↓ move between cells · Tab / ⇧Tab next / previous cell · ⌘← ⌘→ ⌘↑ ⌘↓ first / last column or row · ↩ or F2 edit · type any key to replace the value · Space quick look · ⌥⌫ set NULL · ⌫ delete rows · ⌘C copy rows · ⌥⇧⌘C copy rows with headers · ⌥⌘C copy cell |
 | Editing a cell | ↩ save and move down · Tab / ⇧Tab save and edit the next / previous cell · ⌥↩ new line · ⎋ cancel |
 | Changes | ⌘I add row · ⌘D duplicate row · ⌘Z / ⇧⌘Z undo / redo · ⌘S commit · ⇧⌘S preview SQL · ⌥⌘Z discard all changes |
-| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · Tab accept the grey suggestion · ⎋ or ⌃Space suggestions · ⌘K ask AI · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find |
+| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · ⌘S save · ⇧⌘S save as · Tab accept the grey suggestion · ⎋ or ⌃Space suggestions · ⌘K ask AI · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find |
 | Redis | ⌘T console · ⌘F key pattern · ⌘R refresh · ⌘N new key · ⌘I add element · ⌘S save string · ⌫ delete |
 
 ## Your data

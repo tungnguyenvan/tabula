@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **.sql files from the File menu.** **Open…** (⌘O) opens one or more files, each in its own query tab. **Save** (⌘S) writes back to the tab's file and **Save As…** (⇧⌘S) saves a copy under a new name ([#43](https://github.com/tungnguyenvan/tabula/issues/43)).
+  - A tab opened from or saved to a file takes its name and shows a dot while it has unsaved edits. Undoing back to the saved text clears the dot.
+  - Closing such a tab asks Save, Don't Save or Cancel. Reopening it (⇧⌘T) reads the file again.
+  - Opening a file that's already open selects its tab.
+  - `.sql` files open from Finder (Open With, or dropped on the Dock icon) into the frontmost connection, or into the next connection to connect. Tabula doesn't make itself their default app.
+  - Read and write errors are reported; they used to be ignored.
+  - In table tabs, ⌘S still commits and ⇧⌘S still previews the changes.
+
 ### Changed
 - Clicking anywhere on a sidebar group's title row now collapses or expands it, and its chevron is always shown, so the count beside it no longer jumps when the pointer passes over ([#41](https://github.com/tungnguyenvan/tabula/issues/41)).
 

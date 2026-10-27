@@ -28,6 +28,27 @@ final class QueryTabModel {
     var insertRequest: (sql: String, id: UUID)?
     /// The statement that failed in the last run, for Fix with AI.
     private(set) var failedStatement: String?
+    /// The .sql file the tab was opened from or last saved to.
+    private(set) var fileURL: URL?
+    /// The text as last read from or written to `fileURL`.
+    private var savedSQL = ""
+    /// Edited since it was last read or saved. Tabs without a file aren't tracked, as in a scratch editor.
+    var isEdited: Bool { fileURL != nil && sql != savedSQL }
+
+    /// Ties the tab to a file holding `text`, naming the tab after it.
+    func attach(_ url: URL, savedText text: String) {
+        fileURL = url.standardizedFileURL
+        savedSQL = text
+        title = url.lastPathComponent
+    }
+
+    /// This tab on another connection (after switching database), still tied to its file.
+    func moved(to driver: any DatabaseDriver, workspace: WorkspaceModel) -> QueryTabModel {
+        let copy = QueryTabModel(title: title, sql: sql, driver: driver, workspace: workspace)
+        copy.fileURL = fileURL
+        copy.savedSQL = savedSQL
+        return copy
+    }
 
     /// After Fix with AI replaced the failed statement, its error no longer applies.
     func clearFailure() {

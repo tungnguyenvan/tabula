@@ -14,6 +14,7 @@ import TabulaCore
 ///   (TABULA_DEBUG_RECORD_FPS a second, default 30), e.g. for the demo video (scripts/render-demo.sh)
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
 /// - TABULA_DEBUG_AI_ALLOW_PRODUCTION: allow AI on Production connections; TABULA_DEBUG_APPROVE: answer the chat's query approval
+/// - TABULA_DEBUG_FILES: .sql paths (comma-separated) handed over at launch, as Finder would open them
 /// - TABULA_DEBUG_CHAT_DEMO (a question) / TABULA_DEBUG_ASK_DEMO: play a made-up streamed answer with reasoning
 @MainActor
 enum DebugHooks {
@@ -153,6 +154,9 @@ enum DebugHooks {
 
     static func startKeyScript() {
         dumpMenus()
+        if let files = environment["TABULA_DEBUG_FILES"] {
+            NSApp.delegate?.application?(NSApp, open: files.split(separator: ",").map { URL(fileURLWithPath: String($0)) })
+        }
         guard let script = environment["TABULA_DEBUG_KEYS"] else { return }
         var delay = 3.0
         for token in script.components(separatedBy: ";") where !token.isEmpty {
@@ -211,6 +215,47 @@ enum DebugHooks {
                         post(.leftMouseUp, clicks: 2)
                     }
                     logEvent(kind, x: numbers[0], y: numbers[1])
+                }
+                delay += 0.6
+                continue
+            }
+            // open:<path> hands a file over as Finder would; alert:<button> answers the alert on screen.
+            if token.hasPrefix("open:") {
+                let url = URL(fileURLWithPath: String(token.dropFirst(5)))
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { NSApp.delegate?.application?(NSApp, open: [url]) }
+                delay += 0.6
+                continue
+            }
+            if token.hasPrefix("alert:") {
+                let title = String(token.dropFirst(6))
+                // A run-loop timer, since the main queue is held by the step that opened the alert.
+                let timer = Timer(timeInterval: delay, repeats: false) { _ in
+                    MainActor.assumeIsolated {
+                        guard let alert = NSApp.modalWindow, let content = alert.contentView else { return print("ALERT none") }
+                        func buttons(_ view: NSView) -> [NSButton] { ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(buttons) }
+                        let found = buttons(content)
+                        print("ALERT", found.map(\.title).filter { !$0.isEmpty })
+                        found.first { $0.title == title }?.performClick(nil)
+                    }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+                delay += 0.6
+                continue
+            }
+            // save / saveas / close / reopen: what File > Save, Save As…, Close Tab and Reopen Closed Tab do. SwiftUI
+            // doesn't refresh the menus of an app that isn't active, as one launched from a terminal may not be.
+            if token.hasPrefix("call:") {
+                let name = token.dropFirst(5)
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    guard let workspace = WorkspaceRegistry.key else { return print("CALL no workspace") }
+                    print("CALL", name)
+                    switch name {
+                    case "save": workspace.saveSelectedTab(choosingLocation: false)
+                    case "saveas": workspace.saveSelectedTab(choosingLocation: true)
+                    case "close": if let id = workspace.selectedTabID { workspace.requestClose(id) }
+                    case "reopen": workspace.reopenClosedTab()
+                    default: print("CALL unknown", name)
+                    }
                 }
                 delay += 0.6
                 continue

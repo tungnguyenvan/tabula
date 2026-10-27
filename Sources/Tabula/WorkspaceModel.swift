@@ -105,6 +105,8 @@ final class WorkspaceModel {
     enum ClosedTab {
         case table(TableRef, TableTabModel.Mode)
         case query(title: String, sql: String)
+        /// A tab tied to a file comes back as the file now on disk.
+        case file(URL)
     }
     /// Rows selected in the active grid, shown in the row inspector.
     var inspectedRows = IndexSet()
@@ -167,6 +169,8 @@ final class WorkspaceModel {
         do {
             await setUp(try await openDriver(config))
             if tabs.isEmpty { newQueryTab() }
+            // Files opened from Finder while no connection was ready.
+            PendingSQLFiles.take().forEach(openSQLFile)
             #if DEBUG
             DebugHooks.workspaceConnected(self)
             #endif
@@ -295,11 +299,11 @@ final class WorkspaceModel {
             return
         }
 
-        var queries: [(title: String, sql: String)] = []
+        var queries: [QueryTabModel] = []
         for tab in tabs {
             guard case .query(let model) = tab else { continue }
             model.assistant.cancel()
-            queries.append((model.title, model.sql))
+            queries.append(model)
         }
         await disconnect()
         config = target
@@ -316,7 +320,7 @@ final class WorkspaceModel {
         if queries.isEmpty {
             newQueryTab()
         } else {
-            tabs = queries.map { .query(QueryTabModel(title: $0.title, sql: $0.sql, driver: newDriver, workspace: self)) }
+            tabs = queries.map { .query($0.moved(to: newDriver, workspace: self)) }
             selectedTabID = tabs.first?.id
             prefetchColumns()
         }
@@ -558,7 +562,9 @@ final class WorkspaceModel {
         case .table(let model): closedTabs.append(.table(model.table, model.mode))
         case .query(let model):
             model.assistant.cancel()
-            if !model.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let url = model.fileURL {
+                closedTabs.append(.file(url))
+            } else if !model.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 closedTabs.append(.query(title: model.title, sql: model.sql))
             }
         case .diagram, .metrics, .routine:
@@ -575,10 +581,13 @@ final class WorkspaceModel {
         if let id = selectedTabID { close(id) }
     }
 
-    /// Whether closing this tab would throw away uncommitted edits.
+    /// Whether closing this tab would throw away uncommitted rows or unsaved edits to its file.
     func hasUnsavedChanges(_ id: UUID) -> Bool {
-        guard case .table(let model) = tabs.first(where: { $0.id == id }) else { return false }
-        return model.hasChanges
+        switch tabs.first(where: { $0.id == id }) {
+        case .table(let model): model.hasChanges
+        case .query(let model): model.isEdited
+        default: false
+        }
     }
 
     var canReopenTab: Bool { !closedTabs.isEmpty }
@@ -591,6 +600,8 @@ final class WorkspaceModel {
         case .query(let title, let sql):
             newQueryTab(sql: sql)
             if case .query(let model) = selectedTab { model.title = title }
+        case .file(let url):
+            openSQLFile(url)
         }
     }
 

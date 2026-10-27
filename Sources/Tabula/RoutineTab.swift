@@ -115,9 +115,6 @@ struct RoutineTabView: View {
                 .overlay { if model.loading { ProgressView().controlSize(.small) } }
         }
         .task { if model.original == nil, model.routine != nil { await model.load() } }
-        .background {
-            Button("") { Task { await model.save() } }.keyboardShortcut("s", modifiers: .command).hidden()
-        }
     }
 
     private var bar: some View {
