@@ -118,6 +118,10 @@ enum Layout {
         static let minWidth: CGFloat = 180
         static let idealWidth: CGFloat = 230
         static let maxWidth: CGFloat = 400
+        /// Redis lists keys in a narrower column.
+        static let redisMinWidth: CGFloat = 160
+        static let redisIdealWidth: CGFloat = 200
+        static let redisMaxWidth: CGFloat = 320
         /// Space around the database and schema pickers at the top, and between the two.
         static let pickerPadding: CGFloat = 8
         static let pickerSpacing: CGFloat = 2

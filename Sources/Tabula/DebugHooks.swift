@@ -275,14 +275,21 @@ enum DebugHooks {
                 delay += 0.6
                 continue
             }
-            // save / saveas / close / reopen: what File > Save, Save As…, Close Tab and Reopen Closed Tab do. SwiftUI
-            // doesn't refresh the menus of an app that isn't active, as one launched from a terminal may not be.
+            // save / saveas / close / reopen / nextconn / closeconn / ai / sidebar: what File > Save, Save As…, Close Tab,
+            // Reopen Closed Tab, Next Connection, Close Connection, AI Chat and View > Hide Sidebar do. SwiftUI doesn't
+            // refresh the menus of an app that isn't active, as one launched from a terminal may not be.
             if token.hasPrefix("call:") {
                 let name = token.dropFirst(5)
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    guard let workspace = WorkspaceRegistry.key else { return print("CALL no workspace") }
                     print("CALL", name)
+                    if let window = targetWindow { WorkspaceRegistry.makeActiveForTesting(window) }
+                    // Connections switch in any workspace, Redis included.
+                    if name == "nextconn" { return ActiveWorkspace.shared.session?.selectAdjacent(1) ?? print("CALL no session") }
+                    if name == "closeconn", let session = ActiveWorkspace.shared.session, let id = session.active?.id { return session.close(id) }
+                    if name == "sidebar" { return NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil) ? () : print("CALL no sidebar") }
+                    guard let workspace = WorkspaceRegistry.key else { return print("CALL no workspace") }
                     switch name {
+                    case "ai": workspace.toggleRightPanel(.ai)
                     case "save": workspace.saveSelectedTab(choosingLocation: false)
                     case "saveas": workspace.saveSelectedTab(choosingLocation: true)
                     case "close": if let id = workspace.selectedTabID { workspace.requestClose(id) }
