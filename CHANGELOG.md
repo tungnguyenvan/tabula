@@ -4,6 +4,12 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Planned
+- SSH tunnels
+- Cancelling a running query
+
+## [0.5.5] - 2026-10-27
+
 ### Added
 - **Edit query results on PostgreSQL** ([#64](https://github.com/tungnguyenvan/tabula/issues/64)).
   - Double-click a cell in a result from one table that includes its whole primary key.
@@ -15,10 +21,6 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ### Fixed
 - Added or clarified help text for icon-only controls, including Open/Save SQL, closing tabs and row value actions. Save SQL explains the distinction between saving query text and committing result edits ([#73](https://github.com/tungnguyenvan/tabula/issues/73)).
 - The AI chat now uses a rounded composer with a native scrolling message editor above the model, effort and send controls. Long multiline messages no longer overlap the controls ([#63](https://github.com/tungnguyenvan/tabula/issues/63)).
-
-### Planned
-- SSH tunnels
-- Cancelling a running query
 
 ## [0.5.4] - 2026-10-27
 
