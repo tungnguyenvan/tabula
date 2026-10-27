@@ -5,6 +5,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Fixed
+- The Connections window's **New from Connection String…** button wrapped onto three lines; it is now **Connection String…**, on one line ([#50](https://github.com/tungnguyenvan/tabula/issues/50)).
 - In the AI chat, an expanded query step showed the rows it returned with their columns run together; they now line up ([#48](https://github.com/tungnguyenvan/tabula/issues/48)).
 
 ### Planned
@@ -22,7 +23,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - Read and write errors are reported; they used to be ignored.
   - In table tabs, ⌘S still commits and ⇧⌘S still previews the changes.
 - **Create a connection from a connection string** ([#45](https://github.com/tungnguyenvan/tabula/issues/45)).
-  - **New from Connection String…** (⇧⌘N) in the Connections window, or paste (⌘V) into the connection list.
+  - **Connection String…** (⇧⌘N) in the Connections window, or paste (⌘V) into the connection list.
   - A summary shows what was read; **Continue** fills in the New Connection form.
   - Besides URLs, Tabula now reads JDBC URLs (with `user` and `password` options), libpq `key=value` strings and semicolon-separated strings (`Server=…;Uid=…`, Npgsql's `Host=…;Username=…`), in this sheet and in the Host field.
 

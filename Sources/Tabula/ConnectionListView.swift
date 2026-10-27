@@ -136,7 +136,7 @@ struct ConnectionListView: View {
                 .keyboardShortcut("n", modifiers: .command)
                 WelcomeAction(symbol: "doc.badge.plus", title: "Open SQLite File…", shortcut: "⌘O") { openSQLiteFile() }
                     .keyboardShortcut("o", modifiers: .command)
-                WelcomeAction(symbol: "link.badge.plus", title: "New from Connection String…", shortcut: "⇧⌘N") {
+                WelcomeAction(symbol: "link.badge.plus", title: "Connection String…", shortcut: "⇧⌘N") {
                     connectionString = ConnectionStringRequest()
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -280,7 +280,7 @@ private struct WelcomeAction: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: symbol).font(.system(size: 15)).foregroundStyle(Color.accentColor).frame(width: 20)
-                Text(title).font(.system(size: 13, weight: .medium))
+                Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
                 Spacer()
                 Text(shortcut).font(.system(size: 11)).foregroundStyle(.tertiary)
             }

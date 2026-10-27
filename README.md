@@ -81,7 +81,7 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 - Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
 - Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
 - Copy a connection as a URL (`postgresql://user@host:5432/db?sslmode=require`), with or without the password, from the connection's context menu.
-- **Create a connection from a connection string:** **New from Connection String…** (⇧⌘N) in the Connections window, or paste (⌘V) into the connection list. A summary shows what was read before **Continue** fills in the New Connection form, the password too. The Host field accepts the same strings. Accepted:
+- **Create a connection from a connection string:** **Connection String…** (⇧⌘N) in the Connections window, or paste (⌘V) into the connection list. A summary shows what was read before **Continue** fills in the New Connection form, the password too. The Host field accepts the same strings. Accepted:
   - URLs: `postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and the URLs TablePlus copies;
   - JDBC URLs (`jdbc:postgresql://host/db?user=…&password=…`, `jdbc:sqlite:/path`);
   - libpq strings (`host=… port=… dbname=… user=… password=…`);

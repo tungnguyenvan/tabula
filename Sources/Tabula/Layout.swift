@@ -89,7 +89,7 @@ enum Layout {
     }
 
     enum Welcome {
-        static let width: CGFloat = 250
+        static let width: CGFloat = 270
     }
 
     enum ConnectionForm {
