@@ -61,16 +61,29 @@ public struct KeychainItem: Sendable {
         return String(data: data, encoding: .utf8)
     }
 
-    /// Stores `value`, or removes the item when it is nil or empty.
+    /// Stores `value` without replacing an existing item's access permissions (including Always Allow). Only an
+    /// explicit nil or empty value deletes it; authorization and other failures leave the existing item intact.
     public func write(_ value: String?) throws {
-        let removed = SecItemDelete(query as CFDictionary)
-        guard removed == errSecSuccess || removed == errSecItemNotFound else { throw KeychainError(status: removed) }
-        guard let value, !value.isEmpty else { return }
-        var item = query
-        item[kSecValueData as String] = Data(value.utf8)
-        if let label { item[kSecAttrLabel as String] = label }
+        guard let value, !value.isEmpty else {
+            let removed = SecItemDelete(query as CFDictionary)
+            guard removed == errSecSuccess || removed == errSecItemNotFound else { throw KeychainError(status: removed) }
+            return
+        }
+        var attributes: [String: Any] = [kSecValueData as String: Data(value.utf8)]
+        if let label { attributes[kSecAttrLabel as String] = label }
+        let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updated == errSecSuccess { return }
+        guard updated == errSecItemNotFound else { throw KeychainError(status: updated) }
+
+        let item = query.merging(attributes) { _, new in new }
         let added = SecItemAdd(item as CFDictionary, nil)
-        guard added == errSecSuccess else { throw KeychainError(status: added) }
+        // Another writer may have created it since the update found nothing. Keep that item's access controls too.
+        if added == errSecDuplicateItem {
+            let retried = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            guard retried == errSecSuccess else { throw KeychainError(status: retried) }
+        } else if added != errSecSuccess {
+            throw KeychainError(status: added)
+        }
     }
 }
 

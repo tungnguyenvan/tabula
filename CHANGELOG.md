@@ -14,6 +14,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - **Reopen tabs when connecting** in Settings › General turns this off and forgets what was kept. Deleting a connection deletes its state.
   - Tabula still never reconnects by itself at launch.
 
+### Fixed
+- Saving a connection replaced its Keychain password item, which could discard the permission already granted to Tabula. Tabula now updates the existing item in place and deletes it only when the password is cleared ([#59](https://github.com/tungnguyenvan/tabula/issues/59)).
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query
