@@ -18,9 +18,9 @@ import {
   type InputEvent,
 } from "./Demo";
 
-/// What's new from 0.5.0 to 0.5.2, each feature in the real app (scripts/render-whats-new.sh lists the recordings).
+/// What's new from 0.5.0 to 0.5.4, each feature in the real app (scripts/render-whats-new.sh lists the recordings).
 /// The pointer shows only where it clicks. Timed in thirtieths of a second, as in Demo.tsx.
-export const whatsNewRecordings = ["tools", "history", "sidebar", "sqlfile", "connstring"] as const;
+export const whatsNewRecordings = ["tools", "history", "state", "sidebar", "sqlfile", "connstring"] as const;
 type Name = (typeof whatsNewRecordings)[number];
 export type WhatsNewProps = { events: Partial<Record<Name, InputEvent[]>> };
 
@@ -47,7 +47,7 @@ const Mark: React.FC<{ from: number; to: number; left: number; top: number; widt
   );
 };
 
-const versions = ["0.5.0", "0.5.1", "0.5.2"];
+const versions = ["0.5.0", "0.5.1", "0.5.2", "0.5.3", "0.5.4"];
 
 const Intro: React.FC<{ duration: number }> = ({ duration }) => {
   const frame = useFrame();
@@ -123,6 +123,29 @@ const History: React.FC<SceneProps> = ({ duration, events }) => {
   );
 };
 
+/// Recorded after closing the connection, so the empty window really has no connection. Opening PostgreSQL at
+/// frame 304 restores all four tabs; the Orders tab is selected at 398 and the file tab at 470.
+const WorkspaceState: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Pick up where you left off" sub="Each connection remembers its tabs, SQL, schema and query history" />
+      <Recording name={file("state")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 286], [18, 304], [42, 328], [84, 398], [126, 440], [156, 470], [duration, 544]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.47, zoom: 1.15 },
+          { at: 24, x: 0.5, y: 0.47, zoom: 1.15 },
+          { at: 52, x: 0.48, y: 0.28, zoom: 1.45 },
+          { at: 190, x: 0.48, y: 0.28, zoom: 1.45 },
+          { at: duration, x: 0.5, y: 0.5, zoom: fit },
+        ]}>
+        <Mark from={44} to={78} left={0.184} top={0.068} width={0.65} height={0.038} label="Your tabs, restored" />
+      </Recording>
+      <Caption from={44} to={80}>Your SQL comes back. It is not run automatically.</Caption>
+      <Caption from={166} to={214}>Table tabs and .sql files, together</Caption>
+    </Enter>
+  </Background>
+);
+
 /// Recorded at 30 frames a second: Triggers, Functions, Views and Tables collapse at 181, 227, 272 and 316; Tables
 /// opens again at 379.
 const Sidebar: React.FC<SceneProps> = ({ duration, events }) => (
@@ -164,14 +187,14 @@ const SQLFile: React.FC<SceneProps> = ({ duration, events }) => (
   </Background>
 );
 
-/// Recorded at 30 frames a second in the Connections window: Connection String… at 166, the field at 220, the
-/// string pasted at 262, Continue at 346, the filled-in form from about 352.
+/// Recorded at 30 frames a second in the Connections window: Connection String… at 167, the field at 221, the
+/// string pasted at 262, Continue at 347, the filled-in form from about 352.
 const ConnString: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
       <Title text="Paste a connection string" sub="URLs, JDBC or key=value pairs: Tabula fills in the form" />
       <Recording name={file("connstring")} events={events} duration={duration} pointer="clicks" aspect={connectionsAspect} shape="connections"
-        timeline={[[0, 150], [16, 166], [43, 220], [64, 262], [106, 346], [duration, 425]]}
+        timeline={[[0, 150], [17, 167], [44, 221], [65, 262], [107, 347], [duration, 425]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: connectionsFit },
           { at: 10, x: 0.3, y: 0.7, zoom: 1.2 },
@@ -194,7 +217,7 @@ const Outro: React.FC = () => {
       <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
         <Img src={staticFile("icon.png")} style={{ width: 150, height: 150, transform: `scale(${icon})` }} />
         <Sfx at={18} name="chime" volume={0.6} />
-        <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula 0.5.2" top={10} at={4} /></div>
+        <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula 0.5.4" top={10} at={4} /></div>
         <div style={{ fontSize: 34, color: "rgba(255,255,255,0.8)", opacity: spring({ frame: frame - 12, fps: unit, config: { damping: 200 } }) }}>
           Free · Native · No account, no telemetry
         </div>
@@ -207,10 +230,11 @@ const Outro: React.FC = () => {
 };
 
 const scenes: { duration: number; render: (duration: number, props: WhatsNewProps) => React.ReactNode }[] = [
-  { duration: 70, render: (d) => <Intro duration={d} /> },
+  { duration: 80, render: (d) => <Intro duration={d} /> },
   { duration: 205, render: (d, p) => <Tools duration={d} events={p.events.tools ?? []} /> },
   { duration: 165, render: (d, p) => <History duration={d} events={p.events.history ?? []} /> },
-  { duration: 160, render: (d, p) => <Sidebar duration={d} events={p.events.sidebar ?? []} /> },
+  { duration: 230, render: (d, p) => <WorkspaceState duration={d} events={p.events.state ?? []} /> },
+  { duration: 150, render: (d, p) => <Sidebar duration={d} events={p.events.sidebar ?? []} /> },
   { duration: 205, render: (d, p) => <SQLFile duration={d} events={p.events.sqlfile ?? []} /> },
   { duration: 185, render: (d, p) => <ConnString duration={d} events={p.events.connstring ?? []} /> },
   { duration: 85, render: () => <Outro /> },
