@@ -6,12 +6,14 @@
 # Recordings of a debug build driven by real input, as for scripts/render-demo.sh, in $RECORDINGS (default
 # /tmp/tabula-rec3). The pointer is drawn only around clicks. Each was made with scripts' TABULA_DEBUG_KEYS against
 # the test connections (TABULA_DATA_DIR) at 30 frames a second, in a 1300×760 window unless noted:
-#   tools       PostgreSQL (orders seeded, no saved conversations), TABULA_DEBUG_AI_PROVIDER=claudeCode:
-#               "wait:3000;click:0.947,0.034;wait:1200;click:0.85,0.95;wait:300;slow:Revenue by status? Check the data.;
-#                wait:300;return;wait:55000;click:0.986,0.144;wait:1000;click:0.85,0.95;wait:300;
-#                slow:Top 3 products by price? Look it up.;wait:300;return;wait:40000" (the second saves a conversation)
-#   history     PostgreSQL, claudeCode, reopened: "wait:3000;click:0.947,0.034;wait:1500;click:0.82,0.144;wait:1000;
-#               down;wait:400;down;wait:500;return;wait:1500;click:0.779,0.266;wait:3000"
+#   tools       Current development build, PostgreSQL, TABULA_DEBUG_AI_PROVIDER=claudeCode,
+#               TABULA_DEBUG_INSPECTOR_WIDTH=520, with actual saved conversations copied into the isolated test store.
+#               "wait:3000;click:0.947,0.034;wait:1500;click:0.610,0.266;wait:2500;click:0.610,0.266;wait:2500"
+#               The video explicitly identifies this as a real saved conversation, reopened (not simulated live AI).
+#   history     Same build, store and inspector width:
+#               "wait:3000;click:0.947,0.034;wait:1500;click:0.68,0.144;wait:2200;esc;wait:1000;
+#                click:0.986,0.144;wait:1300;click:0.75,0.925;wait:300;slow:Compare paid and shipped orders;wait:1500"
+#               The unsent draft shows the new composer, labelled as the current development build.
 #   state       PostgreSQL with a real saved workspace: Query 3 (scratch SQL), orders (Data), monthly_revenue.sql,
 #               customers (Structure). After closing and reopening the connection:
 #               "wait:5000;call:closeconn;wait:1500;click:0.43,0.425;wait:2500;click:0.433,0.087;wait:1800;

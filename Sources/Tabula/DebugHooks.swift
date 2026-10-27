@@ -37,6 +37,8 @@ enum DebugHooks {
     static var continuesConnectionString: Bool { environment["TABULA_DEBUG_CONNECTION_STRING_CONTINUE"] != nil }
     /// TABULA_DEBUG_VERSION: the version the Connections window shows (a debug build has none), e.g. for recordings.
     static var version: String? { environment["TABULA_DEBUG_VERSION"] }
+    /// TABULA_DEBUG_INSPECTOR_WIDTH: fix the right panel width for recordings, without changing release defaults.
+    static var inspectorWidth: Double? { environment["TABULA_DEBUG_INSPECTOR_WIDTH"].flatMap(Double.init).flatMap { $0.isFinite && $0 >= Double(Layout.Inspector.minWidth) && $0 <= Double(Layout.Inspector.maxWidth) ? $0 : nil } }
 
     /// TABULA_DEBUG_OPEN may list several ids separated by commas.
     static var connectionsToOpen: [UUID] {
