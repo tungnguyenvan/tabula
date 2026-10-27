@@ -286,12 +286,17 @@ enum DebugHooks {
                     print("CALL", name)
                     if let window = targetWindow { WorkspaceRegistry.makeActiveForTesting(window) }
                     // Connections switch in any workspace, Redis included.
+                    if name == "closewindow" { targetWindow?.performClose(nil); return }
+                    if name == "quit" { NSApp.terminate(nil); return }
                     if name == "nextconn" { return ActiveWorkspace.shared.session?.selectAdjacent(1) ?? print("CALL no session") }
                     if name == "closeconn", let session = ActiveWorkspace.shared.session, let id = session.active?.id { return session.close(id) }
                     if name == "sidebar" { return NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil) ? () : print("CALL no sidebar") }
                     guard let workspace = WorkspaceRegistry.key else { return print("CALL no workspace") }
                     switch name {
                     case "ai": workspace.toggleRightPanel(.ai)
+                    case "resultundo": workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?.undoManager.undo()
+                    case "resultredo": workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?.undoManager.redo()
+                    case "resultpreview": if case .query(let q) = workspace.selectedTab { q.showResultPreview = true }
                     case "save": workspace.saveSelectedTab(choosingLocation: false)
                     case "saveas": workspace.saveSelectedTab(choosingLocation: true)
                     case "close": if let id = workspace.selectedTabID { workspace.requestClose(id) }

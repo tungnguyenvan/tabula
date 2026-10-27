@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Edit query results on PostgreSQL** ([#64](https://github.com/tungnguyenvan/tabula/issues/64)).
+  - Double-click a cell in a result from one table that includes its whole primary key.
+  - Edits are highlighted and wait for **Commit** (⌘S), **Preview** or **Discard**, as in a table tab; the row details panel edits them too.
+  - Changes commit in one transaction on a separate connection, and a row changed by someone else since the query ran is reported instead of overwritten.
+  - Joins, views, grouping, functions and computed columns stay read-only, as do key and generated columns.
+  - Production connections ask before committing. Running the query again, closing the tab or window, quitting, reconnecting or switching database asks before dropping uncommitted edits.
+
 ### Fixed
 - The AI chat now uses a rounded composer with a native scrolling message editor above the model, effort and send controls. Long multiline messages no longer overlap the controls ([#63](https://github.com/tungnguyenvan/tabula/issues/63)).
 

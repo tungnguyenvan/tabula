@@ -48,6 +48,16 @@ public actor LoggingDriver: DatabaseDriver {
         }
     }
 
+    public func queryEditTarget(for result: QueryResult) async throws -> QueryEditTarget? {
+        try await inner.queryEditTarget(for: result)
+    }
+
+    public func commitQueryEdits(_ edits: [QueryRowEdit], target: QueryEditTarget) async throws -> [Int: [String?]] {
+        try await logged("-- Commit query result changes to \(target.table.schema).\(target.table.name)") {
+            try await $0.commitQueryEdits(edits, target: target)
+        } outcome: { .affected($0.count) }
+    }
+
     public func schemas() async throws -> [String] {
         try await logged("-- list schemas", meta: true) { try await $0.schemas() } outcome: { .rows($0.count) }
     }

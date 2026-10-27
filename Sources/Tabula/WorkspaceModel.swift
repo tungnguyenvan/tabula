@@ -217,10 +217,19 @@ final class WorkspaceModel {
         await loadTables()
     }
 
+    private func confirmDiscardQueryResults() -> Bool {
+        for case .query(let query) in tabs where query.hasResultChanges || query.committingResults {
+            if !query.confirmDiscardResults() { return false }
+        }
+        return true
+    }
+
     func reconnect() async {
+        guard confirmDiscardQueryResults() else { return }
         // What was open comes back once connected again; until then the emptied tabs aren't saved.
         saveState()
         stateRestored = false
+        for case .query(let query) in tabs { query.suspendResultEditing() }
         await disconnect()
         tabs.removeAll()
         selectedTabID = nil
@@ -238,6 +247,20 @@ final class WorkspaceModel {
         await driver?.close()
         driver = nil
         await agent?.close()
+    }
+
+    /// Commits result edits through a short-lived connection so a user transaction on the query connection is
+    /// never committed or rolled back by a GUI edit.
+    func commitQueryEdits(_ edits: [QueryRowEdit], target: QueryEditTarget) async throws -> [Int: [String?]] {
+        let writer = try await openDriver(config)
+        do {
+            let rows = try await writer.commitQueryEdits(edits, target: target)
+            await writer.close()
+            return rows
+        } catch {
+            await writer.close()
+            throw error
+        }
     }
 
     /// The chat assistant's own connection: read-only where the server allows it, so its queries can't change
@@ -292,7 +315,8 @@ final class WorkspaceModel {
             switch tab {
             case .table(let model): model.hasChanges
             case .routine(let model): model.hasChanges
-            case .query, .diagram, .metrics: false
+            case .query(let model): model.hasResultChanges || model.committingResults
+            case .diagram, .metrics: false
             }
         }
     }
@@ -318,10 +342,17 @@ final class WorkspaceModel {
             return
         }
 
+        // The old workspace remained usable while connecting: check newly staged edits and commits now,
+        // immediately before replacing it, not before the await above.
+        guard confirmDiscardQueryResults() else {
+            await newDriver.close()
+            return
+        }
         var queries: [QueryTabModel] = []
         for tab in tabs {
             guard case .query(let model) = tab else { continue }
             model.assistant.cancel()
+            model.suspendResultEditing()
             queries.append(model)
         }
         await disconnect()
@@ -611,7 +642,7 @@ final class WorkspaceModel {
     func hasUnsavedChanges(_ id: UUID) -> Bool {
         switch tabs.first(where: { $0.id == id }) {
         case .table(let model): model.hasChanges
-        case .query(let model): model.isEdited
+        case .query(let model): model.isEdited || model.hasResultChanges || model.committingResults
         default: false
         }
     }

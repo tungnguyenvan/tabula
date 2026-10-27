@@ -71,7 +71,7 @@ struct ShortcutsView: View {
             ("⎋ or ⌃Space", "Show suggestions: tables, columns, keywords"),
             ("⇧⌘I", "Beautify the selection or the whole query"),
             ("⌘K", "Ask AI: write SQL, or change the selection"),
-            ("⌘S", "Save to its .sql file"),
+            ("⌘S", "Commit edited result cells, otherwise save the .sql file"),
             ("⇧⌘S", "Save as a new .sql file"),
             ("⌘F", "Find (when editor is focused)"),
             ("⌘Z / ⇧⌘Z", "Undo / redo (per tab)"),

@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 import TabulaCore
 
@@ -12,6 +12,12 @@ final class QueryTabModel {
 
     private(set) var results: [QueryResult] = []
     var selectedResult = 0
+    private(set) var resultEditors: [Int: QueryResultEditor] = [:]
+    var showResultPreview = false
+    var resultEditor: QueryResultEditor? { resultEditors[selectedResult] }
+    var hasResultChanges: Bool { resultEditors.values.contains(where: \.hasChanges) }
+    var committingResults: Bool { resultEditors.values.contains(where: \.committing) }
+
     private(set) var error: String?
     private(set) var running = false
     private(set) var version = 0
@@ -71,11 +77,12 @@ final class QueryTabModel {
     /// Runs `text` (the editor selection, or the whole editor when nil) statement by statement.
     func run(_ text: String? = nil) async {
         let script = (text?.isEmpty == false ? text! : sql).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !script.isEmpty, !running else { return }
+        guard !script.isEmpty, !running, workspace?.openingDatabase == nil, !committingResults, confirmDiscardResults() else { return }
         running = true
         error = nil
         failedStatement = nil
         results = []
+        resultEditors = [:]
         defer { running = false; version += 1 }
 
         workspace?.recordHistory(script)
@@ -85,7 +92,12 @@ final class QueryTabModel {
             if Task.isCancelled { break }
             do {
                 let limited = rowLimit.map { driver.dialect.applyingRowLimit(statement, limit: $0) } ?? statement
-                results.append(try await driver.execute(limited))
+                let result = try await driver.execute(limited)
+                results.append(result)
+                // Metadata/catalog checks may reject a result, but must not turn a successful query into an error.
+                if let target = try? await driver.queryEditTarget(for: result) {
+                    resultEditors[results.count - 1] = QueryResultEditor(target: target, rows: result.rows)
+                }
             } catch {
                 failedStatement = statement
                 let prefix = statements.count > 1 ? "Statement \(index + 1) of \(statements.count) failed:\n" : ""
@@ -97,6 +109,34 @@ final class QueryTabModel {
         selectedResult = results.lastIndex(where: \.hasResultSet) ?? max(0, results.count - 1)
         // Schema may have changed (CREATE/DROP/ALTER).
         if results.contains(where: { !$0.hasResultSet }) { await workspace?.loadTables() }
+    }
+
+    func suspendResultEditing() {
+        for editor in resultEditors.values { editor.suspended = true }
+    }
+
+    func confirmDiscardResults() -> Bool {
+        guard !committingResults else { return false }
+        return !hasResultChanges || Confirmation.ask("Discard uncommitted query result changes?",
+            detail: "Commit the result changes first if you want to keep them. Saving the SQL file does not save data changes.",
+            action: "Discard Changes")
+    }
+
+    func commitResult() async {
+        guard let editor = resultEditor, !editor.suspended, editor.hasChanges, !running, !committingResults, let workspace, workspace.openingDatabase == nil else { return }
+        if workspace.config.tag == .production, !Confirmation.ask("Commit result changes on a PRODUCTION connection?",
+            detail: "This updates rows in \(editor.target.table.schema).\(editor.target.table.name).", action: "Commit") { return }
+        editor.committing = true
+        defer { editor.committing = false }
+        do {
+            // An isolated session avoids implicitly committing/rolling back an SQL transaction in the editor.
+            let returned = try await workspace.commitQueryEdits(editor.changes, target: editor.target)
+            editor.applied(returned)
+            if let index = resultEditors.first(where: { $0.value === editor })?.key {
+                results[index].rows = editor.rows
+                version += 1
+            }
+        } catch { editor.error = error.localizedDescription }
     }
 
     func exportText(_ format: ExportFormat) -> String {

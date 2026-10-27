@@ -79,6 +79,9 @@ final class ConnectionSession {
     func close(_ id: UUID) {
         guard let index = connections.firstIndex(where: { $0.id == id }) else { return }
         let connection = connections[index]
+        // A result commit uses a short-lived writer and can't be interrupted by tearing down its workspace.
+        if case .sql(let model) = connection,
+           model.tabs.contains(where: { if case .query(let query) = $0 { query.committingResults } else { false } }) { return }
         if connection.hasUnsavedChanges, !Confirmation.ask(
             "Close “\(connection.config.displayName)” and discard unsaved changes?",
             detail: "Commit changed rows and save edited .sql files (⌘S) first if you want to keep them.",
@@ -91,6 +94,21 @@ final class ConnectionSession {
     func selectAdjacent(_ offset: Int) {
         guard let current = connections.firstIndex(where: { $0.id == active?.id }), !connections.isEmpty else { return }
         activeID = connections[(current + offset + connections.count) % connections.count].id
+    }
+
+    /// Window close and application quit must not silently drop staged result changes or interrupt a commit.
+    func confirmCloseResults() -> Bool {
+        let queries = connections.flatMap { connection -> [QueryTabModel] in
+            guard case .sql(let workspace) = connection else { return [] }
+            return workspace.tabs.compactMap { if case .query(let query) = $0 { query } else { nil } }
+        }
+        if queries.contains(where: \.committingResults) {
+            NSSound.beep()
+            return false
+        }
+        guard queries.contains(where: \.hasResultChanges) else { return true }
+        return Confirmation.ask("Discard uncommitted query result changes?",
+                                detail: "Commit the result changes before closing if you want to keep them.", action: "Discard and Close")
     }
 
     func closeAll() {

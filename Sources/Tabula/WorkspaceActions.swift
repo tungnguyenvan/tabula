@@ -18,7 +18,9 @@ extension WorkspaceModel {
     /// its changes, a routine saves its definition.
     func saveSelectedTab(choosingLocation: Bool) {
         switch selectedTab {
-        case .query(let query): query.save(choosingLocation: choosingLocation)
+        case .query(let query):
+            if !choosingLocation, query.resultEditor?.hasChanges == true { Task { await query.commitResult() } }
+            else { query.save(choosingLocation: choosingLocation) }
         case .table(let table): if choosingLocation { table.showPreviewRequest += 1 } else { commitSelectedTable() }
         case .routine(let routine) where !choosingLocation: Task { await routine.save() }
         default: NSSound.beep()
@@ -26,6 +28,7 @@ extension WorkspaceModel {
     }
 
     func commitSelectedTable() {
+        if case .query(let query) = selectedTab, query.resultEditor?.hasChanges == true { Task { await query.commitResult() }; return }
         if let table = selectedTableTab, table.hasChanges { Task { await table.commit() } } else { NSSound.beep() }
     }
 }

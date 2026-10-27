@@ -13,6 +13,8 @@ public protocol DatabaseDriver: AnyObject, Sendable {
     func indexes(of table: TableRef) async throws -> [IndexInfo]
     /// Executes exactly one SQL statement.
     func execute(_ sql: String) async throws -> QueryResult
+    func queryEditTarget(for result: QueryResult) async throws -> QueryEditTarget?
+    func commitQueryEdits(_ edits: [QueryRowEdit], target: QueryEditTarget) async throws -> [Int: [String?]]
     func close() async
 }
 

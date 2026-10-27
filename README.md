@@ -131,6 +131,7 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 - **Limit:** SELECTs without a `LIMIT` get one (300 rows by default, or 100 to 5,000, or none), so an accidental full-table query stays small. Statements that already limit themselves, writes and `FOR UPDATE` are left alone.
 - **Beautify** (⇧⌘I) formats the selection or the whole editor: one clause per line, select items and conditions on their own lines, subqueries indented. Strings and comments are kept as written.
 - Comment toggling (⌘/) and query history.
+- **Edit query results (PostgreSQL):** double-click a cell in a result from one table that includes its whole primary key, for example `SELECT id, name, price FROM products`. Edits wait until you **Commit** (⌘S), **Preview** or **Discard** them, as in a table tab. All changes commit in one transaction on a separate connection, and a row someone else changed since the query ran is reported, not overwritten. Results from joins, views, grouping, functions or computed columns stay read-only, as do key and generated columns. Production connections ask before committing.
 - **.sql files:** open them with ⌘O, or from Finder (Open With, or drop one on the Dock icon). Tabula offers itself for `.sql` files but never makes itself their default app. The tab takes the file's name and shows a dot while it has unsaved edits. ⌘S saves the file and ⇧⌘S saves a copy under a new name. Closing a tab with unsaved edits asks whether to save. Opening a file that's already open selects its tab.
 
 **Console log**
@@ -378,7 +379,7 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 | Data grid | ← → ↑ ↓ move between cells · Tab / ⇧Tab next / previous cell · ⌘← ⌘→ ⌘↑ ⌘↓ first / last column or row · ↩ or F2 edit · type any key to replace the value · Space quick look · ⌥⌫ set NULL · ⌫ delete rows · ⌘C copy rows · ⌥⇧⌘C copy rows with headers · ⌥⌘C copy cell |
 | Editing a cell | ↩ save and move down · Tab / ⇧Tab save and edit the next / previous cell · ⌥↩ new line · ⎋ cancel |
 | Changes | ⌘I add row · ⌘D duplicate row · ⌘Z / ⇧⌘Z undo / redo · ⌘S commit · ⇧⌘S preview SQL · ⌥⌘Z discard all changes |
-| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · ⌘S save · ⇧⌘S save as · Tab accept the grey suggestion · ⎋ or ⌃Space suggestions · ⌘K ask AI · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find |
+| SQL editor | ⌘↩ run the selection or the current statement · ⇧⌘↩ run all · ⌘S commit edited result cells, otherwise save · ⇧⌘S save as · Tab accept the grey suggestion · ⎋ or ⌃Space suggestions · ⌘K ask AI · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find |
 | Redis | ⌘T console · ⌘F key pattern · ⌘R refresh · ⌘N new key · ⌘I add element · ⌘S save string · ⌫ delete |
 
 ## Your data

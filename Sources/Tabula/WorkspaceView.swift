@@ -358,7 +358,7 @@ private struct TabButton: View {
     private var hasChanges: Bool {
         switch tab {
         case .table(let model): model.hasChanges
-        case .query(let model): model.isEdited
+        case .query(let model): model.isEdited || model.hasResultChanges
         default: false
         }
     }

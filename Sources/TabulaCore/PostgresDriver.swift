@@ -47,7 +47,8 @@ public actor PostgresDriver: DatabaseDriver {
         do {
             if SQLSplitter.returnsRows(sql) {
                 let sequence = try await connection.query(PostgresQuery(unsafeSQL: sql), logger: logger)
-                let columns = sequence.columns.map { (name: $0.name, oid: $0.dataType.rawValue) }
+                let metadata = Array(sequence.columns)
+                let columns = metadata.map { (name: $0.name, oid: $0.dataType.rawValue) }
                 var rows: [[String?]] = []
                 for try await row in sequence {
                     var values: [String?] = []
@@ -57,7 +58,9 @@ public actor PostgresDriver: DatabaseDriver {
                     }
                     rows.append(values)
                 }
-                return QueryResult(columns: columns.map(\.name), rows: rows, duration: Date().timeIntervalSince(started), statement: sql)
+                var result = QueryResult(columns: columns.map(\.name), rows: rows, duration: Date().timeIntervalSince(started), statement: sql)
+                result.origins = metadata.map { QueryColumnOrigin(tableOID: UInt32(bitPattern: $0.tableOID), attribute: $0.columnAttributeNumber) }
+                return result
             }
 
             // Commands: the legacy API exposes the command tag (affected row count).
