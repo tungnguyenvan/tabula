@@ -12,18 +12,20 @@ struct SidebarView: View {
     /// Groups the user collapsed (comma-separated `Group` names), remembered across launches and connections.
     @AppStorage("SidebarCollapsedGroups") private var collapsedGroups = ""
 
-    /// The sidebar's groups, which collapse like those in Finder: the chevron shows when hovering a group's title.
+    /// The sidebar's groups; clicking a group's title row collapses or expands it.
     enum Group: String { case tables, views, functions, triggers }
 
-    private func expanded(_ group: Group) -> Binding<Bool> {
-        Binding {
-            // While filtering, every group shows its matches.
-            !model.tableSearch.isEmpty || !collapsedGroups.split(separator: ",").contains(Substring(group.rawValue))
-        } set: { open in
-            var collapsed = Set(collapsedGroups.split(separator: ",").map(String.init))
-            if open { collapsed.remove(group.rawValue) } else { collapsed.insert(group.rawValue) }
-            collapsedGroups = collapsed.sorted().joined(separator: ",")
-        }
+    private func isCollapsed(_ group: Group) -> Bool {
+        collapsedGroups.split(separator: ",").contains(Substring(group.rawValue))
+    }
+
+    /// While filtering, every group shows its matches.
+    private func isExpanded(_ group: Group) -> Bool { !model.tableSearch.isEmpty || !isCollapsed(group) }
+
+    private func toggle(_ group: Group) {
+        var collapsed = Set(collapsedGroups.split(separator: ",").map(String.init))
+        if isCollapsed(group) { collapsed.remove(group.rawValue) } else { collapsed.insert(group.rawValue) }
+        withAnimation(.easeInOut(duration: 0.2)) { collapsedGroups = collapsed.sorted().joined(separator: ",") }
     }
 
     struct PendingAction: Identifiable {
@@ -57,24 +59,26 @@ struct SidebarView: View {
                 let tables = model.filteredTables.filter { $0.kind == .table }
                 let views = model.filteredTables.filter { $0.kind == .view }
                 if !tables.isEmpty {
-                    Section(isExpanded: expanded(.tables)) { ForEach(tables) { row($0) } } header: {
-                        sectionHeader(model.config.kind.tablesTitle, count: tables.count)
-                    }
+                    Section {
+                        if isExpanded(.tables) { ForEach(tables) { row($0) } }
+                    } header: { groupHeader(.tables, title: model.config.kind.tablesTitle, count: tables.count) }
                 }
                 if !views.isEmpty {
-                    Section(isExpanded: expanded(.views)) { ForEach(views) { row($0) } } header: { sectionHeader("Views", count: views.count) }
+                    Section {
+                        if isExpanded(.views) { ForEach(views) { row($0) } }
+                    } header: { groupHeader(.views, title: "Views", count: views.count) }
                 }
                 let functions = model.filteredRoutines.filter { $0.kind != .trigger }
                 let triggers = model.filteredRoutines.filter { $0.kind == .trigger }
                 if !functions.isEmpty {
-                    Section(isExpanded: expanded(.functions)) { ForEach(functions) { routineRow($0) } } header: {
-                        sectionHeader("Functions", count: functions.count)
-                    }
+                    Section {
+                        if isExpanded(.functions) { ForEach(functions) { routineRow($0) } }
+                    } header: { groupHeader(.functions, title: "Functions", count: functions.count) }
                 }
                 if !triggers.isEmpty {
-                    Section(isExpanded: expanded(.triggers)) { ForEach(triggers) { routineRow($0) } } header: {
-                        sectionHeader("Triggers", count: triggers.count)
-                    }
+                    Section {
+                        if isExpanded(.triggers) { ForEach(triggers) { routineRow($0) } }
+                    } header: { groupHeader(.triggers, title: "Triggers", count: triggers.count) }
                 }
                 if model.filteredTables.isEmpty && !model.loadingTables {
                     Text(model.tableSearch.isEmpty ? "No \(model.config.kind.tablesTitle.lowercased())" : "No matches")
@@ -171,12 +175,29 @@ struct SidebarView: View {
         .help(help)
     }
 
-    private func sectionHeader(_ title: String, count: Int) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text("\(count)").monospacedDigit().foregroundStyle(.tertiary)
+    /// A group's title row: the whole width collapses and expands it, and the chevron always shows, in a place of its
+    /// own, so the count beside it doesn't move.
+    private func groupHeader(_ group: Group, title: String, count: Int) -> some View {
+        let open = isExpanded(group)
+        return Button { toggle(group) } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(count)").monospacedDigit().foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+                    .frame(width: Layout.Sidebar.disclosureWidth)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        // While filtering, groups stay open to show their matches.
+        .allowsHitTesting(model.tableSearch.isEmpty)
+        .accessibilityLabel("\(title), \(count)")
+        .accessibilityValue(open ? "Expanded" : "Collapsed")
+        .help(open ? "Collapse \(title)" : "Expand \(title)")
     }
 
     private var dialogTitle: String {

@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+- Clicking anywhere on a sidebar group's title row now collapses or expands it, and its chevron is always shown, so the count beside it no longer jumps when the pointer passes over ([#41](https://github.com/tungnguyenvan/tabula/issues/41)).
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query

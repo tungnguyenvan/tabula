@@ -115,6 +115,8 @@ enum Layout {
         /// Space around the database and schema pickers at the top, and between the two.
         static let pickerPadding: CGFloat = 8
         static let pickerSpacing: CGFloat = 2
+        /// The width kept for a group's disclosure chevron, so the count beside it never moves.
+        static let disclosureWidth: CGFloat = 12
     }
 
     enum Inspector {
