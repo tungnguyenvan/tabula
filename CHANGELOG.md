@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+- In the AI chat, an expanded query step showed the rows it returned with their columns run together; they now line up ([#48](https://github.com/tungnguyenvan/tabula/issues/48)).
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query

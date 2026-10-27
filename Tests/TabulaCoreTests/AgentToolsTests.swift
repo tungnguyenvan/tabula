@@ -232,6 +232,17 @@ final class AgentToolboxTests: XCTestCase {
         XCTAssertTrue(text.hasSuffix("tab here\tline break"))
         XCTAssertEqual(AgentToolbox.text(of: QueryResult()), "No rows returned.")
     }
+
+    func testResultsAreShownInColumns() {
+        let text = "2 rows:\nstatus\trevenue\torders\npaid\t393963.90\t857\nshipped\t263090.96\t572"
+        XCTAssertEqual(AgentToolbox.aligned(text), """
+            2 rows:
+            status   revenue    orders
+            paid     393963.90  857
+            shipped  263090.96  572
+            """)
+        XCTAssertEqual(AgentToolbox.aligned("No rows returned."), "No rows returned.")
+    }
 }
 
 final class ChatStoreTests: XCTestCase {
@@ -291,4 +302,5 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(ChatConversation.title(for: [ChatMessage(role: .user, text: String(repeating: "a", count: 100))]).count,
                        Defaults.AI.conversationTitleLength + 1)
     }
+
 }

@@ -370,4 +370,26 @@ public struct AgentToolbox: Sendable {
         let more = result.rows.count > shown
         return "\(shown) row\(shown == 1 ? "" : "s")\(more ? " shown (more were returned, cut off)" : ""):\n" + text
     }
+
+    /// A tool result as the chat shows it: tab-separated rows (`text(of:)`) padded into columns, which a proportional
+    /// panel can't do with tabs. Lines without tabs stay as they are.
+    public static func aligned(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        let cells = lines.map { $0.contains("\t") ? $0.components(separatedBy: "\t") : nil }
+        var widths: [Int] = []
+        for row in cells.compactMap({ $0 }) {
+            for (index, cell) in row.enumerated() {
+                if index == widths.count { widths.append(0) }
+                widths[index] = max(widths[index], cell.count)
+            }
+        }
+        return zip(lines, cells).map { line, row in
+            guard let row else { return line }
+            return row.enumerated().map { index, cell in
+                index == row.count - 1 ? cell : cell.padding(toLength: widths[index] + columnGap, withPad: " ", startingAt: 0)
+            }.joined()
+        }.joined(separator: "\n")
+    }
+
+    private static let columnGap = 2
 }
