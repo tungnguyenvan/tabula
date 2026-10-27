@@ -4,6 +4,10 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+- Table-tab commits and document saves now ask for confirmation on Production connections, including commits from the preview sheet and ⌘S ([#78](https://github.com/tungnguyenvan/tabula/issues/78)).
+- Failed data and diagram exports now show an error instead of silently failing ([#79](https://github.com/tungnguyenvan/tabula/issues/79)).
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query

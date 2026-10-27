@@ -254,11 +254,18 @@ struct DiagramView: View {
             .background(Color(nsColor: .textBackgroundColor)))
         renderer.scale = 2
         guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
-              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { NSSound.beep(); return }
+              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+            Confirmation.report("Couldn’t export the diagram.", error: DatabaseError("The diagram could not be rendered as a PNG image."))
+            return
+        }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(model.schema)-diagram.png"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        try? png.write(to: url)
+        do {
+            try png.write(to: url, options: .atomic)
+        } catch {
+            Confirmation.report("Couldn’t export “\(url.lastPathComponent)”.", error: error)
+        }
     }
 }
 
