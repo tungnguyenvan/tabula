@@ -36,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Windows may not get to close their connections on the way out.
+        MainActor.assumeIsolated { WorkspaceRegistry.saveAllStates() }
         // llama.cpp aborts at exit if a model is still loaded on the GPU.
         LocalModelRunner.shared.unload()
     }
@@ -162,6 +164,13 @@ enum WorkspaceRegistry {
                     ActiveWorkspace.shared.update(number.flatMap { sessions[$0]?.session })
                 }
             }
+        }
+    }
+
+    /// Saves the open tabs of every SQL workspace (when Tabula quits).
+    static func saveAllStates() {
+        for session in sessions.values.compactMap(\.session) {
+            for case .sql(let model) in session.connections { model.saveState() }
         }
     }
 

@@ -89,6 +89,7 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 
   Escaped characters in URLs are decoded, so `p%3Fss` becomes `p?ss`. Tabula never reads the clipboard by itself.
 - A password that still holds URL escapes, as some dashboards show them (`%3F` for `?`), gets a **Decode** button, and a failed login says when escapes are the likely cause.
+- **Picks up where you left off:** opening a connection again brings back its query tabs (with their SQL, unsaved edits included), open tables, the selected tab, the schema (and PostgreSQL database) and the query history. Only the selected table loads its rows at once; the others load when you select them. Turn this off in Settings › General.
 - **Every database on a PostgreSQL server** from one connection: the sidebar's Database picker lists those your login may open, and choosing one moves the window there. Query tabs keep their SQL; the saved connection doesn't change.
 
 **Several connections in one window**
@@ -384,6 +385,7 @@ Everything below is also listed in **Help › Keyboard Shortcuts** (⇧⌘/).
 
 - **Connection settings** are stored in `~/Library/Application Support/Tabula/connections.json`. This file never contains passwords.
 - **Local models** you download or add live in `~/Library/Application Support/Tabula/Models` (Settings › AI › Show in Finder). Delete them there or from Settings.
+- **Open tabs** of each connection (query SQL, open tables, schema, query history) are kept in `~/Library/Application Support/Tabula/Workspaces` so they come back next time. They are deleted with their connection, and all of them when you turn **Reopen tabs when connecting** off in Settings › General.
 - **Passwords** are stored in the login Keychain, under the service `app.tabula.connections`. Deleting a connection also deletes its password.
 - **Network:** Tabula connects to the databases you configure, and to `api.github.com` / `github.com` to check for and download updates. If you turn on the AI assistant, it also talks to the provider you chose (see [AI assistant](#ai-assistant) for what is sent). There is no telemetry and no account.
 - **Windows:** workspace windows are not restored at launch, so Tabula never reconnects to a database, such as Production, unless you choose to.

@@ -4,6 +4,16 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Each connection picks up where you left off** ([#57](https://github.com/tungnguyenvan/tabula/issues/57)).
+  - Opening it again brings back its query tabs: their SQL, including unsaved edits, and the `.sql` files they are tied to.
+  - It also brings back the open tables (Data or Structure), the selected tab, the schema, the PostgreSQL database the window had moved to, and the query history.
+  - Only the selected table loads its rows at once; the others load when selected.
+  - Reconnect keeps the tabs too.
+  - The state is saved when a connection, its window or Tabula closes, and every few seconds while it changes. A connection that is still connecting, or failed to, never overwrites what was saved.
+  - **Reopen tabs when connecting** in Settings › General turns this off and forgets what was kept. Deleting a connection deletes its state.
+  - Tabula still never reconnects by itself at launch.
+
 ### Planned
 - SSH tunnels
 - Cancelling a running query

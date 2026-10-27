@@ -40,6 +40,8 @@ final class WorkspaceModel {
     private(set) var config: ConnectionConfig
     /// The saved connection's id, which identifies the window whatever database it is in.
     nonisolated let connectionID: UUID
+    /// The database the server opens for the saved connection, before the window moves to another (PostgreSQL).
+    private(set) var savedDatabase: String?
     private let password: String?
     private(set) var driver: (any DatabaseDriver)?
     private(set) var status: Status = .connecting
@@ -73,8 +75,19 @@ final class WorkspaceModel {
     private(set) var loadingTables = false
 
     private(set) var tabs: [Tab] = []
-    var selectedTabID: UUID?
+    var selectedTabID: UUID? {
+        didSet { loadIfUnloaded() }
+    }
     var history: [String] = []
+    /// The state last saved for this connection or restored from it, so an unchanged one isn't written again.
+    var savedState: WorkspaceState?
+    /// Set once the saved state has been applied, or found missing. Until then the workspace's empty tabs (still
+    /// connecting, or failed to) must not replace what was saved.
+    var stateRestored = false
+    /// Restored table tabs that haven't loaded their rows; each loads when first selected.
+    var unloadedTabs: Set<UUID> = []
+    /// Saves the state now and then while the workspace is open (one for its lifetime).
+    var stateSaver: Task<Void, Never>?
     var showInspector = false
     /// What the right-hand panel shows.
     enum RightPanel: String, CaseIterable, Identifiable {
@@ -110,7 +123,8 @@ final class WorkspaceModel {
     }
     /// Rows selected in the active grid, shown in the row inspector.
     var inspectedRows = IndexSet()
-    private var queryCounter = 0
+    /// Numbers new query tabs (Query 1, Query 2…); restored tabs carry it on.
+    var queryCounter = 0
 
     init(config: ConnectionConfig, password: String?) {
         self.config = config
@@ -168,6 +182,7 @@ final class WorkspaceModel {
         status = .connecting
         do {
             await setUp(try await openDriver(config))
+            if tabs.isEmpty { await restoreState() }
             if tabs.isEmpty { newQueryTab() }
             // Files opened from Finder while no connection was ready.
             PendingSQLFiles.take().forEach(openSQLFile)
@@ -193,6 +208,7 @@ final class WorkspaceModel {
         connectedAt = Date()
         serverVersion = await driver.serverVersion()
         currentDatabase = await driver.currentDatabase()
+        if savedDatabase == nil { savedDatabase = currentDatabase }
         databases = (try? await driver.serverDatabases()) ?? []
         schemas = (try? await driver.schemas()) ?? []
         let preferred = (try? await driver.defaultSchema()) ?? ""
@@ -202,6 +218,9 @@ final class WorkspaceModel {
     }
 
     func reconnect() async {
+        // What was open comes back once connected again; until then the emptied tabs aren't saved.
+        saveState()
+        stateRestored = false
         await disconnect()
         tabs.removeAll()
         selectedTabID = nil
@@ -285,7 +304,7 @@ final class WorkspaceModel {
     /// database). The new database is connected first, so if it can't be opened nothing changes. Then query
     /// tabs keep their SQL, tabs showing the old database's tables and routines close, and the AI chat starts
     /// over, since its answers were about the old database. The saved connection is unchanged.
-    func openDatabase(_ name: String) async {
+    func openDatabase(_ name: String, startingNewChat: Bool = true) async {
         guard name != currentDatabase, openingDatabase == nil, driver != nil else { return }
         openingDatabase = name
         defer { openingDatabase = nil }
@@ -315,7 +334,7 @@ final class WorkspaceModel {
         inspectedRows = []
         schemaTableCache = [:]
         loadingSchemaTables = []
-        chat.newConversation()
+        if startingNewChat { chat.newConversation() }
         await setUp(newDriver)
         if queries.isEmpty {
             newQueryTab()
@@ -424,6 +443,13 @@ final class WorkspaceModel {
         let model = MetricsModel { try await source.metrics(schema: schema) }
         tabs.append(.metrics(model))
         selectedTabID = model.id
+    }
+
+    /// Puts back the tabs of a saved state (see WorkspaceState.swift's `restoreState`).
+    func setRestoredTabs(_ restored: [Tab], selected: UUID?) {
+        tabs = restored
+        selectedTabID = selected
+        prefetchColumns()
     }
 
     func newQueryTab(sql: String = "") {

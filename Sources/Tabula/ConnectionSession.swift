@@ -41,9 +41,12 @@ enum OpenConnection: Identifiable {
         }
     }
 
+    /// Closes the connection, saving a SQL workspace's tabs first so they come back next time.
     func disconnect() async {
         switch self {
-        case .sql(let model): await model.disconnect()
+        case .sql(let model):
+            model.saveState()
+            await model.disconnect()
         case .redis(let model): await model.disconnect()
         }
     }
