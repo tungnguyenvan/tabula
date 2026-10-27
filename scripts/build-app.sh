@@ -71,6 +71,17 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSSupportsAutomaticTermination</key><false/>
+    <!-- Opens .sql files from Finder without claiming them: other SQL apps each declare their own type for
+         .sql, so the extension is matched rather than a type, and Tabula is only offered, never the default. -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>SQL Script</string>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>CFBundleTypeExtensions</key><array><string>sql</string></array>
+        </dict>
+    </array>
     <key>NSLocalNetworkUsageDescription</key><string>Tabula connects to the database servers you add, including ones on your local network.</string>
 </dict>
 </plist>

@@ -22,6 +22,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
+    /// .sql files from Finder (Open With, the Dock icon) open in the frontmost connection; before there is one,
+    /// they wait for the next connection to be ready.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        MainActor.assumeIsolated {
+            if let (session, window) = WorkspaceRegistry.frontmostSession, case .sql(let model) = session.active, model.driver != nil {
+                window.makeKeyAndOrderFront(nil)
+                urls.forEach(model.openSQLFile)
+            } else {
+                PendingSQLFiles.add(urls)
+            }
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // llama.cpp aborts at exit if a model is still loaded on the GPU.
         LocalModelRunner.shared.unload()
@@ -204,6 +217,9 @@ struct WorkspaceCommands: Commands {
             Button("Reopen Closed Tab") { workspace?.reopenClosedTab() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
+            Button("Open…") { workspace?.chooseSQLFiles() }
+                .keyboardShortcut("o", modifiers: .command)
+                .disabled(workspace == nil)
             Button("Open Anything…") { workspace?.showPalette = true }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(noWorkspace)
@@ -217,6 +233,13 @@ struct WorkspaceCommands: Commands {
                 }
             }
             .keyboardShortcut("w", modifiers: .command)
+            // ⌘S and ⇧⌘S follow the tab: a query saves its .sql file, a table commits and previews its changes.
+            Button("Save") { workspace?.saveSelectedTab(choosingLocation: false) }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(noWorkspace)
+            Button("Save As…") { workspace?.saveSelectedTab(choosingLocation: true) }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .disabled(noWorkspace)
             Divider()
             Button("Connections…") { openWindow(id: WindowID.connections) }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
@@ -300,13 +323,10 @@ struct WorkspaceCommands: Commands {
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(noWorkspace)
             Divider()
-            Button("Commit Changes") {
-                if let table, table.hasChanges { Task { await table.commit() } } else { NSSound.beep() }
-            }
-            .keyboardShortcut("s", modifiers: .command)
-            .disabled(noWorkspace)
+            // On ⌘S and ⇧⌘S in a table tab, through File > Save and Save As.
+            Button("Commit Changes") { workspace?.commitSelectedTable() }
+                .disabled(noWorkspace)
             Button("Preview Changes…") { table?.showPreviewRequest += 1 }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
             Button("Discard Changes") { table?.discardChanges() }
                 .keyboardShortcut("z", modifiers: [.command, .option])
