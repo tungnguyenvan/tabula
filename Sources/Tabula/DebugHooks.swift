@@ -9,11 +9,13 @@ import TabulaCore
 ///   TABULA_DEBUG_PAGE_SIZE: rows per page for that table
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab; TABULA_DEBUG_QUERY_THEN: more SQL to run a moment later
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
-/// - TABULA_DEBUG_KEYS: scripted input, e.g. "wait:500;slow:SELECT 1;cmd+return;click:0.2,0.12" (see startKeyScript)
+/// - TABULA_DEBUG_KEYS: scripted input, e.g. "wait:500;slow:SELECT 1;cmd+return;click:0.2,0.12" (see startKeyScript;
+///   also paste:<text>, open:<path>, alert:<button>, call:save|saveas|close|reopen, snap:<name>)
 /// - TABULA_DEBUG_RECORD: directory that receives the workspace window as numbered JPEG frames
 ///   (TABULA_DEBUG_RECORD_FPS a second, default 30), e.g. for the demo video (scripts/render-demo.sh)
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
 /// - TABULA_DEBUG_AI_ALLOW_PRODUCTION: allow AI on Production connections; TABULA_DEBUG_APPROVE: answer the chat's query approval
+/// - TABULA_DEBUG_TARGET=connections: drive and record the Connections window instead of a workspace
 /// - TABULA_DEBUG_FILES: .sql paths (comma-separated) handed over at launch, as Finder would open them
 /// - TABULA_DEBUG_CHAT_DEMO (a question) / TABULA_DEBUG_ASK_DEMO: play a made-up streamed answer with reasoning
 @MainActor
@@ -33,6 +35,8 @@ enum DebugHooks {
     /// TABULA_DEBUG_CONNECTION_STRING_CONTINUE: then press Continue.
     static var connectionString: String? { environment["TABULA_DEBUG_CONNECTION_STRING"] }
     static var continuesConnectionString: Bool { environment["TABULA_DEBUG_CONNECTION_STRING_CONTINUE"] != nil }
+    /// TABULA_DEBUG_VERSION: the version the Connections window shows (a debug build has none), e.g. for recordings.
+    static var version: String? { environment["TABULA_DEBUG_VERSION"] }
 
     /// TABULA_DEBUG_OPEN may list several ids separated by commas.
     static var connectionsToOpen: [UUID] {
@@ -161,6 +165,7 @@ enum DebugHooks {
         if let files = environment["TABULA_DEBUG_FILES"] {
             NSApp.delegate?.application?(NSApp, open: files.split(separator: ",").map { URL(fileURLWithPath: String($0)) })
         }
+        if environment["TABULA_DEBUG_TARGET"] == "connections" { resizeConnectionsWindow() }
         guard let script = environment["TABULA_DEBUG_KEYS"] else { return }
         var delay = 3.0
         for token in script.components(separatedBy: ";") where !token.isEmpty {
@@ -178,11 +183,13 @@ enum DebugHooks {
                             window.makeKeyAndOrderFront(nil)
                         }
                         WorkspaceRegistry.makeActiveForTesting(window)
+                        // A sheet takes the keys while it is open.
+                        let receiver = window.attachedSheet ?? window
                         // Typing goes to the SQL editor when nothing that takes text has focus.
-                        if !(window.firstResponder is NSTextView), let editor = firstView(of: SQLTextView.self, in: window.contentView) {
-                            window.makeFirstResponder(editor)
+                        if !(receiver.firstResponder is NSTextView), let editor = firstView(of: SQLTextView.self, in: receiver.contentView) {
+                            receiver.makeFirstResponder(editor)
                         }
-                        for event in events(for: "type:\(character)", window: window) { NSApp.postEvent(event, atStart: false) }
+                        for event in events(for: "type:\(character)", window: receiver) { NSApp.postEvent(event, atStart: false) }
                         logEvent(character == " " ? "space" : "key")
                     }
                 }
@@ -202,10 +209,19 @@ enum DebugHooks {
                     }
                     WorkspaceRegistry.makeActiveForTesting(window)
                     // Fractions of the whole window, as recorded frames show it (title bar and toolbar included).
-                    let point = NSPoint(x: numbers[0] * window.frame.width, y: (1 - numbers[1]) * window.frame.height)
+                    var point = NSPoint(x: numbers[0] * window.frame.width, y: (1 - numbers[1]) * window.frame.height)
+                    // A point on a sheet goes to the sheet, in its own coordinates.
+                    var receiver = window
+                    if let sheet = window.attachedSheet {
+                        let onScreen = NSPoint(x: window.frame.minX + point.x, y: window.frame.minY + point.y)
+                        if sheet.frame.contains(onScreen) {
+                            receiver = sheet
+                            point = NSPoint(x: onScreen.x - sheet.frame.minX, y: onScreen.y - sheet.frame.minY)
+                        }
+                    }
                     func post(_ type: NSEvent.EventType, clicks: Int) {
                         guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                                             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
+                                                             windowNumber: receiver.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
                                                              pressure: type == .leftMouseDown ? 1 : 0) else { return }
                         NSApp.postEvent(event, atStart: false)
                     }
@@ -219,6 +235,19 @@ enum DebugHooks {
                         post(.leftMouseUp, clicks: 2)
                     }
                     logEvent(kind, x: numbers[0], y: numbers[1])
+                }
+                delay += 0.6
+                continue
+            }
+            // paste:<text> puts the text into the focused field at once, as Edit > Paste would (logged as a key, ⌘V).
+            if token.hasPrefix("paste:") {
+                let text = String(token.dropFirst(6))
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    guard let window = targetWindow else { return }
+                    let receiver = window.attachedSheet ?? window
+                    guard let field = receiver.firstResponder as? NSTextView else { return print("PASTE no text field") }
+                    field.insertText(text, replacementRange: field.selectedRange())
+                    logEvent("keycap")
                 }
                 delay += 0.6
                 continue
@@ -281,13 +310,20 @@ enum DebugHooks {
                 // turns key; route menu commands to it anyway.
                 WorkspaceRegistry.makeActiveForTesting(window)
                 print("KEY", token, "→ first responder:", String(describing: window.firstResponder.map { type(of: $0) }))
-                let events = events(for: token, window: window)
+                let receiver = window.attachedSheet ?? window
+                // Keys go to the SQL editor when nothing that takes text has focus, as typing does.
+                if !(receiver.firstResponder is NSTextView), let editor = firstView(of: SQLTextView.self, in: receiver.contentView) {
+                    receiver.makeFirstResponder(editor)
+                }
+                let events = events(for: token, window: receiver)
                 if !token.hasPrefix("type:") { logEvent("keycap") }
                 if let down = events.first, down.modifierFlags.contains(.command) {
                     // AppKit's key-equivalent order (window, then main menu), which an inactive app skips.
                     NSApp.mainMenu?.update()
-                    let handled = window.performKeyEquivalent(with: down) || NSApp.mainMenu?.performKeyEquivalent(with: down) == true
-                    print("KEY", token, handled ? "→ handled" : "→ not handled")
+                    let handled = receiver.performKeyEquivalent(with: down) || NSApp.mainMenu?.performKeyEquivalent(with: down) == true
+                    print("KEY", token, handled ? "→ handled" : "→ not handled, sent as a key press")
+                    // As in AppKit, a key equivalent nothing takes is a key press (⌘← and ⌘↑ in a text view).
+                    if !handled { for event in events { NSApp.postEvent(event, atStart: false) } }
                 } else {
                     for event in events { NSApp.postEvent(event, atStart: false) }
                 }
@@ -300,8 +336,13 @@ enum DebugHooks {
         }
     }
 
+    /// The window scripts drive and recordings capture: a workspace, or with TABULA_DEBUG_TARGET=connections the
+    /// Connections window.
     private static var targetWindow: NSWindow? {
-        NSApp.windows.first { $0.isVisible && $0.identifier?.rawValue.hasPrefix("workspace") == true }
+        if environment["TABULA_DEBUG_TARGET"] == "connections" {
+            return NSApp.windows.first { $0.isVisible && $0.identifier?.rawValue.hasPrefix(WindowID.connections) == true }
+        }
+        return NSApp.windows.first { $0.isVisible && $0.identifier?.rawValue.hasPrefix("workspace") == true }
             ?? NSApp.windows.first { $0.isVisible && $0.title != "Tabula" && $0.title != "Keyboard Shortcuts" && $0.contentView != nil && $0.frame.width > 900 }
     }
 
@@ -445,13 +486,7 @@ enum DebugHooks {
         Timer.scheduledTimer(withTimeInterval: 1 / (fps * 2), repeats: true) { _ in
             MainActor.assumeIsolated {
                 guard let window = targetWindow else { return }
-                var sheet: WindowRecorder.Target.Sheet?
-                if let attached = window.attachedSheet {
-                    sheet = .init(id: CGWindowID(attached.windowNumber),
-                                  origin: CGPoint(x: attached.frame.minX - window.frame.minX, y: attached.frame.minY - window.frame.minY),
-                                  size: attached.frame.size)
-                }
-                recorder.target = .init(id: CGWindowID(window.windowNumber), size: window.frame.size, sheet: sheet)
+                recorder.target = .init(id: CGWindowID(window.windowNumber), size: window.frame.size)
             }
         }
         recorder.start()
@@ -505,20 +540,13 @@ enum DebugHooks {
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Captures a window (and any sheet on it) at a steady rate on a queue of its own. Frames are numbered by the clock,
+/// Captures a window (and the app's sheets, menus and popovers over it) at a steady rate on a queue of its own. Frames are numbered by the clock,
 /// not by captures: frame n shows the window at (n - 1) / fps seconds, and a capture that runs late fills the frames
 /// it missed with the picture before, so recordings play back at the speed things happened.
 final class WindowRecorder: @unchecked Sendable {
     struct Target {
-        struct Sheet {
-            var id: CGWindowID
-            /// From the window's bottom left, in points.
-            var origin: CGPoint
-            var size: CGSize
-        }
         var id: CGWindowID
         var size: CGSize
-        var sheet: Sheet?
     }
 
     let directory: URL
@@ -561,18 +589,40 @@ final class WindowRecorder: @unchecked Sendable {
         create?(.null, 1 << 3, id, 1 << 0)?.takeRetainedValue()
     }
 
+    /// The app's own windows in front of the target and over it (sheets, menus, popovers), back to front, with where
+    /// they are on it: points from its top left.
+    private static func overlays(above id: CGWindowID) -> [(id: CGWindowID, rect: CGRect)] {
+        func bounds(_ info: [String: Any]) -> CGRect? {
+            (info[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) }
+        }
+        guard let below = CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]],
+              let frame = below.first.flatMap(bounds),
+              let above = CGWindowListCopyWindowInfo(.optionOnScreenAboveWindow, id) as? [[String: Any]] else { return [] }
+        let pid = Int(getpid())
+        return above.reversed().compactMap { info in
+            guard info[kCGWindowOwnerPID as String] as? Int == pid, let number = info[kCGWindowNumber as String] as? Int,
+                  let rect = bounds(info), rect.intersects(frame) else { return nil }
+            return (CGWindowID(number), rect.offsetBy(dx: -frame.minX, dy: -frame.minY))
+        }
+    }
+
     private func capture() {
         let frame = currentFrame
         guard frame > written, let target, let window = Self.image(of: target.id) else { return }
         var picture = window
-        if let sheet = target.sheet, let sheetImage = Self.image(of: sheet.id),
+        let overlays = Self.overlays(above: target.id)
+        if !overlays.isEmpty,
            let context = CGContext(data: nil, width: window.width, height: window.height, bitsPerComponent: 8, bytesPerRow: 0,
                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
-            // Over the window, keeping the sheet's transparent rounded corners.
+            // Over the window, keeping the overlays' transparent rounded corners and shadows.
             let scale = CGFloat(window.width) / target.size.width
             context.draw(window, in: CGRect(x: 0, y: 0, width: window.width, height: window.height))
-            context.draw(sheetImage, in: CGRect(x: sheet.origin.x * scale, y: sheet.origin.y * scale,
-                                                width: sheet.size.width * scale, height: sheet.size.height * scale))
+            for overlay in overlays {
+                guard let image = Self.image(of: overlay.id) else { continue }
+                let rect = overlay.rect
+                context.draw(image, in: CGRect(x: rect.minX * scale, y: (target.size.height - rect.maxY) * scale,
+                                               width: rect.width * scale, height: rect.height * scale))
+            }
             picture = context.makeImage() ?? window
         }
         let data = NSMutableData()

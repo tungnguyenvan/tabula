@@ -15,10 +15,10 @@ import {
 /// Rendered at 60 frames a second, so camera moves and the pointer are smooth; everything below is timed in
 /// thirtieths of a second (`useFrame`), the rate the app was recorded at.
 export const FPS = 60;
-const unit = 30;
-const scale = FPS / unit;
+export const unit = 30;
+export const scale = FPS / unit;
 /// The current moment in thirtieths of a second (fractional at 60 frames a second).
-const useFrame = () => useCurrentFrame() / scale;
+export const useFrame = () => useCurrentFrame() / scale;
 
 /// Everything shown is Tabula itself, recorded from a debug build driven by real clicks and keys
 /// (scripts/render-demo.sh lists the commands), plus README screenshots for the montage.
@@ -30,27 +30,27 @@ export type InputEvent = { frame: number; kind: "move" | "click" | "dclick" | "k
 export type DemoProps = { events: Partial<Record<RecordingName, InputEvent[]>> };
 
 const font = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif";
-const accent = "#4f8cff";
-const stageWidth = 1640;
+export const accent = "#4f8cff";
+export const stageWidth = 1640;
 /// Recordings are 1300×760 windows.
-const windowAspect = 1520 / 2600;
+export const windowAspect = 1520 / 2600;
 /// Where the camera's frame starts, under the titles.
 const viewportTop = 175;
 /// The zoom that shows a whole window in that frame.
-const fit = 0.92;
-const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
-const ease = Easing.inOut(Easing.cubic);
+export const fit = 0.92;
+export const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
+export const ease = Easing.inOut(Easing.cubic);
 
 // MARK: Building blocks
 
 /// A sound (demo/audio/make-audio.mjs) at a frame of the scene.
-const Sfx: React.FC<{ at: number; name: string; volume?: number }> = ({ at, name, volume = 1 }) => (
+export const Sfx: React.FC<{ at: number; name: string; volume?: number }> = ({ at, name, volume = 1 }) => (
   <Sequence from={Math.round(at * scale)} durationInFrames={50 * scale} layout="none">
     <Audio src={staticFile(`audio/${name}.wav`)} volume={volume} />
   </Sequence>
 );
 
-const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const frame = useFrame();
   const x = 30 + Math.sin(frame / 50) * 12;
   const y = Math.cos(frame / 70) * 10;
@@ -62,7 +62,7 @@ const Background: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 /// Scenes come in with a gentle zoom and leave with a fade.
-const Enter: React.FC<{ duration: number; children: React.ReactNode }> = ({ duration, children }) => {
+export const Enter: React.FC<{ duration: number; children: React.ReactNode }> = ({ duration, children }) => {
   const frame = useFrame();
   const fps = unit;
   const enter = spring({ frame, fps, config: { damping: 20, stiffness: 140 } });
@@ -75,7 +75,7 @@ const Enter: React.FC<{ duration: number; children: React.ReactNode }> = ({ dura
 };
 
 /// A title whose words rise in one after another.
-const Title: React.FC<{ text: string; sub?: string; at?: number; top?: number }> = ({ text, sub, at = 0, top = 48 }) => {
+export const Title: React.FC<{ text: string; sub?: string; at?: number; top?: number }> = ({ text, sub, at = 0, top = 48 }) => {
   const frame = useFrame();
   const fps = unit;
   const words = text.split(" ");
@@ -102,7 +102,7 @@ const Title: React.FC<{ text: string; sub?: string; at?: number; top?: number }>
   );
 };
 
-type Camera = { at: number; x: number; y: number; zoom: number };
+export type Camera = { at: number; x: number; y: number; zoom: number };
 
 const along = (keys: Camera[], frame: number): Camera => {
   if (frame <= keys[0].at) return keys[0];
@@ -118,15 +118,18 @@ const along = (keys: Camera[], frame: number): Camera => {
 
 /// A recording on the stage, played through `timeline`: (scene frame, recorded frame) pairs, linear in between,
 /// so waits can be cut or sped up while what was done keeps its real order. The cursor and the sounds come from the
-/// recording's logged input, at the frames and places they really happened.
-const Recording: React.FC<{
-  name: RecordingName;
+/// recording's logged input, at the frames and places they really happened. `aspect` is the recorded window's height
+/// over its width; `pointer` "clicks" shows the cursor only around each click instead of gliding between positions.
+export const Recording: React.FC<{
+  name: string;
   events: InputEvent[];
   timeline: [number, number][];
   camera: Camera[];
   duration: number;
+  aspect?: number;
+  pointer?: "glide" | "clicks";
   children?: React.ReactNode;
-}> = ({ name, events, timeline, camera, duration, children }) => {
+}> = ({ name, events, timeline, camera, duration, aspect = windowAspect, pointer: pointerStyle = "glide", children }) => {
   const frame = useFrame();
   const scenes = timeline.map((pair) => pair[0]), recorded = timeline.map((pair) => pair[1]);
   const source = interpolate(frame, scenes, recorded, clamp);
@@ -135,10 +138,16 @@ const Recording: React.FC<{
   const keyed = along(camera, frame);
   // A slow breath on top of the camera's moves, so the picture never sits dead still while someone types.
   const view = { ...keyed, zoom: keyed.zoom * (1 + 0.015 * Math.sin(frame / 45)) };
-  const width = stageWidth, height = stageWidth * windowAspect;
+  const width = stageWidth, height = stageWidth * aspect;
   const viewport = 1080 - viewportTop;
   const dx = -(view.x - 0.5) * width * view.zoom, dy = -(view.y - 0.5) * height * view.zoom;
-  const image = `${name}/frame-${String(Math.max(1, Math.round(source))).padStart(5, "0")}.jpg`;
+  // Between two recorded frames, both are shown, the later one as much as the moment is past the earlier: played
+  // faster or slower than recorded (and at 60 frames a second from 30), the picture moves evenly instead of holding
+  // some frames and skipping others.
+  const last = recorded[recorded.length - 1];
+  const earlier = Math.max(1, Math.floor(source)), later = Math.min(earlier + 1, Math.ceil(last));
+  const blend = later > earlier ? source - earlier : 0;
+  const image = (frame: number) => `${name}/frame-${String(frame).padStart(5, "0")}.jpg`;
 
   const pointer = events.filter((event) => event.x !== undefined && event.y !== undefined);
   const visible = (event: InputEvent) => event.frame >= recorded[0] && event.frame <= recorded[recorded.length - 1];
@@ -147,10 +156,15 @@ const Recording: React.FC<{
     <div style={{ position: "absolute", left: 0, top: viewportTop, width: 1920, height: viewport, overflow: "hidden" }}>
       <div style={{ position: "absolute", left: (1920 - width) / 2, top: (viewport - height) / 2, width, height, transform: `translate(${dx}px, ${dy}px) scale(${view.zoom})`, transformOrigin: "50% 50%" }}>
         <div style={{ position: "absolute", inset: 0, borderRadius: 16, overflow: "hidden", boxShadow: "0 40px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.1)" }}>
-          <Img src={staticFile(image)} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />
+          <Img src={staticFile(image(earlier))} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />
+          {blend > 0.01 && (
+            <Img src={staticFile(image(later))} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", opacity: blend }} />
+          )}
         </div>
         {children}
-        <Pointer events={pointer} source={source} sceneFrame={sceneFrame} zoom={view.zoom} width={width} height={height} />
+        {pointerStyle === "clicks"
+          ? <ClickPointer events={pointer} sceneFrame={sceneFrame} zoom={view.zoom} width={width} height={height} />
+          : <Pointer events={pointer} source={source} sceneFrame={sceneFrame} zoom={view.zoom} width={width} height={height} />}
       </div>
       {events.filter(visible).map((event, index) => {
         const at = sceneFrame(event.frame);
@@ -213,15 +227,55 @@ const Pointer: React.FC<{
             border: `3px solid ${accent}`, opacity: 1 - t, background: "rgba(79,140,255,0.15)" }} />
         );
       })}
-      <svg width="40" height="40" viewBox="0 0 24 24" style={{ transform: `scale(${pressed ? 0.88 : 1})`, filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.5))" }}>
-        <path d="M3 2 L3 19 L7.5 14.8 L10.4 21.5 L13.2 20.3 L10.4 13.8 L16.5 13.8 Z" fill="black" stroke="white" strokeWidth="1.4" strokeLinejoin="round" />
-      </svg>
+      <Arrow pressed={pressed} />
     </div>
   );
 };
 
+const Arrow: React.FC<{ pressed: boolean }> = ({ pressed }) => (
+  <svg width="40" height="40" viewBox="0 0 24 24" style={{ transform: `scale(${pressed ? 0.88 : 1})`, filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.5))" }}>
+    <path d="M3 2 L3 19 L7.5 14.8 L10.4 21.5 L13.2 20.3 L10.4 13.8 L16.5 13.8 Z" fill="black" stroke="white" strokeWidth="1.4" strokeLinejoin="round" />
+  </svg>
+);
+
+/// The pointer only where it clicks: it comes in just before the click, presses, rings, and fades away, so the
+/// picture stays clear between clicks.
+const ClickPointer: React.FC<{
+  events: InputEvent[];
+  sceneFrame: (recordedFrame: number) => number;
+  zoom: number;
+  width: number;
+  height: number;
+}> = ({ events, sceneFrame, zoom, width, height }) => {
+  const frame = useFrame();
+  const before = 9, after = 16, fade = 5; // thirtieths of a second
+  return (
+    <>
+      {events.filter((event) => event.kind === "click" || event.kind === "dclick").map((event, index) => {
+        const click = sceneFrame(event.frame);
+        if (frame < click - before || frame > click + after) return null;
+        const opacity = interpolate(frame, [click - before, click - before + fade, click + after - fade, click + after], [0, 1, 1, 0], clamp);
+        // A short approach from below right, as a hand would bring it in.
+        const approach = (1 - ease(interpolate(frame, [click - before, click], [0, 1], clamp))) * 18;
+        const ring = (frame - click) / 14;
+        return (
+          <div key={index} style={{ position: "absolute", left: event.x! * width, top: event.y! * height, transform: `scale(${1 / zoom})`, transformOrigin: "0 0", opacity, zIndex: 5 }}>
+            {ring >= 0 && ring <= 1 && (
+              <div style={{ position: "absolute", left: -32 * ring - 4, top: -32 * ring - 4, width: 64 * ring + 8, height: 64 * ring + 8, borderRadius: "50%",
+                border: `3px solid ${accent}`, opacity: 1 - ring, background: "rgba(79,140,255,0.15)" }} />
+            )}
+            <div style={{ transform: `translate(${approach}px, ${approach}px)` }}>
+              <Arrow pressed={frame >= click && frame < click + 4} />
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+};
+
 /// A note at the bottom (sped-up waits, keys pressed).
-const Caption: React.FC<{ from: number; to: number; children: React.ReactNode }> = ({ from, to, children }) => {
+export const Caption: React.FC<{ from: number; to: number; children: React.ReactNode }> = ({ from, to, children }) => {
   const frame = useFrame();
   if (frame < from || frame >= to) return null;
   const fade = interpolate(frame, [from, from + 6, to - 6, to], [0, 1, 1, 0], clamp);
@@ -235,7 +289,7 @@ const Caption: React.FC<{ from: number; to: number; children: React.ReactNode }>
   );
 };
 
-const Key: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+export const Key: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span style={{ minWidth: 44, height: 44, padding: "0 12px", borderRadius: 9, background: "linear-gradient(#3a3d46, #26282e)", border: "1px solid rgba(255,255,255,0.22)",
     boxShadow: "0 4px 0 #15161a", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
     {children}
