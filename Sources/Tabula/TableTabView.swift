@@ -195,9 +195,11 @@ struct BarButton: View {
                 .frame(width: 24, height: 20)
                 .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : (isEnabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary)))
                 .contentShape(Rectangle())
+                .help(help)
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 

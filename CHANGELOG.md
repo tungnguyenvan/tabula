@@ -13,6 +13,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - Production connections ask before committing. Running the query again, closing the tab or window, quitting, reconnecting or switching database asks before dropping uncommitted edits.
 
 ### Fixed
+- Added or clarified help text for icon-only controls, including Open/Save SQL, closing tabs and row value actions. Save SQL explains the distinction between saving query text and committing result edits ([#73](https://github.com/tungnguyenvan/tabula/issues/73)).
 - The AI chat now uses a rounded composer with a native scrolling message editor above the model, effort and send controls. Long multiline messages no longer overlap the controls ([#63](https://github.com/tungnguyenvan/tabula/issues/63)).
 
 ### Planned

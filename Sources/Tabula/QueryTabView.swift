@@ -95,8 +95,10 @@ struct QueryTabView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help("Query history")
-            BarButton(symbol: "folder", help: "Open .sql File (⌘O)") { workspace.chooseSQLFiles() }
-            BarButton(symbol: "square.and.arrow.down", help: "Save .sql File (⌘S)") { model.save() }
+            BarButton(symbol: "folder", help: "Open SQL File… (⌘O)") { workspace.chooseSQLFiles() }
+            BarButton(symbol: "square.and.arrow.down", help: model.resultEditor?.hasChanges == true
+                      ? "Save SQL File — saves the query text, not pending data changes"
+                      : "Save SQL File (⌘S)") { model.save() }
 
             if model.running { ProgressView().controlSize(.mini) }
             Spacer(minLength: 0)
@@ -212,10 +214,13 @@ struct QueryTabView: View {
                     .help("Edit cells in this result. Only one-table PostgreSQL results with a complete primary key can be changed.")
                 if editor.hasChanges {
                     Button("Discard") { editor.discard() }
+                        .help("Discard pending result changes (⌥⌘Z)")
                         .disabled(editor.committing)
                     Button("Preview") { model.showResultPreview = true }
+                        .help("Preview the UPDATE statements before committing")
                         .disabled(editor.committing)
                     Button(editor.committing ? "Committing…" : "Commit \(editor.changeCount)") { Task { await model.commitResult() } }
+                        .help("Commit pending result changes (⌘S)")
                         .buttonStyle(.borderedProminent)
                         .disabled(editor.committing)
                 }

@@ -379,6 +379,8 @@ private struct TabButton: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .opacity(hovering ? 1 : 0)
+                .help("Close tab (⌘W)")
+                .accessibilityLabel("Close \(tab.title)")
                 Spacer()
             }
             .padding(.leading, 6)

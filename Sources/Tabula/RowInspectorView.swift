@@ -105,7 +105,9 @@ private struct FieldView: View {
                     Menu {
                         Button("Set NULL") { text = ""; onChange(nil) }
                         Button("Set Empty String") { text = ""; onChange("") }
-                    } label: { Image(systemName: "ellipsis") }
+                    } label: { Image(systemName: "ellipsis").help("Set NULL or an empty string") }
+                        .help("Set NULL or an empty string")
+                        .accessibilityLabel("Set value for \(name)")
                         .menuStyle(.borderlessButton)
                         .menuIndicator(.hidden)
                         .fixedSize()
