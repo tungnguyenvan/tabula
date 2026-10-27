@@ -429,7 +429,7 @@ final class WorkspaceModel {
             return
         }
         guard let driver else { return }
-        let model = TableTabModel(table: table, driver: driver)
+        let model = TableTabModel(table: table, driver: driver, connectionTag: config.tag)
         model.mode = mode
         model.focusGridOnLoad = !preview
         if preview, let previewID = previewTabID, let index = tabs.firstIndex(where: { $0.id == previewID }),

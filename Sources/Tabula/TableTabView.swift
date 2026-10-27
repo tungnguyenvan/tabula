@@ -496,6 +496,10 @@ struct ExportMenu: View {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(suggestedName).\(format.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        try? text(format).write(to: url, atomically: true, encoding: .utf8)
+        do {
+            try text(format).write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            Confirmation.report("Couldn’t export “\(url.lastPathComponent)”.", error: error)
+        }
     }
 }

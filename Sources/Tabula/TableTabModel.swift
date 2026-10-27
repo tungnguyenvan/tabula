@@ -16,6 +16,7 @@ final class TableTabModel {
     let id = UUID()
     let table: TableRef
     let driver: any DatabaseDriver
+    let connectionTag: ConnectionTag
     var mode: Mode = .data
 
     private(set) var columns: [ColumnInfo] = []
@@ -70,9 +71,16 @@ final class TableTabModel {
     /// Put keyboard focus in the grid once rows load (opened on purpose, not while browsing the sidebar).
     var focusGridOnLoad = false
 
-    init(table: TableRef, driver: any DatabaseDriver) {
+    init(table: TableRef, driver: any DatabaseDriver, connectionTag: ConnectionTag) {
         self.table = table
         self.driver = driver
+        self.connectionTag = connectionTag
+    }
+
+    /// Central gate for every table write, including the toolbar, preview sheet, shortcut and document editor.
+    private func confirmProductionWrite() -> Bool {
+        connectionTag != .production || Confirmation.ask("Save changes on a PRODUCTION connection?",
+            detail: "This writes to \(table.schema).\(table.name).", action: "Commit")
     }
 
     // MARK: Loading
@@ -413,6 +421,7 @@ final class TableTabModel {
             } else {
                 statement = try MongoChanges.insertDocument(table, text: text)
             }
+            guard confirmProductionWrite() else { return "Save cancelled. Your document has not been changed." }
             _ = try await driver.execute(statement)
             await reload()
             return nil
@@ -429,7 +438,7 @@ final class TableTabModel {
             self.error = error.localizedDescription
             return
         }
-        guard !statements.isEmpty, !committing else { return }
+        guard !statements.isEmpty, !committing, confirmProductionWrite() else { return }
         committing = true
         defer { committing = false }
         do {

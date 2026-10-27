@@ -79,7 +79,7 @@ extension WorkspaceModel {
                 tab = .query(model)
             case .table(let schema, let name, let kind, let mode):
                 if schema == selectedSchema, !tables.contains(where: { $0.schema == schema && $0.name == name }) { continue }
-                let model = TableTabModel(table: TableRef(schema: schema, name: name, kind: TableKind(rawValue: kind) ?? .table), driver: driver)
+                let model = TableTabModel(table: TableRef(schema: schema, name: name, kind: TableKind(rawValue: kind) ?? .table), driver: driver, connectionTag: config.tag)
                 model.mode = TableTabModel.Mode(rawValue: mode) ?? .data
                 unloadedTabs.insert(model.id)
                 tab = .table(model)
