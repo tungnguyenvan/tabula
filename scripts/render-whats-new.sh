@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Renders "What's new in 0.5.0–0.5.2" with Remotion (demo/src/WhatsNew.tsx): dist/demo/tabula-whats-new.mp4 (1080p,
-# 60 fps) and dist/demo/tabula-whats-new-web.mp4 (under GitHub's 10 MB, for the README to play).
+# 60 fps) and dist/demo/tabula-whats-new-web.mp4 (1440×810, under GitHub's 10 MB, for the README to play), both encoded
+# from the same checked frames.
 #
 # Recordings of a debug build driven by real input, as for scripts/render-demo.sh, in $RECORDINGS (default
 # /tmp/tabula-rec2). The pointer is drawn only around clicks. Each was made with scripts' TABULA_DEBUG_KEYS against
@@ -44,6 +45,32 @@ node demo/audio/make-audio.mjs "$PUBLIC/audio"
 BROWSER="${BROWSER:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 BROWSER_FLAG=()
 [ -x "$BROWSER" ] && BROWSER_FLAG=(--browser-executable="$BROWSER")
-(cd demo && npm ci --no-audit --no-fund && npx remotion render src/index.ts WhatsNew "../$OUT" "${BROWSER_FLAG[@]}" \
-  && npx remotion render src/index.ts WhatsNew "../dist/demo/tabula-whats-new-web.mp4" --scale=0.75 --crf=27 "${BROWSER_FLAG[@]}")
+
+# Frames are rendered as images first: now and then Chrome returns a screenshot of the wrong size, which shows in the
+# video as the picture tiled. Broken frames are found (scripts/broken-frames.swift) and rendered again before encoding.
+FRAMES="$(mktemp -d)"
+trap 'rm -rf "$FRAMES"' EXIT
+(cd demo && npm ci --no-audit --no-fund \
+  && npx remotion render src/index.ts WhatsNew "$FRAMES/frames" --sequence --image-format=jpeg --jpeg-quality=95 --concurrency=3 "${BROWSER_FLAG[@]}" \
+  && npx remotion render src/index.ts WhatsNew "$FRAMES/audio.aac" --codec=aac "${BROWSER_FLAG[@]}")
+for attempt in 1 2 3; do
+  broken=$(swift scripts/broken-frames.swift "$FRAMES/frames" | awk '{print $1}')
+  [ -z "$broken" ] && break
+  for file in $broken; do
+    frame=$((10#$(echo "$file" | tr -dc '0-9')))
+    echo "Rendering broken frame $frame again"
+    (cd demo && npx remotion still src/index.ts WhatsNew "$FRAMES/frames/$file" --frame="$frame" --image-format=jpeg --jpeg-quality=95 --log=error "${BROWSER_FLAG[@]}")
+  done
+done
+[ -z "$(swift scripts/broken-frames.swift "$FRAMES/frames")" ] || { echo "Frames still broken after three attempts." >&2; exit 1; }
+
+# Remotion names the frames element-0000.jpeg…; the pattern is read from the first one.
+frames=("$FRAMES"/frames/*.jpeg)
+first=$(basename "${frames[0]}")
+digits=$(echo "$first" | tr -dc '0-9')
+pattern="$FRAMES/frames/${first%%[0-9]*}%0${#digits}d.jpeg"
+encode() { (cd demo && npx remotion ffmpeg -loglevel error -y -framerate 60 -start_number 0 -i "$pattern" -i "$FRAMES/audio.aac" \
+  -map 0:v -map 1:a -c:v libx264 -pix_fmt yuv420p -movflags +faststart -c:a copy -shortest "$@"); }
+encode -crf 18 -preset slow "../$OUT"
+encode -vf scale=1440:810 -crf 27 -preset slow "../dist/demo/tabula-whats-new-web.mp4"
 ls -lh "$OUT" dist/demo/tabula-whats-new-web.mp4
