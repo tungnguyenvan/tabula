@@ -420,42 +420,84 @@ struct AIChatView: View {
         }
     }
 
+    /// One rounded box, as chat apps lay it out: the message on top, and below it the model and effort on the
+    /// left and the actions on the right.
     private var composer: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding / 2) {
             input
             HStack(spacing: Layout.barPadding) {
-                ModelPicker()
-                ChatEffortPicker()
+                // Truncate the model and effort before the actions, which must stay usable in a narrow panel.
+                HStack(spacing: Layout.barPadding) {
+                    ModelPicker()
+                    ChatEffortPicker()
+                }
+                .lineLimit(1)
+                .layoutPriority(0)
+                Spacer(minLength: 0)
+                Menu {
+                    Button("New Chat") { chat.newConversation() }.disabled(chat.messages.isEmpty)
+                    Button("Edit Chat Instructions…") { editingInstructions = true }
+                    SettingsLink { Text("AI Settings…") }
+                } label: { Image(systemName: "ellipsis.circle") }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("More")
+                if chat.busy {
+                    Button { chat.stop() } label: { Image(systemName: "stop.circle.fill").font(.title2) }
+                        .buttonStyle(.borderless)
+                        .help("Stop")
+                } else {
+                    Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
+                        .buttonStyle(.borderless)
+                        .disabled(chat.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .help("Send (↩)")
+                }
             }
+        }
+        .padding(Layout.barPadding)
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: Layout.Chat.composerRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: Layout.Chat.composerRadius)
+                .strokeBorder(inputFocused ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor))
         }
         .padding(Layout.Chat.padding)
         .onAppear { inputFocused = true }
     }
 
+    /// The message, growing up to `Layout.Chat.inputLines` lines and scrolling past that. A hidden copy of the text
+    /// sizes the native editor; a vertical TextField clipped partial lines when its field editor scrolled.
     private var input: some View {
-        HStack(alignment: .bottom, spacing: Layout.barPadding) {
-            TextField("Ask the AI", text: $chat.input, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...Layout.Chat.inputLines)
-                .focused($inputFocused)
-                .onSubmit(send)
-            if chat.busy {
-                Button("Stop") { chat.stop() }
-            } else {
-                Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
-                    .buttonStyle(.borderless)
-                    .disabled(chat.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("Send (↩)")
+        Text(chat.input.isEmpty ? " " : chat.input)
+            .font(.body)
+            .lineLimit(1...Layout.Chat.inputLines)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Layout.Chat.inputInset)
+            .hidden()
+            .accessibilityHidden(true)
+            .overlay {
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $chat.input)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .focused($inputFocused)
+                        .accessibilityLabel("Ask the AI")
+                        // Return sends; Shift-Return starts a new line.
+                        .onKeyPress(.return, phases: .down) { press in
+                            if press.modifiers.contains(.shift) { return .ignored }
+                            send()
+                            return .handled
+                        }
+                    if chat.input.isEmpty {
+                        Text("Ask the AI")
+                            .foregroundStyle(.tertiary)
+                            .padding(Layout.Chat.inputInset)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
             }
-            Menu {
-                Button("New Chat") { chat.newConversation() }.disabled(chat.messages.isEmpty)
-                Button("Edit Chat Instructions…") { editingInstructions = true }
-                SettingsLink { Text("AI Settings…") }
-            } label: { Image(systemName: "ellipsis.circle") }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-        }
+            .clipped()
     }
 
     private func send() {
@@ -730,7 +772,6 @@ private struct ModelPicker: View {
             Label(current, systemImage: "cpu").font(Layout.Font.small)
         }
         .menuStyle(.borderlessButton)
-        .fixedSize()
         .help("Model for the chat and Ask AI")
         .onAppear { models.refresh() }
     }
@@ -766,7 +807,6 @@ private struct ChatEffortPicker: View {
                     .font(Layout.Font.small)
             }
             .menuStyle(.borderlessButton)
-            .fixedSize()
             .help("How much the model thinks before answering. Higher is slower and costs more.")
         }
     }

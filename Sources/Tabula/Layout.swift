@@ -74,6 +74,10 @@ enum Layout {
         static let spacing: CGFloat = 14
         static let padding: CGFloat = 10
         static let inputLines = 6
+        /// TextEditor's built-in text inset, kept in step with the hidden text that sizes it.
+        static let inputInset: CGFloat = 5
+        /// Corners of the box around the message field and its controls.
+        static let composerRadius: CGFloat = 10
     }
 
     enum About {
