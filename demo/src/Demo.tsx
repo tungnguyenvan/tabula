@@ -1,4 +1,5 @@
 import React from "react";
+import { nativeWindowClip, type WindowShape } from "./NativeWindowClip";
 import {
   AbsoluteFill,
   Audio,
@@ -34,9 +35,6 @@ export const accent = "#4f8cff";
 export const stageWidth = 1640;
 /// Recordings are 1300×760 windows.
 export const windowAspect = 1520 / 2600;
-/// JPEG flattens the native window's transparent corners to white (~64 pixels along a 2600-wide capture's edges).
-/// Clip just inside that matte, including its antialiasing; a fraction of the width scales with the picture and camera.
-export const windowCorner = 72 / 2600;
 /// Where the camera's frame starts, under the titles.
 const viewportTop = 175;
 /// The zoom that shows a whole window in that frame.
@@ -122,7 +120,7 @@ const along = (keys: Camera[], frame: number): Camera => {
 /// A recording on the stage, played through `timeline`: (scene frame, recorded frame) pairs, linear in between,
 /// so waits can be cut or sped up while what was done keeps its real order. The cursor and the sounds come from the
 /// recording's logged input, at the frames and places they really happened. `aspect` is the recorded window's height
-/// over its width and `corner` its corner radius over its width; `pointer` "clicks" shows the cursor only around each
+/// over its width; `shape` selects the native corner contour; `pointer` "clicks" shows the cursor only around each
 /// click instead of gliding between positions.
 export const Recording: React.FC<{
   name: string;
@@ -131,10 +129,10 @@ export const Recording: React.FC<{
   camera: Camera[];
   duration: number;
   aspect?: number;
-  corner?: number;
+  shape?: WindowShape;
   pointer?: "glide" | "clicks";
   children?: React.ReactNode;
-}> = ({ name, events, timeline, camera, duration, aspect = windowAspect, corner = windowCorner, pointer: pointerStyle = "glide", children }) => {
+}> = ({ name, events, timeline, camera, duration, aspect = windowAspect, shape = "workspace", pointer: pointerStyle = "glide", children }) => {
   const frame = useFrame();
   const scenes = timeline.map((pair) => pair[0]), recorded = timeline.map((pair) => pair[1]);
   const source = interpolate(frame, scenes, recorded, clamp);
@@ -160,7 +158,7 @@ export const Recording: React.FC<{
   return (
     <div style={{ position: "absolute", left: 0, top: viewportTop, width: 1920, height: viewport, overflow: "hidden" }}>
       <div style={{ position: "absolute", left: (1920 - width) / 2, top: (viewport - height) / 2, width, height, transform: `translate(${dx}px, ${dy}px) scale(${view.zoom})`, transformOrigin: "50% 50%" }}>
-        <div style={{ position: "absolute", inset: 0, borderRadius: width * corner, overflow: "hidden", boxShadow: "0 40px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.1)" }}>
+        <div style={{ position: "absolute", inset: 0, clipPath: nativeWindowClip(shape), overflow: "hidden" }}>
           <Img src={staticFile(image(earlier))} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} />
           {blend > 0.01 && (
             <Img src={staticFile(image(later))} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", opacity: blend }} />
