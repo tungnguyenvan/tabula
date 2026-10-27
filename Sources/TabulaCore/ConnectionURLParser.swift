@@ -88,14 +88,15 @@ extension ConnectionConfig {
         }
         // Skipping certificate checks only weakens TLS that is on, whatever the order of the options.
         if options.insecure && config.tls == .verifyFull { config.tls = .require }
-        return (config, password)
+        return (config, password ?? options.password)
     }
 
-    private static let ports = 1...65535
+    static let ports = 1...65535
 
-    /// Options whose meaning depends on others in the same URL.
-    private struct Options {
+    /// Options whose meaning depends on others in the same URL, and credentials given as options (JDBC).
+    struct Options {
         var insecure = false
+        var password: String?
     }
 
     private static func decoded(_ text: Substring) -> String {
@@ -103,7 +104,7 @@ extension ConnectionConfig {
     }
 
     /// One query option; unknown ones are ignored, as other clients do.
-    private static func apply(_ key: String, _ value: String, to config: inout ConnectionConfig, options: inout Options) {
+    static func apply(_ key: String, _ value: String, to config: inout ConnectionConfig, options: inout Options) {
         let lowered = value.lowercased()
         let on = ["1", "true", "yes", "on"].contains(lowered)
         switch key {
@@ -124,6 +125,11 @@ extension ConnectionConfig {
             options.insecure = !on
         case "ssl_cert_reqs":
             options.insecure = lowered == "none"
+        case "user", "username":
+            // JDBC URLs give the login as options: jdbc:postgresql://host/db?user=app&password=secret
+            if config.user.isEmpty { config.user = value }
+        case "password":
+            options.password = value
         case "authsource":
             config.authSource = value.isEmpty ? nil : value
         case "name":

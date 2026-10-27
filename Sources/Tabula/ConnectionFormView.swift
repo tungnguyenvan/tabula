@@ -47,7 +47,7 @@ struct ConnectionFormView: View {
                 } else {
                     Section("Server") {
                         TextField("Host", text: $config.host, prompt: Text(hostPrompt))
-                            .help("Paste a connection URL, such as postgresql://user:password@host:5432/db, to fill in every field.")
+                            .help("Paste a connection string, such as postgresql://user:password@host:5432/db or host=… dbname=… user=…, to fill in every field.")
                             .onChange(of: config.host) { old, host in
                                 // Typing "postgres://…" key by key, or deleting from the end, must stay typing.
                                 let typed = host.count == old.count + 1 && host.hasPrefix(old)
@@ -98,7 +98,7 @@ struct ConnectionFormView: View {
             }
             .padding(12)
         }
-        .frame(width: 520)
+        .frame(width: Layout.ConnectionForm.width)
         .navigationTitle(isNew ? "New Connection" : "Edit Connection")
         #if DEBUG
         .onAppear {
@@ -125,9 +125,9 @@ struct ConnectionFormView: View {
         }
     }
 
-    /// Fills the form from a connection URL pasted into the Host field.
+    /// Fills the form from a connection string (a URL, JDBC URL or key=value pairs) pasted into the Host field.
     private func applyURL(_ text: String, replacing oldHost: String) {
-        guard text.contains("://"), let (parsed, parsedPassword) = ConnectionConfig.parse(url: text) else { return }
+        guard let (parsed, parsedPassword) = ConnectionConfig.parse(connectionString: text) else { return }
         var filled = parsed
         filled.id = config.id
         if filled.name.isEmpty { filled.name = config.name }

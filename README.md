@@ -81,7 +81,13 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 - Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
 - Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
 - Copy a connection as a URL (`postgresql://user@host:5432/db?sslmode=require`), with or without the password, from the connection's context menu.
-- **Paste a connection URL** into Host (`postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and the URLs TablePlus copies) and every field fills in, the password too. Escaped characters are decoded, so `p%3Fss` becomes `p?ss`.
+- **Create a connection from a connection string:** **New from Connection String…** (⇧⌘N) in the Connections window, or paste (⌘V) into the connection list. A summary shows what was read before **Continue** fills in the New Connection form, the password too. The Host field accepts the same strings. Accepted:
+  - URLs: `postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and the URLs TablePlus copies;
+  - JDBC URLs (`jdbc:postgresql://host/db?user=…&password=…`, `jdbc:sqlite:/path`);
+  - libpq strings (`host=… port=… dbname=… user=… password=…`);
+  - semicolon-separated strings, as .NET drivers take them (`Server=…;Database=…;Uid=…;Pwd=…`, `Host=…;Username=…`).
+
+  Escaped characters in URLs are decoded, so `p%3Fss` becomes `p?ss`. Tabula never reads the clipboard by itself.
 - A password that still holds URL escapes, as some dashboards show them (`%3F` for `?`), gets a **Decode** button, and a failed login says when escapes are the likely cause.
 - **Every database on a PostgreSQL server** from one connection: the sidebar's Database picker lists those your login may open, and choosing one moves the window there. Query tabs keep their SQL; the saved connection doesn't change.
 
