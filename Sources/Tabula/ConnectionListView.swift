@@ -126,7 +126,7 @@ struct ConnectionListView: View {
             Spacer()
             AppMark(size: 72)
             Text("Tabula").font(.system(size: 24, weight: .bold)).padding(.top, 12)
-            Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev")")
+            Text("Version \(version)")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
             Spacer()
             VStack(spacing: 8) {
@@ -144,6 +144,13 @@ struct ConnectionListView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 20)
         }
+    }
+
+    private var version: String {
+        #if DEBUG
+        if let version = DebugHooks.version { return version }
+        #endif
+        return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
     }
 
     private var listPane: some View {
