@@ -565,7 +565,7 @@ private struct ToolStepView: View {
                             .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: Layout.cornerRadius))
                     }
                     if !step.result.isEmpty {
-                        Text(step.result).font(Layout.Font.monoSmall).foregroundColor(Color(nsColor: .secondaryLabelColor))
+                        Text(AgentToolbox.aligned(step.result)).font(Layout.Font.monoSmall).foregroundColor(Color(nsColor: .secondaryLabelColor))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
