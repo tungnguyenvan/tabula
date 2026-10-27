@@ -35,6 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated { WorkspaceRegistry.confirmCloseResults() ? .terminateNow : .terminateCancel }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // Windows may not get to close their connections on the way out.
         MainActor.assumeIsolated { WorkspaceRegistry.saveAllStates() }
@@ -140,6 +144,8 @@ final class ActiveWorkspace {
 enum WorkspaceRegistry {
     private static var sessions: [Int: WeakSession] = [:]
     private static var observer: Any?
+    /// Keep the gate alive without retaining either the window or its SwiftUI delegate.
+    private static var closeGates: [Int: WorkspaceCloseGate] = [:]
 
     private struct WeakSession {
         weak var session: ConnectionSession?
@@ -147,6 +153,16 @@ enum WorkspaceRegistry {
 
     static func register(_ session: ConnectionSession, window: NSWindow) {
         window.title = session.active?.config.displayName ?? window.title
+        closeGates = closeGates.filter { $0.value.window != nil }
+        if let gate = closeGates[window.windowNumber] {
+            gate.install()
+        } else {
+            let gate = WorkspaceCloseGate(window: window, session: session)
+            closeGates[window.windowNumber] = gate
+            gate.install()
+            // SwiftUI can assign its delegate at the end of the first layout pass.
+            DispatchQueue.main.async { gate.install() }
+        }
         guard sessions[window.windowNumber]?.session !== session else { return }
         sessions = sessions.filter { $0.value.session != nil }
         sessions[window.windowNumber] = WeakSession(session: session)
@@ -165,6 +181,10 @@ enum WorkspaceRegistry {
                 }
             }
         }
+    }
+
+    static func confirmCloseResults() -> Bool {
+        sessions.values.compactMap(\.session).allSatisfy { $0.confirmCloseResults() }
     }
 
     /// Saves the open tabs of every SQL workspace (when Tabula quits).
@@ -335,9 +355,13 @@ struct WorkspaceCommands: Commands {
             // On ⌘S and ⇧⌘S in a table tab, through File > Save and Save As.
             Button("Commit Changes") { workspace?.commitSelectedTable() }
                 .disabled(noWorkspace)
-            Button("Preview Changes…") { table?.showPreviewRequest += 1 }
+            Button("Preview Changes…") {
+                if let query, query.resultEditor?.hasChanges == true { query.showResultPreview = true } else { table?.showPreviewRequest += 1 }
+            }
                 .disabled(noWorkspace)
-            Button("Discard Changes") { table?.discardChanges() }
+            Button("Discard Changes") {
+                if let editor = query?.resultEditor, editor.hasChanges { editor.discard() } else { table?.discardChanges() }
+            }
                 .keyboardShortcut("z", modifiers: [.command, .option])
                 .disabled(noWorkspace)
             Divider()

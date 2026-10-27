@@ -19,13 +19,19 @@ struct RowInspectorView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(Array(result.columns.enumerated()), id: \.offset) { index, name in
-                                FieldView(name: name, type: nil, isKey: false,
-                                          cell: result.rows[row][index].map(GridCell.value) ?? .null,
-                                          editable: false, onChange: { _ in })
+                                let editor = query.resultEditor
+                                let info = editor?.target.columns[safe: index]
+                                FieldView(name: name, type: info?.typeName, isKey: info?.isKey ?? false,
+                                          cell: (editor != nil ? editor!.value(row: row, column: index) : result.rows[row][index]).map(GridCell.value) ?? .null,
+                                          edited: editor?.state(row: row, column: index) == .edited,
+                                          editable: editor?.isEditable(row: row, column: index) == true) { value in
+                                    editor?.setValue(value, row: row, column: index)
+                                }
                             }
                         }
                         .padding(12)
                     }
+                    .id("query-\(query.id)-\(query.selectedResult)-\(row)-\(query.resultEditor?.version ?? 0)")
                 } else {
                     placeholder("Select a row to see its fields")
                 }
@@ -151,4 +157,8 @@ private struct FieldView: View {
         guard text != currentText else { return }
         onChange(text)
     }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }

@@ -53,6 +53,7 @@ extension QueryTabModel {
 
     /// Before closing a tab with unsaved edits: Save, Don't Save or Cancel. Returns false when the tab should stay.
     func confirmClose() -> Bool {
+        guard confirmDiscardResults() else { return false }
         guard isEdited else { return true }
         let alert = NSAlert()
         alert.messageText = "Do you want to save the changes made to “\(title)”?"

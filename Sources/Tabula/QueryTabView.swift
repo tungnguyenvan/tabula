@@ -35,6 +35,13 @@ struct QueryTabView: View {
         }
         .onChange(of: model.results.count) { _, _ in selection = [] }
         .onChange(of: model.selectedResult) { _, _ in selection = [] }
+        .sheet(isPresented: $model.showResultPreview) {
+            if let editor = model.resultEditor {
+                SQLPreviewSheet(kind: .postgres, pending: Result { try editor.pendingStatements() },
+                                onCommit: { model.showResultPreview = false; Task { await model.commitResult() } },
+                                onCancel: { model.showResultPreview = false })
+            }
+        }
     }
 
     private var promptBar: AIPromptBar {
@@ -140,17 +147,27 @@ struct QueryTabView: View {
             }
             if let result = model.currentResult {
                 if result.hasResultSet {
+                    let editor = model.resultEditor
                     DataGridView(
                         source: GridSource(
                             columns: result.columns,
                             rowCount: result.rows.count,
-                            version: model.version * 1000 + model.selectedResult,
-                            cell: { row, column in result.rows[row][column].map(GridCell.value) ?? .null },
+                            version: model.version * 1000 + model.selectedResult + (editor?.version ?? 0) * 100_000,
+                            cell: { row, column in
+                                resultValue(result, editor: editor, row: row, column: column).map(GridCell.value) ?? .null
+                            },
+                            state: { row, column in editor?.state(row: row, column: column) ?? .normal },
+                            isEditable: { row in editor?.target.editableRow(row, in: editor?.rows ?? []) == true && editor?.committing == false && editor?.suspended == false },
+                            isColumnEditable: { column in editor?.target.columns.indices.contains(column) == true && editor?.target.columns[column].editable == true },
                             copyText: { rows in
-                                rows.map { result.rows[$0].map { $0 ?? "NULL" }.joined(separator: "\t") }.joined(separator: "\n")
+                                rows.map { row in result.columns.indices.map { column in
+                                    resultValue(result, editor: editor, row: row, column: column) ?? "NULL"
+                                }.joined(separator: "\t") }.joined(separator: "\n")
                             }
                         ),
-                        selection: $selection
+                        selection: $selection,
+                        undoManager: editor?.undoManager,
+                        onEdit: editor.map { editor in { row, column, value in editor.setValue(value, row: row, column: column) } }
                     )
                 } else {
                     VStack(spacing: 6) {
@@ -182,13 +199,32 @@ struct QueryTabView: View {
                 }
                 .labelsHidden()
                 .fixedSize()
+                .disabled(model.committingResults)
             }
             if let result = model.currentResult, result.hasResultSet {
                 ExportMenu(suggestedName: "query") { model.exportText($0) }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
             }
+            if let editor = model.resultEditor {
+                Label("Editing \(editor.target.table.name)", systemImage: "square.and.pencil")
+                    .foregroundStyle(.secondary)
+                    .help("Edit cells in this result. Only one-table PostgreSQL results with a complete primary key can be changed.")
+                if editor.hasChanges {
+                    Button("Discard") { editor.discard() }
+                        .disabled(editor.committing)
+                    Button("Preview") { model.showResultPreview = true }
+                        .disabled(editor.committing)
+                    Button(editor.committing ? "Committing…" : "Commit \(editor.changeCount)") { Task { await model.commitResult() } }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(editor.committing)
+                }
+            }
             Spacer()
+            if let error = model.resultEditor?.error {
+                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).lineLimit(1)
+                    .help(error)
+            }
             if let result = model.currentResult {
                 Text(result.summary).font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
             }
@@ -197,6 +233,11 @@ struct QueryTabView: View {
         .padding(.horizontal, 8)
         .frame(height: 30)
         .barBackground()
+    }
+
+    private func resultValue(_ result: QueryResult, editor: QueryResultEditor?, row: Int, column: Int) -> String? {
+        if let editor { return editor.value(row: row, column: column) }
+        return result.rows[row][column]
     }
 
     private func run(all: Bool) {

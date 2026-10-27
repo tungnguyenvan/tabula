@@ -224,6 +224,8 @@ public struct QueryResult: Sendable {
     public var statement: String
     /// MongoDB: each row's whole document as shell text, which keeps the field types the cells don't show.
     public var documents: DocumentTexts?
+    /// PostgreSQL source metadata; an alias in `columns` is not a writable database column name.
+    public var origins: [QueryColumnOrigin] = []
 
     public init(columns: [String] = [], rows: [[String?]] = [], affectedRows: Int? = nil, duration: TimeInterval = 0, statement: String = "",
                 documents: DocumentTexts? = nil) {
