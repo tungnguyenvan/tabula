@@ -66,6 +66,7 @@ struct ShortcutsView: View {
         Group(title: "SQL editor", items: [
             ("⌘↩", "Run: the selection, or the statement at the cursor"),
             ("⇧⌘↩", "Run everything"),
+            ("⌘.", "Stop the running PostgreSQL query"),
             ("⌘/", "Comment / uncomment lines"),
             ("⇥", "Accept the inline suggestion"),
             ("⎋ or ⌃Space", "Show suggestions: tables, columns, keywords"),

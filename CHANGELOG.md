@@ -8,15 +8,16 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **SSH tunnels for PostgreSQL and MySQL** ([#83](https://github.com/tungnguyenvan/tabula/issues/83)).
   - **Connect over SSH** in the connection form takes the SSH host, port, user and, optionally, a private key file.
   - Tabula runs `/usr/bin/ssh` with key authentication only (ssh-agent, `~/.ssh` or the chosen file) and trusts only host keys already in `~/.ssh/known_hosts`. Your ssh config isn't read, and nothing SSH-related is stored in the Keychain.
-  - The tunnel listens on 127.0.0.1, closes with the connection, and TLS to the database still checks the database's own host name.
+  - The tunnel listens on 127.0.0.1 and closes with the connection or when Tabula quits. TLS to the database still checks the database's own host name.
+- **Stop a running PostgreSQL query** with **Stop** or ⌘. ([#77](https://github.com/tungnguyenvan/tabula/issues/77)).
+  - The server cancels the statement and the rest of the script is skipped. Results finished before Stop are kept.
+  - Tabula never commits or rolls back your transaction; a cancelled transaction stays failed until you run `ROLLBACK`.
+  - Other databases show Stop as unavailable while their statement finishes.
 
 ### Fixed
 - Table-tab commits and document saves now ask for confirmation on Production connections, including commits from the preview sheet and ⌘S ([#78](https://github.com/tungnguyenvan/tabula/issues/78)).
 - Failed data and diagram exports now show an error instead of silently failing ([#79](https://github.com/tungnguyenvan/tabula/issues/79)).
 - An AI command-line tool that leaves a background process running no longer keeps the chat waiting until that process exits; Tabula reads the output and finishes shortly after the command itself exits (related to [#80](https://github.com/tungnguyenvan/tabula/issues/80)).
-
-### Planned
-- Cancelling a running query
 
 ## [0.5.5] - 2026-10-27
 

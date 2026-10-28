@@ -30,6 +30,7 @@ public struct QueryLogEntry: Identifiable, Sendable {
 /// here, so they are logged too.
 public actor LoggingDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind
+    public nonisolated var queryCancellation: QueryCancellationSupport { inner.queryCancellation }
     private let inner: any DatabaseDriver
     private let sink: @Sendable (QueryLogEntry) -> Void
 
