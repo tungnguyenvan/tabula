@@ -1,0 +1,74 @@
+import Foundation
+
+public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
+    case csv, tsv, json, sqlInsert
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .csv: "CSV"
+        case .tsv: "TSV"
+        case .json: "JSON"
+        case .sqlInsert: "SQL INSERT"
+        }
+    }
+
+    public var fileExtension: String {
+        switch self {
+        case .csv: "csv"
+        case .tsv: "tsv"
+        case .json: "json"
+        case .sqlInsert: "sql"
+        }
+    }
+}
+
+public enum ResultExporter {
+    /// JSON keys must be unique, but joins often repeat a column name: "id", "id_2", ...
+    static func uniqueNames(_ columns: [String]) -> [String] {
+        var seen: [String: Int] = [:]
+        return columns.map { name in
+            let count = (seen[name] ?? 0) + 1
+            seen[name] = count
+            return count == 1 ? name : "\(name)_\(count)"
+        }
+    }
+
+    public static func export(columns: [String], rows: [[String?]], format: ExportFormat,
+                              table: TableRef? = nil, dialect: SQLDialect = SQLDialect(kind: .postgres)) -> String {
+        switch format {
+        case .csv:
+            return delimited(columns: columns, rows: rows, separator: ",")
+        case .tsv:
+            return delimited(columns: columns, rows: rows, separator: "\t")
+        case .json:
+            let keys = uniqueNames(columns)
+            let objects: [[String: Any]] = rows.map { row in
+                var object: [String: Any] = [:]
+                for (column, value) in zip(keys, row) { object[column] = value ?? NSNull() }
+                return object
+            }
+            let data = (try? JSONSerialization.data(withJSONObject: objects, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+            return String(data: data, encoding: .utf8) ?? "[]"
+        case .sqlInsert:
+            let target = table ?? TableRef(schema: "main", name: "results")
+            return rows.map { row in
+                dialect.insert(target, values: Array(zip(columns, row)).map { ($0.0, $0.1) }) + ";"
+            }.joined(separator: "\n")
+        }
+    }
+
+    private static func delimited(columns: [String], rows: [[String?]], separator: Character) -> String {
+        func escape(_ value: String?) -> String {
+            guard let value else { return "" }
+            if value.contains(separator) || value.contains("\"") || value.contains(where: \.isNewline) {
+                return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+            }
+            return value
+        }
+        let sep = String(separator)
+        return ([columns.map(escape).joined(separator: sep)] + rows.map { $0.map(escape).joined(separator: sep) })
+            .joined(separator: "\n") + "\n"
+    }
+}
