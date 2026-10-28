@@ -1,7 +1,0 @@
-.build/
-dist/
-.swiftpm/
-*.xcodeproj
-xcuserdata/
-.DS_Store
-Vendor/
