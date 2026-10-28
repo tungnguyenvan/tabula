@@ -129,7 +129,9 @@ struct DataGridView: NSViewRepresentable {
                     if let first = parent.selection.first { tableView.scrollRowToVisible(first) }
                 }
             }
-            if let request = parent.focusRequest, request.id != handledFocusRequest, request.row < parent.source.rowCount {
+            // A hidden tab's grid takes its focus request when the tab is shown, not from the tab in front.
+            if let request = parent.focusRequest, request.id != handledFocusRequest, request.row < parent.source.rowCount,
+               !tableView.isHiddenOrHasHiddenAncestor {
                 handledFocusRequest = request.id
                 DispatchQueue.main.async { [weak self] in
                     self?.focus(row: request.row, tableColumn: (self?.tableColumn(forData: request.column) ?? 1), edit: request.edit)
@@ -259,7 +261,7 @@ struct DataGridView: NSViewRepresentable {
         }
 
         func focus(row: Int, tableColumn: Int, edit: Bool) {
-            guard let tableView, row >= 0, row < tableView.numberOfRows else { return }
+            guard let tableView, !tableView.isHiddenOrHasHiddenAncestor, row >= 0, row < tableView.numberOfRows else { return }
             tableView.selectRowIndexes([row], byExtendingSelection: false)
             tableView.scrollRowToVisible(row)
             tableView.window?.makeFirstResponder(tableView)

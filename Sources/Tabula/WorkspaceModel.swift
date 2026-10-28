@@ -76,7 +76,13 @@ final class WorkspaceModel {
 
     private(set) var tabs: [Tab] = []
     var selectedTabID: UUID? {
-        didSet { loadIfUnloaded() }
+        didSet {
+            let open = Set(tabs.map(\.id))
+            tabSelections = tabSelections.filter { open.contains($0.key) }
+            // Tabs keep their views (and grid selection) while hidden; the inspector follows the tab shown.
+            inspectedRows = selectedTabID.flatMap { tabSelections[$0] } ?? []
+            loadIfUnloaded()
+        }
     }
     var history: [String] = []
     /// The state last saved for this connection or restored from it, so an unchanged one isn't written again.
@@ -123,6 +129,13 @@ final class WorkspaceModel {
     }
     /// Rows selected in the active grid, shown in the row inspector.
     var inspectedRows = IndexSet()
+    /// Each tab's grid selection, so the inspector shows the right rows when a tab is shown again.
+    private var tabSelections: [UUID: IndexSet] = [:]
+
+    func setSelection(_ rows: IndexSet, inTab id: UUID) {
+        tabSelections[id] = rows
+        if selectedTabID == id { inspectedRows = rows }
+    }
     /// Numbers new query tabs (Query 1, Query 2…); restored tabs carry it on.
     var queryCounter = 0
 

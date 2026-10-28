@@ -203,21 +203,42 @@ struct WorkspaceView: View {
         ConsoleLogView(log: model.log) { model.showConsole = false }
     }
 
+    /// Its own view, so switching tabs updates only the tab area, not the toolbar, inspector and sidebar.
     private var tabContent: some View {
+        TabContentArea(model: model)
+    }
+}
+
+/// The selected tab's content. Reads the selection here rather than in `WorkspaceView`, whose body also builds the
+/// toolbar and inspector.
+private struct TabContentArea: View {
+    let model: WorkspaceModel
+
+    var body: some View {
         VStack(spacing: 0) {
-            if let tab = model.selectedTab {
-                switch tab {
-                case .table(let table): TableTabView(model: table, workspace: model).id(table.id)
-                case .query(let query): QueryTabView(model: query, workspace: model).id(query.id)
-                case .diagram(let diagram): DiagramView(model: diagram) { model.open($0) }.id(diagram.id)
-                case .metrics(let metrics): MetricsView(model: metrics).id(metrics.id)
-                case .routine(let routine): RoutineTabView(model: routine, workspace: model).id(routine.id)
+            if model.selectedTab != nil {
+                TabContentHost(tabs: model.tabs, selectedID: model.selectedTabID, transient: transientTabs) { [model] tab in
+                    Self.content(of: tab, workspace: model)
                 }
             } else {
                 EmptyWorkspaceView(model: model)
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity)
+    }
+
+    private var transientTabs: Set<UUID> {
+        Set(model.tabs.compactMap { if case .metrics(let metrics) = $0 { metrics.id } else { nil } })
+    }
+
+    private static func content(of tab: WorkspaceModel.Tab, workspace model: WorkspaceModel) -> AnyView {
+        switch tab {
+        case .table(let table): AnyView(TableTabView(model: table, workspace: model))
+        case .query(let query): AnyView(QueryTabView(model: query, workspace: model))
+        case .diagram(let diagram): AnyView(DiagramView(model: diagram) { model.open($0) })
+        case .metrics(let metrics): AnyView(MetricsView(model: metrics))
+        case .routine(let routine): AnyView(RoutineTabView(model: routine, workspace: model))
+        }
     }
 }
 
