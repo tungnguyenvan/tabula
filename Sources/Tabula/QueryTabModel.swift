@@ -13,6 +13,7 @@ final class QueryTabModel {
     private(set) var results: [QueryResult] = []
     var selectedResult = 0
     private(set) var resultEditors: [Int: QueryResultEditor] = [:]
+    private(set) var resultEditNotes: [Int: String] = [:]
     var showResultPreview = false
     var resultEditor: QueryResultEditor? { resultEditors[selectedResult] }
     var hasResultChanges: Bool { resultEditors.values.contains(where: \.hasChanges) }
@@ -100,6 +101,7 @@ final class QueryTabModel {
         failedStatement = nil
         results = []
         resultEditors = [:]
+        resultEditNotes = [:]
         let scope = QueryCancelScope()
         cancelScope = scope
         let task = Task { [weak self] in
@@ -133,12 +135,14 @@ final class QueryTabModel {
                 let result = try await driver.execute(limited)
                 results.append(result)
                 // Metadata/catalog checks may reject a result, but must not turn a successful query into an error.
-                // They are statements too, so they don't run once the user has stopped.
+                // They are statements too, so they don't run once the user has stopped, nor count as stoppable work.
                 if !scope.isCancelled {
-                    let target = try? await QueryCancelScope.$current.withValue(nil) {
-                        try await driver.queryEditTarget(for: result)
-                    }
-                    if let target { resultEditors[results.count - 1] = QueryResultEditor(target: target, rows: result.rows) }
+                    do {
+                        let target = try await QueryCancelScope.$current.withValue(nil) {
+                            try await driver.queryEditTarget(for: result)
+                        }
+                        if let target { resultEditors[results.count - 1] = QueryResultEditor(target: target, rows: result.rows) }
+                    } catch { resultEditNotes[results.count - 1] = error.localizedDescription }
                 }
             } catch let cancelled as QueryCancelledError {
                 interrupted = cancelled.serverInterrupted

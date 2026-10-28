@@ -12,6 +12,9 @@ public struct QueryColumnOrigin: Sendable, Equatable {
 public struct QueryEditTarget: Sendable {
     public var table: TableRef
     public var tableOID: UInt32
+    public var kind: DatabaseKind
+    /// Persistent InnoDB dictionary ID; unlike names or CREATE_TIME this changes after DROP/CREATE.
+    public var mysqlTableIdentity: String?
     public var columns: [Column]
     public struct Column: Sendable, Equatable {
         public var name: String
@@ -20,13 +23,17 @@ public struct QueryEditTarget: Sendable {
         public var typeName: String
         public var isKey: Bool
         public var editable: Bool
-        public init(name: String, attribute: Int16, typeOID: UInt32, typeName: String, isKey: Bool, editable: Bool) {
+        public var mysqlType: String?
+        public var mysqlDefinition: [String?]?
+        public init(name: String, attribute: Int16, typeOID: UInt32, typeName: String, isKey: Bool, editable: Bool, mysqlType: String? = nil, mysqlDefinition: [String?]? = nil) {
             self.name = name; self.attribute = attribute; self.typeOID = typeOID; self.typeName = typeName
             self.isKey = isKey; self.editable = editable
+            self.mysqlType = mysqlType; self.mysqlDefinition = mysqlDefinition
         }
     }
-    public init(table: TableRef, tableOID: UInt32, columns: [Column]) {
+    public init(table: TableRef, tableOID: UInt32, columns: [Column], kind: DatabaseKind = .postgres, mysqlTableIdentity: String? = nil) {
         self.table = table; self.tableOID = tableOID; self.columns = columns
+        self.kind = kind; self.mysqlTableIdentity = mysqlTableIdentity
     }
 
     /// Text whose PostgreSQL display representation round-trips without a time zone, locale or binary codec.
@@ -42,6 +49,8 @@ public struct QueryEditTarget: Sendable {
     }
 
     public func statement(for edit: QueryRowEdit) throws -> String {
+        if kind == .mysql { return try mysqlStatement(for: edit) }
+        guard kind == .postgres else { throw DatabaseError("Editing is not supported for this database.") }
         guard edit.original.count == columns.count, !edit.values.isEmpty else { throw DatabaseError("Invalid result edit.") }
         let keyIndices = columns.indices.filter { columns[$0].isKey }
         guard !keyIndices.isEmpty, keyIndices.allSatisfy({ edit.original[$0] != nil }) else {

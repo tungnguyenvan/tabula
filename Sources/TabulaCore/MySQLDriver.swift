@@ -71,10 +71,8 @@ public actor MySQLDriver: DatabaseDriver {
             let affected = AffectedRowsBox()
             do {
                 let rows = try await connection.query(sql, onMetadata: { affected.value = Int($0.affectedRows) }).get()
-                if let first = rows.first {
-                    return QueryResult(columns: first.columnDefinitions.map(\.name),
-                                       rows: rows.map(Self.values),
-                                       duration: Date().timeIntervalSince(started), statement: sql)
+                if !rows.isEmpty {
+                    return Self.result(rows, started: started, sql: sql)
                 }
                 return QueryResult(affectedRows: affected.value, duration: Date().timeIntervalSince(started), statement: sql)
             } catch MySQLError.server(let packet) where packet.errorCode.rawValue == ProtocolConstants.mysqlUnsupportedPreparedStatement {
@@ -88,10 +86,21 @@ public actor MySQLDriver: DatabaseDriver {
 
     private func textQuery(_ sql: String, started: Date) async throws -> QueryResult {
         let rows = try await connection.simpleQuery(sql).get()
-        let columns = rows.first?.columnDefinitions.map(\.name) ?? []
-        return QueryResult(columns: columns, rows: rows.map(Self.values),
-                           affectedRows: columns.isEmpty ? 0 : nil,
-                           duration: Date().timeIntervalSince(started), statement: sql)
+        return Self.result(rows, started: started, sql: sql)
+    }
+
+    private static func result(_ rows: [MySQLRow], started: Date, sql: String) -> QueryResult {
+        let definitions = rows.first?.columnDefinitions ?? []
+        var result = QueryResult(columns: definitions.map(\.name), rows: rows.map(Self.values),
+                                 affectedRows: definitions.isEmpty ? 0 : nil,
+                                 duration: Date().timeIntervalSince(started), statement: sql)
+        if !definitions.isEmpty {
+            result.mysqlOrigins = definitions.map {
+                .init(schema: $0.schema, table: $0.table, originalTable: $0.orgTable, originalName: $0.orgName,
+                      dataType: UInt32($0.columnType.rawValue), characterSet: UInt32($0.characterSet.rawValue))
+            }
+        }
+        return result
     }
 
     private static func values(_ row: MySQLRow) -> [String?] {

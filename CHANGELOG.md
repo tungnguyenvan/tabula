@@ -9,6 +9,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - **Connect over SSH** in the connection form takes the SSH host, port, user and, optionally, a private key file.
   - Tabula runs `/usr/bin/ssh` with key authentication only (ssh-agent, `~/.ssh` or the chosen file) and trusts only host keys already in `~/.ssh/known_hosts`. Your ssh config isn't read, and nothing SSH-related is stored in the Keychain.
   - The tunnel listens on 127.0.0.1 and closes with the connection or when Tabula quits. TLS to the database still checks the database's own host name.
+- **Edit query results on MySQL InnoDB tables** ([#81](https://github.com/tungnguyenvan/tabula/issues/81)).
+  - Works for plain one-table SELECTs that include the whole primary key, with aliases and backtick-quoted names.
+  - Integer, DECIMAL and text columns can be changed. Keys, generated, binary, date/time, floating-point and BIT columns stay read-only.
+  - Commits run in one transaction on a separate connection. Each edited row must still match its old key and old values, and the table must be the same one the query read; otherwise nothing is saved.
+  - Tabula needs the PROCESS privilege to prove the table's InnoDB identity. Without it, or for names MySQL stores in encoded form (such as names with hyphens), the result shows **Read-only** with the reason. Session temporary tables stay read-only.
 - **Stop a running PostgreSQL query** with **Stop** or ⌘. ([#77](https://github.com/tungnguyenvan/tabula/issues/77)).
   - The server cancels the statement and the rest of the script is skipped. Results finished before Stop are kept.
   - Tabula never commits or rolls back your transaction; a cancelled transaction stays failed until you run `ROLLBACK`.
