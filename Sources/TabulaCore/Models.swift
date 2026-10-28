@@ -230,6 +230,8 @@ public struct QueryResult: Sendable {
     public var documents: DocumentTexts?
     /// PostgreSQL source metadata; an alias in `columns` is not a writable database column name.
     public var origins: [QueryColumnOrigin] = []
+    /// MySQL protocol origins, separate from PostgreSQL OIDs. Display aliases are never physical names.
+    public var mysqlOrigins: [MySQLQueryColumnOrigin]?
 
     public init(columns: [String] = [], rows: [[String?]] = [], affectedRows: Int? = nil, duration: TimeInterval = 0, statement: String = "",
                 documents: DocumentTexts? = nil) {

@@ -22,30 +22,39 @@ import Foundation
 /// (`SELECT t FROM t`) or `ref.name` attribute notation for a function, so the caller should confirm through
 /// result metadata (table OID and column number) that every result column really is a column of the table.
 public struct EditableSelect: Sendable {
-    public static func accepts(_ sql: String) -> Bool { source(sql) != nil }
+    public static func accepts(_ sql: String, kind: DatabaseKind = .postgres) -> Bool { source(sql, kind: kind) != nil }
 
     /// The FROM relation of an accepted query, decoded to the names PostgreSQL resolves (unquoted folded to lower
     /// case, quoted taken verbatim): `[table]` or `[schema, table]`. Nil whenever `accepts` is false. The caller
     /// should still resolve it (e.g. via regclass) and confirm it is a plain table matching the result metadata.
-    public static func source(_ sql: String) -> [String]? {
-        guard let tokens = significantTokens(sql) else { return nil }
-        var parser = Parser(tokens: tokens)
+    public static func source(_ sql: String, kind: DatabaseKind = .postgres) -> [String]? {
+        relation(sql, kind: kind)?.names
+    }
+
+    public struct Relation: Sendable {
+        public let names: [String]
+        public let reference: String
+    }
+
+    public static func relation(_ sql: String, kind: DatabaseKind = .postgres) -> Relation? {
+        guard kind == .postgres || kind == .mysql, let tokens = significantTokens(sql, kind: kind) else { return nil }
+        var parser = Parser(tokens: tokens, kind: kind)
         do {
             try parser.statement()
         } catch {
             return nil
         }
-        return parser.relation
+        return Relation(names: parser.relation, reference: parser.reference ?? "")
     }
 
     // MARK: - Lexical checks
 
     /// The tokens that matter, or nil when the text holds anything whose meaning to PostgreSQL is uncertain,
     /// including places where `SQLLexer` and the server's lexer could disagree.
-    static func significantTokens(_ sql: String) -> [SQLToken]? {
-        let all = SQLLexer.tokens(sql, kind: .postgres)
+    static func significantTokens(_ sql: String, kind: DatabaseKind = .postgres) -> [SQLToken]? {
+        let all = SQLLexer.tokens(sql, kind: kind)
         for (index, token) in all.enumerated() {
-            guard isLexicallySafe(token) else { return nil }
+            guard isLexicallySafe(token, kind: kind) else { return nil }
             if index + 1 < all.count, !canAdjoin(token, all[index + 1]) { return nil }
         }
         return all.filter { $0.kind != .whitespace && $0.kind != .comment }
@@ -58,7 +67,7 @@ public struct EditableSelect: Sendable {
     private static let operators: Set<String> = ["*", "=", "<", ">", "<=", ">=", "<>", "!=", "+", "-", "/", "%"]
     static let comparisons: Set<String> = ["=", "<", ">", "<=", ">=", "<>", "!="]
 
-    private static func isLexicallySafe(_ token: SQLToken) -> Bool {
+    private static func isLexicallySafe(_ token: SQLToken, kind: DatabaseKind) -> Bool {
         let scalars = token.text.unicodeScalars
         guard !scalars.contains("\0") else { return false }
         switch token.kind {
@@ -68,13 +77,18 @@ public struct EditableSelect: Sendable {
         case .comment:
             // Block comments nest in PostgreSQL but not in SQLLexer, so refuse them outright. A line comment
             // ends at \r for the server but only at \n for the lexer.
-            return token.text.hasPrefix("--") && !scalars.contains("\r")
+            guard !scalars.contains("\r") else { return false }
+            if kind == .mysql {
+                // MySQL requires whitespace after --; # comments are unambiguous. Never executable /*! */.
+                return token.text.hasPrefix("#") || (token.text.hasPrefix("--") && token.text.dropFirst(2).first.map { $0 == " " || $0 == "\t" || $0 == "\n" } == true)
+            }
+            return token.text.hasPrefix("--")
         case .string:
             // Plain '...' only: no dollar quoting, and no backslash, whose meaning depends on
             // standard_conforming_strings.
             return token.text.hasPrefix("'") && !scalars.contains("\\") && quotedBody(token.text) != nil
         case .quotedIdentifier:
-            return quotedName(token.text) != nil
+            return quotedName(token.text, kind: kind) != nil
         case .number:
             return isDecimal(token.text)
         case .word:
@@ -131,22 +145,26 @@ public struct EditableSelect: Sendable {
     }
 
     /// A PostgreSQL "..." identifier's name. Backticks are MySQL's and refused.
-    private static func quotedName(_ text: String) -> String? {
-        guard text.hasPrefix("\""), let name = quotedBody(text), !name.isEmpty, fitsNameLength(name) else { return nil }
+    private static func quotedName(_ text: String, kind: DatabaseKind = .postgres) -> String? {
+        guard text.hasPrefix(kind == .mysql ? "`" : "\""),
+              kind != .mysql || !text.contains("\\"),
+              let name = quotedBody(text), !name.isEmpty, fitsNameLength(name, kind: kind) else { return nil }
         return name
     }
 
     /// Longer names are silently truncated by the server, so the name it resolves is not the one written.
-    private static func fitsNameLength(_ name: String) -> Bool { name.utf8.count <= 63 }
+    private static func fitsNameLength(_ name: String, kind: DatabaseKind = .postgres) -> Bool {
+        kind == .mysql ? name.count <= 64 : name.utf8.count <= 63
+    }
 
     /// The name PostgreSQL resolves an identifier token to, or nil when the token isn't a safe identifier.
-    static func identifierName(_ token: SQLToken) -> String? {
+    static func identifierName(_ token: SQLToken, kind: DatabaseKind = .postgres) -> String? {
         switch token.kind {
         case .quotedIdentifier:
-            return quotedName(token.text)
+            return quotedName(token.text, kind: kind)
         case .word:
-            guard isPlainWord(token.text), !reservedWords.contains(token.keyword), fitsNameLength(token.text) else { return nil }
-            return token.text.lowercased()
+            guard isPlainWord(token.text), !reservedWords.contains(token.keyword), !mysqlReservedWords.contains(kind == .mysql ? token.keyword : ""), fitsNameLength(token.text, kind: kind) else { return nil }
+            return kind == .mysql ? token.text : token.text.lowercased()
         default:
             return nil
         }
@@ -155,6 +173,8 @@ public struct EditableSelect: Sendable {
     /// Words never taken as a bare identifier: PostgreSQL's reserved, type/function-name and column-name keywords
     /// (some of which are functions without parentheses, like CURRENT_USER), plus clause words this grammar
     /// steers by. A column with one of these names must be written quoted.
+    private static let mysqlReservedWords: Set<String> = ["STRAIGHT_JOIN", "SQL_CALC_FOUND_ROWS", "SQL_NO_CACHE", "SQL_CACHE", "HIGH_PRIORITY", "DELAYED", "DISTINCTROW", "PARTITION", "FORCE", "USE", "IGNORE", "INDEX", "KEY", "DIV", "MOD", "XOR", "REGEXP", "RLIKE", "SOUNDS", "MATCH", "AGAINST", "DATABASE", "SCHEMA", "CURRENT_USER", "CURRENT_ROLE", "SYSTEM_USER", "SESSION_USER", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "LOCALTIME", "LOCALTIMESTAMP", "UTC_DATE", "UTC_TIME", "UTC_TIMESTAMP"]
+
     static let reservedWords: Set<String> = [
         // Reserved
         "ALL", "ANALYSE", "ANALYZE", "AND", "ANY", "ARRAY", "AS", "ASC", "ASYMMETRIC", "BOTH", "CASE", "CAST", "CHECK",
@@ -190,6 +210,7 @@ private struct Rejected: Error {}
 /// that falls outside it.
 private struct Parser {
     let tokens: [SQLToken]
+    let kind: DatabaseKind
     var index = 0
     var depth = 0
     /// The name columns may be qualified with: the alias, or the bare table name when there is none.
@@ -217,10 +238,10 @@ private struct Parser {
 
     mutating func expectPunctuation(_ text: String) throws { guard acceptPunctuation(text) else { throw Rejected() } }
 
-    var atIdentifier: Bool { current.map { EditableSelect.identifierName($0) != nil } ?? false }
+    var atIdentifier: Bool { current.map { EditableSelect.identifierName($0, kind: kind) != nil } ?? false }
 
     mutating func identifier() throws -> String {
-        guard let token = current, let name = EditableSelect.identifierName(token) else { throw Rejected() }
+        guard let token = current, let name = EditableSelect.identifierName(token, kind: kind) else { throw Rejected() }
         index += 1
         return name
     }
@@ -294,7 +315,7 @@ private struct Parser {
     mutating func orderItem() throws {
         try columnReference()
         if !accept("ASC") { _ = accept("DESC") }
-        if accept("NULLS") {
+        if kind == .postgres && accept("NULLS") {
             guard accept("FIRST") || accept("LAST") else { throw Rejected() }
         }
     }
@@ -350,7 +371,7 @@ private struct Parser {
             try arithmetic()
             try expect("AND")
             try arithmetic()
-        } else if accept("LIKE") || accept("ILIKE") {
+        } else if accept("LIKE") || (kind == .postgres && accept("ILIKE")) {
             try arithmetic()
         } else if negated {
             throw Rejected()

@@ -42,7 +42,7 @@ struct QueryTabView: View {
         .onChange(of: model.selectedResult) { _, _ in selection = [] }
         .sheet(isPresented: $model.showResultPreview) {
             if let editor = model.resultEditor {
-                SQLPreviewSheet(kind: .postgres, pending: Result { try editor.pendingStatements() },
+                SQLPreviewSheet(kind: editor.target.kind, pending: Result { try editor.pendingStatements() },
                                 onCommit: { model.showResultPreview = false; Task { await model.commitResult() } },
                                 onCancel: { model.showResultPreview = false })
             }
@@ -234,7 +234,7 @@ struct QueryTabView: View {
             if let editor = model.resultEditor {
                 Label("Editing \(editor.target.table.name)", systemImage: "square.and.pencil")
                     .foregroundStyle(.secondary)
-                    .help("Edit cells in this result. Only one-table PostgreSQL results with a complete primary key can be changed.")
+                    .help("Edit cells in this result. Only proven one-table PostgreSQL or MySQL InnoDB results with a complete primary key can be changed.")
                 if editor.hasChanges {
                     Button("Discard") { editor.discard() }
                         .help("Discard pending result changes (⌥⌘Z)")
@@ -247,6 +247,10 @@ struct QueryTabView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(editor.committing)
                 }
+            } else if let note = model.resultEditNotes[model.selectedResult] {
+                Label("Read-only", systemImage: "lock")
+                    .foregroundStyle(.secondary)
+                    .help(note)
             }
             Spacer()
             if let error = model.resultEditor?.error {
