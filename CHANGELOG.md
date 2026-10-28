@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-28
+
 ### Added
 - **SSH tunnels for PostgreSQL and MySQL** ([#83](https://github.com/tungnguyenvan/tabula/issues/83)).
   - **Connect over SSH** in the connection form takes the SSH host, port, user and, optionally, a private key file.
