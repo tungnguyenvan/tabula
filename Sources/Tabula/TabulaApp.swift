@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Windows may not get to close their connections on the way out.
         MainActor.assumeIsolated { WorkspaceRegistry.saveAllStates() }
+        SSHTunnel.terminateAll()
         // llama.cpp aborts at exit if a model is still loaded on the GPU.
         LocalModelRunner.shared.unload()
     }
