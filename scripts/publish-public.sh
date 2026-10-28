@@ -41,6 +41,13 @@ if [ "${FRESH:-}" = "1" ]; then
   git -C "$work" init -q -b main
 else
   git clone -q --depth 1 "https://github.com/$REPOSITORY.git" "$work"
+  # When the source lives in the public repository itself (it holds Package.swift), replacing its contents with the
+  # documentation would delete the source from main. Release there with `gh release create` instead.
+  if [ -f "$work/Package.swift" ]; then
+    echo "$REPOSITORY holds the source code; this script would replace it with the documentation. Nothing was pushed." >&2
+    echo "Publish the release with: gh release create v$VERSION -R $REPOSITORY --target <source commit> ..." >&2
+    exit 1
+  fi
   git -C "$work" rm -rq --ignore-unmatch . >/dev/null
 fi
 
