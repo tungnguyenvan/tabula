@@ -121,6 +121,8 @@ struct SQLEditorView: NSViewRepresentable {
     var undoManager: UndoManager
     /// ⌘↩ runs the selection or current statement; ⇧⌘↩ runs everything.
     var onRun: (_ all: Bool) -> Void
+    /// Return true when a running query takes ⌘., instead of NSTextView's cancel action.
+    var onStop: (() -> Bool)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -371,6 +373,10 @@ final class SQLTextView: NSTextView {
         if event.keyCode == KeyCode.space && flags == [.control] {
             complete(nil)
             return true
+        }
+        // ⌘. is the text view's cancel; while a query runs it belongs to Query › Stop Query.
+        if event.charactersIgnoringModifiers == "." && flags == [.command] {
+            if coordinator?.parent.onStop?() == true { return true }
         }
         return super.performKeyEquivalent(with: event)
     }

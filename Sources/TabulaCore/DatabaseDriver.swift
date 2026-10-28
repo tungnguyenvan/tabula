@@ -1,8 +1,11 @@
 import Foundation
 
-/// One open database session. Implementations are actors, so calls are serialized per connection.
+/// One open database session. Actor implementations must account for reentrancy across awaits:
+/// isolation alone does not serialize entire executions.
 public protocol DatabaseDriver: AnyObject, Sendable {
     var kind: DatabaseKind { get }
+    /// Whether Stop can interrupt the current server statement, or only skip subsequent statements.
+    var queryCancellation: QueryCancellationSupport { get }
 
     /// Schemas (Postgres), databases (MySQL) or attached schemas (SQLite).
     func schemas() async throws -> [String]
@@ -74,6 +77,7 @@ extension DatabaseDriver {
     public func executeScript(_ script: String) async throws -> [QueryResult] {
         var results: [QueryResult] = []
         for statement in SQLSplitter.split(script, kind: kind) {
+            try QueryCancelScope.current?.checkCancellation()
             results.append(try await execute(statement))
         }
         return results

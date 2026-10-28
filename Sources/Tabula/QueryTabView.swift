@@ -20,7 +20,12 @@ struct QueryTabView: View {
                 }
                 SQLEditorView(text: $model.sql, handle: handle, kind: model.driver.kind, suggest: suggest, aiSuggest: aiSuggest,
                               aiSuggestDelay: AIService.shared.settings.provider(for: .inline).runsLocally ? Defaults.AI.localInlineDelay : Defaults.AI.inlineDelay,
-                              completionVersion: workspace.completionVersion, undoManager: model.undoManager) { all in run(all: all) }
+                              completionVersion: workspace.completionVersion, undoManager: model.undoManager,
+                              onRun: { all in run(all: all) }, onStop: {
+                                  guard model.canStop else { return false }
+                                  model.stop()
+                                  return true
+                              })
             }
         } bottom: {
             results
@@ -51,19 +56,28 @@ struct QueryTabView: View {
 
     private var editorBar: some View {
         HStack(spacing: 6) {
-            // One Run button, as in other SQL clients; Run All is in its menu (and on ⇧⌘↩).
-            Menu {
-                Button("Run All Statements") { run(all: true) }
-            } label: {
-                Label("Run", systemImage: "play.fill")
-            } primaryAction: {
-                run(all: false)
+            if model.running {
+                Button { model.stop() } label: {
+                    Label(model.stopping ? "Stopping…" : "Stop", systemImage: "stop.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .fixedSize()
+                .disabled(!model.canStop)
+                .help(model.stopHelp)
+            } else {
+                // One Run button; Run All is in its menu (and on ⇧⌘↩).
+                Menu {
+                    Button("Run All Statements") { run(all: true) }
+                } label: {
+                    Label("Run", systemImage: "play.fill")
+                } primaryAction: {
+                    run(all: false)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.borderedProminent)
+                .fixedSize()
+                .help("Run the selected text, or the statement at the cursor when nothing is selected (⌘↩). Run all: ⇧⌘↩")
             }
-            .menuStyle(.button)
-            .buttonStyle(.borderedProminent)
-            .fixedSize()
-            .disabled(model.running)
-            .help("Run the selected text, or the statement at the cursor when nothing is selected (⌘↩). Run all: ⇧⌘↩")
             Picker("Limit", selection: $model.rowLimit) {
                 Text("No Limit").tag(Int?.none)
                 Divider()
@@ -147,6 +161,15 @@ struct QueryTabView: View {
                 .frame(maxHeight: model.results.isEmpty ? .infinity : 90)
                 Divider()
             }
+            if let status = model.runStatus {
+                Label(status, systemImage: "stop.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Layout.barPadding)
+                Divider()
+            }
             if let result = model.currentResult {
                 if result.hasResultSet {
                     let editor = model.resultEditor
@@ -180,7 +203,7 @@ struct QueryTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else if model.error == nil {
-                Text(model.running ? "Running…" : "Run a query to see results")
+                Text(model.stopping ? "Stopping…" : model.running ? "Running…" : model.runStatus == nil ? "Run a query to see results" : "No results")
                     .font(.callout)
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

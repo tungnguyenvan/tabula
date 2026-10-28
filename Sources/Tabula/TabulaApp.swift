@@ -406,6 +406,9 @@ struct WorkspaceCommands: Commands {
             }
             .keyboardShortcut(.return, modifiers: [.command, .shift])
             .disabled(noWorkspace)
+            Button("Stop Query") { query?.stop() }
+                .keyboardShortcut(".", modifiers: .command)
+                .disabled(noWorkspace)
             Divider()
             Button("Beautify SQL") { query?.beautifyRequest += 1 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])

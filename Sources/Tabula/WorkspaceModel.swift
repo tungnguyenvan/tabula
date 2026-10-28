@@ -237,7 +237,7 @@ final class WorkspaceModel {
         // What was open comes back once connected again; until then the emptied tabs aren't saved.
         saveState()
         stateRestored = false
-        for case .query(let query) in tabs { query.suspendResultEditing() }
+        for case .query(let query) in tabs { query.cancelRun(); query.suspendResultEditing() }
         await disconnect()
         tabs.removeAll()
         selectedTabID = nil
@@ -249,6 +249,7 @@ final class WorkspaceModel {
 
     func disconnect() async {
         connectionGeneration += 1
+        for case .query(let query) in tabs { query.cancelRun() }
         // An answer in progress would go on using the closed connection (and open another).
         chat.stop()
         agentGeneration += 1
@@ -364,6 +365,7 @@ final class WorkspaceModel {
         for tab in tabs {
             guard case .query(let model) = tab else { continue }
             model.assistant.cancel()
+            model.cancelRun()
             model.suspendResultEditing()
             queries.append(model)
         }
@@ -631,6 +633,7 @@ final class WorkspaceModel {
         case .table(let model): closedTabs.append(.table(model.table, model.mode))
         case .query(let model):
             model.assistant.cancel()
+            model.cancelRun()
             if let url = model.fileURL {
                 closedTabs.append(.file(url))
             } else if !model.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

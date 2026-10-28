@@ -20,6 +20,19 @@ final class QueryTabModel {
 
     private(set) var error: String?
     private(set) var running = false
+    private(set) var stopping = false
+    private(set) var runStatus: String?
+    @ObservationIgnored private var runTask: Task<Void, Never>?
+    /// The current or most recent run's scope; a late Stop answer is matched against it.
+    @ObservationIgnored private var cancelScope: QueryCancelScope?
+    @ObservationIgnored private var stopNote: String?
+
+    var canStop: Bool { running && !stopping && driver.queryCancellation == .server }
+    var stopHelp: String {
+        driver.queryCancellation == .server
+            ? "Cancel the current PostgreSQL statement and skip the remaining statements (⌘.). The transaction is not committed or rolled back."
+            : "Stopping a running statement is not supported for \(driver.kind.displayName). Wait for it to finish."
+    }
     private(set) var version = 0
     let undoManager = UndoManager()
     /// Added as LIMIT to SELECTs that have none; nil runs statements as written.
@@ -74,30 +87,62 @@ final class QueryTabModel {
         results.indices.contains(selectedResult) ? results[selectedResult] : nil
     }
 
-    /// Runs `text` (the editor selection, or the whole editor when nil) statement by statement.
+    /// Runs `text` (the editor selection, or the whole editor when nil) statement by statement. The run
+    /// lives in a task this tab owns, so Stop and closing the tab can end it.
     func run(_ text: String? = nil) async {
         let script = (text?.isEmpty == false ? text! : sql).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !script.isEmpty, !running, workspace?.openingDatabase == nil, !committingResults, confirmDiscardResults() else { return }
         running = true
+        stopping = false
+        runStatus = nil
+        stopNote = nil
         error = nil
         failedStatement = nil
         results = []
         resultEditors = [:]
-        defer { running = false; version += 1 }
+        let scope = QueryCancelScope()
+        cancelScope = scope
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await QueryCancelScope.$current.withValue(scope) { await self.perform(script, scope: scope) }
+        }
+        runTask = task
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            scope.requestStop()
+            Task { await scope.cancel() }
+        }
+    }
 
+    private func perform(_ script: String, scope: QueryCancelScope) async {
+        defer {
+            running = false
+            stopping = false
+            runTask = nil
+            version += 1
+        }
         workspace?.recordHistory(script)
         let statements = SQLSplitter.split(script, kind: driver.kind)
+        var interrupted = false
         for (index, statement) in statements.enumerated() {
-            // The tab was closed mid-script: don't keep running statements nobody will see.
-            if Task.isCancelled { break }
+            // Stop (or closing the tab) ends the run here: no further statement is sent.
+            if scope.isCancelled || Task.isCancelled { break }
             do {
                 let limited = rowLimit.map { driver.dialect.applyingRowLimit(statement, limit: $0) } ?? statement
                 let result = try await driver.execute(limited)
                 results.append(result)
                 // Metadata/catalog checks may reject a result, but must not turn a successful query into an error.
-                if let target = try? await driver.queryEditTarget(for: result) {
-                    resultEditors[results.count - 1] = QueryResultEditor(target: target, rows: result.rows)
+                // They are statements too, so they don't run once the user has stopped.
+                if !scope.isCancelled {
+                    let target = try? await QueryCancelScope.$current.withValue(nil) {
+                        try await driver.queryEditTarget(for: result)
+                    }
+                    if let target { resultEditors[results.count - 1] = QueryResultEditor(target: target, rows: result.rows) }
                 }
+            } catch let cancelled as QueryCancelledError {
+                interrupted = cancelled.serverInterrupted
+                break
             } catch {
                 failedStatement = statement
                 let prefix = statements.count > 1 ? "Statement \(index + 1) of \(statements.count) failed:\n" : ""
@@ -105,10 +150,62 @@ final class QueryTabModel {
                 break
             }
         }
+        if scope.isCancelled, error == nil {
+            runStatus = Self.stoppedMessage(completed: results.count, total: statements.count, interrupted: interrupted, detail: stopNote)
+        }
         // Show the last result set, which is what the user usually wants after a script.
         selectedResult = results.lastIndex(where: \.hasResultSet) ?? max(0, results.count - 1)
         // Schema may have changed (CREATE/DROP/ALTER).
-        if results.contains(where: { !$0.hasResultSet }) { await workspace?.loadTables() }
+        if !scope.isCancelled, results.contains(where: { !$0.hasResultSet }) {
+            await QueryCancelScope.$current.withValue(nil) { await workspace?.loadTables() }
+        }
+    }
+
+    private static func stoppedMessage(completed: Int, total: Int, interrupted: Bool, detail: String?) -> String {
+        var text = interrupted ? "Query cancelled." : "Stopped."
+        if total > 1 { text += " \(completed) of \(total) statements completed; the rest were not run." }
+        if interrupted {
+            text += " If a transaction was open, PostgreSQL has marked it failed: run ROLLBACK (or ROLLBACK TO SAVEPOINT) before continuing."
+        }
+        if let detail { text += "\n" + detail }
+        return text
+    }
+
+    /// Stop: no further statements run, and the server is asked to cancel the one in progress. Nothing is
+    /// committed or rolled back on the user's behalf.
+    func stop() {
+        guard canStop, let scope = cancelScope else { return }
+        stopping = true
+        scope.requestStop()
+        Task { [weak self] in
+            let outcome = await scope.cancel()
+            // The run may already have ended by the time the answer arrives, so the note goes to whichever is current.
+            guard let self, self.cancelScope === scope else { return }
+            let note: String
+            switch outcome {
+            case .failed(let message):
+                note = "The server could not cancel the running statement: \(message)"
+            case .unsupported:
+                note = "This database cannot cancel a running statement; only remaining statements are skipped."
+            case .requested, .notRunning: return
+            }
+            if self.running {
+                self.stopNote = note
+                self.runStatus = note + " Waiting for it to finish…"
+            } else {
+                self.runStatus = (self.runStatus.map { $0 + "\n" } ?? "") + note
+            }
+        }
+    }
+
+    /// The tab is going away: no further statements run, and a supported driver cancels the current one.
+    func cancelRun() {
+        guard running, let scope = cancelScope else { return }
+        stopping = true
+        scope.requestStop()
+        // Task.cancel alone only cancels NIO's consumer, not necessarily the server statement. Keep the
+        // run task alive until the driver has cancelled/drained the actual statement.
+        Task { await scope.cancel() }
     }
 
     func suspendResultEditing() {
