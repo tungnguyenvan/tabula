@@ -227,6 +227,9 @@ struct SidebarView: View {
                 Button("Copy Name") {
                     Clipboard.copy(table.name)
                 }
+                if table.kind == .table, model.supportsDumps {
+                    Button("Dump Table…") { model.startDump(tables: [table]) }
+                }
                 Divider()
                 if table.kind == .table {
                     Button("\(model.config.kind.truncateTitle)…", role: .destructive) { pendingAction = PendingAction(kind: .truncate, table: table) }

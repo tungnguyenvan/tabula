@@ -10,7 +10,7 @@ import TabulaCore
 /// - TABULA_DEBUG_QUERY: SQL to run in the first query tab; TABULA_DEBUG_QUERY_THEN: more SQL to run a moment later
 /// - TABULA_DEBUG_SNAPSHOT: directory that receives PNG snapshots of every window
 /// - TABULA_DEBUG_KEYS: scripted input, e.g. "wait:500;slow:SELECT 1;cmd+return;click:0.2,0.12" (see startKeyScript;
-///   also paste:<text>, open:<path>, alert:<button>, call:save|saveas|close|reopen, snap:<name>)
+///   also paste:<text>, open:<path>, alert:<button>, call:save|saveas|close|reopen|dump|restore|dumpstart, snap:<name>)
 /// - TABULA_DEBUG_RECORD: directory that receives the workspace window as numbered JPEG frames
 ///   (TABULA_DEBUG_RECORD_FPS a second, default 30), e.g. for the demo video (scripts/render-demo.sh)
 /// - TABULA_DEBUG_AI_PROVIDER: turn AI on with this provider; TABULA_DEBUG_ASK (+ _ASK_SUBMIT): fill the Ask AI bar
@@ -297,6 +297,18 @@ enum DebugHooks {
                     case "resultundo": workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?.undoManager.undo()
                     case "resultredo": workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?.undoManager.redo()
                     case "resultpreview": if case .query(let q) = workspace.selectedTab { q.showResultPreview = true }
+                    case "dump": workspace.startDump()
+                    case "restore": Task { await workspace.startRestore() }
+                    case "dumpstart": workspace.transfer?.start()
+                    case "dumpstop": workspace.transfer?.cancel()
+                    case let call where call.hasPrefix("dumptable-"):
+                        if let table = workspace.tables.first(where: { $0.name == call.dropFirst("dumptable-".count) }) {
+                            workspace.startDump(tables: [table])
+                        }
+                    case "dumpcustom": workspace.transfer?.dumpOptions.format = .custom
+                    case "dumpdrop": workspace.transfer?.dumpOptions.addDrop = true
+                    case "restoredrop": workspace.transfer?.restoreOptions.dropExisting = true
+                    case "dumpdone": workspace.transfer = nil
                     case "save": workspace.saveSelectedTab(choosingLocation: false)
                     case "saveas": workspace.saveSelectedTab(choosingLocation: true)
                     case "close": if let id = workspace.selectedTabID { workspace.requestClose(id) }
@@ -523,7 +535,8 @@ enum DebugHooks {
     }
 
     private static func snapshotKeyWindow(_ name: String) {
-        guard let directory = environment["TABULA_DEBUG_SNAPSHOT"], let window = targetWindow ?? NSApp.keyWindow,
+        // A sheet on the window is what the step is about.
+        guard let directory = environment["TABULA_DEBUG_SNAPSHOT"], let window = (targetWindow ?? NSApp.keyWindow).map({ $0.attachedSheet ?? $0 }),
               let rep = windowServerImage(window) ?? cachedImage(window) else { return }
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("step-\(name).png"))
         print("SNAP", name)

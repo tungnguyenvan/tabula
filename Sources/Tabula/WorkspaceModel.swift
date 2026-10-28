@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import TabulaCore
@@ -263,6 +264,8 @@ final class WorkspaceModel {
     func disconnect() async {
         connectionGeneration += 1
         for case .query(let query) in tabs { query.cancelRun() }
+        // A dump or restore stops with its window; a restore in one transaction is rolled back.
+        transfer?.cancel()
         // An answer in progress would go on using the closed connection (and open another).
         chat.stop()
         agentGeneration += 1
@@ -273,6 +276,45 @@ final class WorkspaceModel {
         await driver?.close()
         driver = nil
         await agent?.close()
+    }
+
+    /// The dump or restore sheet shown in this window.
+    var transfer: DatabaseTransfer?
+
+    var supportsDumps: Bool { (config.kind == .postgres || config.kind == .mysql) && driver != nil }
+
+    /// The database a dump or restore works on: the one the window is in (PostgreSQL), the selected one (MySQL).
+    private var transferDatabase: String {
+        switch config.kind {
+        case .postgres: currentDatabase ?? (config.database.isEmpty ? config.user : config.database)
+        default: selectedSchema.isEmpty ? config.database : selectedSchema
+        }
+    }
+
+    /// Dumps the database, or only `tables`, to a file.
+    private var serverIsMariaDB: Bool { serverVersion?.contains("MariaDB") == true }
+    /// Set while the restore's file is being chosen, so the menu can't start a second one meanwhile.
+    private var choosingRestore = false
+
+    func startDump(tables: [TableRef] = []) {
+        guard supportsDumps, transfer == nil, !choosingRestore else { return NSSound.beep() }
+        transfer = DatabaseTransfer(direction: .dump, config: config, database: transferDatabase, password: password,
+                                    serverMajor: nil, serverIsMariaDB: serverIsMariaDB, tables: tables)
+    }
+
+    /// Restores a dump into the database, after choosing the file.
+    func startRestore() async {
+        guard supportsDumps, transfer == nil, !choosingRestore, let driver else { return NSSound.beep() }
+        choosingRestore = true
+        defer { choosingRestore = false }
+        var major: Int?
+        if config.kind == .postgres, let text = try? await driver.execute("SHOW server_version_num").rows.first?.first ?? nil {
+            major = Int(text).map { $0 / 10000 }
+        }
+        let restore = DatabaseTransfer(direction: .restore, config: config, database: transferDatabase, password: password,
+                                       serverMajor: major, serverIsMariaDB: serverIsMariaDB) { [weak self] in Task { await self?.refresh() } }
+        guard restore.chooseFile() else { return }
+        transfer = restore
     }
 
     /// Commits result edits through a short-lived connection so a user transaction on the query connection is

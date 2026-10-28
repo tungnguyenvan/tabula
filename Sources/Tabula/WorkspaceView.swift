@@ -113,6 +113,9 @@ struct WorkspaceView: View {
                                    max: recordingInspectorWidth ?? Layout.Inspector.maxWidth)
         }
         .navigationTitle(model.config.displayName)
+        .sheet(item: $model.transfer) { transfer in
+            DatabaseTransferSheet(transfer: transfer) { model.transfer = nil }
+        }
         .toolbar {
             ConnectionPillItem(pill: ConnectionPill(config: model.config, status: model.status,
                                                     location: location,

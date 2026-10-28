@@ -106,6 +106,19 @@ final class ConnectionSession {
             NSSound.beep()
             return false
         }
+        let transfers = connections.compactMap { connection -> DatabaseTransfer? in
+            guard case .sql(let workspace) = connection, let transfer = workspace.transfer, transfer.isRunning else { return nil }
+            return transfer
+        }
+        if !transfers.isEmpty {
+            let restoring = transfers.contains { $0.direction == .restore }
+            guard Confirmation.ask(restoring ? "Stop the restore in progress?" : "Stop the dump in progress?",
+                                   detail: restoring
+                                       ? "A restore in one transaction is rolled back; otherwise what already ran stays applied."
+                                       : "The dump file isn't saved.",
+                                   action: "Stop and Close") else { return false }
+            transfers.forEach { $0.cancel() }
+        }
         guard queries.contains(where: \.hasResultChanges) else { return true }
         return Confirmation.ask("Discard uncommitted query result changes?",
                                 detail: "Commit the result changes before closing if you want to keep them.", action: "Discard and Close")
