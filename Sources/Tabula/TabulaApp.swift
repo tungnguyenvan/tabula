@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Windows may not get to close their connections on the way out.
         MainActor.assumeIsolated { WorkspaceRegistry.saveAllStates() }
         SSHTunnel.terminateAll()
+        DatabaseDump.terminateAll()
         // llama.cpp aborts at exit if a model is still loaded on the GPU.
         LocalModelRunner.shared.unload()
     }
@@ -270,6 +271,12 @@ struct WorkspaceCommands: Commands {
             Button("Save As…") { workspace?.saveSelectedTab(choosingLocation: true) }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
+            Divider()
+            // PostgreSQL and MySQL; elsewhere the action beeps.
+            Button("Dump Database…") { workspace?.startDump() }
+                .disabled(workspace == nil)
+            Button("Restore from Dump…") { if let workspace { Task { await workspace.startRestore() } } }
+                .disabled(workspace == nil)
             Divider()
             Button("Connections…") { openWindow(id: WindowID.connections) }
                 .keyboardShortcut("k", modifiers: [.command, .shift])

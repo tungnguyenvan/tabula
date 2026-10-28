@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Dump and restore PostgreSQL and MySQL databases** ([#93](https://github.com/tungnguyenvan/tabula/issues/93)).
+  - **File › Dump Database…**, **Dump Table…** in the sidebar, and **File › Restore from Dump…**, with progress and Stop.
+  - Uses `pg_dump` / `pg_restore` / `psql` and `mysqldump` / `mysql` (or MariaDB's) installed on the Mac, the newest found; explains how to install them when missing.
+  - PostgreSQL restores run in one transaction by default; Production restores ask for the database name. Scripts can't run shell commands on the Mac, and passwords never appear on a command line.
+
+### Fixed
+- An SSH tunnel no longer keeps running after Tabula is force-quit or crashes ([#95](https://github.com/tungnguyenvan/tabula/issues/95)).
+
 ## [0.6.0] - 2026-10-28
 
 ### Added

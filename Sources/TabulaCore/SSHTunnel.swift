@@ -46,23 +46,39 @@ public struct SSHConfig: Codable, Hashable, Sendable {
 
 /// A local port forwarded through `/usr/bin/ssh` to a database server, for as long as the tunnel lives.
 ///
-/// The ssh process gets a fixed argument list (never a shell), ignores the user's ssh config (which can run
+/// The ssh process gets a fixed argument list (no shell parses it), ignores the user's ssh config (which can run
 /// commands), authenticates with keys only, and trusts only host keys already in known_hosts. Its forward listens on
 /// 127.0.0.1. ssh reports the forward ready with `ExitOnForwardFailure` and the port answering.
+///
+/// ssh doesn't exit with the app that started it, so a crashed or force-quit Tabula would leave the tunnel open.
+/// ssh runs under a small /bin/sh watcher holding a pipe from Tabula: when the pipe closes, because the tunnel is
+/// closed or Tabula is gone however it ended, the watcher stops ssh.
 public actor SSHTunnel {
     public nonisolated let localPort: Int
     private let process: Process
     private let errors: Pipe
+    /// Closing it stops ssh.
+    private let lifeline: Pipe
 
-    private init(localPort: Int, process: Process, errors: Pipe) {
+    private init(localPort: Int, process: Process, errors: Pipe, lifeline: Pipe) {
         self.localPort = localPort
         self.process = process
         self.errors = errors
+        self.lifeline = lifeline
     }
+
+    /// Runs "$@" (ssh and its arguments, never parsed by the shell) and stops it when standard input closes.
+    /// The watcher exits with ssh's status, and its reader goes with it.
+    static let watcher = #"exec 3<&0; "$@" </dev/null 3<&- & child=$!; (read -r _ <&3; kill "$child") >/dev/null 2>&1 & reader=$!; wait "$child"; status=$?; kill "$reader" 2>/dev/null; exit "$status""#
 
     /// Opens a tunnel from 127.0.0.1 to `targetHost:targetPort` as seen from the SSH server.
     public static func open(_ ssh: SSHConfig, targetHost: String, targetPort: Int, timeout: Double) async throws -> SSHTunnel {
-        try await open(ssh, targetHost: targetHost, targetPort: targetPort, timeout: timeout, knownHosts: nil)
+        var knownHosts: String?
+        #if DEBUG
+        // TABULA_DEBUG_SSH_KNOWN_HOSTS: a throwaway server's host key, so checks don't touch ~/.ssh/known_hosts.
+        knownHosts = ProcessInfo.processInfo.environment["TABULA_DEBUG_SSH_KNOWN_HOSTS"]
+        #endif
+        return try await open(ssh, targetHost: targetHost, targetPort: targetPort, timeout: timeout, knownHosts: knownHosts)
     }
 
     /// `knownHosts` replaces ~/.ssh/known_hosts, for tests against a throwaway server.
@@ -125,16 +141,17 @@ public actor SSHTunnel {
     private static func start(_ ssh: SSHConfig, port: Int, targetHost: String, targetPort: Int, timeout: Double,
                               knownHosts: String?) async throws -> SSHTunnel {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        process.arguments = arguments(ssh, localPort: port, targetHost: targetHost, targetPort: targetPort, timeout: timeout,
-                                      knownHosts: knownHosts)
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", watcher, "sh", "/usr/bin/ssh"]
+            + arguments(ssh, localPort: port, targetHost: targetHost, targetPort: targetPort, timeout: timeout, knownHosts: knownHosts)
         var environment = ProcessInfo.processInfo.environment
         // Never pop up a password prompt; keys come from the agent (SSH_AUTH_SOCK) or the identity file.
         environment.removeValue(forKey: "SSH_ASKPASS")
         environment.removeValue(forKey: "SSH_ASKPASS_REQUIRE")
         environment.removeValue(forKey: "DISPLAY")
         process.environment = environment
-        process.standardInput = FileHandle.nullDevice
+        let lifeline = Pipe()
+        process.standardInput = lifeline
         process.standardOutput = FileHandle.nullDevice
         let errors = Pipe()
         process.standardError = errors
@@ -147,8 +164,8 @@ public actor SSHTunnel {
             errors.fileHandleForReading.readabilityHandler = nil
             throw error
         }
-        live.insert(process.processIdentifier)
-        let tunnel = SSHTunnel(localPort: port, process: process, errors: errors)
+        live.insert(process.processIdentifier, lifeline.fileHandleForWriting)
+        let tunnel = SSHTunnel(localPort: port, process: process, errors: errors, lifeline: lifeline)
 
         do {
             let deadline = Date().addingTimeInterval(timeout + 2)
@@ -187,6 +204,7 @@ public actor SSHTunnel {
     /// Stops ssh; the forward closes with it.
     public func close() {
         errors.fileHandleForReading.readabilityHandler = nil
+        try? lifeline.fileHandleForWriting.close()
         guard process.isRunning else { return }
         process.terminate()
         let process = process
@@ -203,17 +221,18 @@ public actor SSHTunnel {
     private static let live = LiveProcesses()
 
     /// Stops every tunnel at once; for when the app quits.
+    /// Closing each tunnel's lifeline makes its watcher stop ssh.
     public static func terminateAll() {
-        for pid in live.all { kill(pid, SIGTERM) }
+        for lifeline in live.all { try? lifeline.close() }
     }
 
     private final class LiveProcesses: @unchecked Sendable {
         private let lock = NSLock()
-        private var pids: Set<pid_t> = []
+        private var lifelines: [pid_t: FileHandle] = [:]
 
-        func insert(_ pid: pid_t) { _ = lock.withLock { pids.insert(pid) } }
-        func remove(_ pid: pid_t) { _ = lock.withLock { pids.remove(pid) } }
-        var all: [pid_t] { lock.withLock { Array(pids) } }
+        func insert(_ pid: pid_t, _ lifeline: FileHandle) { lock.withLock { lifelines[pid] = lifeline } }
+        func remove(_ pid: pid_t) { _ = lock.withLock { lifelines.removeValue(forKey: pid) } }
+        var all: [FileHandle] { lock.withLock { Array(lifelines.values) } }
     }
 
     /// A port nothing listens on, found by binding port 0 on 127.0.0.1.

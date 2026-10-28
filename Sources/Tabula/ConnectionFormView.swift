@@ -107,6 +107,10 @@ struct ConnectionFormView: View {
         #if DEBUG
         .onAppear {
             if let host = DebugHooks.formHost { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { config.host = host } }
+            // TABULA_DEBUG_FORM_TEST: press Test once the form is up.
+            if ProcessInfo.processInfo.environment["TABULA_DEBUG_FORM_TEST"] != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { Task { await test() } }
+            }
         }
         #endif
     }
