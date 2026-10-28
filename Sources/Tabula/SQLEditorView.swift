@@ -15,7 +15,9 @@ final class EditorHandle {
     }
 
     func focus() {
-        textView?.window?.makeFirstResponder(textView)
+        // A tab kept hidden in the background must not take the keyboard from the one shown.
+        guard let textView, !textView.isHiddenOrHasHiddenAncestor else { return }
+        textView.window?.makeFirstResponder(textView)
     }
 
     /// The selection if there is one, otherwise the statement under the caret (briefly highlighted).

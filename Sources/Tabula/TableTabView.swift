@@ -56,13 +56,14 @@ struct TableTabView: View {
             Divider()
             bottomBar
         }
-        .onChange(of: selection) { _, rows in workspace.inspectedRows = rows }
+        .onChange(of: selection) { _, rows in workspace.setSelection(rows, inTab: model.id) }
+        // A rebuilt view starts with no selection; the inspector and ⌘D must not keep using the old rows.
+        .onAppear { workspace.setSelection(selection, inTab: model.id) }
         .onChange(of: model.showPreviewRequest) { _, _ in if model.hasChanges { showingPreview = true } }
         .onChange(of: model.documentEditRequest) { _, row in
             if let row, let text = model.documentText(row: row) { editingDocument = .init(row: row, text: text) }
             model.documentEditRequest = nil
         }
-        .onAppear { workspace.inspectedRows = selection }
         .sheet(item: $editingDocument) { target in
             DocumentEditorSheet(target: target, collection: model.table.name) { text in
                 await model.saveDocument(text, replacing: target.row)

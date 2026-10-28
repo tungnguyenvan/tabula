@@ -211,7 +211,8 @@ struct QueryTabView: View {
             Divider()
             resultBar
         }
-        .onChange(of: selection) { _, rows in workspace.inspectedRows = rows }
+        .onChange(of: selection) { _, rows in workspace.setSelection(rows, inTab: model.id) }
+        .onAppear { workspace.setSelection(selection, inTab: model.id) }
     }
 
     private var resultBar: some View {

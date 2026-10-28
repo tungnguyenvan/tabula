@@ -156,7 +156,7 @@ enum DebugHooks {
     private static let typingInterval = 0.05
 
     private static func firstView<T: NSView>(of type: T.Type, in view: NSView?) -> T? {
-        guard let view else { return nil }
+        guard let view, !view.isHidden else { return nil }
         if let match = view as? T { return match }
         for subview in view.subviews { if let match = firstView(of: type, in: subview) { return match } }
         return nil
