@@ -13,6 +13,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ### Fixed
 - Table-tab commits and document saves now ask for confirmation on Production connections, including commits from the preview sheet and ⌘S ([#78](https://github.com/tungnguyenvan/tabula/issues/78)).
 - Failed data and diagram exports now show an error instead of silently failing ([#79](https://github.com/tungnguyenvan/tabula/issues/79)).
+- An AI command-line tool that leaves a background process running no longer keeps the chat waiting until that process exits; Tabula reads the output and finishes shortly after the command itself exits (related to [#80](https://github.com/tungnguyenvan/tabula/issues/80)).
 
 ### Planned
 - Cancelling a running query
