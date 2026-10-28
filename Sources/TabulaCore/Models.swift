@@ -84,6 +84,8 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
     public var authSource: String?
     /// MongoDB: `host` is a DNS seed list name (mongodb+srv://, e.g. Atlas).
     public var srv: Bool?
+    /// PostgreSQL / MySQL: reach the server through this SSH server. Optional so older saved files still load.
+    public var ssh: SSHConfig?
 
     public init(
         id: UUID = UUID(),
@@ -98,7 +100,8 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
         tag: ConnectionTag = .none,
         connectTimeout: Double? = nil,
         authSource: String? = nil,
-        srv: Bool? = nil
+        srv: Bool? = nil,
+        ssh: SSHConfig? = nil
     ) {
         self.id = id
         self.name = name
@@ -113,6 +116,7 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
         self.connectTimeout = connectTimeout
         self.authSource = authSource
         self.srv = srv
+        self.ssh = ssh
     }
 
     public var displayName: String {

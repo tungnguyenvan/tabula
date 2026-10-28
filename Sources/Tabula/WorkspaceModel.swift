@@ -180,8 +180,15 @@ final class WorkspaceModel {
 
     func connect() async {
         status = .connecting
+        let generation = connectionGeneration
         do {
-            await setUp(try await openDriver(config))
+            let driver = try await openDriver(config)
+            // Closed or disconnected while connecting: nothing will close this one (or its SSH tunnel) later.
+            guard generation == connectionGeneration else {
+                await driver.close()
+                return
+            }
+            await setUp(driver)
             if tabs.isEmpty { await restoreState() }
             if tabs.isEmpty { newQueryTab() }
             // Files opened from Finder while no connection was ready.
@@ -190,6 +197,7 @@ final class WorkspaceModel {
             DebugHooks.workspaceConnected(self)
             #endif
         } catch {
+            guard generation == connectionGeneration else { return }
             status = .failed(PasswordEscapes.message(for: error, password: password))
         }
     }
@@ -236,7 +244,11 @@ final class WorkspaceModel {
         await connect()
     }
 
+    /// Bumped by `disconnect`, so a connection that finishes opening afterwards is closed, not kept.
+    private var connectionGeneration = 0
+
     func disconnect() async {
+        connectionGeneration += 1
         // An answer in progress would go on using the closed connection (and open another).
         chat.stop()
         agentGeneration += 1

@@ -4,12 +4,17 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **SSH tunnels for PostgreSQL and MySQL** ([#83](https://github.com/tungnguyenvan/tabula/issues/83)).
+  - **Connect over SSH** in the connection form takes the SSH host, port, user and, optionally, a private key file.
+  - Tabula runs `/usr/bin/ssh` with key authentication only (ssh-agent, `~/.ssh` or the chosen file) and trusts only host keys already in `~/.ssh/known_hosts`. Your ssh config isn't read, and nothing SSH-related is stored in the Keychain.
+  - The tunnel listens on 127.0.0.1, closes with the connection, and TLS to the database still checks the database's own host name.
+
 ### Fixed
 - Table-tab commits and document saves now ask for confirmation on Production connections, including commits from the preview sheet and ⌘S ([#78](https://github.com/tungnguyenvan/tabula/issues/78)).
 - Failed data and diagram exports now show an error instead of silently failing ([#79](https://github.com/tungnguyenvan/tabula/issues/79)).
 
 ### Planned
-- SSH tunnels
 - Cancelling a running query
 
 ## [0.5.5] - 2026-10-27

@@ -25,6 +25,7 @@ struct ConnectionFormView: View {
                         ForEach(DatabaseKind.allCases) { Text($0.displayName).tag($0) }
                     }
                     .onChange(of: config.kind) { old, new in
+                        if new != .postgres && new != .mysql { config.ssh = nil }
                         if applyingURL { applyingURL = false; return }
                         if config.port == old.defaultPort || config.port == 0 { config.port = new.defaultPort }
                         if new == .mysql && config.tls == .disable { config.tls = .require }
@@ -78,6 +79,9 @@ struct ConnectionFormView: View {
                             ForEach(TLSMode.allCases) { Text($0.displayName).tag($0) }
                         }
                     }
+                    if config.kind == .postgres || config.kind == .mysql {
+                        sshSection
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -125,6 +129,73 @@ struct ConnectionFormView: View {
         }
     }
 
+    /// An SSH server the connection goes through. The Host above is then the database as the SSH server reaches it.
+    @ViewBuilder
+    private var sshSection: some View {
+        Section {
+            Toggle("Connect over SSH", isOn: sshEnabled)
+                .help("Reaches a database that only an SSH server (a bastion) can reach, through a tunnel from this Mac.")
+            if config.ssh != nil {
+                TextField("SSH host", text: sshField(\.host), prompt: Text("bastion.example.com"))
+                TextField("SSH port", value: sshField(\.port), format: .number.grouping(.never))
+                TextField("SSH user", text: sshField(\.user))
+                LabeledContent("Key") {
+                    HStack {
+                        Text(config.ssh?.identityFile.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "ssh-agent and default keys")
+                            .foregroundStyle(config.ssh?.identityFile == nil ? .secondary : .primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Button("Choose…", action: chooseKey)
+                            .help("Use one private key file instead of ssh-agent and the default keys.")
+                        if config.ssh?.identityFile != nil {
+                            Button("Clear") { config.ssh?.identityFile = nil }
+                                .help("Use ssh-agent and the default keys.")
+                        }
+                    }
+                }
+                if let problem = sshProblem {
+                    Label(problem, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("SSH tunnel")
+        } footer: {
+            if config.ssh != nil {
+                Text("Keys only: from ssh-agent, ~/.ssh or the chosen file. A key with a passphrase must be added to ssh-agent first (ssh-add). The server's host key must already be in ~/.ssh/known_hosts; connect once with ssh in Terminal to add it. Host above is the database as the SSH server reaches it, such as localhost.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var sshEnabled: Binding<Bool> {
+        Binding { config.ssh != nil } set: { on in
+            config.ssh = on ? (config.ssh ?? SSHConfig(user: NSUserName())) : nil
+            testState = .idle
+        }
+    }
+
+    private func sshField<Value>(_ keyPath: WritableKeyPath<SSHConfig, Value>) -> Binding<Value> {
+        Binding { (config.ssh ?? SSHConfig())[keyPath: keyPath] } set: { config.ssh?[keyPath: keyPath] = $0 }
+    }
+
+    /// Shown once the SSH host and user are filled in, so an empty new section isn't all warnings.
+    private var sshProblem: String? {
+        guard let ssh = config.ssh, !ssh.host.isEmpty, !ssh.user.isEmpty else { return nil }
+        return ssh.problem
+    }
+
+    private func chooseKey() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.showsHiddenFiles = true
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh")
+        panel.message = "Choose the private key, such as id_ed25519 (not the .pub file)."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        config.ssh?.identityFile = url.path
+        testState = .idle
+    }
+
     /// Fills the form from a connection string (a URL, JDBC URL or key=value pairs) pasted into the Host field.
     private func applyURL(_ text: String, replacing oldHost: String) {
         guard let (parsed, parsedPassword) = ConnectionConfig.parse(connectionString: text) else { return }
@@ -133,6 +204,8 @@ struct ConnectionFormView: View {
         if filled.name.isEmpty { filled.name = config.name }
         if filled.tag == ConnectionConfig().tag { filled.tag = config.tag }
         filled.connectTimeout = config.connectTimeout
+        // A URL names the database, not how to reach it: the SSH server stays, for the kinds that can use it.
+        filled.ssh = filled.kind == .postgres || filled.kind == .mysql ? config.ssh : nil
         let kindBeforeURL = config.kind
         if filled.kind != config.kind { applyingURL = true }
         config = filled
@@ -151,7 +224,8 @@ struct ConnectionFormView: View {
         case .redis:
             let database = config.database.trimmingCharacters(in: .whitespaces)
             return (1...65535).contains(config.port) && (database.isEmpty || (Int(database).map { $0 >= 0 } ?? false))
-        case .postgres, .mysql: return !config.user.isEmpty && (1...65535).contains(config.port)
+        case .postgres, .mysql:
+            return !config.user.isEmpty && (1...65535).contains(config.port) && config.ssh?.problem == nil
         case .mongodb: return !config.host.isEmpty && (config.srv == true || (1...65535).contains(config.port))
         }
     }

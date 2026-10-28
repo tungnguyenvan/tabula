@@ -80,6 +80,10 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 - Tag each connection Local, Development, Staging or Production. The tag colors the sidebar strip and the toolbar pill, and Production gets an extra warning before destructive actions.
 - Passwords are stored in the macOS Keychain. TLS can be disabled, required, or required with certificate verification.
 - Test a connection before saving. Connecting gives up after 15 seconds instead of hanging.
+- **SSH tunnels (PostgreSQL, MySQL):** turn on **Connect over SSH** to reach a database that only an SSH server (a bastion) can reach. Host is then the database as the SSH server sees it, such as `localhost`.
+  - Tabula runs the system's `/usr/bin/ssh` with key authentication only: keys come from ssh-agent, `~/.ssh`, or a key file you choose. Add a key with a passphrase to ssh-agent first (`ssh-add`). No SSH password or passphrase is stored.
+  - The SSH server's host key must already be in `~/.ssh/known_hosts`; connect once with `ssh` in Terminal to check and save it. Your `~/.ssh/config` is not read, so enter the real host name, port and user.
+  - The tunnel listens on 127.0.0.1 only and closes with the connection or when Tabula quits. **Verify certificate** needs a database host name, not an IP address, so TLS checks the database's real identity rather than the tunnel's loopback address.
 - Copy a connection as a URL (`postgresql://user@host:5432/db?sslmode=require`), with or without the password, from the connection's context menu.
 - **Create a connection from a connection string:** **Connection String…** (⇧⌘N) in the Connections window, or paste (⌘V) into the connection list. A summary shows what was read before **Continue** fills in the New Connection form, the password too. The Host field accepts the same strings. Accepted:
   - URLs: `postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `file://`, and the URLs TablePlus copies;

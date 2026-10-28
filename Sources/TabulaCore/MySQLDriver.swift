@@ -13,7 +13,8 @@ public actor MySQLDriver: DatabaseDriver {
         self.initialDatabase = initialDatabase
     }
 
-    public static func connect(_ config: ConnectionConfig, password: String?) async throws -> MySQLDriver {
+    /// `tlsServerName` overrides the name TLS checks, for connections through an SSH tunnel to 127.0.0.1.
+    public static func connect(_ config: ConnectionConfig, password: String?, tlsServerName: String? = nil) async throws -> MySQLDriver {
         var logger = Logger(label: "tabula.mysql")
         logger.logLevel = .error
         let host = config.resolvedHost, port = config.port
@@ -23,7 +24,7 @@ public actor MySQLDriver: DatabaseDriver {
             let address = try await config.resolveAddress()
             let user = config.user, database = config.database
             let password = password?.isEmpty == true ? nil : password
-            let serverHostname = config.serverName(usingTLS: tls != nil)
+            let serverHostname = tlsServerName ?? config.serverName(usingTLS: tls != nil)
             let connection = try await withTimeout(seconds: config.timeout, "Connecting to \(host):\(port)", discard: { _ = $0.close() }) { [logger] in
                 try await MySQLConnection.connect(
                     to: address,

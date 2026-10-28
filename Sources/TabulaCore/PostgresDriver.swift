@@ -12,7 +12,8 @@ public actor PostgresDriver: DatabaseDriver {
         self.logger = logger
     }
 
-    public static func connect(_ config: ConnectionConfig, password: String?) async throws -> PostgresDriver {
+    /// `tlsServerName` overrides the name TLS checks, for connections through an SSH tunnel to 127.0.0.1.
+    public static func connect(_ config: ConnectionConfig, password: String?, tlsServerName: String? = nil) async throws -> PostgresDriver {
         var logger = Logger(label: "tabula.postgres")
         logger.logLevel = .error
         let tls: PostgresConnection.Configuration.TLS = try config.tlsConfiguration()
@@ -27,6 +28,7 @@ public actor PostgresDriver: DatabaseDriver {
         )
         configuration.options.connectTimeout = .milliseconds(Int64(config.timeout * 1000))
         configuration.options.additionalStartupParameters = [("application_name", Defaults.applicationName)]
+        if let tlsServerName { configuration.options.tlsServerName = tlsServerName }
         do {
             let connection = try await withTimeout(seconds: config.timeout, "Connecting to \(config.host):\(config.port)",
                                                    discard: { _ = $0.close() as EventLoopFuture<Void> }) { [configuration, logger] in
