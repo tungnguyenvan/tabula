@@ -392,8 +392,12 @@ private struct TabButton: View {
             if selected { Rectangle().fill(Color.accentColor).frame(height: 2) }
         }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2, perform: pin)
-        .onTapGesture(perform: select)
+        // One tap gesture selects at once; a separate double-tap gesture would hold every single click for the
+        // double-click interval before selecting.
+        .onTapGesture {
+            select()
+            if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { pin() }
+        }
         .onHover { hovering = $0 }
         .help(isPreview ? "Preview tab — double-click to keep it open" : "")
         .contextMenu {
