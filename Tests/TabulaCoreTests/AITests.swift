@@ -230,6 +230,22 @@ final class ShellCommandTests: XCTestCase {
         XCTAssertEqual(output.status, 0)
     }
 
+    func testExitedCommandDoesNotWaitForBackgroundChildsPipes() async throws {
+        let start = Date()
+        // The shell exits, but the disowned child inherits both pipes and keeps them open.
+        let output = try await ShellCommand.run(script: "sleep 8 & disown; printf done; printf error >&2", arguments: [], timeout: 2)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 6, "waited for the background child's EOF after the shell exited")
+        XCTAssertEqual(output.status, 0)
+        XCTAssertTrue(output.stdout.hasSuffix("done"), output.stdout)
+        XCTAssertTrue(output.stderr.contains("error"), output.stderr)
+    }
+
+    func testDrainsOutputBeforeReturning() async throws {
+        let output = try await ShellCommand.run(script: "awk 'BEGIN { for (i = 0; i < 20000; i++) print \"line\"; printf \"tail\" }'", arguments: [], timeout: 30)
+        XCTAssertEqual(output.status, 0)
+        XCTAssertTrue(output.stdout.hasSuffix(String(repeating: "line\n", count: 20000) + "tail"))
+    }
+
     func testTimeoutStopsTheProcess() async throws {
         let marker = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-timeout-\(UUID()).txt")
         let start = Date()
