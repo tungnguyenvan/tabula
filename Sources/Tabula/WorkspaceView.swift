@@ -118,6 +118,7 @@ struct WorkspaceView: View {
                     Divider()
                     switch model.rightPanel {
                     case .rowDetails: RowInspectorView(model: model)
+                    case .queries: QueryLibraryView(workspace: model)
                     case .ai: AIChatView(workspace: model, chat: model.chat)
                     }
                 }

@@ -113,6 +113,7 @@ final class WorkspaceModel {
     /// What the right-hand panel shows.
     enum RightPanel: String, CaseIterable, Identifiable {
         case rowDetails = "Row Details"
+        case queries = "Queries"
         case ai = "AI"
         var id: String { rawValue }
     }
@@ -456,7 +457,11 @@ final class WorkspaceModel {
             try await driver.useSchema(selectedSchema)
             agentSchema = selectedSchema
         }
-        return AgentToolbox(driver: driver, currentSchema: selectedSchema)
+        return AgentToolbox(
+            driver: driver,
+            currentSchema: selectedSchema,
+            savedQueries: QueryLibraryModel.shared.queries
+        )
     }
 
     /// Tabs whose edits would be lost by leaving the database: changed rows or an unsaved routine.

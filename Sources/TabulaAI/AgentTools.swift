@@ -12,6 +12,7 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
     case listTables = "list_tables"
     case describeTable = "describe_table"
     case runQuery = "run_query"
+    case searchSavedQueries = "search_saved_queries"
 }
 
 public struct AgentToolCall: Codable, Equatable, Sendable {
@@ -22,12 +23,21 @@ public struct AgentToolCall: Codable, Equatable, Sendable {
     public var table: String?
     /// run_query: one read-only statement.
     public var query: String?
+    /// search_saved_queries: words to look for in the user's saved queries.
+    public var search: String?
 
-    public init(tool: AgentTool, schema: String? = nil, table: String? = nil, query: String? = nil) {
+    public init(
+        tool: AgentTool,
+        schema: String? = nil,
+        table: String? = nil,
+        query: String? = nil,
+        search: String? = nil
+    ) {
         self.tool = tool
         self.schema = schema
         self.table = table
         self.query = query
+        self.search = search
     }
 
     /// One line for the conversation: what the assistant looked at.
@@ -36,6 +46,7 @@ public struct AgentToolCall: Codable, Equatable, Sendable {
         case .listTables: return "Listed tables" + (schema.map { " in \($0)" } ?? "")
         case .describeTable: return "Described \(table ?? "a table")"
         case .runQuery: return "Ran a query"
+        case .searchSavedQueries: return "Searched saved queries" + (search.map { " for “\($0)”" } ?? "")
         }
     }
 
@@ -50,6 +61,9 @@ public struct AgentToolCall: Codable, Equatable, Sendable {
         }
         if let query {
             object["query"] = query
+        }
+        if let search {
+            object["search"] = search
         }
         let data =
             (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]))
@@ -72,6 +86,8 @@ public enum AgentProtocol {
         var tools = """
             - {"tool": "list_tables", "schema": "<optional schema>"}: the tables and views of a schema (default: the current one).
             - {"tool": "describe_table", "table": "<schema.table>"}: columns with types, indexes and foreign keys.
+            - {"tool": "search_saved_queries", "search": "<words>"}: the user's saved queries whose keyword, folder or \
+            SQL contain the words. Use it when the user asks for a query they saved, or one they may already have.
             """
         if canQuery {
             tools +=
@@ -113,7 +129,8 @@ public enum AgentProtocol {
             tool: tool,
             schema: text("schema"),
             table: text("table"),
-            query: text("query") ?? text("sql")
+            query: text("query") ?? text("sql"),
+            search: text("search") ?? text("keyword")
         )
     }
 
@@ -145,10 +162,13 @@ public struct AgentToolbox: Sendable {
     public let driver: any DatabaseDriver
     /// The schema selected in the sidebar, used when a call names none.
     public let currentSchema: String
+    /// The user's saved query library (#94), for search_saved_queries.
+    public let savedQueries: [SavedQuery]
 
-    public init(driver: any DatabaseDriver, currentSchema: String) {
+    public init(driver: any DatabaseDriver, currentSchema: String, savedQueries: [SavedQuery]) {
         self.driver = driver
         self.currentSchema = currentSchema
+        self.savedQueries = savedQueries
     }
 
     /// Makes the agent's own connection read-only where the server can enforce it, and bounds query time.
@@ -171,6 +191,11 @@ public struct AgentToolbox: Sendable {
                     return "Error: run_query needs a query."
                 }
                 return try await runQuery(query)
+            case .searchSavedQueries:
+                guard let search = call.search else {
+                    return "Error: search_saved_queries needs words to search for."
+                }
+                return Self.text(of: SavedQuery.search(savedQueries, for: search), searchedFor: search)
             }
         } catch {
             return "Error: \(SQLPrompts.redacted(error.localizedDescription, kind: driver.kind))"
@@ -281,6 +306,29 @@ public struct AgentToolbox: Sendable {
         // A failed ROLLBACK leaves the connection inside the transaction, so it is reported rather than ignored.
         _ = try await driver.execute("ROLLBACK")
         return result
+    }
+
+    /// Saved queries for the model: keyword, folder and SQL, best matches first, cut to the total limit.
+    static func text(of matches: [SavedQuery], searchedFor search: String) -> String {
+        guard !matches.isEmpty else {
+            return "No saved query matches “\(search)”."
+        }
+        var text = "\(matches.count) saved \(matches.count == 1 ? "query matches" : "queries match") “\(search)”:"
+        var shown = 0
+        for query in matches {
+            let folder = query.group.isEmpty ? "" : " (folder \(query.group))"
+            let entry =
+                "\n\nKeyword: \(query.keyword)\(folder)\n```sql\n\(query.sql.trimmingCharacters(in: .whitespacesAndNewlines))\n```"
+            guard text.count + entry.count < Defaults.AI.agentResultLength else {
+                break
+            }
+            text += entry
+            shown += 1
+        }
+        if shown < matches.count {
+            text += "\n\n\(matches.count - shown) more not shown; search with more specific words."
+        }
+        return text
     }
 
     /// Rows as tab-separated text, cut to the row, cell and total limits.

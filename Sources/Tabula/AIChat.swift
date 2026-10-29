@@ -768,6 +768,7 @@ private struct ToolStepView: View {
         case .listTables: return "list.bullet.rectangle"
         case .describeTable: return "tablecells"
         case .runQuery: return "play.rectangle"
+        case .searchSavedQueries: return "books.vertical"
         }
     }
 }

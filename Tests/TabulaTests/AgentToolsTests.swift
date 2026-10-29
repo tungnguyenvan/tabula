@@ -186,7 +186,7 @@ final class AgentToolboxTests: XCTestCase {
     func testToolsOnSQLite() async throws {
         let driver = try SQLiteDriver(path: path)
         try await AgentToolbox.prepare(driver)
-        let toolbox = AgentToolbox(driver: driver, currentSchema: "main")
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "main", savedQueries: [])
 
         let tables = await toolbox.run(AgentToolCall(tool: .listTables))
         XCTAssertTrue(tables.contains("customers") && tables.contains("orders"), tables)
@@ -232,7 +232,7 @@ final class AgentToolboxTests: XCTestCase {
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("read-only"), error.localizedDescription)
         }
-        let toolbox = AgentToolbox(driver: driver, currentSchema: "public")
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "public", savedQueries: [])
         let result = await toolbox.run(AgentToolCall(tool: .runQuery, query: "SELECT 1 AS one"))
         XCTAssertEqual(result, "1 row:\none\n1")
 
@@ -259,7 +259,7 @@ final class AgentToolboxTests: XCTestCase {
         let config = ConnectionConfig(kind: .mysql, port: port, user: "tabula", database: "tabula", tls: .require)
         let driver = try await DriverFactory.connect(config, password: "tabula")
         try await AgentToolbox.prepare(driver)
-        let toolbox = AgentToolbox(driver: driver, currentSchema: "tabula")
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "tabula", savedQueries: [])
         let before = try await driver.execute("SELECT count(*) FROM employees").rows.first?.first ?? nil
         // The session default can be changed by a statement, the per-query read-only transaction can't.
         _ = try await driver.execute("SET SESSION TRANSACTION READ WRITE")
@@ -367,11 +367,53 @@ final class ChatStoreTests: XCTestCase {
 
 }
 
+/// search_saved_queries (#94): the assistant finds the user's saved queries without touching the database.
+final class SavedQueryToolTests: XCTestCase {
+    private let queries = [
+        SavedQuery(
+            file: URL(fileURLWithPath: "/q/active_users.sql"),
+            keyword: "active_users",
+            group: "",
+            sql: "SELECT * FROM users WHERE active"
+        ),
+        SavedQuery(
+            file: URL(fileURLWithPath: "/q/reports/revenue.sql"),
+            keyword: "revenue",
+            group: "reports",
+            sql: "SELECT sum(total) FROM orders"
+        ),
+    ]
+
+    func testCallIsParsed() {
+        let reply = "```tool\n{\"tool\": \"search_saved_queries\", \"search\": \"revenue\"}\n```"
+        XCTAssertEqual(AgentProtocol.call(in: reply), AgentToolCall(tool: .searchSavedQueries, search: "revenue"))
+        let keyword = "```tool\n{\"tool\": \"search_saved_queries\", \"keyword\": \"users\"}\n```"
+        XCTAssertEqual(AgentProtocol.call(in: keyword)?.search, "users")
+        XCTAssertTrue(AgentProtocol.instructions(kind: .postgres, canQuery: false).contains("search_saved_queries"))
+    }
+
+    func testSearchReturnsMatchesWithoutQueryingTheDatabase() async {
+        let driver = RecordingDriver(failing: nil)
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "public", savedQueries: queries)
+        let found = await toolbox.run(AgentToolCall(tool: .searchSavedQueries, search: "orders"))
+        XCTAssertEqual(
+            found,
+            "1 saved query matches “orders”:\n\nKeyword: revenue (folder reports)\n```sql\nSELECT sum(total) FROM orders\n```"
+        )
+        let none = await toolbox.run(AgentToolCall(tool: .searchSavedQueries, search: "invoices"))
+        XCTAssertEqual(none, "No saved query matches “invoices”.")
+        let missing = await toolbox.run(AgentToolCall(tool: .searchSavedQueries))
+        XCTAssertEqual(missing, "Error: search_saved_queries needs words to search for.")
+        let executed = await driver.executed
+        XCTAssertEqual(executed, [])
+    }
+}
+
 /// The transaction a read-only agent query opens is always ended, even when a statement after BEGIN fails.
 final class AgentReadOnlyTransactionTests: XCTestCase {
     func testFailedOpeningStatementStillRollsBack() async throws {
         let driver = RecordingDriver(failing: "SET LOCAL")
-        let toolbox = AgentToolbox(driver: driver, currentSchema: "public")
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "public", savedQueries: [])
         do {
             _ = try await toolbox.runReadOnly("SELECT 1")
             XCTFail("The failing opening statement was not reported")
@@ -386,7 +428,7 @@ final class AgentReadOnlyTransactionTests: XCTestCase {
 
     func testSuccessfulQueryRollsBack() async throws {
         let driver = RecordingDriver(failing: nil)
-        let toolbox = AgentToolbox(driver: driver, currentSchema: "public")
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "public", savedQueries: [])
         _ = try await toolbox.runReadOnly("SELECT 1")
         let executed = await driver.executed
         XCTAssertEqual(executed.suffix(2), ["SELECT 1", "ROLLBACK"])

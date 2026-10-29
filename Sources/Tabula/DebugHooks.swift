@@ -365,6 +365,7 @@ enum DebugHooks {
                     }
                     switch name {
                     case "ai": workspace.toggleRightPanel(.ai)
+                    case "queries": workspace.toggleRightPanel(.queries)
                     case "resultundo":
                         workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?
                             .undoManager.undo()
