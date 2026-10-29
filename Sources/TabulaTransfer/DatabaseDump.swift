@@ -12,8 +12,11 @@ import TabulaSQL
 /// (PostgreSQL) or a private option file (MySQL), never on the command line where other processes could read them.
 public enum DatabaseDump {
     public enum Tool: String, Sendable, CaseIterable {
-        case pgDump = "pg_dump", pgRestore = "pg_restore", psql
-        case mysqldump, mysql
+        case pgDump = "pg_dump"
+        case pgRestore = "pg_restore"
+        case psql
+        case mysqldump
+        case mysql
 
         /// MariaDB's names for the same tools.
         var alternatives: [String] {
@@ -88,6 +91,14 @@ public enum DatabaseDump {
         public var dropExisting = false
         /// The target server's major version (PostgreSQL), to leave out settings it doesn't have.
         public var serverMajor: Int?
+        /// PostgreSQL 17 added "SET transaction_timeout", which pg_dump and pg_restore 17 and later emit and older
+        /// servers reject. An unknown version counts as older: leaving the setting out is safe on every server.
+        public var serverHasTransactionTimeout: Bool {
+            guard let serverMajor else {
+                return false
+            }
+            return serverMajor >= 17
+        }
         /// MySQL: the server is MariaDB, so MariaDB's tools are preferred (and MySQL's for MySQL).
         public var serverIsMariaDB: Bool?
         public init() {}
@@ -485,7 +496,7 @@ public enum DatabaseDump {
         let kind = try kind(of: file)
         try await withEndpoint(config) { endpoint in
             switch (config.kind, kind) {
-            case (.postgres, .postgresArchive) where (options.serverMajor ?? 0) >= 17:
+            case (.postgres, .postgresArchive) where options.serverHasTransactionTimeout:
                 let tool = try await required(.pgRestore)
                 let environment = try postgresEnvironment(
                     config,
@@ -523,7 +534,10 @@ public enum DatabaseDump {
                 )
                 // pg_dump 17 and later write "SET transaction_timeout = 0;" into every script, which older servers
                 // reject as an unknown setting, stopping the restore at its first line.
-                let unsupported = (options.serverMajor ?? 0) < 17 ? [Data("\nSET transaction_timeout = 0;\n".utf8)] : []
+                var unsupported: [Data] = []
+                if !options.serverHasTransactionTimeout {
+                    unsupported.append(Data("\nSET transaction_timeout = 0;\n".utf8))
+                }
                 // Checked again as it is sent, in case the file changed since.
                 let ending = DatabaseDump.commit
                 var trailer: (@Sendable () -> Data?)?
@@ -581,8 +595,6 @@ public enum DatabaseDump {
         endpoint: Endpoint,
         progress: @escaping @Sendable (Progress) -> Void
     ) async throws {
-        // pg_restore 17 and later send "SET transaction_timeout", which older servers reject. pg_restore turns
-        // the archive into a script instead, the setting is left out, and psql runs it.
         let tool = try await required(.pgRestore)
         let psql = try await required(.psql)
         let environment = try postgresEnvironment(

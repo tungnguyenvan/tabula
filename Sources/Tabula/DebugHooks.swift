@@ -350,8 +350,15 @@ enum DebugHooks {
                         return session.close(id)
                     }
                     if name == "sidebar" {
-                        return NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
-                            ? () : print("CALL no sidebar")
+                        let toggled = NSApp.sendAction(
+                            #selector(NSSplitViewController.toggleSidebar(_:)),
+                            to: nil,
+                            from: nil
+                        )
+                        if !toggled {
+                            print("CALL no sidebar")
+                        }
+                        return
                     }
                     guard let workspace = WorkspaceRegistry.key else { return print("CALL no workspace") }
                     switch name {

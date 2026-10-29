@@ -223,16 +223,22 @@ struct BarButton: View {
     let action: () -> Void
     @Environment(\.isEnabled) private var isEnabled
 
+    private var symbolStyle: AnyShapeStyle {
+        if active {
+            return AnyShapeStyle(Color.accentColor)
+        }
+        if isEnabled {
+            return AnyShapeStyle(.primary)
+        }
+        return AnyShapeStyle(.tertiary)
+    }
+
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 12))
                 .frame(width: 24, height: 20)
-                .foregroundStyle(
-                    active
-                        ? AnyShapeStyle(Color.accentColor)
-                        : (isEnabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-                )
+                .foregroundStyle(symbolStyle)
                 .contentShape(Rectangle())
                 .help(help)
         }
@@ -350,6 +356,16 @@ struct FilterBarView: View {
 struct StructureView: View {
     let model: TableTabModel
 
+    private static func kindLabel(_ index: IndexInfo) -> String {
+        if index.isPrimary {
+            return "PRIMARY"
+        }
+        if index.isUnique {
+            return "UNIQUE"
+        }
+        return "INDEX"
+    }
+
     var body: some View {
         VerticalSplit(
             topMinimum: Layout.Structure.columnsMinHeight,
@@ -377,7 +393,7 @@ struct StructureView: View {
                         Text($0.columns.joined(separator: ", ")).font(.body.monospaced())
                     }
                     TableColumn("Kind") { index in
-                        Text(index.isPrimary ? "PRIMARY" : index.isUnique ? "UNIQUE" : "INDEX")
+                        Text(Self.kindLabel(index))
                     }
                     .width(80)
                     TableColumn("Definition") {

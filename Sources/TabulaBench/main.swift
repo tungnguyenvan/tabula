@@ -346,6 +346,7 @@ while let argument = arguments.next() {
 func wanted(_ name: String) -> Bool { only?.contains(name) ?? true }
 
 var sections: [(title: String, steps: [Step])] = []
+@MainActor
 func run(_ title: String, _ key: String, _ body: () async throws -> [Step]) async {
     guard wanted(key) else { return }
     print("\(title)…")
@@ -412,9 +413,13 @@ await run("Redis", "redis") {
 await run("MongoDB shell text (no server)", "shell") { try await benchmarkShellText() }
 
 func format(_ milliseconds: Double) -> String {
-    milliseconds < 10
-        ? String(format: "%.2f", milliseconds)
-        : milliseconds < 100 ? String(format: "%.1f", milliseconds) : String(format: "%.0f", milliseconds)
+    if milliseconds < 10 {
+        return String(format: "%.2f", milliseconds)
+    }
+    if milliseconds < 100 {
+        return String(format: "%.1f", milliseconds)
+    }
+    return String(format: "%.0f", milliseconds)
 }
 
 var report =

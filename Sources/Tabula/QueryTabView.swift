@@ -281,21 +281,29 @@ struct QueryTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else if model.error == nil {
-                Text(
-                    model.stopping
-                        ? "Stopping…"
-                        : model.running
-                            ? "Running…" : model.runStatus == nil ? "Run a query to see results" : "No results"
-                )
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text(emptyResultMessage)
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             Divider()
             resultBar
         }
         .onChange(of: selection) { _, rows in workspace.setSelection(rows, inTab: model.id) }
         .onAppear { workspace.setSelection(selection, inTab: model.id) }
+    }
+
+    private var emptyResultMessage: String {
+        if model.stopping {
+            return "Stopping…"
+        }
+        if model.running {
+            return "Running…"
+        }
+        if model.runStatus == nil {
+            return "Run a query to see results"
+        }
+        return "No results"
     }
 
     private var resultBar: some View {

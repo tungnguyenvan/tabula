@@ -203,7 +203,10 @@ enum PostgresValueFormatter {
             parts.append("\(days) day\(days.magnitude == 1 ? "" : "s")")
         }
         if micros != 0 || parts.isEmpty {
-            parts.append((micros < 0 ? "-" : "") + timeOfDay(micros.magnitude > UInt64(Int64.max) ? 0 : abs(micros)))
+            let sign = micros < 0 ? "-" : ""
+            // Int64.min has no positive counterpart, so abs() would trap on it.
+            let magnitude = micros.magnitude > UInt64(Int64.max) ? 0 : abs(micros)
+            parts.append(sign + timeOfDay(magnitude))
         }
         return parts.joined(separator: " ")
     }

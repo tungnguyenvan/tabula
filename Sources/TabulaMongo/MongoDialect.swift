@@ -77,6 +77,7 @@ public struct MongoQueryDialect: QueryDialect {
         return MongoVocabulary.highlighted.contains(word.text) ? .keyword : nil
     }
 
+    @MainActor
     public func completions(
         in text: String,
         caret: Int,

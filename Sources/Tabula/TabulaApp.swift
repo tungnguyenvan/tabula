@@ -181,7 +181,11 @@ enum WorkspaceRegistry {
         // The window often becomes key before SwiftUI hands it to us, so the notification below has
         // already gone by; check now and once more after this layout pass.
         let number = window.windowNumber
-        let refresh = { if NSApp.keyWindow?.windowNumber == number { ActiveWorkspace.shared.update(session) } }
+        let refresh: @MainActor @Sendable () -> Void = {
+            if NSApp.keyWindow?.windowNumber == number {
+                ActiveWorkspace.shared.update(session)
+            }
+        }
         refresh()
         DispatchQueue.main.async(execute: refresh)
         if observer == nil {

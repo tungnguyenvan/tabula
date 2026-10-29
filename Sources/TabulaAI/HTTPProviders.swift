@@ -62,9 +62,10 @@ public struct AnthropicProvider: AIProvider {
             let match = regex.firstMatch(in: model, range: NSRange(location: 0, length: (model as NSString).length))
         else { return false }
         let major = Int((model as NSString).substring(with: match.range(at: 1))) ?? 0
-        let minor =
-            match.range(at: 2).location == NSNotFound
-            ? 0 : Int((model as NSString).substring(with: match.range(at: 2))) ?? 0
+        var minor = 0
+        if match.range(at: 2).location != NSNotFound {
+            minor = Int((model as NSString).substring(with: match.range(at: 2))) ?? 0
+        }
         return major > 4 || (major == 4 && minor >= 6)
     }
 

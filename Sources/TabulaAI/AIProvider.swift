@@ -185,8 +185,10 @@ public struct AISettings: Codable, Equatable, Sendable {
     public func endpoint(for purpose: AIRequest.Purpose, apiKey: String) -> AIEndpoint {
         let kind = provider(for: purpose)
         // Suggestions while typing always use the provider's quickest setting.
-        let effort =
-            purpose == .inline ? nil : efforts[kind.rawValue].flatMap { kind.effortLevels.contains($0) ? $0 : nil }
+        var effort: String?
+        if purpose != .inline, let saved = efforts[kind.rawValue], kind.effortLevels.contains(saved) {
+            effort = saved
+        }
         return AIEndpoint(
             kind: kind,
             baseURL: baseURL(kind),

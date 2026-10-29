@@ -32,9 +32,10 @@ final class RedisWorkspaceModel {
     var keySelection = IndexSet() {
         didSet {
             guard keySelection != oldValue else { return }
-            let single =
-                keySelection.count == 1
-                ? keySelection.first.flatMap { keys.indices.contains($0) ? keys[$0].key : nil } : nil
+            var single: RedisBytes?
+            if keySelection.count == 1, let row = keySelection.first, keys.indices.contains(row) {
+                single = keys[row].key
+            }
             if single != selectedKey {
                 selectedKey = single
             }

@@ -43,7 +43,12 @@ public enum PostgresScriptCheck {
 
     struct Scanner {
         enum State: Equatable {
-            case normal, single(escapes: Bool), quotedName, dollar([UInt8]), blockComment(Int), copyData
+            case normal
+            case single(escapes: Bool)
+            case quotedName
+            case dollar([UInt8])
+            case blockComment(Int)
+            case copyData
         }
         var state = State.normal
         var lineNumber = 0

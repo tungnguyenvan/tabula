@@ -153,6 +153,7 @@ public struct SQLDialect: QueryDialect, Equatable {
         SQLKeywords.set.contains(word.keyword) ? .keyword : nil
     }
 
+    @MainActor
     public func completions(
         in text: String,
         caret: Int,

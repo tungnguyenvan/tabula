@@ -114,7 +114,17 @@ public enum RedisCommandLine {
 
     private static func decodeUTF8(_ bytes: [UInt8], at index: Int) -> (Unicode.Scalar, Int)? {
         let first = bytes[index]
-        let length = first >= 0xF0 ? 4 : first >= 0xE0 ? 3 : first >= 0xC2 ? 2 : 0
+        let length: Int
+        switch first {
+        case 0xF0...:
+            length = 4
+        case 0xE0...:
+            length = 3
+        case 0xC2...:
+            length = 2
+        default:
+            length = 0
+        }
         guard length > 0, index + length <= bytes.count,
             let string = String(bytes: bytes[index..<index + length], encoding: .utf8),
             let scalar = string.unicodeScalars.first, string.unicodeScalars.count == 1

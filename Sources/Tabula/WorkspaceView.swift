@@ -446,6 +446,16 @@ private struct TabButton: View {
     let closeOthers: () -> Void
     @State private var hovering = false
 
+    private var background: Color {
+        if selected {
+            return Color(nsColor: .windowBackgroundColor)
+        }
+        if hovering {
+            return Color.primary.opacity(0.04)
+        }
+        return .clear
+    }
+
     private var icon: String {
         switch tab {
         case .table(let model): model.table.kind == .view ? "eye" : "tablecells"
@@ -492,7 +502,7 @@ private struct TabButton: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            selected ? Color(nsColor: .windowBackgroundColor) : (hovering ? Color.primary.opacity(0.04) : .clear),
+            background,
             ignoresSafeAreaEdges: []
         )
         .overlay(alignment: .top) {

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TabulaFoundation
 
 /// Right-hand panel listing every field of the selected row; editable for table tabs.
 struct RowInspectorView: View {
@@ -25,9 +26,7 @@ struct RowInspectorView: View {
                                     name: name,
                                     type: info?.typeName,
                                     isKey: info?.isKey ?? false,
-                                    cell: (editor != nil
-                                        ? editor!.value(row: row, column: index) : result.rows[row][index])
-                                        .map(GridCell.value) ?? .null,
+                                    cell: Self.cell(result, editor: editor, row: row, column: index),
                                     edited: editor?.state(row: row, column: index) == .edited,
                                     editable: editor?.isEditable(row: row, column: index) == true
                                 ) { value in
@@ -49,6 +48,20 @@ struct RowInspectorView: View {
 
     private func placeholder(_ text: String) -> some View {
         Text(text).font(.callout).foregroundStyle(.tertiary).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The value shown for a result cell: the pending edit when there is one, otherwise what the query returned.
+    private static func cell(_ result: QueryResult, editor: QueryResultEditor?, row: Int, column: Int) -> GridCell {
+        let value: String?
+        if let editor {
+            value = editor.value(row: row, column: column)
+        } else {
+            value = result.rows[row][column]
+        }
+        guard let value else {
+            return .null
+        }
+        return .value(value)
     }
 }
 

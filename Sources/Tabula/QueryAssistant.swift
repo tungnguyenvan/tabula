@@ -164,6 +164,13 @@ struct AIPromptBar: View {
         }
     }
 
+    private var submitTitle: String {
+        if hasSelection {
+            return "Edit"
+        }
+        return language == "SQL" ? "Write SQL" : "Write Query"
+    }
+
     private var bar: some View {
         HStack(spacing: Layout.barPadding) {
             Image(systemName: "sparkles").foregroundStyle(.secondary)
@@ -179,7 +186,7 @@ struct AIPromptBar: View {
                 ProgressView().controlSize(.small)
                 Button("Stop") { assistant.cancel() }
             } else {
-                Button(hasSelection ? "Edit" : language == "SQL" ? "Write SQL" : "Write Query", action: submit)
+                Button(submitTitle, action: submit)
                     .disabled(assistant.prompt.trimmingCharacters(in: .whitespaces).isEmpty)
                     .keyboardShortcut(.defaultAction)
             }

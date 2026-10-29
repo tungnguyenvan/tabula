@@ -749,7 +749,7 @@ public actor MongoDriver: DatabaseDriver {
 
     private func explain(_ command: Document, verbosity: String?, in database: String) async throws -> Document {
         var explained = command
-        explained.removeValue(forKey: "singleBatch")
+        _ = explained.removeValue(forKey: "singleBatch")
         return try await self.command(["explain": explained, "verbosity": verbosity ?? "queryPlanner"], in: database)
     }
 

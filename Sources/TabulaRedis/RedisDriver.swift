@@ -298,7 +298,7 @@ public actor RedisDriver {
             keys += page.keys
             cursor = page.cursor
             rounds += 1
-        } while cursor != "0" && keys.count < limit && rounds < 200
+        } while cursor != "0" && keys.count < limit && rounds < Defaults.Redis.keyScanRounds
         return (cursor, keys)
     }
 
@@ -471,6 +471,36 @@ public actor RedisDriver {
         return (RedisBytes(try await run([.text("GET"), k]).bytes ?? []), false)
     }
 
+    /// One page of a hash, set or sorted set. Each row holds `columns.count` consecutive elements of the reply.
+    private func scanPage(
+        _ key: RedisArgument,
+        command: String,
+        columns: [String],
+        after next: String?,
+        count: Int
+    ) async throws -> RedisPage {
+        let wanted = count * columns.count
+        var cursor = next ?? "0"
+        var items: [RedisBytes] = []
+        var rounds = 0
+        // SCAN may return few or no elements per call; keep going to fill a page.
+        repeat {
+            let reply = try await run([.text(command), key, .text(cursor), .text("COUNT"), .text(String(count))]).array
+            guard reply.count == 2, let nextCursor = reply[0].string else {
+                throw DatabaseError("Unexpected \(command) reply")
+            }
+            items += reply[1].array.compactMap(\.bytes).map(RedisBytes.init)
+            cursor = nextCursor
+            rounds += 1
+        } while cursor != "0" && items.count < wanted && rounds < Defaults.Redis.collectionScanRounds
+        let rows = stride(from: 0, to: items.count - columns.count + 1, by: columns.count)
+            .map { start in
+                Array(items[start..<start + columns.count])
+            }
+        let token = cursor == "0" ? nil : cursor
+        return RedisPage(columns: columns, rows: rows, next: token)
+    }
+
     /// One page of a collection. `next` is the token from the previous page (nil for the first page).
     public func page(
         _ key: RedisBytes,
@@ -480,28 +510,12 @@ public actor RedisDriver {
     ) async throws -> RedisPage {
         let k = RedisArgument.bytes(key.bytes)
         switch type {
-        case .hash, .set, .zset:
-            let command = type == .hash ? "HSCAN" : type == .set ? "SSCAN" : "ZSCAN"
-            var cursor = next ?? "0"
-            var items: [RedisBytes] = []
-            var rounds = 0
-            // SCAN may return few or no elements per call; keep going to fill a page.
-            repeat {
-                let reply = try await run([.text(command), k, .text(cursor), .text("COUNT"), .text(String(count))])
-                    .array
-                guard reply.count == 2, let nextCursor = reply[0].string else {
-                    throw DatabaseError("Unexpected \(command) reply")
-                }
-                items += reply[1].array.compactMap(\.bytes).map(RedisBytes.init)
-                cursor = nextCursor
-                rounds += 1
-            } while cursor != "0" && items.count < count * (type == .set ? 1 : 2) && rounds < 50
-            let rows: [[RedisBytes]] =
-                type == .set
-                ? items.map { [$0] }
-                : stride(from: 0, to: items.count - 1, by: 2).map { [items[$0], items[$0 + 1]] }
-            let columns = type == .hash ? ["field", "value"] : type == .set ? ["member"] : ["member", "score"]
-            return RedisPage(columns: columns, rows: rows, next: cursor == "0" ? nil : cursor)
+        case .hash:
+            return try await scanPage(k, command: "HSCAN", columns: ["field", "value"], after: next, count: count)
+        case .set:
+            return try await scanPage(k, command: "SSCAN", columns: ["member"], after: next, count: count)
+        case .zset:
+            return try await scanPage(k, command: "ZSCAN", columns: ["member", "score"], after: next, count: count)
         case .list:
             let start = Int(next ?? "0") ?? 0
             let values = try await run([.text("LRANGE"), k, .text(String(start)), .text(String(start + count - 1))])

@@ -18,9 +18,8 @@ extension ConnectionConfig {
         if let password, !password.isEmpty {
             components.password = password
         }
-        let path = kind == .redis ? (database.isEmpty ? "" : database) : database
-        if !path.isEmpty {
-            components.path = "/" + path
+        if !database.isEmpty {
+            components.path = "/" + database
         }
         var parameters = tlsParameters
         if kind == .mongodb, let authSource, !authSource.isEmpty {

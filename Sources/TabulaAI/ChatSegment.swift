@@ -131,7 +131,14 @@ public struct MarkdownTable: Equatable, Sendable {
             let right = cell.hasSuffix(":")
             let dashes = cell.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
             guard !dashes.isEmpty, dashes.allSatisfy({ $0 == "-" }) else { return nil }
-            alignments.append(left && right ? .center : right ? .trailing : .leading)
+            switch (left, right) {
+            case (true, true):
+                alignments.append(.center)
+            case (false, true):
+                alignments.append(.trailing)
+            case (_, false):
+                alignments.append(.leading)
+            }
         }
         return alignments.isEmpty ? nil : alignments
     }

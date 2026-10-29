@@ -215,13 +215,23 @@ private struct RailItem: View {
     let close: () -> Void
     @State private var hovering = false
 
+    private var fill: Color {
+        if selected {
+            return Color.accentColor.opacity(0.22)
+        }
+        if hovering {
+            return Color.primary.opacity(0.06)
+        }
+        return .clear
+    }
+
     var body: some View {
         let config = connection.config
         KindBadge(kind: config.kind, size: Layout.Rail.badgeSize)
             .frame(width: Layout.Rail.itemSize, height: Layout.Rail.itemSize)
             .background(
                 RoundedRectangle(cornerRadius: Layout.cornerRadius)
-                    .fill(selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(hovering ? 0.06 : 0))
+                    .fill(fill)
             )
             .overlay(alignment: .leading) {
                 // Environment colour, like the strip under the window controls.

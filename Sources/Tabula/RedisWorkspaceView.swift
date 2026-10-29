@@ -270,9 +270,11 @@ private struct RedisKeysPane: View {
         case 1: return .value(key.type.displayName)
         case 2: return .value(key.ttlMilliseconds == nil ? "∞" : RedisTTL.format(milliseconds: key.ttlMilliseconds))
         case 3:
-            return .value(
-                key.type == .string ? RedisFormat.bytes(key.length) : "\(key.length) item\(key.length == 1 ? "" : "s")"
-            )
+            if key.type == .string {
+                return .value(RedisFormat.bytes(key.length))
+            }
+            let noun = key.length == 1 ? "item" : "items"
+            return .value("\(key.length) \(noun)")
         default: return .value(key.preview)
         }
     }

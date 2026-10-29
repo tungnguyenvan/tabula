@@ -241,8 +241,19 @@ public final class LocalModelRunner: @unchecked Sendable {
         }
         guard index > 0 else { return data.count }
         let lead = data[data.startIndex + index - 1]
-        let needed = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1
-        return data.count - (index - 1) >= needed ? data.count : index - 1
+        let needed: Int
+        switch lead {
+        case 0xF0...:
+            needed = 4
+        case 0xE0...:
+            needed = 3
+        case 0xC0...:
+            needed = 2
+        default:
+            needed = 1
+        }
+        let available = data.count - (index - 1)
+        return available >= needed ? data.count : index - 1
     }
 
     private func load(_ path: String) throws -> (OpaquePointer, OpaquePointer) {

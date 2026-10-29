@@ -74,11 +74,19 @@ final class DatabaseTransfer: Identifiable {
         switch (direction, config.kind) {
         case (.dump, .postgres): [.pgDump]
         case (.dump, _): [.mysqldump]
-        case (.restore, .postgres):
-            fileKind == .postgresArchive
-                ? ((restoreOptions.serverMajor ?? 0) >= 17 ? [.pgRestore] : [.pgRestore, .psql]) : [.psql]
+        case (.restore, .postgres): postgresRestoreTools
         case (.restore, _): [.mysql]
         }
+    }
+
+    private var postgresRestoreTools: [DatabaseDump.Tool] {
+        guard fileKind == .postgresArchive else {
+            return [.psql]
+        }
+        if restoreOptions.serverHasTransactionTimeout {
+            return [.pgRestore]
+        }
+        return [.pgRestore, .psql]
     }
 
     private var toolSearch: Task<Void, Never>?
@@ -167,7 +175,7 @@ final class DatabaseTransfer: Identifiable {
             guard let url = chosen else { return }
             var options = dumpOptions
             options.format = format
-            run { [config, password, database] progress in
+            run { [config, password, database, options] progress in
                 try await DatabaseDump.dump(
                     config,
                     password: password,

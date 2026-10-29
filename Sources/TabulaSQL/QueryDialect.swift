@@ -102,12 +102,14 @@ public protocol QueryDialect: Sendable {
     func role(ofWord word: SQLToken) -> WordRole?
 
     /// Suggestions for the word at `caret` (a UTF-16 offset): the range they replace and the candidates, best first.
+    @MainActor
     func completions(in text: String, caret: Int, catalog: any CompletionCatalog) -> (range: NSRange, items: [String])
     /// The tables a statement reads or writes, for focusing what the assistant is told.
     func referencedTables(in text: String) -> [SQLCompletion.TableName]
 }
 
-/// The names completion offers, as the workspace knows them so far.
+/// The names completion offers, as the workspace knows them so far. Read on the main actor, where the editor runs.
+@MainActor
 public protocol CompletionCatalog {
     var tableNames: [String] { get }
     var schemaNames: [String] { get }

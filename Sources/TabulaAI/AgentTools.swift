@@ -291,8 +291,9 @@ public struct AgentToolbox: Sendable {
             text += "\n" + line
             shown += 1
         }
-        let more = result.rows.count > shown
-        return "\(shown) row\(shown == 1 ? "" : "s")\(more ? " shown (more were returned, cut off)" : ""):\n" + text
+        let noun = shown == 1 ? "row" : "rows"
+        let cutOff = result.rows.count > shown ? " shown (more were returned, cut off)" : ""
+        return "\(shown) \(noun)\(cutOff):\n" + text
     }
 
     /// A tool result as the chat shows it: tab-separated rows (`text(of:)`) padded into columns, which a proportional
