@@ -220,7 +220,7 @@ private struct CodeBlock: View {
                 Button {
                     Clipboard.copy(sql)
                 } label: {
-                    Image(systemName: "doc.on.doc")
+                    Label("Copy", systemImage: "doc.on.doc").labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless).help("Copy")
             }

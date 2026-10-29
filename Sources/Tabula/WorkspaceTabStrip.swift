@@ -47,7 +47,8 @@ struct TabStrip: View {
             Button {
                 model.newQueryTab()
             } label: {
-                Image(systemName: "plus").font(.system(size: 11, weight: .medium)).frame(width: 28, height: 26)
+                Label("New Query Tab", systemImage: "plus").labelStyle(.iconOnly)
+                    .font(.system(size: 11, weight: .medium)).frame(width: 28, height: 26)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)

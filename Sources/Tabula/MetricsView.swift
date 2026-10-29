@@ -113,7 +113,7 @@ struct MetricsView: View {
                 Button {
                     Task { await model.refresh() }
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    Label("Refresh Now", systemImage: "arrow.clockwise").labelStyle(.iconOnly)
                 }
                 .help("Refresh now")
             }

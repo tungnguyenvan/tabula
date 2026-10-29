@@ -167,7 +167,8 @@ struct QueryTabView: View {
                     Button(String(sql.replacingOccurrences(of: "\n", with: " ").prefix(80))) { model.sql = sql }
                 }
             } label: {
-                Image(systemName: "clock.arrow.circlepath").font(.system(size: 12))
+                Label("Query History", systemImage: "clock.arrow.circlepath").labelStyle(.iconOnly)
+                    .font(.system(size: 12))
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)

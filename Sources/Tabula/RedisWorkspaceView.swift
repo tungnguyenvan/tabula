@@ -330,7 +330,7 @@ private struct RedisFilterBar: View {
                         model.pattern = "*"
                         Task { await model.reloadKeys() }
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Label("Clear Pattern", systemImage: "xmark.circle.fill").labelStyle(.iconOnly)
                     }
                     .buttonStyle(.plain).foregroundStyle(.tertiary)
                 }

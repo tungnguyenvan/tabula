@@ -147,7 +147,7 @@ struct AIChatView: View {
                     Button("Edit Chat Instructions…") { editingInstructions = true }
                     SettingsLink { Text("AI Settings…") }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Label("Chat Options", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
@@ -157,15 +157,17 @@ struct AIChatView: View {
                     Button {
                         chat.stop()
                     } label: {
-                        Image(systemName: "stop.circle.fill").font(.title2)
+                        Label("Stop", systemImage: "stop.circle.fill").labelStyle(.iconOnly).font(.title2)
                     }
                     .buttonStyle(.borderless)
                     .help("Stop")
                 } else {
-                    Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
-                        .buttonStyle(.borderless)
-                        .disabled(chat.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .help("Send (↩)")
+                    Button(action: send) {
+                        Label("Send", systemImage: "arrow.up.circle.fill").labelStyle(.iconOnly).font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(chat.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help("Send (↩)")
                 }
             }
         }
