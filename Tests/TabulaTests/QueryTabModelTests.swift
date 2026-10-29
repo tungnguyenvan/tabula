@@ -8,27 +8,17 @@ import XCTest
 /// The query tab against a real SQLite file: scripts, errors, the row limit and Stop.
 @MainActor
 final class QueryTabModelTests: XCTestCase {
-    private static let dataDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent("tabula-query-tab-\(UUID().uuidString)", isDirectory: true)
     private var path = ""
     private var driver: SQLiteDriver?
 
     /// The workspace reads its stores from TABULA_DATA_DIR, so nothing of the user's is read or written.
     override class func setUp() {
         super.setUp()
-        setenv("TABULA_DATA_DIR", dataDirectory.path, 1)
-    }
-
-    override class func tearDown() {
-        try? FileManager.default.removeItem(at: dataDirectory)
-        super.tearDown()
+        TestDataDirectory.prepare()
     }
 
     override func setUp() async throws {
-        // The stores are read once per process; another test may have read them before the variable was set.
-        guard WorkspaceModel.stateStore.directory.path.hasPrefix(Self.dataDirectory.path) else {
-            throw XCTSkip("The workspace store was set up before TABULA_DATA_DIR; run this test on its own.")
-        }
+        try TestDataDirectory.check()
         path =
             FileManager.default.temporaryDirectory.appendingPathComponent("tabula-query-\(UUID().uuidString).sqlite")
             .path
