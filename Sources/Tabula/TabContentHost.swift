@@ -29,13 +29,20 @@ final class TabContainerView: NSView {
 
     private struct WeakView { weak var view: NSView? }
 
-    func update(tabs: [WorkspaceModel.Tab], selectedID: UUID?, transient: Set<UUID>, content: (WorkspaceModel.Tab) -> AnyView) {
+    func update(
+        tabs: [WorkspaceModel.Tab],
+        selectedID: UUID?,
+        transient: Set<UUID>,
+        content: (WorkspaceModel.Tab) -> AnyView
+    ) {
         let open = Set(tabs.map(\.id))
         for (id, host) in hosts where !open.contains(id) {
             host.removeFromSuperview()
             hosts[id] = nil
             focus[id] = nil
-            if shown == id { shown = nil }
+            if shown == id {
+                shown = nil
+            }
         }
         let selected = selectedID.flatMap { id in tabs.first { $0.id == id } }
         if let shown, shown != selected?.id, let host = hosts[shown] {
@@ -45,7 +52,10 @@ final class TabContainerView: NSView {
                 hosts[shown] = nil
             }
         }
-        guard let selected else { shown = nil; return }
+        guard let selected else {
+            shown = nil
+            return
+        }
 
         let host: NSHostingView<AnyView>
         if let existing = hosts[selected.id] {
@@ -95,9 +105,13 @@ final class TabContainerView: NSView {
     }
 
     private static func first<T: NSView>(_ type: T.Type, in view: NSView) -> T? {
-        if let match = view as? T { return match }
+        if let match = view as? T {
+            return match
+        }
         for subview in view.subviews where !subview.isHidden {
-            if let match = first(type, in: subview) { return match }
+            if let match = first(type, in: subview) {
+                return match
+            }
         }
         return nil
     }

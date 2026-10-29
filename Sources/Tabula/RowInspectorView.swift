@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 /// Right-hand panel listing every field of the selected row; editable for table tabs.
 struct RowInspectorView: View {
@@ -14,17 +14,22 @@ struct RowInspectorView: View {
                 } else {
                     placeholder("Select a row to see its fields")
                 }
-            } else if case .query(let query) = model.selectedTab, let result = query.currentResult, result.hasResultSet {
+            } else if case .query(let query) = model.selectedTab, let result = query.currentResult, result.hasResultSet
+            {
                 if let row = model.inspectedRows.first, row < result.rows.count {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(Array(result.columns.enumerated()), id: \.offset) { index, name in
                                 let editor = query.resultEditor
                                 let info = editor?.target.columns[safe: index]
-                                FieldView(name: name, type: info?.typeName, isKey: info?.isKey ?? false,
-                                          cell: (editor != nil ? editor!.value(row: row, column: index) : result.rows[row][index]).map(GridCell.value) ?? .null,
-                                          edited: editor?.state(row: row, column: index) == .edited,
-                                          editable: editor?.isEditable(row: row, column: index) == true) { value in
+                                FieldView(
+                                    name: name,
+                                    type: info?.typeName,
+                                    isKey: info?.isKey ?? false,
+                                    cell: Self.cell(result, editor: editor, row: row, column: index),
+                                    edited: editor?.state(row: row, column: index) == .edited,
+                                    editable: editor?.isEditable(row: row, column: index) == true
+                                ) { value in
                                     editor?.setValue(value, row: row, column: index)
                                 }
                             }
@@ -44,6 +49,20 @@ struct RowInspectorView: View {
     private func placeholder(_ text: String) -> some View {
         Text(text).font(.callout).foregroundStyle(.tertiary).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    /// The value shown for a result cell: the pending edit when there is one, otherwise what the query returned.
+    private static func cell(_ result: QueryResult, editor: QueryResultEditor?, row: Int, column: Int) -> GridCell {
+        let value: String?
+        if let editor {
+            value = editor.value(row: row, column: column)
+        } else {
+            value = result.rows[row][column]
+        }
+        guard let value else {
+            return .null
+        }
+        return .value(value)
+    }
 }
 
 private struct TableRowInspector: View {
@@ -56,7 +75,9 @@ private struct TableRowInspector: View {
             HStack {
                 Text(row >= table.rows.count ? "New row" : "Row \(row + 1 + table.offset)")
                     .font(.system(size: 12, weight: .semibold))
-                if count > 1 { Text("(\(count) selected)").font(.system(size: 11)).foregroundStyle(.secondary) }
+                if count > 1 {
+                    Text("(\(count) selected)").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 Spacer()
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
@@ -65,10 +86,14 @@ private struct TableRowInspector: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(Array(table.resultColumns.enumerated()), id: \.offset) { index, name in
                         let info = table.columnInfo(name)
-                        FieldView(name: name, type: info?.dataType, isKey: info?.isPrimaryKey ?? false,
-                                  cell: table.cell(row: row, column: index),
-                                  edited: table.state(row: row, column: index) == .edited,
-                                  editable: table.isEditable(row: row)) { value in
+                        FieldView(
+                            name: name,
+                            type: info?.dataType,
+                            isKey: info?.isPrimaryKey ?? false,
+                            cell: table.cell(row: row, column: index),
+                            edited: table.state(row: row, column: index) == .edited,
+                            editable: table.isEditable(row: row)
+                        ) { value in
                             table.setValue(value, row: row, column: index)
                         }
                     }
@@ -97,20 +122,32 @@ private struct FieldView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                if isKey { Image(systemName: "key.fill").font(.system(size: 9)).foregroundStyle(.yellow) }
+                if isKey {
+                    Image(systemName: "key.fill").font(.system(size: 9)).foregroundStyle(.yellow)
+                }
                 Text(name).font(.system(size: 11, weight: .semibold))
-                if let type { Text(type).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary) }
+                if let type {
+                    Text(type).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
+                }
                 Spacer()
                 if editable {
                     Menu {
-                        Button("Set NULL") { text = ""; onChange(nil) }
-                        Button("Set Empty String") { text = ""; onChange("") }
-                    } label: { Image(systemName: "ellipsis").help("Set NULL or an empty string") }
-                        .help("Set NULL or an empty string")
-                        .accessibilityLabel("Set value for \(name)")
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
+                        Button("Set NULL") {
+                            text = ""
+                            onChange(nil)
+                        }
+                        Button("Set Empty String") {
+                            text = ""
+                            onChange("")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis").help("Set NULL or an empty string")
+                    }
+                    .help("Set NULL or an empty string")
+                    .accessibilityLabel("Set value for \(name)")
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
             }
             Group {
@@ -135,7 +172,9 @@ private struct FieldView: View {
     }
 
     private var currentText: String {
-        if case .value(let value) = cell { return value }
+        if case .value(let value) = cell {
+            return value
+        }
         return ""
     }
 

@@ -451,18 +451,27 @@ Other options: `SKIP_TESTS=1`, `BUILD_NUMBER=…` (defaults to a UTC timestamp) 
 ## Development
 
 ```
-Sources/TabulaCore   Drivers and SQL: PostgresDriver (PostgresNIO), MySQLDriver (MySQLNIO), SQLiteDriver
-                     (system SQLite), RedisDriver (RediStack) and RedisCommandLine, MongoDriver (MongoKitten) with
-                     Mongo/ (shell parser and printer, statements, dialect, completion), LoggingDriver (console log),
-                     SQLLexer, SQLSplitter, SQLFormatter, SQLCompletion, SQLDialect, FilterRule, SchemaInsights
-                     (foreign keys, metrics), ConnectionStore (JSON + Keychain), ResultExporter, UpdateFeed,
-                     Defaults (every tunable value in one place)
-Sources/Tabula       SwiftUI app. ConnectionSession holds a window's connections; DataGridView (NSTableView)
-                     and SQLEditorView (NSTextView) wrap AppKit for speed and keyboard control; Layout holds the
-                     design tokens.
-Tests/TabulaCoreTests
-Sources/TabulaBench  Benchmarks against the test containers (swift run -c release TabulaBench)
-scripts/             build-app.sh, release.sh, seed-dev.sh, benchmark.sh, make-icon.swift, third-party-notices.sh
+Sources/TabulaFoundation   Connection settings and URLs, query results, Defaults (shared tunable values)
+Sources/TabulaStorage      Saved connections (JSON + Keychain) and workspace state
+Sources/TabulaSQL          Query languages: SQLLexer, SQLSplitter, SQLFormatter, SQLCompletion, EditableSelect, and the
+                           QueryDialect strategy (SQLDialect for each SQLFlavor)
+Sources/TabulaDrivers      The DatabaseDriver protocol and what every driver shares: DatabaseCatalog (versions, foreign
+                           keys, metrics, routines), result editing, LoggingDriver, query cancellation, SSH tunnels
+Sources/TabulaPostgres     PostgresDriver (PostgresNIO) and its catalog, dialect settings and result editing
+Sources/TabulaMySQL        MySQLDriver (MySQLNIO), likewise
+Sources/TabulaSQLite       SQLiteDriver (system SQLite), likewise
+Sources/TabulaMongo        MongoDriver (MongoKitten): shell parser and printer, statements, MongoQueryDialect, completion
+Sources/TabulaRedis        RedisDriver (RediStack) and RedisCommandLine
+Sources/TabulaConnections  DriverFactory: opens the driver for every engine except Redis
+Sources/TabulaTransfer     Dump, restore and export
+Sources/TabulaAI           Providers, chat history and the assistant's tools
+Sources/TabulaUpdates      The release feed
+Sources/Tabula             SwiftUI app. ConnectionSession holds a window's connections; DataGridView (NSTableView)
+                           and SQLEditorView (NSTextView) wrap AppKit for speed and keyboard control; Layout holds
+                           the design tokens.
+Sources/TabulaBench        Benchmarks against the test containers (swift run -c release TabulaBench)
+Tests/TabulaTests          Tests of every module
+scripts/                   build-app.sh, release.sh, seed-dev.sh, benchmark.sh, make-icon.swift, third-party-notices.sh
 ```
 
 **Tests.** Unit tests and SQLite tests always run. The Postgres, MySQL, Redis and MongoDB tests run against real servers when ports are set:

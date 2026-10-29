@@ -1,5 +1,5 @@
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 /// ⌘P: type to jump to a table, an open tab, or an action. ↑↓ choose, ↩ open, ⌥↩ structure, ⎋ close.
 struct CommandPaletteView: View {
@@ -9,7 +9,11 @@ struct CommandPaletteView: View {
     @FocusState private var focused: Bool
 
     struct Item: Identifiable {
-        enum Kind { case table(TableRef), tab(UUID), action(() -> Void) }
+        enum Kind {
+            case table(TableRef)
+            case tab(UUID)
+            case action(() -> Void)
+        }
         let id: String
         let title: String
         let subtitle: String
@@ -19,34 +23,85 @@ struct CommandPaletteView: View {
 
     private var allItems: [Item] {
         var items: [Item] = model.tables.map { table in
-            Item(id: "table:\(table.id)", title: table.name, subtitle: table.kind == .view ? "View · \(table.schema)" : "Table · \(table.schema)",
-                 symbol: table.kind == .view ? "eye" : "tablecells", kind: .table(table))
+            Item(
+                id: "table:\(table.id)",
+                title: table.name,
+                subtitle: table.kind == .view ? "View · \(table.schema)" : "Table · \(table.schema)",
+                symbol: table.kind == .view ? "eye" : "tablecells",
+                kind: .table(table)
+            )
         }
         items += model.tabs.map { tab in
-            Item(id: "tab:\(tab.id)", title: tab.title, subtitle: "Open tab", symbol: "square.on.square", kind: .tab(tab.id))
+            Item(
+                id: "tab:\(tab.id)",
+                title: tab.title,
+                subtitle: "Open tab",
+                symbol: "square.on.square",
+                kind: .tab(tab.id)
+            )
         }
-        items.append(Item(id: "action:query", title: "New Query", subtitle: "⌘T", symbol: "plus.square", kind: .action { model.newQueryTab() }))
+        items.append(
+            Item(
+                id: "action:query",
+                title: "New Query",
+                subtitle: "⌘T",
+                symbol: "plus.square",
+                kind: .action { model.newQueryTab() }
+            )
+        )
         if model.config.kind.supportsDiagram {
-            items.append(Item(id: "action:diagram", title: "Relationship Diagram", subtitle: "⌥⌘3", symbol: "point.3.connected.trianglepath.dotted",
-                              kind: .action { model.openDiagram() }))
+            items.append(
+                Item(
+                    id: "action:diagram",
+                    title: "Relationship Diagram",
+                    subtitle: "⌥⌘3",
+                    symbol: "point.3.connected.trianglepath.dotted",
+                    kind: .action { model.openDiagram() }
+                )
+            )
         }
         items += [
-            Item(id: "action:metrics", title: "Server Metrics", subtitle: "⌥⌘4", symbol: "gauge.with.dots.needle.33percent",
-                 kind: .action { model.openMetrics() }),
-            Item(id: "action:refresh", title: "Refresh", subtitle: "⌘R", symbol: "arrow.clockwise", kind: .action { Task { await model.refresh() } }),
-            Item(id: "action:inspector", title: "Toggle Row Details", subtitle: "⌥⌘0", symbol: "sidebar.right",
-                 kind: .action { model.showInspector.toggle() }),
+            Item(
+                id: "action:metrics",
+                title: "Server Metrics",
+                subtitle: "⌥⌘4",
+                symbol: "gauge.with.dots.needle.33percent",
+                kind: .action { model.openMetrics() }
+            ),
+            Item(
+                id: "action:refresh",
+                title: "Refresh",
+                subtitle: "⌘R",
+                symbol: "arrow.clockwise",
+                kind: .action { Task { await model.refresh() } }
+            ),
+            Item(
+                id: "action:inspector",
+                title: "Toggle Row Details",
+                subtitle: "⌥⌘0",
+                symbol: "sidebar.right",
+                kind: .action { model.showInspector.toggle() }
+            ),
         ]
-        items += model.schemas.filter { $0 != model.selectedSchema }.map { schema in
-            Item(id: "schema:\(schema)", title: "Switch to \(schema)", subtitle: model.config.kind == .mysql ? "Database" : "Schema",
-                 symbol: "arrow.left.arrow.right", kind: .action { Task { await model.selectSchema(schema) } })
-        }
+        items += model.schemas.filter { $0 != model.selectedSchema }
+            .map { schema in
+                Item(
+                    id: "schema:\(schema)",
+                    title: "Switch to \(schema)",
+                    subtitle: model.config.kind == .mysql ? "Database" : "Schema",
+                    symbol: "arrow.left.arrow.right",
+                    kind: .action { Task { await model.selectSchema(schema) } }
+                )
+            }
         return items
     }
 
     private var results: [Item] {
-        guard !query.isEmpty else { return Array(allItems.prefix(50)) }
-        return allItems
+        guard !query.isEmpty else {
+            return Array(allItems.prefix(50))
+        }
+        return
+            allItems
             .compactMap { item in Self.score(item.title, query).map { (item, $0) } }
             .sorted { $0.1 > $1.1 }
             .prefix(50)
@@ -55,8 +110,11 @@ struct CommandPaletteView: View {
 
     /// Subsequence match; consecutive and word-start hits score higher.
     static func score(_ text: String, _ query: String) -> Int? {
-        let haystack = Array(text.lowercased()), needle = Array(query.lowercased())
-        var score = 0, position = 0, previous = -2
+        let haystack = Array(text.lowercased())
+        let needle = Array(query.lowercased())
+        var score = 0
+        var position = 0
+        var previous = -2
         for character in needle {
             guard let found = haystack[position...].firstIndex(of: character) else { return nil }
             score += found == previous + 1 ? 5 : 1
@@ -75,7 +133,9 @@ struct CommandPaletteView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 15))
                     .focused($focused)
-                    .onSubmit { activate(results.indices.contains(highlighted) ? results[highlighted] : nil, structure: false) }
+                    .onSubmit {
+                        activate(results.indices.contains(highlighted) ? results[highlighted] : nil, structure: false)
+                    }
             }
             .padding(12)
             Divider()
@@ -95,7 +155,9 @@ struct CommandPaletteView: View {
                 }
                 .frame(maxHeight: 320)
                 .onChange(of: highlighted) { _, index in
-                    if results.indices.contains(index) { proxy.scrollTo(results[index].id) }
+                    if results.indices.contains(index) {
+                        proxy.scrollTo(results[index].id)
+                    }
                 }
             }
             Divider()
@@ -108,10 +170,18 @@ struct CommandPaletteView: View {
         .shadow(color: .black.opacity(0.3), radius: 24, y: 10)
         .onAppear { focused = true }
         .onChange(of: query) { _, _ in highlighted = 0 }
-        .onKeyPress(.downArrow) { highlighted = min(highlighted + 1, max(results.count - 1, 0)); return .handled }
-        .onKeyPress(.upArrow) { highlighted = max(highlighted - 1, 0); return .handled }
+        .onKeyPress(.downArrow) {
+            highlighted = min(highlighted + 1, max(results.count - 1, 0))
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            highlighted = max(highlighted - 1, 0)
+            return .handled
+        }
         .onKeyPress(.return, phases: .down) { press in
-            guard press.modifiers.contains(.option) else { return .ignored }
+            guard press.modifiers.contains(.option) else {
+                return .ignored
+            }
             activate(results.indices.contains(highlighted) ? results[highlighted] : nil, structure: true)
             return .handled
         }

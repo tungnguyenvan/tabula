@@ -1,6 +1,8 @@
 import AppKit
 import Observation
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
+import TabulaTransfer
 
 @MainActor @Observable
 final class QueryTabModel {
@@ -92,7 +94,8 @@ final class QueryTabModel {
     /// lives in a task this tab owns, so Stop and closing the tab can end it.
     func run(_ text: String? = nil) async {
         let script = (text?.isEmpty == false ? text! : sql).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !script.isEmpty, !running, workspace?.openingDatabase == nil, !committingResults, confirmDiscardResults() else { return }
+        guard !script.isEmpty, !running, workspace?.openingDatabase == nil, !committingResults, confirmDiscardResults()
+        else { return }
         running = true
         stopping = false
         runStatus = nil
@@ -129,7 +132,9 @@ final class QueryTabModel {
         var interrupted = false
         for (index, statement) in statements.enumerated() {
             // Stop (or closing the tab) ends the run here: no further statement is sent.
-            if scope.isCancelled || Task.isCancelled { break }
+            if scope.isCancelled || Task.isCancelled {
+                break
+            }
             do {
                 let limited = rowLimit.map { driver.dialect.applyingRowLimit(statement, limit: $0) } ?? statement
                 let result = try await driver.execute(limited)
@@ -141,7 +146,9 @@ final class QueryTabModel {
                         let target = try await QueryCancelScope.$current.withValue(nil) {
                             try await driver.queryEditTarget(for: result)
                         }
-                        if let target { resultEditors[results.count - 1] = QueryResultEditor(target: target, rows: result.rows) }
+                        if let target {
+                            resultEditors[results.count - 1] = QueryResultEditor(target: target, rows: result.rows)
+                        }
                     } catch { resultEditNotes[results.count - 1] = error.localizedDescription }
                 }
             } catch let cancelled as QueryCancelledError {
@@ -155,7 +162,12 @@ final class QueryTabModel {
             }
         }
         if scope.isCancelled, error == nil {
-            runStatus = Self.stoppedMessage(completed: results.count, total: statements.count, interrupted: interrupted, detail: stopNote)
+            runStatus = Self.stoppedMessage(
+                completed: results.count,
+                total: statements.count,
+                interrupted: interrupted,
+                detail: stopNote
+            )
         }
         // Show the last result set, which is what the user usually wants after a script.
         selectedResult = results.lastIndex(where: \.hasResultSet) ?? max(0, results.count - 1)
@@ -167,11 +179,16 @@ final class QueryTabModel {
 
     private static func stoppedMessage(completed: Int, total: Int, interrupted: Bool, detail: String?) -> String {
         var text = interrupted ? "Query cancelled." : "Stopped."
-        if total > 1 { text += " \(completed) of \(total) statements completed; the rest were not run." }
-        if interrupted {
-            text += " If a transaction was open, PostgreSQL has marked it failed: run ROLLBACK (or ROLLBACK TO SAVEPOINT) before continuing."
+        if total > 1 {
+            text += " \(completed) of \(total) statements completed; the rest were not run."
         }
-        if let detail { text += "\n" + detail }
+        if interrupted {
+            text +=
+                " If a transaction was open, PostgreSQL has marked it failed: run ROLLBACK (or ROLLBACK TO SAVEPOINT) before continuing."
+        }
+        if let detail {
+            text += "\n" + detail
+        }
         return text
     }
 
@@ -213,20 +230,35 @@ final class QueryTabModel {
     }
 
     func suspendResultEditing() {
-        for editor in resultEditors.values { editor.suspended = true }
+        for editor in resultEditors.values {
+            editor.suspended = true
+        }
     }
 
     func confirmDiscardResults() -> Bool {
         guard !committingResults else { return false }
-        return !hasResultChanges || Confirmation.ask("Discard uncommitted query result changes?",
-            detail: "Commit the result changes first if you want to keep them. Saving the SQL file does not save data changes.",
-            action: "Discard Changes")
+        return !hasResultChanges
+            || Confirmation.ask(
+                "Discard uncommitted query result changes?",
+                detail:
+                    "Commit the result changes first if you want to keep them. Saving the SQL file does not save data changes.",
+                action: "Discard Changes"
+            )
     }
 
     func commitResult() async {
-        guard let editor = resultEditor, !editor.suspended, editor.hasChanges, !running, !committingResults, let workspace, workspace.openingDatabase == nil else { return }
-        if workspace.config.tag == .production, !Confirmation.ask("Commit result changes on a PRODUCTION connection?",
-            detail: "This updates rows in \(editor.target.table.schema).\(editor.target.table.name).", action: "Commit") { return }
+        guard let editor = resultEditor, !editor.suspended, editor.hasChanges, !running, !committingResults,
+            let workspace, workspace.openingDatabase == nil
+        else { return }
+        if workspace.config.tag == .production,
+            !Confirmation.ask(
+                "Commit result changes on a PRODUCTION connection?",
+                detail: "This updates rows in \(editor.target.table.schema).\(editor.target.table.name).",
+                action: "Commit"
+            )
+        {
+            return
+        }
         editor.committing = true
         defer { editor.committing = false }
         do {
@@ -241,7 +273,14 @@ final class QueryTabModel {
     }
 
     func exportText(_ format: ExportFormat) throws -> String {
-        guard let result = currentResult else { throw DatabaseError("Run a query that returns rows first.") }
-        return try ResultExporter.export(columns: result.columns, rows: result.rows, format: format, dialect: driver.dialect)
+        guard let result = currentResult else {
+            throw DatabaseError("Run a query that returns rows first.")
+        }
+        return try ResultExporter.export(
+            columns: result.columns,
+            rows: result.rows,
+            format: format,
+            dialect: driver.dialect
+        )
     }
 }

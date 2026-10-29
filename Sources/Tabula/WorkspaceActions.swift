@@ -1,5 +1,4 @@
 import AppKit
-import TabulaCore
 
 extension WorkspaceModel {
     /// Closes a tab, asking first if it holds uncommitted rows or unsaved edits to its file.
@@ -8,7 +7,9 @@ extension WorkspaceModel {
         case .table(let table) where table.hasChanges:
             if table.confirmDiscard(action: "Discard and Close") { close(id) }
         case .query(let query):
-            if query.confirmClose() { close(id) }
+            if query.confirmClose() {
+                close(id)
+            }
         default:
             close(id)
         }
@@ -19,8 +20,11 @@ extension WorkspaceModel {
     func saveSelectedTab(choosingLocation: Bool) {
         switch selectedTab {
         case .query(let query):
-            if !choosingLocation, query.resultEditor?.hasChanges == true { Task { await query.commitResult() } }
-            else { query.save(choosingLocation: choosingLocation) }
+            if !choosingLocation, query.resultEditor?.hasChanges == true {
+                Task { await query.commitResult() }
+            } else {
+                query.save(choosingLocation: choosingLocation)
+            }
         case .table(let table): if choosingLocation { table.showPreviewRequest += 1 } else { commitSelectedTable() }
         case .routine(let routine) where !choosingLocation: Task { await routine.save() }
         default: NSSound.beep()
@@ -28,7 +32,10 @@ extension WorkspaceModel {
     }
 
     func commitSelectedTable() {
-        if case .query(let query) = selectedTab, query.resultEditor?.hasChanges == true { Task { await query.commitResult() }; return }
+        if case .query(let query) = selectedTab, query.resultEditor?.hasChanges == true {
+            Task { await query.commitResult() }
+            return
+        }
         if let table = selectedTableTab, table.hasChanges { Task { await table.commit() } } else { NSSound.beep() }
     }
 }

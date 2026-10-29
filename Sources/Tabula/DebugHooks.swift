@@ -1,7 +1,7 @@
 #if DEBUG
 import AppKit
 import Foundation
-import TabulaCore
+import TabulaSQL
 
 /// Debug-only automation for visual checks, driven by environment variables:
 /// - TABULA_DEBUG_OPEN: connection UUID to open at launch
@@ -38,7 +38,13 @@ enum DebugHooks {
     /// TABULA_DEBUG_VERSION: the version the Connections window shows (a debug build has none), e.g. for recordings.
     static var version: String? { environment["TABULA_DEBUG_VERSION"] }
     /// TABULA_DEBUG_INSPECTOR_WIDTH: fix the right panel width for recordings, without changing release defaults.
-    static var inspectorWidth: Double? { environment["TABULA_DEBUG_INSPECTOR_WIDTH"].flatMap(Double.init).flatMap { $0.isFinite && $0 >= Double(Layout.Inspector.minWidth) && $0 <= Double(Layout.Inspector.maxWidth) ? $0 : nil } }
+    static var inspectorWidth: Double? {
+        environment["TABULA_DEBUG_INSPECTOR_WIDTH"].flatMap(Double.init)
+            .flatMap {
+                $0.isFinite && $0 >= Double(Layout.Inspector.minWidth) && $0 <= Double(Layout.Inspector.maxWidth)
+                    ? $0 : nil
+            }
+    }
 
     /// TABULA_DEBUG_OPEN may list several ids separated by commas.
     static var connectionsToOpen: [UUID] {
@@ -59,8 +65,12 @@ enum DebugHooks {
         if environment["TABULA_DEBUG_DIAGRAM"] != nil { model.openDiagram() }
         if environment["TABULA_DEBUG_METRICS"] != nil { model.openMetrics() }
         if let count = environment["TABULA_DEBUG_TABS"].flatMap(Int.init) {
-            for table in model.tables { model.open(table) }
-            for _ in 0..<count { model.newQueryTab() }
+            for table in model.tables {
+                model.open(table)
+            }
+            for _ in 0..<count {
+                model.newQueryTab()
+            }
         }
         if let name = environment["TABULA_DEBUG_ROUTINE"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
@@ -69,17 +79,24 @@ enum DebugHooks {
         }
         if environment["TABULA_DEBUG_ASK_DEMO"] != nil, case .query(let query) = model.tabs.first {
             query.assistant.prompt = "top 5 customers by total order value"
-            query.assistant.simulate(thinking: "Orders hold each order's total, so sum it per customer and join customers for the name.",
-                                     answer: "SELECT c.id, c.name, SUM(o.total) AS spent FROM public.customers c JOIN public.orders o ON o.customer_id = c.id GROUP BY c.id, c.name ORDER BY spent DESC LIMIT 5;",
-                                     piece: .milliseconds(200)) { query.insertRequest = ($0, UUID()) }
+            query.assistant.simulate(
+                thinking: "Orders hold each order's total, so sum it per customer and join customers for the name.",
+                answer:
+                    "SELECT c.id, c.name, SUM(o.total) AS spent FROM public.customers c JOIN public.orders o ON o.customer_id = c.id GROUP BY c.id, c.name ORDER BY spent DESC LIMIT 5;",
+                piece: .milliseconds(200)
+            ) { query.insertRequest = ($0, UUID()) }
         }
         if let question = environment["TABULA_DEBUG_CHAT_DEMO"] {
             model.rightPanel = .ai
             model.showInspector = true
-            model.chat.simulate(question: question,
-                                thinking: "The user wants the customers who spent the most. Orders hold the total per order, so sum orders.total per customer, join customers for the name, sort descending and keep five.",
-                                answer: "Sum each customer's orders and keep the top five:\n\n```sql\nSELECT c.id, c.name, SUM(o.total) AS spent\nFROM public.customers c\nJOIN public.orders o ON o.customer_id = c.id\nGROUP BY c.id, c.name\nORDER BY spent DESC\nLIMIT 5;\n```",
-                                piece: .milliseconds(150))
+            model.chat.simulate(
+                question: question,
+                thinking:
+                    "The user wants the customers who spent the most. Orders hold the total per order, so sum orders.total per customer, join customers for the name, sort descending and keep five.",
+                answer:
+                    "Sum each customer's orders and keep the top five:\n\n```sql\nSELECT c.id, c.name, SUM(o.total) AS spent\nFROM public.customers c\nJOIN public.orders o ON o.customer_id = c.id\nGROUP BY c.id, c.name\nORDER BY spent DESC\nLIMIT 5;\n```",
+                piece: .milliseconds(150)
+            )
         }
         if let question = environment["TABULA_DEBUG_CHAT"] {
             model.rightPanel = .ai
@@ -94,8 +111,11 @@ enum DebugHooks {
             if let allow = environment["TABULA_DEBUG_APPROVE"] {
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
                     MainActor.assumeIsolated {
-                        guard let step = model.chat.messages.last(where: { $0.tool?.status == .awaitingApproval }) else { return }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { model.chat.answer(step.id, allow: allow == "1") }
+                        guard let step = model.chat.messages.last(where: { $0.tool?.status == .awaitingApproval })
+                        else { return }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                            model.chat.answer(step.id, allow: allow == "1")
+                        }
                         timer.invalidate()
                     }
                 }
@@ -157,7 +177,9 @@ enum DebugHooks {
 
     private static func firstView<T: NSView>(of type: T.Type, in view: NSView?) -> T? {
         guard let view, !view.isHidden else { return nil }
-        if let match = view as? T { return match }
+        if let match = view as? T {
+            return match
+        }
         for subview in view.subviews { if let match = firstView(of: type, in: subview) { return match } }
         return nil
     }
@@ -165,7 +187,10 @@ enum DebugHooks {
     static func startKeyScript() {
         dumpMenus()
         if let files = environment["TABULA_DEBUG_FILES"] {
-            NSApp.delegate?.application?(NSApp, open: files.split(separator: ",").map { URL(fileURLWithPath: String($0)) })
+            NSApp.delegate?.application?(
+                NSApp,
+                open: files.split(separator: ",").map { URL(fileURLWithPath: String($0)) }
+            )
         }
         if environment["TABULA_DEBUG_TARGET"] == "connections" { resizeConnectionsWindow() }
         guard let script = environment["TABULA_DEBUG_KEYS"] else { return }
@@ -188,10 +213,14 @@ enum DebugHooks {
                         // A sheet takes the keys while it is open.
                         let receiver = window.attachedSheet ?? window
                         // Typing goes to the SQL editor when nothing that takes text has focus.
-                        if !(receiver.firstResponder is NSTextView), let editor = firstView(of: SQLTextView.self, in: receiver.contentView) {
+                        if !(receiver.firstResponder is NSTextView),
+                            let editor = firstView(of: SQLTextView.self, in: receiver.contentView)
+                        {
                             receiver.makeFirstResponder(editor)
                         }
-                        for event in events(for: "type:\(character)", window: receiver) { NSApp.postEvent(event, atStart: false) }
+                        for event in events(for: "type:\(character)", window: receiver) {
+                            NSApp.postEvent(event, atStart: false)
+                        }
                         logEvent(character == " " ? "space" : "key")
                     }
                 }
@@ -222,9 +251,19 @@ enum DebugHooks {
                         }
                     }
                     func post(_ type: NSEvent.EventType, clicks: Int) {
-                        guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                                             windowNumber: receiver.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
-                                                             pressure: type == .leftMouseDown ? 1 : 0) else { return }
+                        guard
+                            let event = NSEvent.mouseEvent(
+                                with: type,
+                                location: point,
+                                modifierFlags: [],
+                                timestamp: ProcessInfo.processInfo.systemUptime,
+                                windowNumber: receiver.windowNumber,
+                                context: nil,
+                                eventNumber: 0,
+                                clickCount: clicks,
+                                pressure: type == .leftMouseDown ? 1 : 0
+                            )
+                        else { return }
                         NSApp.postEvent(event, atStart: false)
                     }
                     post(.mouseMoved, clicks: 0)
@@ -247,7 +286,9 @@ enum DebugHooks {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     guard let window = targetWindow else { return }
                     let receiver = window.attachedSheet ?? window
-                    guard let field = receiver.firstResponder as? NSTextView else { return print("PASTE no text field") }
+                    guard let field = receiver.firstResponder as? NSTextView else {
+                        return print("PASTE no text field")
+                    }
                     field.insertText(text, replacementRange: field.selectedRange())
                     logEvent("keycap")
                 }
@@ -257,7 +298,9 @@ enum DebugHooks {
             // open:<path> hands a file over as Finder would; alert:<button> answers the alert on screen.
             if token.hasPrefix("open:") {
                 let url = URL(fileURLWithPath: String(token.dropFirst(5)))
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { NSApp.delegate?.application?(NSApp, open: [url]) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    NSApp.delegate?.application?(NSApp, open: [url])
+                }
                 delay += 0.6
                 continue
             }
@@ -266,8 +309,12 @@ enum DebugHooks {
                 // A run-loop timer, since the main queue is held by the step that opened the alert.
                 let timer = Timer(timeInterval: delay, repeats: false) { _ in
                     MainActor.assumeIsolated {
-                        guard let alert = NSApp.modalWindow, let content = alert.contentView else { return print("ALERT none") }
-                        func buttons(_ view: NSView) -> [NSButton] { ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(buttons) }
+                        guard let alert = NSApp.modalWindow, let content = alert.contentView else {
+                            return print("ALERT none")
+                        }
+                        func buttons(_ view: NSView) -> [NSButton] {
+                            ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(buttons)
+                        }
                         let found = buttons(content)
                         print("ALERT", found.map(\.title).filter { !$0.isEmpty })
                         found.first { $0.title == title }?.performClick(nil)
@@ -284,25 +331,54 @@ enum DebugHooks {
                 let name = token.dropFirst(5)
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     print("CALL", name)
-                    if let window = targetWindow { WorkspaceRegistry.makeActiveForTesting(window) }
+                    if let window = targetWindow {
+                        WorkspaceRegistry.makeActiveForTesting(window)
+                    }
                     // Connections switch in any workspace, Redis included.
-                    if name == "closewindow" { targetWindow?.performClose(nil); return }
-                    if name == "quit" { NSApp.terminate(nil); return }
-                    if name == "nextconn" { return ActiveWorkspace.shared.session?.selectAdjacent(1) ?? print("CALL no session") }
-                    if name == "closeconn", let session = ActiveWorkspace.shared.session, let id = session.active?.id { return session.close(id) }
-                    if name == "sidebar" { return NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil) ? () : print("CALL no sidebar") }
-                    guard let workspace = WorkspaceRegistry.key else { return print("CALL no workspace") }
+                    if name == "closewindow" {
+                        targetWindow?.performClose(nil)
+                        return
+                    }
+                    if name == "quit" {
+                        NSApp.terminate(nil)
+                        return
+                    }
+                    if name == "nextconn" {
+                        return ActiveWorkspace.shared.session?.selectAdjacent(1) ?? print("CALL no session")
+                    }
+                    if name == "closeconn", let session = ActiveWorkspace.shared.session, let id = session.active?.id {
+                        return session.close(id)
+                    }
+                    if name == "sidebar" {
+                        let toggled = NSApp.sendAction(
+                            #selector(NSSplitViewController.toggleSidebar(_:)),
+                            to: nil,
+                            from: nil
+                        )
+                        if !toggled {
+                            print("CALL no sidebar")
+                        }
+                        return
+                    }
+                    guard let workspace = WorkspaceRegistry.key else {
+                        return print("CALL no workspace")
+                    }
                     switch name {
                     case "ai": workspace.toggleRightPanel(.ai)
-                    case "resultundo": workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?.undoManager.undo()
-                    case "resultredo": workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?.undoManager.redo()
+                    case "resultundo":
+                        workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?
+                            .undoManager.undo()
+                    case "resultredo":
+                        workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?
+                            .undoManager.redo()
                     case "resultpreview": if case .query(let q) = workspace.selectedTab { q.showResultPreview = true }
                     case "dump": workspace.startDump()
                     case "restore": Task { await workspace.startRestore() }
                     case "dumpstart": workspace.transfer?.start()
                     case "dumpstop": workspace.transfer?.cancel()
                     case let call where call.hasPrefix("dumptable-"):
-                        if let table = workspace.tables.first(where: { $0.name == call.dropFirst("dumptable-".count) }) {
+                        if let table = workspace.tables.first(where: { $0.name == call.dropFirst("dumptable-".count) })
+                        {
                             workspace.startDump(tables: [table])
                         }
                     case "dumpcustom": workspace.transfer?.dumpOptions.format = .custom
@@ -327,7 +403,10 @@ enum DebugHooks {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 // Real dispatch path (NSApp → monitor → key equivalents → first responder) on the key window.
-                guard let window = targetWindow else { print("KEY", token, "→ no window"); return }
+                guard let window = targetWindow else {
+                    print("KEY", token, "→ no window")
+                    return
+                }
                 if !window.isKeyWindow {
                     NSApp.activate(ignoringOtherApps: true)
                     window.makeKeyAndOrderFront(nil)
@@ -335,10 +414,17 @@ enum DebugHooks {
                 // Launched from a terminal the app may not be allowed to become active, so its window never
                 // turns key; route menu commands to it anyway.
                 WorkspaceRegistry.makeActiveForTesting(window)
-                print("KEY", token, "→ first responder:", String(describing: window.firstResponder.map { type(of: $0) }))
+                print(
+                    "KEY",
+                    token,
+                    "→ first responder:",
+                    String(describing: window.firstResponder.map { type(of: $0) })
+                )
                 let receiver = window.attachedSheet ?? window
                 // Keys go to the SQL editor when nothing that takes text has focus, as typing does.
-                if !(receiver.firstResponder is NSTextView), let editor = firstView(of: SQLTextView.self, in: receiver.contentView) {
+                if !(receiver.firstResponder is NSTextView),
+                    let editor = firstView(of: SQLTextView.self, in: receiver.contentView)
+                {
                     receiver.makeFirstResponder(editor)
                 }
                 let events = events(for: token, window: receiver)
@@ -346,12 +432,16 @@ enum DebugHooks {
                 if let down = events.first, down.modifierFlags.contains(.command) {
                     // AppKit's key-equivalent order (window, then main menu), which an inactive app skips.
                     NSApp.mainMenu?.update()
-                    let handled = receiver.performKeyEquivalent(with: down) || NSApp.mainMenu?.performKeyEquivalent(with: down) == true
+                    let handled =
+                        receiver.performKeyEquivalent(with: down)
+                        || NSApp.mainMenu?.performKeyEquivalent(with: down) == true
                     print("KEY", token, handled ? "→ handled" : "→ not handled, sent as a key press")
                     // As in AppKit, a key equivalent nothing takes is a key press (⌘← and ⌘↑ in a text view).
                     if !handled { for event in events { NSApp.postEvent(event, atStart: false) } }
                 } else {
-                    for event in events { NSApp.postEvent(event, atStart: false) }
+                    for event in events {
+                        NSApp.postEvent(event, atStart: false)
+                    }
                 }
             }
             delay += 0.6
@@ -366,31 +456,47 @@ enum DebugHooks {
     /// Connections window.
     private static var targetWindow: NSWindow? {
         if environment["TABULA_DEBUG_TARGET"] == "connections" {
-            return NSApp.windows.first { $0.isVisible && $0.identifier?.rawValue.hasPrefix(WindowID.connections) == true }
+            return NSApp.windows.first {
+                $0.isVisible && $0.identifier?.rawValue.hasPrefix(WindowID.connections) == true
+            }
         }
         return NSApp.windows.first { $0.isVisible && $0.identifier?.rawValue.hasPrefix("workspace") == true }
-            ?? NSApp.windows.first { $0.isVisible && $0.title != "Tabula" && $0.title != "Keyboard Shortcuts" && $0.contentView != nil && $0.frame.width > 900 }
+            ?? NSApp.windows.first {
+                $0.isVisible && $0.title != "Tabula" && $0.title != "Keyboard Shortcuts" && $0.contentView != nil
+                    && $0.frame.width > 900
+            }
     }
 
     private static let namedKeys: [String: (UInt16, String)] = [
         "return": (36, "\r"), "tab": (48, "\t"), "space": (49, " "), "delete": (51, "\u{7F}"), "esc": (53, "\u{1B}"),
-        "left": (123, "\u{F702}"), "right": (124, "\u{F703}"), "down": (125, "\u{F701}"), "up": (126, "\u{F700}"), "f2": (120, "\u{F705}"),
+        "left": (123, "\u{F702}"), "right": (124, "\u{F703}"), "down": (125, "\u{F701}"), "up": (126, "\u{F700}"),
+        "f2": (120, "\u{F705}"),
     ]
 
     private static let letterCodes: [Character: UInt16] = [
-        "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
-        "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "9": 25, "7": 26, "8": 28, "0": 29, "]": 30, "o": 31,
+        "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13,
+        "e": 14, "r": 15,
+        "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "9": 25, "7": 26, "8": 28, "0": 29,
+        "]": 30, "o": 31,
         "u": 32, "[": 33, "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "/": 44, ".": 47,
     ]
 
     private static func events(for token: String, window: NSWindow) -> [NSEvent] {
         if token.hasPrefix("type:") {
-            return token.dropFirst(5).flatMap { character in
-                [true, false].compactMap { down in
-                    key(down: down, code: letterCodes[Character(character.lowercased())] ?? 0, characters: String(character),
-                        ignoring: String(character).lowercased(), flags: character.isUppercase ? [.shift] : [], window: window)
+            return token.dropFirst(5)
+                .flatMap { character in
+                    [true, false]
+                        .compactMap { down in
+                            key(
+                                down: down,
+                                code: letterCodes[Character(character.lowercased())] ?? 0,
+                                characters: String(character),
+                                ignoring: String(character).lowercased(),
+                                flags: character.isUppercase ? [.shift] : [],
+                                window: window
+                            )
+                        }
                 }
-            }
         }
         var parts = token.lowercased().components(separatedBy: "+")
         let name = parts.removeLast()
@@ -407,13 +513,32 @@ enum DebugHooks {
         let (code, characters): (UInt16, String) = namedKeys[name] ?? (letterCodes[Character(name)] ?? 0, name)
         // Like a real keyboard: Shift changes `characters` but not `charactersIgnoringModifiers`.
         let typed = flags.contains(.shift) ? characters.uppercased() : characters
-        return [true, false].compactMap { key(down: $0, code: code, characters: typed, ignoring: characters, flags: flags, window: window) }
+        return [true, false]
+            .compactMap {
+                key(down: $0, code: code, characters: typed, ignoring: characters, flags: flags, window: window)
+            }
     }
 
-    private static func key(down: Bool, code: UInt16, characters: String, ignoring: String, flags: NSEvent.ModifierFlags, window: NSWindow) -> NSEvent? {
-        NSEvent.keyEvent(with: down ? .keyDown : .keyUp, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
-                         windowNumber: window.windowNumber, context: nil, characters: characters,
-                         charactersIgnoringModifiers: ignoring, isARepeat: false, keyCode: code)
+    private static func key(
+        down: Bool,
+        code: UInt16,
+        characters: String,
+        ignoring: String,
+        flags: NSEvent.ModifierFlags,
+        window: NSWindow
+    ) -> NSEvent? {
+        NSEvent.keyEvent(
+            with: down ? .keyDown : .keyUp,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: characters,
+            charactersIgnoringModifiers: ignoring,
+            isARepeat: false,
+            keyCode: code
+        )
     }
 
     /// Logs every menu item with its shortcut, to spot conflicts.
@@ -421,12 +546,19 @@ enum DebugHooks {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             func walk(_ menu: NSMenu, _ path: String) {
                 for item in menu.items where !item.isSeparatorItem {
-                    let key = item.keyEquivalent.isEmpty ? "" : " [\(item.keyEquivalentModifierMask.rawValue >> 17):\(item.keyEquivalent.debugDescription)]"
+                    let key =
+                        item.keyEquivalent.isEmpty
+                        ? ""
+                        : " [\(item.keyEquivalentModifierMask.rawValue >> 17):\(item.keyEquivalent.debugDescription)]"
                     print("MENU", path + item.title + key)
-                    if let submenu = item.submenu { walk(submenu, path + item.title + " > ") }
+                    if let submenu = item.submenu {
+                        walk(submenu, path + item.title + " > ")
+                    }
                 }
             }
-            if let main = NSApp.mainMenu { walk(main, "") }
+            if let main = NSApp.mainMenu {
+                walk(main, "")
+            }
             fflush(stdout)
         }
     }
@@ -464,7 +596,8 @@ enum DebugHooks {
     /// Screenshots for the README are taken at 2x: with a sized window, move it to a Retina screen if one is attached.
     private static func moveToRetinaScreen(_ window: NSWindow) {
         guard (window.screen?.backingScaleFactor ?? 1) < 2,
-              let screen = NSScreen.screens.first(where: { $0.backingScaleFactor >= 2 }) else { return }
+            let screen = NSScreen.screens.first(where: { $0.backingScaleFactor >= 2 })
+        else { return }
         let visible = screen.visibleFrame
         window.setFrameTopLeftPoint(NSPoint(x: visible.minX, y: visible.maxY))
     }
@@ -493,7 +626,10 @@ enum DebugHooks {
     private static func logEvent(_ kind: String, x: Double? = nil, y: Double? = nil) {
         guard let recorder else { return }
         var event: [String: Any] = ["frame": recorder.currentFrame, "kind": kind]
-        if let x, let y { event["x"] = x; event["y"] = y }
+        if let x, let y {
+            event["x"] = x
+            event["y"] = y
+        }
         recordedEvents.append(event)
         if let data = try? JSONSerialization.data(withJSONObject: recordedEvents, options: [.prettyPrinted]) {
             try? data.write(to: recorder.directory.appendingPathComponent("events.json"))
@@ -528,7 +664,8 @@ enum DebugHooks {
                     guard let rep = windowServerImage(window) ?? cachedImage(window) else { continue }
                     let name = window.title.isEmpty ? "window-\(window.windowNumber)" : window.title
                     let safe = name.replacingOccurrences(of: "/", with: "-")
-                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("\(safe).png"))
+                    try? rep.representation(using: .png, properties: [:])?
+                        .write(to: URL(fileURLWithPath: directory).appendingPathComponent("\(safe).png"))
                 }
             }
         }
@@ -536,9 +673,12 @@ enum DebugHooks {
 
     private static func snapshotKeyWindow(_ name: String) {
         // A sheet on the window is what the step is about.
-        guard let directory = environment["TABULA_DEBUG_SNAPSHOT"], let window = (targetWindow ?? NSApp.keyWindow).map({ $0.attachedSheet ?? $0 }),
-              let rep = windowServerImage(window) ?? cachedImage(window) else { return }
-        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("step-\(name).png"))
+        guard let directory = environment["TABULA_DEBUG_SNAPSHOT"],
+            let window = (targetWindow ?? NSApp.keyWindow).map({ $0.attachedSheet ?? $0 }),
+            let rep = windowServerImage(window) ?? cachedImage(window)
+        else { return }
+        try? rep.representation(using: .png, properties: [:])?
+            .write(to: URL(fileURLWithPath: directory).appendingPathComponent("step-\(name).png"))
         print("SNAP", name)
     }
 
@@ -550,13 +690,16 @@ enum DebugHooks {
         guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return nil }
         let create = unsafeBitCast(symbol, to: CreateImage.self)
         // kCGWindowListOptionIncludingWindow = 1 << 3, kCGWindowImageBoundsIgnoreFraming = 1 << 0
-        guard let image = create(.null, 1 << 3, UInt32(window.windowNumber), 1 << 0)?.takeRetainedValue() else { return nil }
+        guard let image = create(.null, 1 << 3, UInt32(window.windowNumber), 1 << 0)?.takeRetainedValue() else {
+            return nil
+        }
         return NSBitmapImageRep(cgImage: image)
     }
 
     private static func cachedImage(_ window: NSWindow) -> NSBitmapImageRep? {
         guard let view = window.contentView?.superview ?? window.contentView,
-              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+            let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        else { return nil }
         view.cacheDisplay(in: view.bounds, to: rep)
         return rep
     }
@@ -623,14 +766,18 @@ final class WindowRecorder: @unchecked Sendable {
             (info[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) }
         }
         guard let below = CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]],
-              let frame = below.first.flatMap(bounds),
-              let above = CGWindowListCopyWindowInfo(.optionOnScreenAboveWindow, id) as? [[String: Any]] else { return [] }
+            let frame = below.first.flatMap(bounds),
+            let above = CGWindowListCopyWindowInfo(.optionOnScreenAboveWindow, id) as? [[String: Any]]
+        else { return [] }
         let pid = Int(getpid())
-        return above.reversed().compactMap { info in
-            guard info[kCGWindowOwnerPID as String] as? Int == pid, let number = info[kCGWindowNumber as String] as? Int,
-                  let rect = bounds(info), rect.intersects(frame) else { return nil }
-            return (CGWindowID(number), rect.offsetBy(dx: -frame.minX, dy: -frame.minY))
-        }
+        return above.reversed()
+            .compactMap { info in
+                guard info[kCGWindowOwnerPID as String] as? Int == pid,
+                    let number = info[kCGWindowNumber as String] as? Int,
+                    let rect = bounds(info), rect.intersects(frame)
+                else { return nil }
+                return (CGWindowID(number), rect.offsetBy(dx: -frame.minX, dy: -frame.minY))
+            }
     }
 
     private func capture() {
@@ -639,25 +786,47 @@ final class WindowRecorder: @unchecked Sendable {
         var picture = window
         let overlays = Self.overlays(above: target.id)
         if !overlays.isEmpty,
-           let context = CGContext(data: nil, width: window.width, height: window.height, bitsPerComponent: 8, bytesPerRow: 0,
-                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
+            let context = CGContext(
+                data: nil,
+                width: window.width,
+                height: window.height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        {
             // Over the window, keeping the overlays' transparent rounded corners and shadows.
             let scale = CGFloat(window.width) / target.size.width
             context.draw(window, in: CGRect(x: 0, y: 0, width: window.width, height: window.height))
             for overlay in overlays {
                 guard let image = Self.image(of: overlay.id) else { continue }
                 let rect = overlay.rect
-                context.draw(image, in: CGRect(x: rect.minX * scale, y: (target.size.height - rect.maxY) * scale,
-                                               width: rect.width * scale, height: rect.height * scale))
+                context.draw(
+                    image,
+                    in: CGRect(
+                        x: rect.minX * scale,
+                        y: (target.size.height - rect.maxY) * scale,
+                        width: rect.width * scale,
+                        height: rect.height * scale
+                    )
+                )
             }
             picture = context.makeImage() ?? window
         }
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return }
-        CGImageDestinationAddImage(destination, picture, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil)
+        else { return }
+        CGImageDestinationAddImage(
+            destination,
+            picture,
+            [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
+        )
         guard CGImageDestinationFinalize(destination) else { return }
         // Frames missed while this one was taken show the picture before.
-        for missed in (written + 1)..<frame { write(last ?? data as Data, frame: missed) }
+        for missed in (written + 1)..<frame {
+            write(last ?? data as Data, frame: missed)
+        }
         write(data as Data, frame: frame)
         written = frame
         last = data as Data

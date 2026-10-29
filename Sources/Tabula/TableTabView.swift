@@ -1,6 +1,9 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
+import TabulaMongo
+import TabulaSQL
+import TabulaTransfer
 
 struct TableTabView: View {
     @Bindable var model: TableTabModel
@@ -40,10 +43,18 @@ struct TableTabView: View {
                     focusRequest: model.focusRequest,
                     onEdit: { row, column, value in model.setValue(value, row: row, column: column) },
                     onSort: { column, ascending in Task { await model.sort(by: column, ascending: ascending) } },
-                    onDelete: { model.deleteRows($0); selection = [] },
+                    onDelete: {
+                        model.deleteRows($0)
+                        selection = []
+                    },
                     onRestore: { model.restoreRows($0) },
                     onFilterByValue: { row, column in
-                        let value: String? = if case .value(let text) = model.cell(row: row, column: column) { text } else { nil }
+                        let value: String? =
+                            if case .value(let text) = model.cell(row: row, column: column) {
+                                text
+                            } else {
+                                nil
+                            }
                         Task { await model.filter(equalTo: value, column: column) }
                     },
                     onDuplicate: model.canInsert ? { model.duplicateRows($0) } : nil,
@@ -61,7 +72,9 @@ struct TableTabView: View {
         .onAppear { workspace.setSelection(selection, inTab: model.id) }
         .onChange(of: model.showPreviewRequest) { _, _ in if model.hasChanges { showingPreview = true } }
         .onChange(of: model.documentEditRequest) { _, row in
-            if let row, let text = model.documentText(row: row) { editingDocument = .init(row: row, text: text) }
+            if let row, let text = model.documentText(row: row) {
+                editingDocument = .init(row: row, text: text)
+            }
             model.documentEditRequest = nil
         }
         .sheet(item: $editingDocument) { target in
@@ -70,7 +83,11 @@ struct TableTabView: View {
             }
         }
         .sheet(isPresented: $showingPreview) {
-            SQLPreviewSheet(kind: model.driver.kind, dialect: model.driver.dialect, pending: Result { try model.pendingStatements() }) {
+            SQLPreviewSheet(
+                kind: model.driver.kind,
+                dialect: model.driver.dialect,
+                pending: Result { try model.pendingStatements() }
+            ) {
                 showingPreview = false
                 Task { await model.commit() }
             } onCancel: {
@@ -96,23 +113,36 @@ struct TableTabView: View {
             if model.mode == .data {
                 HStack(spacing: 2) {
                     let noun = model.driver.kind.rowNoun
-                    BarButton(symbol: "plus", help: "Add \(noun) (or double-click below the \(noun)s)") { model.addRow() }
-                        .disabled(!model.canInsert)
-                    BarButton(symbol: "minus", help: "Delete selected \(noun)s (⌫)") { model.deleteRows(selection); selection = [] }
-                        .disabled(selection.isEmpty || !(model.canEditExisting || selection.contains { $0 >= model.rows.count }))
+                    BarButton(symbol: "plus", help: "Add \(noun) (or double-click below the \(noun)s)") {
+                        model.addRow()
+                    }
+                    .disabled(!model.canInsert)
+                    BarButton(symbol: "minus", help: "Delete selected \(noun)s (⌫)") {
+                        model.deleteRows(selection)
+                        selection = []
+                    }
+                    .disabled(
+                        selection.isEmpty || !(model.canEditExisting || selection.contains { $0 >= model.rows.count })
+                    )
                     if model.driver.kind.isDocument {
                         BarButton(symbol: "curlybraces", help: "Edit the selected document as JSON") {
                             editSelectedDocument()
                         }
-                        .disabled(selection.count != 1 || !model.canEditExisting || (selection.first ?? 0) >= model.rows.count)
+                        .disabled(
+                            selection.count != 1 || !model.canEditExisting || (selection.first ?? 0) >= model.rows.count
+                        )
                         BarButton(symbol: "doc.badge.plus", help: "Insert a document written as JSON") {
                             editingDocument = .init(row: nil, text: "{\n  \n}")
                         }
                         .disabled(!model.canInsert)
                     }
                 }
-                BarButton(symbol: model.isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
-                          help: "Filter (⌘F)", active: model.showFilterBar || model.isFiltered) {
+                BarButton(
+                    symbol: model.isFiltered
+                        ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
+                    help: "Filter (⌘F)",
+                    active: model.showFilterBar || model.isFiltered
+                ) {
                     model.toggleFilterBar()
                 }
                 ExportMenu(suggestedName: model.table.name) { try model.exportText($0) }
@@ -147,7 +177,9 @@ struct TableTabView: View {
             }
 
             if model.mode == .data {
-                if model.loading { ProgressView().controlSize(.mini) }
+                if model.loading {
+                    ProgressView().controlSize(.mini)
+                }
                 Text(model.pageDescription)
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -171,7 +203,9 @@ struct TableTabView: View {
                         .disabled(!model.canGoForward || model.hasChanges)
                 }
             } else {
-                BarButton(symbol: "arrow.clockwise", help: "Reload structure") { Task { await model.reloadStructure() } }
+                BarButton(symbol: "arrow.clockwise", help: "Reload structure") {
+                    Task { await model.reloadStructure() }
+                }
             }
         }
         .controlSize(.small)
@@ -189,12 +223,22 @@ struct BarButton: View {
     let action: () -> Void
     @Environment(\.isEnabled) private var isEnabled
 
+    private var symbolStyle: AnyShapeStyle {
+        if active {
+            return AnyShapeStyle(Color.accentColor)
+        }
+        if isEnabled {
+            return AnyShapeStyle(.primary)
+        }
+        return AnyShapeStyle(.tertiary)
+    }
+
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 12))
                 .frame(width: 24, height: 20)
-                .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : (isEnabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary)))
+                .foregroundStyle(symbolStyle)
                 .contentShape(Rectangle())
                 .help(help)
         }
@@ -215,11 +259,14 @@ struct FilterBarView: View {
             if model.useRawFilter {
                 HStack(spacing: 6) {
                     Text(filterKeyword).font(Layout.Font.smallBold.monospaced()).foregroundStyle(.secondary)
-                    TextField(isDocument ? "{ age: { $gt: 30 }, status: \"active\" }" : "id > 10 AND status = 'active'", text: $model.filterText)
-                        .focused($rawFocused)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12, design: .monospaced))
-                        .onSubmit { Task { await model.applyFilter() } }
+                    TextField(
+                        isDocument ? "{ age: { $gt: 30 }, status: \"active\" }" : "id > 10 AND status = 'active'",
+                        text: $model.filterText
+                    )
+                    .focused($rawFocused)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+                    .onSubmit { Task { await model.applyFilter() } }
                     controls
                 }
             } else {
@@ -256,7 +303,9 @@ struct FilterBarView: View {
                             model.filterRules.removeAll { $0.id == rule.id }
                         }
                         BarButton(symbol: "plus.circle", help: "Add condition") { model.addFilterRule() }
-                        if rule.id == model.filterRules.first?.id { controls }
+                        if rule.id == model.filterRules.first?.id {
+                            controls
+                        }
                     }
                 }
                 if model.filterRules.isEmpty {
@@ -274,7 +323,7 @@ struct FilterBarView: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .onAppear(perform: focusValue)
         .onChange(of: model.filterFocusRequest) { _, _ in focusValue() }
-        .onExitCommand { model.showFilterBar = false } // Esc closes the bar; the applied filter stays.
+        .onExitCommand { model.showFilterBar = false }  // Esc closes the bar; the applied filter stays.
     }
 
     private var isDocument: Bool { model.driver.kind.isDocument }
@@ -282,7 +331,11 @@ struct FilterBarView: View {
 
     private func focusValue() {
         DispatchQueue.main.async {
-            if model.useRawFilter { rawFocused = true } else { focusedRule = model.filterRules.last?.id }
+            if model.useRawFilter {
+                rawFocused = true
+            } else {
+                focusedRule = model.filterRules.last?.id
+            }
         }
     }
 
@@ -303,25 +356,50 @@ struct FilterBarView: View {
 struct StructureView: View {
     let model: TableTabModel
 
+    private static func kindLabel(_ index: IndexInfo) -> String {
+        if index.isPrimary {
+            return "PRIMARY"
+        }
+        if index.isUnique {
+            return "UNIQUE"
+        }
+        return "INDEX"
+    }
+
     var body: some View {
-        VerticalSplit(topMinimum: Layout.Structure.columnsMinHeight, bottomMinimum: Layout.Structure.indexesMinHeight,
-                      autosaveName: "Structure") {
+        VerticalSplit(
+            topMinimum: Layout.Structure.columnsMinHeight,
+            bottomMinimum: Layout.Structure.indexesMinHeight,
+            autosaveName: "Structure"
+        ) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(model.driver.kind.isDocument ? "Fields (from the first \(Defaults.Mongo.sampleSize) documents)" : "Columns")
-                    .font(.headline).padding([.horizontal, .top], 10)
-                if model.driver.kind.isDocument { fieldsTable } else { columnsTable }
+                Text(
+                    model.driver.kind.isDocument
+                        ? "Fields (from the first \(Defaults.Mongo.sampleSize) documents)" : "Columns"
+                )
+                .font(.headline).padding([.horizontal, .top], 10)
+                if model.driver.kind.isDocument {
+                    fieldsTable
+                } else {
+                    columnsTable
+                }
             }
         } bottom: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Indexes").font(.headline).padding([.horizontal, .top], 10)
                 Table(model.indexes) {
                     TableColumn("Name") { Text($0.name).font(.body.monospaced()) }
-                    TableColumn(model.driver.kind.isDocument ? "Fields" : "Columns") { Text($0.columns.joined(separator: ", ")).font(.body.monospaced()) }
+                    TableColumn(model.driver.kind.isDocument ? "Fields" : "Columns") {
+                        Text($0.columns.joined(separator: ", ")).font(.body.monospaced())
+                    }
                     TableColumn("Kind") { index in
-                        Text(index.isPrimary ? "PRIMARY" : index.isUnique ? "UNIQUE" : "INDEX")
+                        Text(Self.kindLabel(index))
                     }
                     .width(80)
-                    TableColumn("Definition") { Text($0.definition ?? "").font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled) }
+                    TableColumn("Definition") {
+                        Text($0.definition ?? "").font(.caption.monospaced()).foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
                 }
             }
         }
@@ -331,13 +409,17 @@ struct StructureView: View {
         Table(model.columns) {
             TableColumn("Name") { column in
                 HStack(spacing: 4) {
-                    if column.isPrimaryKey { Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption) }
+                    if column.isPrimaryKey {
+                        Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption)
+                    }
                     Text(column.name).font(.body.monospaced())
                 }
             }
             TableColumn("Type") { Text($0.dataType).font(.body.monospaced()) }
-            TableColumn("Nullable") { Text($0.isNullable ? "YES" : "NO").foregroundStyle($0.isNullable ? .secondary : .primary) }
-                .width(70)
+            TableColumn("Nullable") {
+                Text($0.isNullable ? "YES" : "NO").foregroundStyle($0.isNullable ? .secondary : .primary)
+            }
+            .width(70)
             TableColumn("Default") { Text($0.defaultValue ?? "—").font(.body.monospaced()).foregroundStyle(.secondary) }
             TableColumn("Comment") { Text($0.comment ?? "").foregroundStyle(.secondary) }
         }
@@ -348,12 +430,16 @@ struct StructureView: View {
         Table(model.columns) {
             TableColumn("Name") { column in
                 HStack(spacing: 4) {
-                    if column.isPrimaryKey { Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption) }
+                    if column.isPrimaryKey {
+                        Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption)
+                    }
                     Text(column.name).font(.body.monospaced())
                 }
             }
             TableColumn("Types seen") { Text($0.dataType).font(.body.monospaced()) }
-            TableColumn("Missing in some") { Text($0.isNullable ? "YES" : "NO").foregroundStyle($0.isNullable ? .secondary : .primary) }
+            TableColumn("Missing in some") {
+                Text($0.isNullable ? "YES" : "NO").foregroundStyle($0.isNullable ? .secondary : .primary)
+            }
         }
     }
 }
@@ -381,21 +467,32 @@ struct DocumentEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding) {
             Text(target.row == nil ? "Insert into \(collection)" : "Edit document in \(collection)").font(.headline)
-            Text("Shell syntax: ObjectId(\"…\"), ISODate(\"…\"), NumberLong(…) and NumberDecimal(\"…\") keep their types. "
-                 + (target.row == nil ? "Leave out _id to have one generated." : "The document is replaced as a whole, matched by its _id."))
-                .font(.caption).foregroundStyle(.secondary)
+            Text(
+                "Shell syntax: ObjectId(\"…\"), ISODate(\"…\"), NumberLong(…) and NumberDecimal(\"…\") keep their types. "
+                    + (target.row == nil
+                        ? "Leave out _id to have one generated."
+                        : "The document is replaced as a whole, matched by its _id.")
+            )
+            .font(.caption).foregroundStyle(.secondary)
             if let error {
-                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.callout).lineLimit(4)
+                Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.callout)
+                    .lineLimit(4)
             }
-            SQLEditorView(text: $text, handle: handle, dialect: MongoQueryDialect(),
-                          suggest: { _, caret in (NSRange(location: caret, length: 0), []) },
-                          undoManager: undoManager) { _ in Task { await submit() } }
-                .border(Color(nsColor: .separatorColor))
+            SQLEditorView(
+                text: $text,
+                handle: handle,
+                dialect: MongoQueryDialect(),
+                suggest: { _, caret in (NSRange(location: caret, length: 0), []) },
+                undoManager: undoManager
+            ) { _ in Task { await submit() } }
+            .border(Color(nsColor: .separatorColor))
             HStack {
                 Button("Format") { text = MongoShell.pretty(text) }
                     .help("Lay the document out over indented lines")
                 Spacer()
-                if saving { ProgressView().controlSize(.small) }
+                if saving {
+                    ProgressView().controlSize(.small)
+                }
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(target.row == nil ? "Insert" : "Save") { Task { await submit() } }
                     .keyboardShortcut(.defaultAction)
@@ -411,7 +508,11 @@ struct DocumentEditorSheet: View {
         guard !saving else { return }
         saving = true
         defer { saving = false }
-        if let message = await save(text) { error = message } else { dismiss() }
+        if let message = await save(text) {
+            error = message
+        } else {
+            dismiss()
+        }
     }
 }
 
@@ -428,10 +529,12 @@ struct SQLPreviewSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Pending changes").font(.headline)
-            Text(dialect.beginTransaction == nil
-                 ? "These commands run one after another. If one fails, the ones before it stay saved."
-                 : "These statements run in a single transaction. If any fails, all are rolled back.")
-                .font(.caption).foregroundStyle(.secondary)
+            Text(
+                dialect.beginTransaction == nil
+                    ? "These commands run one after another. If one fails, the ones before it stay saved."
+                    : "These statements run in a single transaction. If any fails, all are rolled back."
+            )
+            .font(.caption).foregroundStyle(.secondary)
             if case .failure(let error) = pending {
                 Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
             }

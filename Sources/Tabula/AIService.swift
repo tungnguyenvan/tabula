@@ -1,6 +1,8 @@
 import Foundation
 import Observation
-import TabulaCore
+import TabulaAI
+import TabulaFoundation
+import TabulaStorage
 
 /// The AI settings and the one place the app asks a model for something.
 @MainActor @Observable
@@ -19,7 +21,9 @@ final class AIService {
     private let keychain = DispatchQueue(label: "app.tabula.ai.keychain")
 
     private init() {
-        var loaded = UserDefaults.standard.data(forKey: Self.settingsKey).flatMap { try? JSONDecoder().decode(AISettings.self, from: $0) } ?? AISettings()
+        var loaded =
+            UserDefaults.standard.data(forKey: Self.settingsKey)
+            .flatMap { try? JSONDecoder().decode(AISettings.self, from: $0) } ?? AISettings()
         #if DEBUG
         // Applied before the single assignment below: mutating `settings` afterwards, even here in init,
         // would trigger didSet and save the overrides as the developer's real settings.
@@ -41,11 +45,17 @@ final class AIService {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(settings) { defaults.set(data, forKey: Self.settingsKey) }
+        if let data = try? JSONEncoder().encode(settings) {
+            defaults.set(data, forKey: Self.settingsKey)
+        }
     }
 
     private func item(for provider: AIProviderKind) -> KeychainItem {
-        KeychainItem(service: Self.keychainService, account: provider.rawValue, label: "Tabula AI (\(provider.displayName))")
+        KeychainItem(
+            service: Self.keychainService,
+            account: provider.rawValue,
+            label: "Tabula AI (\(provider.displayName))"
+        )
     }
 
     func apiKey(for provider: AIProviderKind) async -> String {
@@ -53,13 +63,17 @@ final class AIService {
         // Test runs pass the key in the environment, so they never touch the Keychain.
         if let key = ProcessInfo.processInfo.environment["TABULA_AI_KEY"] { return key }
         #endif
-        if let key = keys[provider] { return key }
+        if let key = keys[provider] {
+            return key
+        }
         let item = item(for: provider)
         let key = await withCheckedContinuation { continuation in
             keychain.async { continuation.resume(returning: item.read() ?? "") }
         }
         // A failed read (locked Keychain, denied access) looks like "no key"; only remember real keys.
-        if !key.isEmpty { keys[provider] = key }
+        if !key.isEmpty {
+            keys[provider] = key
+        }
         return key
     }
 
@@ -75,7 +89,9 @@ final class AIService {
 
     /// Why AI can't be used for this connection, or nil when it can.
     func refusal(for connection: ConnectionConfig) -> String? {
-        if !settings.enabled { return "Turn on the AI assistant in Settings › AI." }
+        if !settings.enabled {
+            return "Turn on the AI assistant in Settings › AI."
+        }
         if connection.tag == .production && !settings.allowProduction {
             return "AI is off for Production connections. You can allow it in Settings › AI."
         }
@@ -96,7 +112,9 @@ final class AIService {
     private func provider(for purpose: AIRequest.Purpose) async -> any AIProvider {
         let settings = settings
         let kind = settings.provider(for: purpose)
-        return AIProviders.make(settings.endpoint(for: purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : ""))
+        return AIProviders.make(
+            settings.endpoint(for: purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : "")
+        )
     }
 
     /// The answer as the model writes it, with its reasoning when the provider shares it.
@@ -106,7 +124,9 @@ final class AIService {
 
     /// A tiny round trip, for the Test buttons in Settings.
     func test(_ purpose: AIRequest.Purpose) async throws -> String {
-        let reply = try await complete(AIRequest(purpose: purpose, instructions: "Reply with the single word OK.", prompt: "Say OK."))
+        let reply = try await complete(
+            AIRequest(purpose: purpose, instructions: "Reply with the single word OK.", prompt: "Say OK.")
+        )
         return reply.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

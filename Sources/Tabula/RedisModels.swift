@@ -1,12 +1,15 @@
 import AppKit
 import Foundation
 import Observation
-import TabulaCore
+import TabulaFoundation
+import TabulaRedis
 
 @MainActor @Observable
 final class RedisWorkspaceModel {
     enum Mode: String, CaseIterable, Identifiable {
-        case keys = "Keys", console = "Console", metrics = "Metrics"
+        case keys = "Keys"
+        case console = "Console"
+        case metrics = "Metrics"
         var id: String { rawValue }
     }
 
@@ -29,8 +32,13 @@ final class RedisWorkspaceModel {
     var keySelection = IndexSet() {
         didSet {
             guard keySelection != oldValue else { return }
-            let single = keySelection.count == 1 ? keySelection.first.flatMap { keys.indices.contains($0) ? keys[$0].key : nil } : nil
-            if single != selectedKey { selectedKey = single }
+            var single: RedisBytes?
+            if keySelection.count == 1, let row = keySelection.first, keys.indices.contains(row) {
+                single = keys[row].key
+            }
+            if single != selectedKey {
+                selectedKey = single
+            }
         }
     }
     private(set) var scanCursor = "0"
@@ -146,7 +154,9 @@ final class RedisWorkspaceModel {
             scanCursor = page.cursor
             keysError = nil
         } catch {
-            if generation == scanGeneration { keysError = error.localizedDescription }
+            if generation == scanGeneration {
+                keysError = error.localizedDescription
+            }
         }
     }
 
@@ -162,8 +172,13 @@ final class RedisWorkspaceModel {
     }
 
     private func openSelectedKey() {
-        if suppressReopen { return }
-        guard let driver, let key = selectedKey else { keyModel = nil; return }
+        if suppressReopen {
+            return
+        }
+        guard let driver, let key = selectedKey else {
+            keyModel = nil
+            return
+        }
         let model = RedisKeyModel(key: key, driver: driver, workspace: self)
         keyModel = model
         Task { await model.reload() }
@@ -186,9 +201,13 @@ final class RedisWorkspaceModel {
     /// Creates a key with its first value, refusing to overwrite an existing one.
     func create(key: RedisBytes, type: RedisKeyType, values: [RedisBytes], ttl: Int?) async throws {
         guard let driver else { return }
-        if try await driver.exists(key) { throw DatabaseError("A key named “\(key.display)” already exists.") }
+        if try await driver.exists(key) {
+            throw DatabaseError("A key named “\(key.display)” already exists.")
+        }
         try await driver.add(key, type: type, values: values)
-        if let ttl { try await driver.setTTL(key, seconds: ttl) }
+        if let ttl {
+            try await driver.setTTL(key, seconds: ttl)
+        }
         if let summary = try await driver.summaries(of: [key]).first {
             keys.append(summary)
             keys.sort(by: Self.naturalOrder)
@@ -210,7 +229,9 @@ final class RedisWorkspaceModel {
     /// Selects a key's row (and opens it below the table).
     func select(_ key: RedisBytes, reopen: Bool = true) {
         guard let index = keys.firstIndex(where: { $0.key == key }) else { return }
-        if !reopen { suppressReopen = true }
+        if !reopen {
+            suppressReopen = true
+        }
         keySelection = [index]
         suppressReopen = false
     }
@@ -237,7 +258,9 @@ final class RedisWorkspaceModel {
         switch column {
         case .key: return keys[row].key.isText
         case .ttl: return true
-        case .value: return keys[row].type == .string && keys[row].length <= RedisDriver.maxEditableStringBytes && keys[row].length < 200
+        case .value:
+            return keys[row].type == .string && keys[row].length <= RedisDriver.maxEditableStringBytes
+                && keys[row].length < 200
         case .type, .size: return false
         }
     }
@@ -266,14 +289,19 @@ final class RedisWorkspaceModel {
             NSSound.beep()
         }
         await refreshSummary(summary.key)
-        if keyModel?.key == summary.key { await keyModel?.reload() }
+        if keyModel?.key == summary.key {
+            await keyModel?.reload()
+        }
     }
 
     func confirmDelete(_ keysToDelete: [RedisBytes]) {
         guard !keysToDelete.isEmpty else { return }
-        let message = keysToDelete.count == 1
+        let message =
+            keysToDelete.count == 1
             ? "Delete key “\(keysToDelete[0].display)”?" : "Delete \(keysToDelete.count) keys?"
-        let detail = config.tag == .production ? "This is a PRODUCTION connection. This cannot be undone." : "This cannot be undone."
+        let detail =
+            config.tag == .production
+            ? "This is a PRODUCTION connection. This cannot be undone." : "This cannot be undone."
         if Confirmation.ask(message, detail: detail, action: "Delete") { Task { await delete(keysToDelete) } }
     }
 }
@@ -313,7 +341,10 @@ final class RedisKeyModel {
 
     func reload() async {
         loading = true
-        defer { loading = false; version += 1 }
+        defer {
+            loading = false
+            version += 1
+        }
         do {
             let info = try await driver.info(key)
             self.info = info
@@ -344,8 +375,12 @@ final class RedisKeyModel {
         defer { loading = false }
         do {
             let page = try await driver.page(key, type: type, after: next)
-            if page.columns.count > columns.count { columns = page.columns }
-            rows += page.rows.map { row in row + Array(repeating: RedisBytes(""), count: max(0, columns.count - row.count)) }
+            if page.columns.count > columns.count {
+                columns = page.columns
+            }
+            rows += page.rows.map { row in
+                row + Array(repeating: RedisBytes(""), count: max(0, columns.count - row.count))
+            }
             self.next = page.next
             version += 1
         } catch {
@@ -375,8 +410,15 @@ final class RedisKeyModel {
 
     func formatJSON() {
         guard let data = draft.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data),
-              let pretty = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
-              let text = String(data: pretty, encoding: .utf8) else { NSSound.beep(); return }
+            let pretty = try? JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            ),
+            let text = String(data: pretty, encoding: .utf8)
+        else {
+            NSSound.beep()
+            return
+        }
         draft = text
     }
 
@@ -398,18 +440,30 @@ final class RedisKeyModel {
     }
 
     func isEditable(row: Int, column: Int) -> Bool {
-        guard canEditCells, rows.indices.contains(row), rows[row].indices.contains(column), rows[row][column].isText else { return false }
+        guard canEditCells, rows.indices.contains(row), rows[row].indices.contains(column), rows[row][column].isText
+        else { return false }
         return !(type == .list && column == 0)
     }
 
     func update(row: Int, column: Int, to value: String?) async {
         guard rows.indices.contains(row) else { return }
         guard isEditable(row: row, column: column) else {
-            error = type == .list && column == 0 ? "List indexes can't be edited." : "Binary values can't be edited here; use the console."
+            error =
+                type == .list && column == 0
+                ? "List indexes can't be edited." : "Binary values can't be edited here; use the console."
             return
         }
         let current = rows[row]
-        await perform { try await driver.update(key, type: type, element: current[0], column: column, to: RedisBytes(value ?? ""), row: current) }
+        await perform {
+            try await driver.update(
+                key,
+                type: type,
+                element: current[0],
+                column: column,
+                to: RedisBytes(value ?? ""),
+                row: current
+            )
+        }
     }
 
     func remove(rows indices: IndexSet) async {
@@ -423,7 +477,8 @@ final class RedisKeyModel {
     }
 
     func copyText(_ indices: IndexSet) -> String {
-        indices.filter { rows.indices.contains($0) }.map { rows[$0].map(\.display).joined(separator: "\t") }.joined(separator: "\n")
+        indices.filter { rows.indices.contains($0) }.map { rows[$0].map(\.display).joined(separator: "\t") }
+            .joined(separator: "\n")
     }
 }
 
@@ -460,7 +515,9 @@ final class RedisConsoleModel {
         let prompt = self.prompt
         input = ""
         historyIndex = nil
-        if history.last != line { history.append(line) }
+        if history.last != line {
+            history.append(line)
+        }
 
         if line.lowercased() == "clear" {
             entries = []
@@ -470,14 +527,23 @@ final class RedisConsoleModel {
         do {
             arguments = try RedisCommandLine.parse(line)
         } catch {
-            entries.append(Entry(prompt: prompt, command: line, output: "Invalid argument(s): \(error.localizedDescription)", isError: true))
+            entries.append(
+                Entry(
+                    prompt: prompt,
+                    command: line,
+                    output: "Invalid argument(s): \(error.localizedDescription)",
+                    isError: true
+                )
+            )
             return
         }
         if let refusal = RedisCommandLine.refusal(for: arguments) {
             entries.append(Entry(prompt: prompt, command: line, output: refusal, isError: true))
             return
         }
-        if RedisCommandLine.isDestructive(arguments) || (config.tag == .production && !RedisCommandLine.isReadOnly(arguments)) {
+        if RedisCommandLine.isDestructive(arguments)
+            || (config.tag == .production && !RedisCommandLine.isReadOnly(arguments))
+        {
             guard confirm(line) else {
                 entries.append(Entry(prompt: prompt, command: line, output: "Cancelled.", isError: true))
                 return
@@ -489,7 +555,9 @@ final class RedisConsoleModel {
         do {
             let reply = try await driver.send(arguments)
             var isError = false
-            if case .error = reply { isError = true }
+            if case .error = reply {
+                isError = true
+            }
             entries.append(Entry(prompt: prompt, command: line, output: reply.formatted(), isError: isError))
             let database = await driver.database
             await workspace?.databaseChanged(to: database)
@@ -499,9 +567,12 @@ final class RedisConsoleModel {
     }
 
     private func confirm(_ line: String) -> Bool {
-        Confirmation.ask("Run “\(line.prefix(120))”?",
-                         detail: config.tag == .production ? "This is a PRODUCTION connection." : "This command can delete or change a lot of data.",
-                         action: "Run")
+        Confirmation.ask(
+            "Run “\(line.prefix(120))”?",
+            detail: config.tag == .production
+                ? "This is a PRODUCTION connection." : "This command can delete or change a lot of data.",
+            action: "Run"
+        )
     }
 
     func historyUp() {

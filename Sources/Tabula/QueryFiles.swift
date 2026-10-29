@@ -1,5 +1,4 @@
 import AppKit
-import TabulaCore
 import UniformTypeIdentifiers
 
 /// Query tabs saved to and opened from .sql files.
@@ -26,7 +25,9 @@ extension QueryTabModel {
     /// Returns whether it saved.
     @discardableResult
     func save(choosingLocation: Bool = false) -> Bool {
-        if !choosingLocation, let fileURL { return write(to: fileURL) }
+        if !choosingLocation, let fileURL {
+            return write(to: fileURL)
+        }
         guard let url = chooseLocation() else { return false }
         return write(to: url)
     }
@@ -75,7 +76,9 @@ extension QueryTabModel {
 extension WorkspaceModel {
     /// Asks for .sql files (⌘O) and opens each in a query tab.
     func chooseSQLFiles() {
-        guard driver != nil else { return NSSound.beep() }
+        guard driver != nil else {
+            return NSSound.beep()
+        }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [SQLFile.type, .plainText]
         panel.allowsMultipleSelection = true
@@ -100,12 +103,15 @@ extension WorkspaceModel {
         }
         // The empty tab a connection opens with is used for the file rather than left behind it.
         if case .query(let current) = selectedTab, current.fileURL == nil,
-           current.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            current.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
             current.sql = text
             current.attach(url, savedText: text)
         } else {
             newQueryTab(sql: text)
-            if case .query(let model) = selectedTab { model.attach(url, savedText: text) }
+            if case .query(let model) = selectedTab {
+                model.attach(url, savedText: text)
+            }
         }
     }
 }

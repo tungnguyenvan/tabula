@@ -36,9 +36,16 @@ struct VerticalSplit<Top: View, Bottom: View>: NSViewControllerRepresentable {
     /// The divider position is saved under this name, as macOS does for split views.
     private let autosaveName: String?
 
-    init(topMinimum: CGFloat, bottomMinimum: CGFloat, topIdeal: CGFloat? = nil, bottomIdeal: CGFloat? = nil,
-         growing: Grow = .bottom, autosaveName: String? = nil,
-         @ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom) {
+    init(
+        topMinimum: CGFloat,
+        bottomMinimum: CGFloat,
+        topIdeal: CGFloat? = nil,
+        bottomIdeal: CGFloat? = nil,
+        growing: Grow = .bottom,
+        autosaveName: String? = nil,
+        @ViewBuilder top: () -> Top,
+        @ViewBuilder bottom: () -> Bottom
+    ) {
         self.top = top()
         self.bottom = bottom()
         self.topMinimum = topMinimum
@@ -61,13 +68,17 @@ struct VerticalSplit<Top: View, Bottom: View>: NSViewControllerRepresentable {
         (growing == .bottom ? topItem : bottomItem).holdingPriority = .defaultLow + 1
         controller.addSplitViewItem(topItem)
         controller.addSplitViewItem(bottomItem)
-        if let autosaveName { controller.splitView.autosaveName = autosaveName }
+        if let autosaveName {
+            controller.splitView.autosaveName = autosaveName
+        }
         return controller
     }
 
     func updateNSViewController(_ controller: SplitController, context: Context) {
         (controller.splitViewItems[0].viewController.view as? NSHostingView<Pane<Top>>)?.rootView = Pane(content: top)
-        (controller.splitViewItems[1].viewController.view as? NSHostingView<Pane<Bottom>>)?.rootView = Pane(content: bottom)
+        (controller.splitViewItems[1].viewController.view as? NSHostingView<Pane<Bottom>>)?.rootView = Pane(
+            content: bottom
+        )
         controller.splitViewItems[0].minimumThickness = topMinimum
         controller.splitViewItems[1].minimumThickness = bottomMinimum
     }
@@ -101,7 +112,10 @@ struct VerticalSplit<Top: View, Bottom: View>: NSViewControllerRepresentable {
             super.viewDidLayout()
             guard !placed, splitView.bounds.height > 0 else { return }
             placed = true
-            let saved = splitView.autosaveName.map { UserDefaults.standard.object(forKey: "NSSplitView Subview Frames \($0)") != nil } ?? false
+            let saved =
+                splitView.autosaveName.map {
+                    UserDefaults.standard.object(forKey: "NSSplitView Subview Frames \($0)") != nil
+                } ?? false
             guard !saved else { return }
             let position = topIdeal ?? bottomIdeal.map { splitView.bounds.height - $0 - splitView.dividerThickness }
             if let position {

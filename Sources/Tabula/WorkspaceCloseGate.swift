@@ -30,7 +30,9 @@ final class WorkspaceCloseGate: NSObject, NSWindowDelegate {
     }
 
     override func forwardingTarget(for selector: Selector!) -> Any? {
-        if original?.responds(to: selector) == true { return original }
+        if original?.responds(to: selector) == true {
+            return original
+        }
         return super.forwardingTarget(for: selector)
     }
 }

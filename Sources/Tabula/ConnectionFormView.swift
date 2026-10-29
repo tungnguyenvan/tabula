@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaConnections
+import TabulaFoundation
+import TabulaRedis
 
 struct ConnectionFormView: View {
     @State var config: ConnectionConfig
@@ -14,7 +16,9 @@ struct ConnectionFormView: View {
     @State private var applyingURL = false
 
     enum TestState: Equatable {
-        case idle, testing, success(String), failure(String)
+        case idle, testing
+        case success(String)
+        case failure(String)
     }
 
     var body: some View {
@@ -25,13 +29,29 @@ struct ConnectionFormView: View {
                         ForEach(DatabaseKind.allCases) { Text($0.displayName).tag($0) }
                     }
                     .onChange(of: config.kind) { old, new in
-                        if new != .postgres && new != .mysql { config.ssh = nil }
-                        if applyingURL { applyingURL = false; return }
-                        if config.port == old.defaultPort || config.port == 0 { config.port = new.defaultPort }
-                        if new == .mysql && config.tls == .disable { config.tls = .require }
-                        if new != .mongodb { config.srv = nil; config.authSource = nil }
+                        if new != .postgres && new != .mysql {
+                            config.ssh = nil
+                        }
+                        if applyingURL {
+                            applyingURL = false
+                            return
+                        }
+                        if config.port == old.defaultPort || config.port == 0 {
+                            config.port = new.defaultPort
+                        }
+                        if new == .mysql && config.tls == .disable {
+                            config.tls = .require
+                        }
+                        if new != .mongodb {
+                            config.srv = nil
+                            config.authSource = nil
+                        }
                     }
-                    TextField("Name", text: $config.name, prompt: Text(config.displayName.isEmpty ? "My database" : config.displayName))
+                    TextField(
+                        "Name",
+                        text: $config.name,
+                        prompt: Text(config.displayName.isEmpty ? "My database" : config.displayName)
+                    )
                     Picker("Tag", selection: $config.tag) {
                         ForEach(ConnectionTag.allCases) { Text($0.displayName).tag($0) }
                     }
@@ -48,15 +68,21 @@ struct ConnectionFormView: View {
                 } else {
                     Section("Server") {
                         TextField("Host", text: $config.host, prompt: Text(hostPrompt))
-                            .help("Paste a connection string, such as postgresql://user:password@host:5432/db or host=… dbname=… user=…, to fill in every field.")
+                            .help(
+                                "Paste a connection string, such as postgresql://user:password@host:5432/db or host=… dbname=… user=…, to fill in every field."
+                            )
                             .onChange(of: config.host) { old, host in
                                 // Typing "postgres://…" key by key, or deleting from the end, must stay typing.
                                 let typed = host.count == old.count + 1 && host.hasPrefix(old)
-                                if !typed && !old.hasPrefix(host) { applyURL(host, replacing: old) }
+                                if !typed && !old.hasPrefix(host) {
+                                    applyURL(host, replacing: old)
+                                }
                             }
                         if config.kind == .mongodb {
                             Toggle("DNS seed list (mongodb+srv)", isOn: srv)
-                                .help("For hosts such as cluster0.example.mongodb.net (MongoDB Atlas). The port comes from DNS.")
+                                .help(
+                                    "For hosts such as cluster0.example.mongodb.net (MongoDB Atlas). The port comes from DNS."
+                                )
                         }
                         if !(config.kind == .mongodb && config.srv == true) {
                             TextField("Port", value: $config.port, format: .number.grouping(.never))
@@ -73,7 +99,11 @@ struct ConnectionFormView: View {
                         } else {
                             TextField("User", text: $config.user)
                             passwordField(prompt: nil)
-                            TextField("Database", text: $config.database, prompt: Text(config.kind == .postgres ? "defaults to the user name" : "optional"))
+                            TextField(
+                                "Database",
+                                text: $config.database,
+                                prompt: Text(config.kind == .postgres ? "defaults to the user name" : "optional")
+                            )
                         }
                         Picker("TLS", selection: $config.tls) {
                             ForEach(TLSMode.allCases) { Text($0.displayName).tag($0) }
@@ -106,7 +136,9 @@ struct ConnectionFormView: View {
         .navigationTitle(isNew ? "New Connection" : "Edit Connection")
         #if DEBUG
         .onAppear {
-            if let host = DebugHooks.formHost { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { config.host = host } }
+            if let host = DebugHooks.formHost {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { config.host = host }
+            }
             // TABULA_DEBUG_FORM_TEST: press Test once the form is up.
             if ProcessInfo.processInfo.environment["TABULA_DEBUG_FORM_TEST"] != nil {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { Task { await test() } }
@@ -125,10 +157,12 @@ struct ConnectionFormView: View {
                 Button("Decode") { password = decoded }
                     .help("Replaces each %xx escape with the character it stands for, such as %3F with ?.")
             } label: {
-                Label("This password contains URL escapes such as %3F. If you copied it from a URL or a dashboard, decode it.",
-                      systemImage: "info.circle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Label(
+                    "This password contains URL escapes such as %3F. If you copied it from a URL or a dashboard, decode it.",
+                    systemImage: "info.circle"
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
         }
     }
@@ -138,17 +172,22 @@ struct ConnectionFormView: View {
     private var sshSection: some View {
         Section {
             Toggle("Connect over SSH", isOn: sshEnabled)
-                .help("Reaches a database that only an SSH server (a bastion) can reach, through a tunnel from this Mac.")
+                .help(
+                    "Reaches a database that only an SSH server (a bastion) can reach, through a tunnel from this Mac."
+                )
             if config.ssh != nil {
                 TextField("SSH host", text: sshField(\.host), prompt: Text("bastion.example.com"))
                 TextField("SSH port", value: sshField(\.port), format: .number.grouping(.never))
                 TextField("SSH user", text: sshField(\.user))
                 LabeledContent("Key") {
                     HStack {
-                        Text(config.ssh?.identityFile.map { ($0 as NSString).abbreviatingWithTildeInPath } ?? "ssh-agent and default keys")
-                            .foregroundStyle(config.ssh?.identityFile == nil ? .secondary : .primary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                        Text(
+                            config.ssh?.identityFile.map { ($0 as NSString).abbreviatingWithTildeInPath }
+                                ?? "ssh-agent and default keys"
+                        )
+                        .foregroundStyle(config.ssh?.identityFile == nil ? .secondary : .primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                         Button("Choose…", action: chooseKey)
                             .help("Use one private key file instead of ssh-agent and the default keys.")
                         if config.ssh?.identityFile != nil {
@@ -165,22 +204,30 @@ struct ConnectionFormView: View {
             Text("SSH tunnel")
         } footer: {
             if config.ssh != nil {
-                Text("Keys only: from ssh-agent, ~/.ssh or the chosen file. A key with a passphrase must be added to ssh-agent first (ssh-add). The server's host key must already be in ~/.ssh/known_hosts; connect once with ssh in Terminal to add it. Host above is the database as the SSH server reaches it, such as localhost.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Keys only: from ssh-agent, ~/.ssh or the chosen file. A key with a passphrase must be added to ssh-agent first (ssh-add). The server's host key must already be in ~/.ssh/known_hosts; connect once with ssh in Terminal to add it. Host above is the database as the SSH server reaches it, such as localhost."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
         }
     }
 
     private var sshEnabled: Binding<Bool> {
-        Binding { config.ssh != nil } set: { on in
+        Binding {
+            config.ssh != nil
+        } set: { on in
             config.ssh = on ? (config.ssh ?? SSHConfig(user: NSUserName())) : nil
             testState = .idle
         }
     }
 
     private func sshField<Value>(_ keyPath: WritableKeyPath<SSHConfig, Value>) -> Binding<Value> {
-        Binding { (config.ssh ?? SSHConfig())[keyPath: keyPath] } set: { config.ssh?[keyPath: keyPath] = $0 }
+        Binding {
+            (config.ssh ?? SSHConfig())[keyPath: keyPath]
+        } set: {
+            config.ssh?[keyPath: keyPath] = $0
+        }
     }
 
     /// Shown once the SSH host and user are filled in, so an empty new section isn't all warnings.
@@ -205,13 +252,19 @@ struct ConnectionFormView: View {
         guard let (parsed, parsedPassword) = ConnectionConfig.parse(connectionString: text) else { return }
         var filled = parsed
         filled.id = config.id
-        if filled.name.isEmpty { filled.name = config.name }
-        if filled.tag == ConnectionConfig().tag { filled.tag = config.tag }
+        if filled.name.isEmpty {
+            filled.name = config.name
+        }
+        if filled.tag == ConnectionConfig().tag {
+            filled.tag = config.tag
+        }
         filled.connectTimeout = config.connectTimeout
         // A URL names the database, not how to reach it: the SSH server stays, for the kinds that can use it.
         filled.ssh = filled.kind == .postgres || filled.kind == .mysql ? config.ssh : nil
         let kindBeforeURL = config.kind
-        if filled.kind != config.kind { applyingURL = true }
+        if filled.kind != config.kind {
+            applyingURL = true
+        }
         config = filled
         // A URL without a password keeps the saved one only for the same server; it isn't sent to another.
         if let parsedPassword {
@@ -235,20 +288,30 @@ struct ConnectionFormView: View {
     }
 
     private var hostPrompt: String {
-        guard config.kind == .mongodb else { return Defaults.host }
+        guard config.kind == .mongodb else {
+            return Defaults.host
+        }
         return config.srv == true ? "cluster0.example.mongodb.net" : "\(Defaults.host)  (or a:27017,b:27017)"
     }
 
     private var srv: Binding<Bool> {
-        Binding { config.srv == true } set: { on in
+        Binding {
+            config.srv == true
+        } set: { on in
             config.srv = on ? true : nil
             // Seed lists (Atlas) always use TLS.
-            if on && config.tls == .disable { config.tls = .verifyFull }
+            if on && config.tls == .disable {
+                config.tls = .verifyFull
+            }
         }
     }
 
     private var authSource: Binding<String> {
-        Binding { config.authSource ?? "" } set: { config.authSource = $0.isEmpty ? nil : $0 }
+        Binding {
+            config.authSource ?? ""
+        } set: {
+            config.authSource = $0.isEmpty ? nil : $0
+        }
     }
 
     @ViewBuilder
@@ -279,7 +342,9 @@ struct ConnectionFormView: View {
                     throw error
                 }
                 await redis.close()
-                if case .error(let message) = pong { throw DatabaseError(message) }
+                if case .error(let message) = pong {
+                    throw DatabaseError(message)
+                }
                 testState = .success(redis.serverDescription)
                 return
             }
@@ -310,6 +375,8 @@ struct ConnectionFormView: View {
             guard panel.runModal() == .OK, let url = panel.url else { return }
             config.filePath = url.path
         }
-        if config.name.isEmpty { config.name = (config.filePath as NSString).lastPathComponent }
+        if config.name.isEmpty {
+            config.name = (config.filePath as NSString).lastPathComponent
+        }
     }
 }

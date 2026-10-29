@@ -1,12 +1,17 @@
 import Foundation
 import Observation
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
+import TabulaMongo
+import TabulaSQL
+import TabulaTransfer
 
 /// One table opened in a tab: paged data, pending edits, and structure.
 @MainActor @Observable
 final class TableTabModel {
     enum Mode: String, CaseIterable, Identifiable {
-        case data = "Data", structure = "Structure"
+        case data = "Data"
+        case structure = "Structure"
         var id: String { rawValue }
     }
 
@@ -79,8 +84,12 @@ final class TableTabModel {
 
     /// Central gate for every table write, including the toolbar, preview sheet, shortcut and document editor.
     private func confirmProductionWrite() -> Bool {
-        connectionTag != .production || Confirmation.ask("Save changes on a PRODUCTION connection?",
-            detail: "This writes to \(table.schema).\(table.name).", action: "Commit")
+        connectionTag != .production
+            || Confirmation.ask(
+                "Save changes on a PRODUCTION connection?",
+                detail: "This writes to \(table.schema).\(table.name).",
+                action: "Commit"
+            )
     }
 
     // MARK: Loading
@@ -89,7 +98,12 @@ final class TableTabModel {
         reloadGeneration += 1
         let generation = reloadGeneration
         loading = true
-        defer { if generation == reloadGeneration { loading = false; version += 1 } }
+        defer {
+            if generation == reloadGeneration {
+                loading = false
+                version += 1
+            }
+        }
         do {
             if columns.isEmpty {
                 let fetched = try await driver.columns(of: table)
@@ -98,8 +112,14 @@ final class TableTabModel {
                 columns = fetched
                 indexes = fetchedIndexes
             }
-            let request = TablePageRequest(table: table, limit: pageSize, offset: offset, orderBy: orderBy,
-                                           ascending: ascending, filter: appliedFilter)
+            let request = TablePageRequest(
+                table: table,
+                limit: pageSize,
+                offset: offset,
+                orderBy: orderBy,
+                ascending: ascending,
+                filter: appliedFilter
+            )
             let page = try await driver.fetchPage(request)
             guard generation == reloadGeneration else { return }
             resultColumns = page.columns.isEmpty ? columns.map(\.name) : page.columns
@@ -113,17 +133,24 @@ final class TableTabModel {
             }
             error = nil
             let count = try? await driver.countRows(table, filter: appliedFilter)
-            if generation == reloadGeneration { totalRows = count }
+            if generation == reloadGeneration {
+                totalRows = count
+            }
         } catch {
-            if generation == reloadGeneration { self.error = error.localizedDescription }
+            if generation == reloadGeneration {
+                self.error = error.localizedDescription
+            }
         }
     }
 
     /// Asks before something drops the pending edits; true when there are none.
     func confirmDiscard(action: String = "Discard") -> Bool {
         guard hasChanges else { return true }
-        return Confirmation.ask("Discard \(changeCount) uncommitted change\(changeCount == 1 ? "" : "s") in “\(table.name)”?",
-                                detail: "Commit them (⌘S) first if you want to keep them.", action: action)
+        return Confirmation.ask(
+            "Discard \(changeCount) uncommitted change\(changeCount == 1 ? "" : "s") in “\(table.name)”?",
+            detail: "Commit them (⌘S) first if you want to keep them.",
+            action: action
+        )
     }
 
     func reloadStructure() async {
@@ -155,7 +182,9 @@ final class TableTabModel {
     /// Shows the filter bar, seeding a rule so there is something to edit.
     func toggleFilterBar() {
         showFilterBar.toggle()
-        if showFilterBar && filterRules.isEmpty && !useRawFilter { addFilterRule() }
+        if showFilterBar && filterRules.isEmpty && !useRawFilter {
+            addFilterRule()
+        }
     }
 
     /// ⌘F: open the filter bar, or jump into it if it is already open.
@@ -173,7 +202,9 @@ final class TableTabModel {
         guard resultColumns.indices.contains(column), confirmDiscard() else { return }
         clearPending()
         useRawFilter = false
-        filterRules = [FilterRule(column: resultColumns[column], op: value == nil ? .isNull : .equals, value: value ?? "")]
+        filterRules = [
+            FilterRule(column: resultColumns[column], op: value == nil ? .isNull : .equals, value: value ?? "")
+        ]
         showFilterBar = true
         await applyFilter()
     }
@@ -206,7 +237,9 @@ final class TableTabModel {
     }
 
     var pageDescription: String {
-        guard !rows.isEmpty else { return totalRows.map { "\($0) rows" } ?? "No rows" }
+        guard !rows.isEmpty else {
+            return totalRows.map { "\($0) rows" } ?? "No rows"
+        }
         let range = "\(offset + 1)–\(offset + rows.count)"
         return totalRows.map { "\(range) of \($0)" } ?? range
     }
@@ -230,16 +263,24 @@ final class TableTabModel {
     func cell(row: Int, column: Int) -> Cell {
         if row >= rows.count {
             let inserted = insertedRows[row - rows.count]
-            guard let set = inserted[column] else { return .defaultValue }
+            guard let set = inserted[column] else {
+                return .defaultValue
+            }
             return set.map(Cell.value) ?? .null
         }
-        if let edit = edits[row]?[column] { return edit.map(Cell.value) ?? .null }
+        if let edit = edits[row]?[column] {
+            return edit.map(Cell.value) ?? .null
+        }
         return rows[row][column].map(Cell.value) ?? .null
     }
 
     func state(row: Int, column: Int) -> CellState {
-        if row >= rows.count { return .inserted }
-        if deletedRows.contains(row) { return .deleted }
+        if row >= rows.count {
+            return .inserted
+        }
+        if deletedRows.contains(row) {
+            return .deleted
+        }
         return edits[row]?[column] != nil ? .edited : .normal
     }
 
@@ -255,7 +296,12 @@ final class TableTabModel {
 
     private var pending: Pending {
         get { Pending(edits: edits, deletedRows: deletedRows, insertedRows: insertedRows) }
-        set { edits = newValue.edits; deletedRows = newValue.deletedRows; insertedRows = newValue.insertedRows; version += 1 }
+        set {
+            edits = newValue.edits
+            deletedRows = newValue.deletedRows
+            insertedRows = newValue.insertedRows
+            version += 1
+        }
     }
 
     /// Records the current pending state so the next change can be undone with ⌘Z.
@@ -268,7 +314,7 @@ final class TableTabModel {
     }
 
     private func restore(_ snapshot: Pending, name: String) {
-        registerUndo(name) // makes the restore itself redoable
+        registerUndo(name)  // makes the restore itself redoable
         pending = snapshot
     }
 
@@ -279,7 +325,9 @@ final class TableTabModel {
             insertedRows[row - rows.count][column] = .some(value)
         } else if rows[row][column] == value {
             edits[row]?[column] = nil
-            if edits[row]?.isEmpty == true { edits[row] = nil }
+            if edits[row]?.isEmpty == true {
+                edits[row] = nil
+            }
         } else {
             edits[row, default: [:]][column] = .some(value)
         }
@@ -299,8 +347,9 @@ final class TableTabModel {
     private var firstColumnToFill: Int {
         let keys = columns.filter(\.isPrimaryKey)
         guard keys.count == 1, let key = keys.first,
-              ["int", "serial", "objectid"].contains(where: key.dataType.lowercased().contains),
-              let index = resultColumns.firstIndex(of: key.name), index == 0, resultColumns.count > 1 else { return 0 }
+            ["int", "serial", "objectid"].contains(where: key.dataType.lowercased().contains),
+            let index = resultColumns.firstIndex(of: key.name), index == 0, resultColumns.count > 1
+        else { return 0 }
         return 1
     }
 
@@ -344,7 +393,9 @@ final class TableTabModel {
 
     func restoreRows(_ indices: IndexSet) {
         registerUndo("Restore Rows")
-        for row in indices { deletedRows.remove(row) }
+        for row in indices {
+            deletedRows.remove(row)
+        }
         version += 1
     }
 
@@ -363,9 +414,18 @@ final class TableTabModel {
 
     /// Statements that apply the pending changes, in the order they will run.
     func pendingStatements() throws -> [String] {
-        try driver.dialect.statements(for: TableChanges(table: table, columns: resultColumns, rows: rows, documents: documents,
-                                                        keyColumns: primaryKeyIndices, deleted: deletedRows, edited: edits,
-                                                        inserted: insertedRows))
+        try driver.dialect.statements(
+            for: TableChanges(
+                table: table,
+                columns: resultColumns,
+                rows: rows,
+                documents: documents,
+                keyColumns: primaryKeyIndices,
+                deleted: deletedRows,
+                edited: edits,
+                inserted: insertedRows
+            )
+        )
     }
 
     /// MongoDB: the row's whole document over indented lines, for the document editor.
@@ -376,16 +436,22 @@ final class TableTabModel {
 
     /// MongoDB: replaces the document at `row`, or inserts a new one when `row` is nil. Returns the error, if any.
     func saveDocument(_ text: String, replacing row: Int?) async -> String? {
-        guard confirmDiscard(action: "Discard and Save") else { return "Commit or discard the changes in the grid first." }
+        guard confirmDiscard(action: "Discard and Save") else {
+            return "Commit or discard the changes in the grid first."
+        }
         do {
             let statement: String
             if let row {
-                guard let documents, documents.indices.contains(row) else { return "Reload the collection and try again." }
+                guard let documents, documents.indices.contains(row) else {
+                    return "Reload the collection and try again."
+                }
                 statement = try MongoChanges.replace(table, original: documents[row], with: text)
             } else {
                 statement = try MongoChanges.insertDocument(table, text: text)
             }
-            guard confirmProductionWrite() else { return "Save cancelled. Your document has not been changed." }
+            guard confirmProductionWrite() else {
+                return "Save cancelled. Your document has not been changed."
+            }
             _ = try await driver.execute(statement)
             await reload()
             return nil
@@ -423,15 +489,27 @@ final class TableTabModel {
     // MARK: Export
 
     func exportText(_ format: ExportFormat) throws -> String {
-        try ResultExporter.export(columns: resultColumns, rows: rows, format: format, table: table, dialect: driver.dialect)
+        try ResultExporter.export(
+            columns: resultColumns,
+            rows: rows,
+            format: format,
+            table: table,
+            dialect: driver.dialect
+        )
     }
 
     func copyText(rows indices: IndexSet) -> String {
-        indices.filter { $0 < displayRowCount }.map { row in
-            (0..<resultColumns.count).map { column -> String in
-                if case .value(let text) = cell(row: row, column: column) { return text }
-                return cell(row: row, column: column) == .null ? "NULL" : ""
-            }.joined(separator: "\t")
-        }.joined(separator: "\n")
+        indices.filter { $0 < displayRowCount }
+            .map { row in
+                (0..<resultColumns.count)
+                    .map { column -> String in
+                        if case .value(let text) = cell(row: row, column: column) {
+                            return text
+                        }
+                        return cell(row: row, column: column) == .null ? "NULL" : ""
+                    }
+                    .joined(separator: "\t")
+            }
+            .joined(separator: "\n")
     }
 }

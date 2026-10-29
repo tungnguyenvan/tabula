@@ -1,5 +1,5 @@
 import SwiftUI
-import TabulaCore
+import TabulaUpdates
 
 struct UpdateView: View {
     @Bindable var updater: Updater
@@ -11,7 +11,8 @@ struct UpdateView: View {
                 AppMark(size: 48)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(headline).font(.headline)
-                    Text("You have version \(Updater.currentVersion.description).").font(.callout).foregroundStyle(.secondary)
+                    Text("You have version \(Updater.currentVersion.description).").font(.callout)
+                        .foregroundStyle(.secondary)
                 }
             }
             content
@@ -27,7 +28,8 @@ struct UpdateView: View {
         switch updater.state {
         case .idle, .checking: "Checking for updates…"
         case .upToDate: "Tabula is up to date"
-        case .available(let update), .downloading(let update, _), .installing(let update): "Tabula \(update.version) is available"
+        case .available(let update), .downloading(let update, _), .installing(let update):
+            "Tabula \(update.version) is available"
         case .failed: "Couldn't update"
         }
     }
@@ -51,17 +53,22 @@ struct UpdateView: View {
                 }
                 Spacer()
                 Button("Close") { dismissWindow() }
-                Button("Try Again") { Task { await updater.check(userInitiated: true) } }.keyboardShortcut(.defaultAction)
+                Button("Try Again") { Task { await updater.check(userInitiated: true) } }
+                    .keyboardShortcut(.defaultAction)
             }
         case .available(let update):
             notes(update)
             let location = Updater.installLocation()
             if case .failure(let reason) = location {
-                Label(reason.localizedDescription, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+                Label(reason.localizedDescription, systemImage: "exclamationmark.triangle").font(.callout)
+                    .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
-                Button("Skip This Version") { updater.skip(update); dismissWindow() }
+                Button("Skip This Version") {
+                    updater.skip(update)
+                    dismissWindow()
+                }
                 Button("Release Page") { NSWorkspace.shared.open(update.pageURL) }
                 Spacer()
                 Button("Later") { dismissWindow() }.keyboardShortcut(.cancelAction)
@@ -85,25 +92,32 @@ struct UpdateView: View {
 
     /// Headings become bold lines and list markers become bullets (SwiftUI renders inline Markdown only).
     static func readable(_ markdown: String) -> String {
-        markdown.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n").map { line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("#") { return "**" + trimmed.drop(while: { $0 == "#" || $0 == " " }) + "**" }
-            if trimmed.hasPrefix("- ") {
-                let indent = line.prefix(while: { $0 == " " })
-                return indent + (indent.isEmpty ? "• " : "◦ ") + trimmed.dropFirst(2)
+        markdown.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
+            .map { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("#") { return "**" + trimmed.drop(while: { $0 == "#" || $0 == " " }) + "**" }
+                if trimmed.hasPrefix("- ") {
+                    let indent = line.prefix(while: { $0 == " " })
+                    return indent + (indent.isEmpty ? "• " : "◦ ") + trimmed.dropFirst(2)
+                }
+                return line
             }
-            return line
-        }.joined(separator: "\n")
+            .joined(separator: "\n")
     }
 
     private func notes(_ update: AvailableUpdate) -> some View {
         ScrollView {
-            Text((try? AttributedString(markdown: Self.readable(update.notes), options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-                 ?? AttributedString(Self.readable(update.notes)))
-                .font(.callout)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
+            Text(
+                (try? AttributedString(
+                    markdown: Self.readable(update.notes),
+                    options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+                ))
+                    ?? AttributedString(Self.readable(update.notes))
+            )
+            .font(.callout)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
         }
         .frame(height: 220)
         .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
@@ -133,16 +147,21 @@ private struct GeneralSettingsView: View {
                 Toggle("Reopen tabs when connecting", isOn: $restoresState)
                     // Off forgets what was kept, not only stops keeping it.
                     .onChange(of: restoresState) { _, on in if !on { WorkspaceModel.stateStore.removeAll() } }
-                Text("Opening a connection brings back its query tabs (with their SQL), open tables, schema and query history. They are kept on this Mac only. Tabula never reconnects by itself at launch.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(
+                    "Opening a connection brings back its query tabs (with their SQL), open tables, schema and query history. They are kept on this Mac only. Tabula never reconnects by itself at launch."
+                )
+                .font(.caption).foregroundStyle(.secondary)
             }
             Section("Updates") {
                 Toggle("Automatically check for updates", isOn: $automatic)
                     .onChange(of: automatic) { _, value in Updater.shared.automaticallyChecks = value }
-                Text("Tabula checks GitHub at most once a day when it starts. It never downloads or installs anything without asking.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(
+                    "Tabula checks GitHub at most once a day when it starts. It never downloads or installs anything without asking."
+                )
+                .font(.caption).foregroundStyle(.secondary)
                 if let last = Updater.shared.lastCheck {
-                    Text("Last checked \(last.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary)
+                    Text("Last checked \(last.formatted(.relative(presentation: .named)))").font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

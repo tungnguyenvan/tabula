@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
 
 /// The statements a workspace sent to the server, newest last.
 @MainActor @Observable
@@ -13,14 +14,17 @@ final class QueryLogModel {
 
     func append(_ entry: QueryLogEntry) {
         entries.append(entry)
-        if entries.count > Defaults.consoleLogLimit { entries.removeFirst(entries.count - Defaults.consoleLogLimit) }
+        if entries.count > Defaults.consoleLogLimit {
+            entries.removeFirst(entries.count - Defaults.consoleLogLimit)
+        }
     }
 
     func clear() { entries = [] }
 
     /// The log as a SQL script with outcomes as comments.
     var text: String {
-        visible.map { "-- \(Self.time($0.date)) \(Self.describe($0))\n\($0.statement)\($0.isMeta ? "" : ";")" }.joined(separator: "\n\n")
+        visible.map { "-- \(Self.time($0.date)) \(Self.describe($0))\n\($0.statement)\($0.isMeta ? "" : ";")" }
+            .joined(separator: "\n\n")
     }
 
     static func time(_ date: Date) -> String {
@@ -28,7 +32,8 @@ final class QueryLogModel {
     }
 
     static func describe(_ entry: QueryLogEntry) -> String {
-        let duration = Duration.milliseconds(Int(entry.duration * 1000)).formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow))
+        let duration = Duration.milliseconds(Int(entry.duration * 1000))
+            .formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow))
         switch entry.outcome {
         case .rows(let count): return "\(count) row\(count == 1 ? "" : "s") · \(duration)"
         case .affected(let count): return (count.map { "\($0) affected · " } ?? "") + duration
@@ -64,11 +69,14 @@ struct ConsoleLogView: View {
                 .listStyle(.plain)
                 .environment(\.defaultMinListRowHeight, Layout.Console.rowHeight)
                 .onChange(of: log.entries.last?.id) { _, id in
-                    if let id { proxy.scrollTo(id, anchor: .bottom) }
+                    if let id {
+                        proxy.scrollTo(id, anchor: .bottom)
+                    }
                 }
                 .overlay {
                     if log.visible.isEmpty {
-                        Text("Statements sent to the server appear here.").font(Layout.Font.small).foregroundStyle(.secondary)
+                        Text("Statements sent to the server appear here.").font(Layout.Font.small)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -80,7 +88,9 @@ private struct ConsoleLogRow: View {
     let entry: QueryLogEntry
 
     private var failed: Bool {
-        if case .failed = entry.outcome { return true }
+        if case .failed = entry.outcome {
+            return true
+        }
         return false
     }
 

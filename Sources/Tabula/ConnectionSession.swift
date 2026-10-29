@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 /// A connection open in a window: the SQL workspace or the Redis key browser.
 @MainActor
@@ -68,7 +68,8 @@ final class ConnectionSession {
         guard !contains(config.id) else { return }
         let password = await appState.password(for: config.id)
         guard !contains(config.id) else { return }
-        let connection: OpenConnection = config.kind == .redis
+        let connection: OpenConnection =
+            config.kind == .redis
             ? .redis(RedisWorkspaceModel(config: config, password: password))
             : .sql(WorkspaceModel(config: config, password: password))
         connections.append(connection)
@@ -81,13 +82,23 @@ final class ConnectionSession {
         let connection = connections[index]
         // A result commit uses a short-lived writer and can't be interrupted by tearing down its workspace.
         if case .sql(let model) = connection,
-           model.tabs.contains(where: { if case .query(let query) = $0 { query.committingResults } else { false } }) { return }
-        if connection.hasUnsavedChanges, !Confirmation.ask(
-            "Close “\(connection.config.displayName)” and discard unsaved changes?",
-            detail: "Commit changed rows and save edited .sql files (⌘S) first if you want to keep them.",
-            action: "Discard and Close") { return }
+            model.tabs.contains(where: { if case .query(let query) = $0 { query.committingResults } else { false } })
+        {
+            return
+        }
+        if connection.hasUnsavedChanges,
+            !Confirmation.ask(
+                "Close “\(connection.config.displayName)” and discard unsaved changes?",
+                detail: "Commit changed rows and save edited .sql files (⌘S) first if you want to keep them.",
+                action: "Discard and Close"
+            )
+        {
+            return
+        }
         connections.remove(at: index)
-        if activeID == id { activeID = connections.isEmpty ? nil : connections[min(index, connections.count - 1)].id }
+        if activeID == id {
+            activeID = connections.isEmpty ? nil : connections[min(index, connections.count - 1)].id
+        }
         Task { await connection.disconnect() }
     }
 
@@ -107,21 +118,30 @@ final class ConnectionSession {
             return false
         }
         let transfers = connections.compactMap { connection -> DatabaseTransfer? in
-            guard case .sql(let workspace) = connection, let transfer = workspace.transfer, transfer.isRunning else { return nil }
+            guard case .sql(let workspace) = connection, let transfer = workspace.transfer, transfer.isRunning else {
+                return nil
+            }
             return transfer
         }
         if !transfers.isEmpty {
             let restoring = transfers.contains { $0.direction == .restore }
-            guard Confirmation.ask(restoring ? "Stop the restore in progress?" : "Stop the dump in progress?",
-                                   detail: restoring
-                                       ? "A restore in one transaction is rolled back; otherwise what already ran stays applied."
-                                       : "The dump file isn't saved.",
-                                   action: "Stop and Close") else { return false }
+            guard
+                Confirmation.ask(
+                    restoring ? "Stop the restore in progress?" : "Stop the dump in progress?",
+                    detail: restoring
+                        ? "A restore in one transaction is rolled back; otherwise what already ran stays applied."
+                        : "The dump file isn't saved.",
+                    action: "Stop and Close"
+                )
+            else { return false }
             transfers.forEach { $0.cancel() }
         }
         guard queries.contains(where: \.hasResultChanges) else { return true }
-        return Confirmation.ask("Discard uncommitted query result changes?",
-                                detail: "Commit the result changes before closing if you want to keep them.", action: "Discard and Close")
+        return Confirmation.ask(
+            "Discard uncommitted query result changes?",
+            detail: "Commit the result changes before closing if you want to keep them.",
+            action: "Discard and Close"
+        )
     }
 
     func closeAll() {
@@ -156,9 +176,12 @@ struct ConnectionRail: View {
     var body: some View {
         VStack(spacing: Layout.Rail.spacing) {
             ForEach(session.connections) { connection in
-                RailItem(connection: connection, selected: connection.id == session.active?.id,
-                         select: { session.activeID = connection.id },
-                         close: { session.close(connection.id) })
+                RailItem(
+                    connection: connection,
+                    selected: connection.id == session.active?.id,
+                    select: { session.activeID = connection.id },
+                    close: { session.close(connection.id) }
+                )
             }
             Menu {
                 ForEach(appState.connections.filter { !session.contains($0.id) }) { config in
@@ -169,7 +192,8 @@ struct ConnectionRail: View {
                 Divider()
                 Button("Manage Connections…") { openWindow(id: WindowID.connections) }
             } label: {
-                Image(systemName: "plus").font(Layout.Rail.addFont).frame(width: Layout.Rail.itemSize, height: Layout.Rail.itemSize)
+                Image(systemName: "plus").font(Layout.Rail.addFont)
+                    .frame(width: Layout.Rail.itemSize, height: Layout.Rail.itemSize)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -191,12 +215,24 @@ private struct RailItem: View {
     let close: () -> Void
     @State private var hovering = false
 
+    private var fill: Color {
+        if selected {
+            return Color.accentColor.opacity(0.22)
+        }
+        if hovering {
+            return Color.primary.opacity(0.06)
+        }
+        return .clear
+    }
+
     var body: some View {
         let config = connection.config
         KindBadge(kind: config.kind, size: Layout.Rail.badgeSize)
             .frame(width: Layout.Rail.itemSize, height: Layout.Rail.itemSize)
-            .background(RoundedRectangle(cornerRadius: Layout.cornerRadius)
-                .fill(selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(hovering ? 0.06 : 0)))
+            .background(
+                RoundedRectangle(cornerRadius: Layout.cornerRadius)
+                    .fill(fill)
+            )
             .overlay(alignment: .leading) {
                 // Environment colour, like the strip under the window controls.
                 if let color = config.tag.color {
