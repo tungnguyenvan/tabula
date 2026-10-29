@@ -304,6 +304,36 @@ final class CLIEventsTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: input, encoding: .utf8), "Count the rows of t.")
     }
 
+    /// Codex, with a stand-in `codex`: the user's MCP servers are turned off for the run, and the instructions and
+    /// prompt arrive on standard input (`-`).
+    func testCodexRunsWithoutTheUsersMCPServers() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FakeCodex-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let arguments = directory.appendingPathComponent("arguments.txt")
+        let input = directory.appendingPathComponent("input.txt")
+        let fake = directory.appendingPathComponent("codex")
+        let script = """
+            #!/bin/sh
+            printf '%s\\n' "$@" > "\(arguments.path)"
+            cat > "\(input.path)"
+            echo '{"type":"item.completed","item":{"type":"agent_message","text":"SELECT 2"}}'
+            """
+        try script.write(to: fake, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fake.path)
+
+        let provider = CLIProvider(tool: .codex, model: "", effort: nil, executable: fake.path)
+        let reply = try await provider.complete(
+            AIRequest(purpose: .generate, instructions: "Reply with SQL only.", prompt: "Count the rows of u.")
+        )
+        XCTAssertEqual(reply, "SELECT 2")
+        let given = try String(contentsOf: arguments, encoding: .utf8).split(separator: "\n").map(String.init)
+        let override = given.firstIndex(of: "-c").map { given[$0 + 1] }
+        XCTAssertEqual(override, "mcp_servers={}")
+        XCTAssertEqual(given.last, "-", "the prompt comes on standard input")
+        XCTAssertEqual(try String(contentsOf: input, encoding: .utf8), "Reply with SQL only.\n\nCount the rows of u.")
+    }
+
     /// Runs the installed Codex (TABULA_TEST_CODEX=1), which costs a small request.
     func testCodexStreamsLive() async throws {
         guard ProcessInfo.processInfo.environment["TABULA_TEST_CODEX"] != nil else {
