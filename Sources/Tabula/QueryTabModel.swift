@@ -307,6 +307,7 @@ final class QueryTabModel {
             columns: result.columns,
             rows: result.rows,
             format: format,
+            binaryColumns: result.binaryColumns,
             dialect: driver.dialect
         )
     }

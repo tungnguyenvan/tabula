@@ -44,8 +44,8 @@ enum PostgresValueFormatter {
             return String(format: "%@$%llu.%02llu", sign, magnitude / 100, magnitude % 100)
         case 2950:
             return uuid(&buffer)
-        case 17:
-            return "\\x" + hex(&buffer)
+        case 17:  // bytea
+            return BinaryText.text(buffer.readBytes(length: buffer.readableBytes) ?? [])
         case 3802:  // jsonb: one version byte, then JSON text
             buffer.moveReaderIndex(forwardBy: min(1, buffer.readableBytes))
             return buffer.readString(length: buffer.readableBytes) ?? ""

@@ -16,6 +16,8 @@ public struct TableChanges: Sendable {
     /// New values by row and column index; nil sets NULL.
     public var edited: [Int: [Int: String?]]
     public var inserted: [[Int: String?]]
+    /// Columns whose values are bytes (`QueryResult.binaryColumns`), written as hex literals.
+    public var binaryColumns: Set<Int>
 
     public init(
         table: TableRef,
@@ -25,7 +27,8 @@ public struct TableChanges: Sendable {
         keyColumns: [Int],
         deleted: Set<Int>,
         edited: [Int: [Int: String?]],
-        inserted: [[Int: String?]]
+        inserted: [[Int: String?]],
+        binaryColumns: Set<Int>
     ) {
         self.table = table
         self.columns = columns
@@ -34,6 +37,7 @@ public struct TableChanges: Sendable {
         self.keyColumns = keyColumns
         self.deleted = deleted
         self.edited = edited
+        self.binaryColumns = binaryColumns
         self.inserted = inserted
     }
 
@@ -81,7 +85,8 @@ public protocol QueryDialect: Sendable {
 
     func selectPage(_ request: TablePageRequest) -> String
     func countRows(_ table: TableRef, filter: String?) -> String
-    func insert(_ table: TableRef, values: [(column: String, value: String?)]) -> String
+    /// `binaryColumns` names the columns whose values are bytes, written as the language's hex literals.
+    func insert(_ table: TableRef, values: [(column: String, value: String?)], binaryColumns: Set<String>) -> String
     /// What the sidebar's "open in a query tab" puts in the editor.
     func selectSample(_ table: TableRef, limit: Int) -> String
     func truncate(_ table: TableRef) -> String

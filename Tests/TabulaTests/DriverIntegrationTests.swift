@@ -24,7 +24,7 @@ final class DriverIntegrationTests: XCTestCase {
         try await exerciseEditing(driver, table: TableRef(schema: "main", name: "people"))
 
         let blob = try await driver.execute("SELECT x'00ff', NULL, 3")
-        XCTAssertEqual(blob.rows.first, ["x'00ff'", nil, "3"])
+        XCTAssertEqual(blob.rows.first, ["\\x00ff", nil, "3"])
         let tables = try await driver.tables(in: "main")
         XCTAssertEqual(tables.map(\.name), ["names", "people"])
         XCTAssertEqual(tables.first?.kind, .view)
@@ -185,8 +185,8 @@ final class DriverIntegrationTests: XCTestCase {
     ) async throws {
         let d = try XCTUnwrap(driver.dialect.sql)
         try await driver.applyInTransaction([
-            d.insert(table, values: [("name", "O'Brien \\ slash")]),
-            d.insert(table, values: [("name", "Zed")]),
+            d.insert(table, values: [("name", "O'Brien \\ slash")], binaryColumns: []),
+            d.insert(table, values: [("name", "Zed")], binaryColumns: []),
         ])
         let page = try await driver.fetchPage(TablePageRequest(table: table, orderBy: "name", ascending: true))
         let nameIndex = try XCTUnwrap(page.columns.firstIndex(of: "name"), file: file, line: line)
@@ -201,7 +201,7 @@ final class DriverIntegrationTests: XCTestCase {
 
         let zedID = page.rows[1][idIndex]
         try await driver.applyInTransaction([
-            d.update(table, set: [("name", "Zoe"), ("photo", nil)], key: [("id", zedID)])
+            d.update(table, set: [("name", "Zoe"), ("photo", nil)], key: [("id", zedID)], binaryColumns: [])
         ])
         let filtered = try await driver.fetchPage(
             TablePageRequest(table: table, filter: "\(d.quoteIdentifier("name")) = 'Zoe'")
@@ -211,14 +211,14 @@ final class DriverIntegrationTests: XCTestCase {
         // A failing batch must leave the table untouched.
         do {
             try await driver.applyInTransaction([
-                d.delete(table, key: [("id", zedID)]), "INSERT INTO nowhere VALUES (1)",
+                d.delete(table, key: [("id", zedID)], binaryColumns: []), "INSERT INTO nowhere VALUES (1)",
             ])
             XCTFail("expected failure", file: file, line: line)
         } catch {}
         let count = try await driver.countRows(table, filter: nil)
         XCTAssertEqual(count, 2, file: file, line: line)
 
-        try await driver.applyInTransaction([d.delete(table, key: [("id", zedID)])])
+        try await driver.applyInTransaction([d.delete(table, key: [("id", zedID)], binaryColumns: [])])
         let after = try await driver.countRows(table, filter: nil)
         XCTAssertEqual(after, 1, file: file, line: line)
         let update = try await driver.execute("UPDATE \(d.qualified(table)) SET \(d.quoteIdentifier("score")) = 2")

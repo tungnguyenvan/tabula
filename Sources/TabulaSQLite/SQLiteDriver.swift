@@ -106,6 +106,8 @@ public actor SQLiteDriver: DatabaseDriver {
         let columnCount = Int(sqlite3_column_count(statement))
         let columns = (0..<columnCount).map { String(cString: sqlite3_column_name(statement, Int32($0))) }
         var rows: [[String?]] = []
+        // SQLite types each value, not the column; a column holding any blob is written back as bytes.
+        var binaryColumns: Set<Int> = []
 
         while true {
             let step = sqlite3_step(statement)
@@ -118,19 +120,24 @@ public actor SQLiteDriver: DatabaseDriver {
             var row: [String?] = []
             row.reserveCapacity(columnCount)
             for index in 0..<Int32(columnCount) {
+                if sqlite3_column_type(statement, index) == SQLITE_BLOB {
+                    binaryColumns.insert(Int(index))
+                }
                 row.append(Self.text(statement, index))
             }
             rows.append(row)
         }
 
         let affected: Int? = columnCount == 0 ? Int(sqlite3_changes(db)) : nil
-        return QueryResult(
+        var result = QueryResult(
             columns: columns,
             rows: rows,
             affectedRows: affected,
             duration: Date().timeIntervalSince(started),
             statement: sql
         )
+        result.binaryColumns = binaryColumns
+        return result
     }
 
     private static func text(_ statement: OpaquePointer?, _ index: Int32) -> String? {
@@ -140,10 +147,9 @@ public actor SQLiteDriver: DatabaseDriver {
         case SQLITE_BLOB:
             let count = Int(sqlite3_column_bytes(statement, index))
             guard count > 0, let bytes = sqlite3_column_blob(statement, index) else {
-                return "x''"
+                return BinaryText.text([])
             }
-            let buffer = UnsafeRawBufferPointer(start: bytes, count: count)
-            return "x'" + buffer.map { String(format: "%02x", $0) }.joined() + "'"
+            return BinaryText.text(UnsafeRawBufferPointer(start: bytes, count: count))
         default:
             guard let cString = sqlite3_column_text(statement, index) else { return nil }
             return String(cString: cString)

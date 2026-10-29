@@ -8,8 +8,8 @@ import XCTest
 @testable import TabulaTransfer
 
 /// An SQL INSERT export, run into an empty copy of its table, gives the same rows back. Hard values go through:
-/// quotes, backslashes, line breaks, NULL next to an empty string, JSON, numbers and times, and PostgreSQL's bytea.
-/// MySQL and SQLite binary columns don't survive yet (#171); add BLOB and BIT columns here with that fix.
+/// quotes, backslashes, line breaks, NULL next to an empty string, JSON, numbers, times, and bytes (#171): bytea,
+/// MySQL's BLOB, VARBINARY and BIT, and SQLite blobs, including one that reads as text and one in a text column.
 final class SQLExportRoundTripTests: XCTestCase {
     private let env = ProcessInfo.processInfo.environment
 
@@ -40,6 +40,7 @@ final class SQLExportRoundTripTests: XCTestCase {
             rows: page.rows,
             format: .sqlInsert,
             table: copy,
+            binaryColumns: page.binaryColumns,
             dialect: d
         )
         for statement in d.split(script) {
@@ -90,18 +91,18 @@ final class SQLExportRoundTripTests: XCTestCase {
             driver,
             schema: "tabula",
             create: {
-                "CREATE TABLE \($0) (id INT PRIMARY KEY, t TEXT, j JSON, n DECIMAL(20,6), f DOUBLE, ts DATETIME(3), flag TINYINT(1))"
+                "CREATE TABLE \($0) (id INT PRIMARY KEY, t TEXT, j JSON, b BLOB, vb VARBINARY(8), bits BIT(8), n DECIMAL(20,6), f DOUBLE, ts DATETIME(3), flag TINYINT(1))"
             },
             seed: {
                 """
                 INSERT INTO \($0) VALUES
-                  (1, CONCAT('it''s \\\\ a "test"', CHAR(10), 'line two'), '{"k": "v\\'s", "n": [1, 2.5]}', 12.34, 1.5, '2024-01-02 03:04:05.678', 1),
-                  (2, '', NULL, 0, -0.0, '1000-01-01 00:00:00', 0),
-                  (3, NULL, '[]', -0.000001, 1e300, NULL, NULL)
+                  (1, CONCAT('it''s \\\\ a "test"', CHAR(10), 'line two'), '{"k": "v\\'s", "n": [1, 2.5]}', X'DEADBEEF00', X'41', b'10100101', 12.34, 1.5, '2024-01-02 03:04:05.678', 1),
+                  (2, '', NULL, X'', X'', b'0', 0, -0.0, '1000-01-01 00:00:00', 0),
+                  (3, NULL, '[]', NULL, NULL, NULL, -0.000001, 1e300, NULL, NULL)
                 """
             },
             compare:
-                "SELECT id, t, CAST(j AS CHAR), CAST(n AS CHAR), CAST(f AS CHAR), CAST(ts AS CHAR), flag FROM $T ORDER BY id"
+                "SELECT id, t, CAST(j AS CHAR), HEX(b), HEX(vb), HEX(bits), CAST(n AS CHAR), CAST(f AS CHAR), CAST(ts AS CHAR), flag FROM $T ORDER BY id"
         )
     }
 
@@ -111,11 +112,11 @@ final class SQLExportRoundTripTests: XCTestCase {
         try await roundTrip(
             try SQLiteDriver(path: path),
             schema: "main",
-            create: { "CREATE TABLE \($0) (id INTEGER PRIMARY KEY, t TEXT, r REAL, i INTEGER)" },
+            create: { "CREATE TABLE \($0) (id INTEGER PRIMARY KEY, t TEXT, b BLOB, r REAL, i INTEGER)" },
             seed: {
-                "INSERT INTO \($0) VALUES (1, 'it''s \\ a \"test\"' || char(10) || 'two', 1.5, 9007199254740993), (2, '', -0.0, 0), (3, NULL, NULL, NULL)"
+                "INSERT INTO \($0) VALUES (1, 'it''s \\ a \"test\"' || char(10) || 'two', x'DEADBEEF00', 1.5, 9007199254740993), (2, '', x'', -0.0, 0), (3, x'414243', 'text in a blob column', NULL, NULL)"
             },
-            compare: "SELECT id, t, typeof(t), r, i FROM $T ORDER BY id"
+            compare: "SELECT id, t, typeof(t), hex(b), typeof(b), r, i FROM $T ORDER BY id"
         )
     }
 }

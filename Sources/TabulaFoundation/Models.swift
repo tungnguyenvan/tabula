@@ -255,6 +255,8 @@ public struct QueryResult: Sendable {
     public var origins: [QueryColumnOrigin] = []
     /// MySQL protocol origins, separate from PostgreSQL OIDs. Display aliases are never physical names.
     public var mysqlOrigins: [MySQLQueryColumnOrigin]?
+    /// Columns whose values are bytes, shown as `BinaryText` (SQLite: columns holding at least one blob).
+    public var binaryColumns: Set<Int> = []
 
     public init(
         columns: [String] = [],

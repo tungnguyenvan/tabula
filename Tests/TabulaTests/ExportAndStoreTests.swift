@@ -11,6 +11,7 @@ final class ExportAndStoreTests: XCTestCase {
             columns: ["a", "b"],
             rows: [["x,y", nil], ["say \"hi\"", "line\nbreak"]],
             format: .csv,
+            binaryColumns: [],
             dialect: SQLDialect(flavor: .postgres)
         )
         XCTAssertEqual(csv, "a,b\n\"x,y\",\n\"say \"\"hi\"\"\",\"line\nbreak\"\n")
@@ -21,6 +22,7 @@ final class ExportAndStoreTests: XCTestCase {
             columns: ["a", "b"],
             rows: [["1", nil]],
             format: .json,
+            binaryColumns: [],
             dialect: SQLDialect(flavor: .postgres)
         )
         let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: Any]])
@@ -33,6 +35,7 @@ final class ExportAndStoreTests: XCTestCase {
             rows: [["1"]],
             format: .sqlInsert,
             table: TableRef(schema: "db", name: "t"),
+            binaryColumns: [],
             dialect: SQLDialect(flavor: .mysql)
         )
         XCTAssertEqual(sql, "INSERT INTO `db`.`t` (`id`) VALUES ('1');")
