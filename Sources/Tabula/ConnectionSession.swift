@@ -96,7 +96,9 @@ final class ConnectionSession {
             return
         }
         connections.remove(at: index)
-        if activeID == id { activeID = connections.isEmpty ? nil : connections[min(index, connections.count - 1)].id }
+        if activeID == id {
+            activeID = connections.isEmpty ? nil : connections[min(index, connections.count - 1)].id
+        }
         Task { await connection.disconnect() }
     }
 

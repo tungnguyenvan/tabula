@@ -43,9 +43,15 @@ public struct AgentToolCall: Codable, Equatable, Sendable {
     /// The call as the model wrote it, for the transcript sent back.
     var json: String {
         var object: [String: String] = ["tool": tool.rawValue]
-        if let schema { object["schema"] = schema }
-        if let table { object["table"] = table }
-        if let query { object["query"] = query }
+        if let schema {
+            object["schema"] = schema
+        }
+        if let table {
+            object["table"] = table
+        }
+        if let query {
+            object["query"] = query
+        }
         let data =
             (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]))
             ?? Data()
@@ -186,10 +192,18 @@ public struct AgentToolbox: Sendable {
         var lines = ["\(table.schema).\(table.name)\(table.kind == .view ? " (view)" : "")", "Columns:"]
         for column in try await driver.columns(of: table) {
             var line = "  \(column.name) \(column.dataType)"
-            if column.isPrimaryKey { line += " PRIMARY KEY" }
-            if !column.isNullable { line += " NOT NULL" }
-            if let value = column.defaultValue { line += " DEFAULT \(value)" }
-            if let comment = column.comment, !comment.isEmpty { line += " -- \(comment)" }
+            if column.isPrimaryKey {
+                line += " PRIMARY KEY"
+            }
+            if !column.isNullable {
+                line += " NOT NULL"
+            }
+            if let value = column.defaultValue {
+                line += " DEFAULT \(value)"
+            }
+            if let comment = column.comment, !comment.isEmpty {
+                line += " -- \(comment)"
+            }
             lines.append(line)
         }
         let indexes = (try? await driver.indexes(of: table)) ?? []
@@ -217,7 +231,9 @@ public struct AgentToolbox: Sendable {
         func find(_ table: String, in schema: String) async throws -> TableRef? {
             try await driver.tables(in: schema).first { $0.name.caseInsensitiveCompare(table) == .orderedSame }
         }
-        if let table = try await find(unquoted, in: currentSchema) { return table }
+        if let table = try await find(unquoted, in: currentSchema) {
+            return table
+        }
         guard let dot = unquoted.firstIndex(of: ".") else { return nil }
         let wanted = String(unquoted[..<dot])
         guard
@@ -287,7 +303,9 @@ public struct AgentToolbox: Sendable {
         var widths: [Int] = []
         for row in cells.compactMap({ $0 }) {
             for (index, cell) in row.enumerated() {
-                if index == widths.count { widths.append(0) }
+                if index == widths.count {
+                    widths.append(0)
+                }
                 widths[index] = max(widths[index], cell.count)
             }
         }

@@ -171,7 +171,9 @@ public enum DatabaseDump {
         }
         var line = result.output.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         // mysql prints its own path first ("/opt/…/bin/mysql  Ver 9.4.0 …"); the name is enough to show.
-        if line.hasPrefix(path) { line = (path as NSString).lastPathComponent + line.dropFirst(path.count) }
+        if line.hasPrefix(path) {
+            line = (path as NSString).lastPathComponent + line.dropFirst(path.count)
+        }
         guard let major = majorVersion(line) else { return nil }
         return Located(path: path, version: line, major: major, isMariaDB: line.contains("MariaDB"))
     }
@@ -215,8 +217,12 @@ public enum DatabaseDump {
             "PGHOST": endpoint.host, "PGPORT": String(endpoint.port), "PGUSER": config.user, "PGDATABASE": database,
             "PGAPPNAME": Defaults.applicationName, "PGCONNECT_TIMEOUT": String(Int(config.timeout.rounded(.up))),
         ]
-        if let address = endpoint.address { environment["PGHOSTADDR"] = address }
-        if let password, !password.isEmpty { environment["PGPASSWORD"] = password }
+        if let address = endpoint.address {
+            environment["PGHOSTADDR"] = address
+        }
+        if let password, !password.isEmpty {
+            environment["PGPASSWORD"] = password
+        }
         switch config.tls {
         case .disable: environment["PGSSLMODE"] = "disable"
         case .require: environment["PGSSLMODE"] = "require"
@@ -247,7 +253,9 @@ public enum DatabaseDump {
         if options.addDrop, options.content != .data, options.format == .sql {
             arguments += ["--clean", "--if-exists"]
         }
-        if !options.ownersAndPrivileges { arguments += ["--no-owner", "--no-privileges"] }
+        if !options.ownersAndPrivileges {
+            arguments += ["--no-owner", "--no-privileges"]
+        }
         // Quoted names are matched literally, not as patterns, and keep their case.
         arguments += options.tables.map { "--table=\(quotedPattern($0.schema)).\(quotedPattern($0.name))" }
         return arguments
@@ -272,16 +280,26 @@ public enum DatabaseDump {
     /// pg_restore writing the archive as a script on standard output, for psql.
     static func pgRestoreScriptArguments(_ options: RestoreOptions, file: URL) -> [String] {
         var arguments = ["--file=-"]
-        if options.dropExisting { arguments += ["--clean", "--if-exists"] }
-        if options.skipOwnersAndPrivileges { arguments += ["--no-owner", "--no-privileges"] }
+        if options.dropExisting {
+            arguments += ["--clean", "--if-exists"]
+        }
+        if options.skipOwnersAndPrivileges {
+            arguments += ["--no-owner", "--no-privileges"]
+        }
         return arguments + [file.path]
     }
 
     static func pgRestoreArguments(_ options: RestoreOptions, database: String, file: URL) -> [String] {
         var arguments = ["--no-password", "--verbose", "--exit-on-error", "--dbname=dbname=\(conninfoValue(database))"]
-        if options.singleTransaction { arguments.append("--single-transaction") }
-        if options.dropExisting { arguments += ["--clean", "--if-exists"] }
-        if options.skipOwnersAndPrivileges { arguments += ["--no-owner", "--no-privileges"] }
+        if options.singleTransaction {
+            arguments.append("--single-transaction")
+        }
+        if options.dropExisting {
+            arguments += ["--clean", "--if-exists"]
+        }
+        if options.skipOwnersAndPrivileges {
+            arguments += ["--no-owner", "--no-privileges"]
+        }
         return arguments + [file.path]
     }
 
@@ -295,7 +313,9 @@ public enum DatabaseDump {
     static func mysqlOptionFile(_ config: ConnectionConfig, password: String?, tool: Located) -> String {
         // "loose-": mysqldump has no connect-timeout, and an unknown option would stop it.
         var lines = ["[client]", "loose-connect-timeout=\(Int(config.timeout.rounded(.up)))"]
-        if let password, !password.isEmpty { lines.append("password=\(optionValue(password))") }
+        if let password, !password.isEmpty {
+            lines.append("password=\(optionValue(password))")
+        }
         switch (config.tls, tool.isMariaDB) {
         case (.disable, false): lines.append("ssl-mode=DISABLED")
         case (.require, false): lines.append("ssl-mode=REQUIRED")
@@ -345,9 +365,13 @@ public enum DatabaseDump {
                 "--triggers", "--no-tablespaces", "--hex-blob", "--default-character-set=utf8mb4",
                 "--result-file=\(file.path)",
             ]
-        if !tool.isMariaDB { arguments.append("--set-gtid-purged=OFF") }
+        if !tool.isMariaDB {
+            arguments.append("--set-gtid-purged=OFF")
+        }
         // MySQL 8's mysqldump otherwise asks for column statistics that MariaDB and older servers don't have.
-        if supportsColumnStatistics { arguments.append("--skip-column-statistics") }
+        if supportsColumnStatistics {
+            arguments.append("--skip-column-statistics")
+        }
         switch options.content {
         case .all: break
         case .structure: arguments.append("--no-data")
@@ -742,7 +766,9 @@ public enum DatabaseDump {
                 !$0.hasPrefix("pg_dump: dumping") && !$0.hasPrefix("pg_restore: creating") && !$0.hasPrefix("-- ")
             }
         var text = lines.suffix(6).joined(separator: "\n")
-        if text.isEmpty { text = "\(kind.rawValue) stopped (status \(status))." }
+        if text.isEmpty {
+            text = "\(kind.rawValue) stopped (status \(status))."
+        }
         if output.contains("server version mismatch") || output.contains("aborting because of server version mismatch")
         {
             text += "\n\nThe server is newer than \(kind.rawValue) \(tool.major) (\(tool.path)). \(kind.installHint)"
@@ -778,7 +804,9 @@ public enum DatabaseDump {
                 lastReport = Date()
                 return progress
             }
-            if let snapshot { report(snapshot) }
+            if let snapshot {
+                report(snapshot)
+            }
         }
     }
 
@@ -797,7 +825,9 @@ public enum DatabaseDump {
                 defer { if status == nil { status = value } }
                 return status == nil
             }
-            if first { semaphore.signal() }
+            if first {
+                semaphore.signal()
+            }
         }
         func wait() -> Int32 {
             semaphore.wait()
@@ -851,7 +881,11 @@ public enum DatabaseDump {
         let collected = OutputCollector(onLine: onLine)
         messages.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
-            if data.isEmpty { handle.readabilityHandler = nil } else { collected.append(data) }
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                collected.append(data)
+            }
         }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RunResult, Error>) in
@@ -955,8 +989,12 @@ public enum DatabaseDump {
                                     clean = false
                                 }
                             }
-                            if clean, !collected.cancelled, let ending = trailer?() { _ = write(ending) }
-                            if case .file = input { try? reader.close() }
+                            if clean, !collected.cancelled, let ending = trailer?() {
+                                _ = write(ending)
+                            }
+                            if case .file = input {
+                                try? reader.close()
+                            }
                             try? stdin.fileHandleForWriting.close()
                         }
                 }
@@ -987,7 +1025,9 @@ public enum DatabaseDump {
 
     /// Stops every dump and restore; for when the app quits. A restore in one transaction is rolled back.
     public static func terminateAll() {
-        for process in running.all where process.isRunning { process.terminate() }
+        for process in running.all where process.isRunning {
+            process.terminate()
+        }
     }
 
     final class RunningTools: @unchecked Sendable {
@@ -1011,7 +1051,9 @@ public enum DatabaseDump {
             get { lock.withLock { storedProcess } }
             set {
                 lock.withLock { storedProcess = newValue }
-                if cancelled { stop() }
+                if cancelled {
+                    stop()
+                }
             }
         }
         private var storedProcess: Process?
@@ -1033,18 +1075,24 @@ public enum DatabaseDump {
             guard !more.isEmpty else { return }
             let lines: [String] = lock.withLock {
                 data.append(more)
-                if data.count > 16_384 { data = data.suffix(16_384) }
+                if data.count > 16_384 {
+                    data = data.suffix(16_384)
+                }
                 partial.append(more)
                 var complete: [String] = []
                 while let newline = partial.firstIndex(of: UInt8(ascii: "\n")) {
                     complete.append(String(decoding: partial[partial.startIndex..<newline], as: UTF8.self))
                     partial = Data(partial[partial.index(after: newline)...])
                 }
-                if partial.count > 4096 { partial = Data() }
+                if partial.count > 4096 {
+                    partial = Data()
+                }
                 return complete
             }
             if let onLine {
-                for line in lines where !line.trimmingCharacters(in: .whitespaces).isEmpty { onLine(line) }
+                for line in lines where !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                    onLine(line)
+                }
             }
         }
 
@@ -1058,7 +1106,9 @@ public enum DatabaseDump {
             process.terminate()
             DispatchQueue.global()
                 .asyncAfter(deadline: .now() + 3) {
-                    if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                    if process.isRunning {
+                        kill(process.processIdentifier, SIGKILL)
+                    }
                 }
         }
     }

@@ -42,7 +42,9 @@ actor MongoCatalog: DatabaseCatalog {
         let stats = try await document("db.getSiblingDB(\(MongoShell.quoted(database))).runCommand({ dbStats: 1 })")
         func number(_ document: Document?, _ path: String...) -> Double {
             var current: Primitive? = document
-            for key in path { current = (current as? Document)?[key] }
+            for key in path {
+                current = (current as? Document)?[key]
+            }
             return current.flatMap(MongoShellParser.double) ?? (current as? Decimal128)
                 .flatMap { Double(MongoDecimal.string($0)) } ?? 0
         }

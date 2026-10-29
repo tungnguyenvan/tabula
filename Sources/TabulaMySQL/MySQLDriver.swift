@@ -72,7 +72,9 @@ public actor MySQLDriver: DatabaseDriver {
 
     static func describe(_ error: any Error) -> String {
         // Our own errors (timeouts, TLS setup) already read well.
-        if let database = error as? DatabaseError { return database.message }
+        if let database = error as? DatabaseError {
+            return database.message
+        }
         if let mysql = error as? MySQLError {
             if case .server(let packet) = mysql {
                 return "\(packet.errorMessage) (\(packet.errorCode.rawValue))"
@@ -148,9 +150,15 @@ public actor MySQLDriver: DatabaseDriver {
                     buffer: buffer,
                     isUnsigned: column.flags.contains(.COLUMN_UNSIGNED)
                 )
-                if let text = data.string { return text }
-                if let double = data.double { return String(double) }
-                if let date = data.date { return dateFormatter.string(from: date) }
+                if let text = data.string {
+                    return text
+                }
+                if let double = data.double {
+                    return String(double)
+                }
+                if let date = data.date {
+                    return dateFormatter.string(from: date)
+                }
                 var copy = buffer
                 return (copy.readBytes(length: copy.readableBytes) ?? []).map { String(format: "%02x", $0) }.joined()
             }
@@ -177,7 +185,9 @@ public actor MySQLDriver: DatabaseDriver {
     }
 
     public func defaultSchema() async throws -> String {
-        if !initialDatabase.isEmpty { return initialDatabase }
+        if !initialDatabase.isEmpty {
+            return initialDatabase
+        }
         let current = try await strings("SELECT DATABASE()").first?.first ?? nil
         return current ?? ""
     }

@@ -24,7 +24,9 @@ public enum ChatSegment: Equatable, Sendable {
                 return segments
             }
             let code = body[..<close.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
-            if !code.isEmpty { segments.append(.code(code)) }
+            if !code.isEmpty {
+                segments.append(.code(code))
+            }
             rest = body[close.upperBound...]
         }
         return segments + textAndTables(rest)
@@ -37,7 +39,9 @@ public enum ChatSegment: Equatable, Sendable {
         var pending: [String] = []
         func flushText() {
             let joined = pending.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !joined.isEmpty { segments.append(.text(joined)) }
+            if !joined.isEmpty {
+                segments.append(.text(joined))
+            }
             pending = []
         }
         var index = 0
@@ -110,7 +114,9 @@ public struct MarkdownTable: Equatable, Sendable {
                 cell.append(character)
             }
         }
-        if escaped { cell.append("\\") }
+        if escaped {
+            cell.append("\\")
+        }
         cells.append(cell.trimmingCharacters(in: .whitespaces))
         return cells
     }

@@ -23,7 +23,9 @@ final class EditorHandle {
 
     /// The selection if there is one, otherwise the statement under the caret (briefly highlighted).
     func textToRun(dialect: any QueryDialect) -> String? {
-        if let selectedText { return selectedText }
+        if let selectedText {
+            return selectedText
+        }
         guard let textView else { return nil }
         let caret = textView.selectedRange().location
         guard let statement = dialect.statement(at: caret, in: textView.string) else { return nil }
@@ -56,7 +58,9 @@ final class EditorHandle {
 
     /// Inserts at the snapshot's selection if the text hasn't changed since, otherwise at the current one.
     func insert(_ text: String, at snapshot: Snapshot) {
-        if let textView, textView.string == snapshot.text { textView.setSelectedRange(snapshot.range) }
+        if let textView, textView.string == snapshot.text {
+            textView.setSelectedRange(snapshot.range)
+        }
         insertReplacingSelection(text)
     }
 
@@ -153,7 +157,9 @@ struct SQLEditorView: NSViewRepresentable {
         // macOS's own word completion and grey inline predictions are for prose; they would hide
         // (and fight with) the SQL suggestions.
         textView.isAutomaticTextCompletionEnabled = false
-        if #available(macOS 14.0, *) { textView.inlinePredictionType = .no }
+        if #available(macOS 14.0, *) {
+            textView.inlinePredictionType = .no
+        }
         textView.font = SQLHighlighter.font
         textView.textContainerInset = NSSize(width: 6, height: 8)
         textView.isVerticallyResizable = true
@@ -317,7 +323,9 @@ final class SQLTextView: NSTextView {
 
     override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
         // Any edit other than typing (delete, paste, undo) cancels a pending late refresh.
-        if !typedCharacter { lastTypedLocation = nil }
+        if !typedCharacter {
+            lastTypedLocation = nil
+        }
         return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
     }
 
@@ -333,7 +341,9 @@ final class SQLTextView: NSTextView {
 
     func dropInlineSuggestionIfMoved() {
         // Moving the caret away from where the user typed cancels a pending AI request.
-        if selectedRange() != NSRange(location: lastTypedLocation ?? -1, length: 0) { aiTask?.cancel() }
+        if selectedRange() != NSRange(location: lastTypedLocation ?? -1, length: 0) {
+            aiTask?.cancel()
+        }
         if let suggestion = inlineSuggestion, selectedRange() != NSRange(location: suggestion.location, length: 0) {
             inlineSuggestion = nil
         }
@@ -347,7 +357,11 @@ final class SQLTextView: NSTextView {
 
     override func cancelOperation(_ sender: Any?) {
         // ⎋ first dismisses the inline suggestion, then opens the completion list as usual.
-        if inlineSuggestion != nil { inlineSuggestion = nil } else { super.cancelOperation(sender) }
+        if inlineSuggestion != nil {
+            inlineSuggestion = nil
+        } else {
+            super.cancelOperation(sender)
+        }
     }
 
     /// The word the completion list replaces: what the SQL lexer considers the word at the caret, which
@@ -414,7 +428,9 @@ final class SQLTextView: NSTextView {
         }
         // ⌘. is the text view's cancel; while a query runs it belongs to Query › Stop Query.
         if event.charactersIgnoringModifiers == "." && flags == [.command] {
-            if coordinator?.parent.onStop?() == true { return true }
+            if coordinator?.parent.onStop?() == true {
+                return true
+            }
         }
         return super.performKeyEquivalent(with: event)
     }
@@ -426,7 +442,9 @@ final class SQLTextView: NSTextView {
         let block = text.substring(with: lines)
         var parts = block.components(separatedBy: "\n")
         let hasTrailingNewline = parts.last == ""
-        if hasTrailingNewline { parts.removeLast() }
+        if hasTrailingNewline {
+            parts.removeLast()
+        }
         let nonEmpty = parts.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         let allCommented =
             !nonEmpty.isEmpty && nonEmpty.allSatisfy { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
@@ -463,7 +481,9 @@ final class SQLTextView: NSTextView {
         let line = text.substring(with: lineRange)
         let indent = String(line.prefix(while: { $0 == " " || $0 == "\t" }))
         super.insertNewline(sender)
-        if !indent.isEmpty { insertText(indent, replacementRange: selectedRange()) }
+        if !indent.isEmpty {
+            insertText(indent, replacementRange: selectedRange())
+        }
     }
 }
 

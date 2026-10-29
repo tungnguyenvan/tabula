@@ -26,7 +26,9 @@ public struct SemanticVersion: Comparable, Sendable, CustomStringConvertible {
         for index in 0..<count {
             let a = index < lhs.components.count ? lhs.components[index] : 0
             let b = index < rhs.components.count ? rhs.components[index] : 0
-            if a != b { return a < b }
+            if a != b {
+                return a < b
+            }
         }
         switch (lhs.prerelease, rhs.prerelease) {
         case (nil, nil), (nil, _?): return false
@@ -107,7 +109,9 @@ public enum UpdateFeed {
             var name = parts[1].trimmingCharacters(in: .whitespaces)
             if name.hasPrefix("*") { name.removeFirst() }  // binary-mode marker
             let hex = parts[0].lowercased()
-            if name == file, hex.count == 64, hex.allSatisfy(\.isHexDigit) { return hex }
+            if name == file, hex.count == 64, hex.allSatisfy(\.isHexDigit) {
+                return hex
+            }
         }
         return nil
     }
@@ -127,7 +131,9 @@ public enum UpdateFeed {
         request.setValue("Tabula/\(current)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if status == 404 { return nil }
+        if status == 404 {
+            return nil
+        }
         if status == 403 || status == 429 {
             throw DatabaseError("GitHub is limiting update checks right now. Try again later.")
         }

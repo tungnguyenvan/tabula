@@ -183,9 +183,13 @@ public actor MongoDriver: DatabaseDriver {
         var present: [String: Int] = [:]
         for document in sample {
             for pair in document.pairs {
-                if !order.contains(pair.key) { order.append(pair.key) }
+                if !order.contains(pair.key) {
+                    order.append(pair.key)
+                }
                 types[pair.key, default: [:]][MongoShell.typeName(pair.value), default: 0] += 1
-                if !(pair.value is Null) { present[pair.key, default: 0] += 1 }
+                if !(pair.value is Null) {
+                    present[pair.key, default: 0] += 1
+                }
             }
         }
         if sample.isEmpty || types["_id"] == nil { order.removeFirst() }
@@ -297,7 +301,9 @@ public actor MongoDriver: DatabaseDriver {
             return QueryResult(columns: ["name"], rows: names.map { [$0] })
         case "getCollectionInfos":
             var command: Document = ["listCollections": Int32(1)]
-            if let filter = arguments.optionalDocument(0) { command["filter"] = filter }
+            if let filter = arguments.optionalDocument(0) {
+                command["filter"] = filter
+            }
             return documentsResult(try await cursor(command, in: database))
         case "createCollection":
             var command: Document = ["create": try arguments.string(0, "a collection name")]
@@ -351,7 +357,9 @@ public actor MongoDriver: DatabaseDriver {
             )
         case "aggregate":
             var pipeline = try arguments.array(0, "a pipeline")
-            if let limit = try limit(of: statement) { pipeline.append(["$limit": limit] as Document) }
+            if let limit = try limit(of: statement) {
+                pipeline.append(["$limit": limit] as Document)
+            }
             return documentsResult(
                 try await cursor(
                     ["aggregate": Int32(1), "pipeline": pipeline, "cursor": Document()],
@@ -374,7 +382,9 @@ public actor MongoDriver: DatabaseDriver {
         switch call.name {
         case "find", "findOne":
             var command: Document = ["find": collection, "filter": arguments.optionalDocument(0) ?? Document()]
-            if let projection = arguments.optionalDocument(1) { command["projection"] = projection }
+            if let projection = arguments.optionalDocument(1) {
+                command["projection"] = projection
+            }
             command.append(contentsOf: arguments.optionalDocument(2) ?? Document())
             for modifier in statement.calls.dropFirst() {
                 let value = modifier.arguments.first
@@ -420,7 +430,9 @@ public actor MongoDriver: DatabaseDriver {
                 pipeline.values.last.map {
                     ($0 as? Document)?.keys.first.map { $0 == "$out" || $0 == "$merge" } ?? false
                 } ?? false
-            if let limit, !writes { pipeline.append(["$limit": limit] as Document) }
+            if let limit, !writes {
+                pipeline.append(["$limit": limit] as Document)
+            }
             command["pipeline"] = pipeline
             if statement.modifier("explain") != nil {
                 return documentsResult([
@@ -453,7 +465,9 @@ public actor MongoDriver: DatabaseDriver {
         case "distinct":
             let field = try arguments.string(0, "a field name")
             var command: Document = ["distinct": collection, "key": field]
-            if let filter = arguments.optionalDocument(1) { command["query"] = filter }
+            if let filter = arguments.optionalDocument(1) {
+                command["query"] = filter
+            }
             let values = (try await self.command(command, in: database)["values"] as? Document)?.values ?? []
             return QueryResult(
                 columns: [field],
@@ -501,7 +515,9 @@ public actor MongoDriver: DatabaseDriver {
                 "q": filter, "u": change, "multi": call.name == "updateMany" || options["multi"] as? Bool == true,
             ]
             for key in ["upsert", "arrayFilters", "hint", "collation"] {
-                if let value = options[key] { update[key] = value }
+                if let value = options[key] {
+                    update[key] = value
+                }
             }
             let reply = try await command(
                 ["update": collection, "updates": [update] as Document],
@@ -559,7 +575,9 @@ public actor MongoDriver: DatabaseDriver {
                     options["returnDocument"] as? String == "after" || options["returnNewDocument"] as? Bool == true
             }
             for key in ["sort", "upsert", "arrayFilters", "hint", "collation"] {
-                if let value = options[key] { command[key] = value }
+                if let value = options[key] {
+                    command[key] = value
+                }
             }
             if let projection = options["projection"] { command["fields"] = projection }
             let reply = try await self.command(command, in: database, writable: true)
@@ -697,7 +715,9 @@ public actor MongoDriver: DatabaseDriver {
 
     static func array(_ values: [Primitive]) -> Document {
         var array = Document(isArray: true)
-        for value in values { array.append(value) }
+        for value in values {
+            array.append(value)
+        }
         return array
     }
 
@@ -713,8 +733,12 @@ public actor MongoDriver: DatabaseDriver {
         limit: Primitive?
     ) async throws -> Int {
         var pipeline: Document = [["$match": filter] as Document]
-        if let skip, MongoShellParser.double(skip) ?? 0 > 0 { pipeline.append(["$skip": skip] as Document) }
-        if let limit, MongoShellParser.double(limit) ?? 0 > 0 { pipeline.append(["$limit": limit] as Document) }
+        if let skip, MongoShellParser.double(skip) ?? 0 > 0 {
+            pipeline.append(["$skip": skip] as Document)
+        }
+        if let limit, MongoShellParser.double(limit) ?? 0 > 0 {
+            pipeline.append(["$limit": limit] as Document)
+        }
         pipeline.append(["$group": ["_id": Int32(1), "n": ["$sum": Int32(1)] as Document] as Document] as Document)
         let result = try await cursor(
             ["aggregate": collection, "pipeline": pipeline, "cursor": Document()],
@@ -760,11 +784,17 @@ public actor MongoDriver: DatabaseDriver {
         var columns: [String] = []
         var known = Set<String>()
         let present = Set(documents.flatMap(\.keys))
-        for field in order where present.contains(field) && known.insert(field).inserted { columns.append(field) }
-        for document in documents {
-            for key in document.keys where known.insert(key).inserted { columns.append(key) }
+        for field in order where present.contains(field) && known.insert(field).inserted {
+            columns.append(field)
         }
-        if documents.isEmpty, !order.isEmpty { columns = order }
+        for document in documents {
+            for key in document.keys where known.insert(key).inserted {
+                columns.append(key)
+            }
+        }
+        if documents.isEmpty, !order.isEmpty {
+            columns = order
+        }
         let rows = documents.map { document in columns.map { document[$0].flatMap(MongoShell.cell) } }
         return QueryResult(columns: columns, rows: rows, affectedRows: affected, documents: DocumentTexts(documents))
     }

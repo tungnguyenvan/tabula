@@ -50,7 +50,9 @@ public actor SQLiteDriver: DatabaseDriver {
 
         while true {
             let step = sqlite3_step(statement)
-            if step == SQLITE_DONE { break }
+            if step == SQLITE_DONE {
+                break
+            }
             guard step == SQLITE_ROW else { throw DatabaseError(String(cString: sqlite3_errmsg(db))) }
             var row: [String?] = []
             row.reserveCapacity(columnCount)

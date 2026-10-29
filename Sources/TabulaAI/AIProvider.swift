@@ -499,7 +499,9 @@ extension SQLPrompts {
                 : "\n\nContinue: use another tool, or answer the user."
         }
         var system = instructions(.chat, custom: custom, kind: kind)
-        if let tools { system += "\n\n" + tools }
+        if let tools {
+            system += "\n\n" + tools
+        }
         return AIRequest(purpose: .generate, instructions: system, prompt: prompt)
     }
 

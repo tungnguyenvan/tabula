@@ -82,7 +82,9 @@ extension SQLDialect {
     public func condition(_ rules: [FilterRule]) -> String {
         var groups: [[String]] = []
         for rule in rules where !rule.op.needsValue || !rule.value.isEmpty {
-            if groups.isEmpty || rule.conjunction == .or { groups.append([]) }
+            if groups.isEmpty || rule.conjunction == .or {
+                groups.append([])
+            }
             groups[groups.count - 1].append(condition(rule))
         }
         guard groups.count > 1 else { return groups.first?.joined(separator: " AND ") ?? "" }

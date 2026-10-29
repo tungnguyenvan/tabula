@@ -60,7 +60,9 @@ public struct EditableSelect: Sendable {
         let all = SQLLexer.tokens(sql, flavor: flavor)
         for (index, token) in all.enumerated() {
             guard isLexicallySafe(token, flavor: flavor) else { return nil }
-            if index + 1 < all.count, !canAdjoin(token, all[index + 1]) { return nil }
+            if index + 1 < all.count, !canAdjoin(token, all[index + 1]) {
+                return nil
+            }
         }
         return all.filter { $0.kind != .whitespace && $0.kind != .comment }
     }
@@ -111,7 +113,9 @@ public struct EditableSelect: Sendable {
         let atoms: [SQLToken.Kind] = [.word, .number, .string, .quotedIdentifier]
         // E'..', B'..', X'..', N'..', date'..', 1e5, 0x1F, 1_000, ident"x": prefixes and suffixes PostgreSQL
         // reads differently from the lexer.
-        if atoms.contains(left.kind) && atoms.contains(right.kind) { return false }
+        if atoms.contains(left.kind) && atoms.contains(right.kind) {
+            return false
+        }
         if left.kind == .punctuation && right.kind == .punctuation
             && operators.contains(left.text) && operators.contains(right.text)
         {

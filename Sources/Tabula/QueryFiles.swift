@@ -25,7 +25,9 @@ extension QueryTabModel {
     /// Returns whether it saved.
     @discardableResult
     func save(choosingLocation: Bool = false) -> Bool {
-        if !choosingLocation, let fileURL { return write(to: fileURL) }
+        if !choosingLocation, let fileURL {
+            return write(to: fileURL)
+        }
         guard let url = chooseLocation() else { return false }
         return write(to: url)
     }
@@ -105,7 +107,9 @@ extension WorkspaceModel {
             current.attach(url, savedText: text)
         } else {
             newQueryTab(sql: text)
-            if case .query(let model) = selectedTab { model.attach(url, savedText: text) }
+            if case .query(let model) = selectedTab {
+                model.attach(url, savedText: text)
+            }
         }
     }
 }

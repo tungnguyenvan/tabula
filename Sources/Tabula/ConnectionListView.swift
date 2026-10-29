@@ -73,7 +73,9 @@ struct ConnectionListView: View {
                 connect in
                 appState.save(saved, password: password)
                 editing = nil
-                if connect { open(saved.id) }
+                if connect {
+                    open(saved.id)
+                }
             } onCancel: {
                 editing = nil
             }
@@ -98,7 +100,9 @@ struct ConnectionListView: View {
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                if let id = pendingDelete?.id { appState.delete(id) }
+                if let id = pendingDelete?.id {
+                    appState.delete(id)
+                }
                 pendingDelete = nil
             }
         } message: {
@@ -120,7 +124,9 @@ struct ConnectionListView: View {
                 WindowRequests.request(WindowID.shortcuts)
                 openWindow(id: WindowID.shortcuts)
             }
-            if DebugHooks.showAbout { AboutPanel.show() }
+            if DebugHooks.showAbout {
+                AboutPanel.show()
+            }
             if DebugHooks.showSettings {
                 UserDefaults.standard.set(
                     ProcessInfo.processInfo.environment["TABULA_DEBUG_SETTINGS"],
@@ -131,7 +137,9 @@ struct ConnectionListView: View {
         }
         #endif
         .onDeleteCommand {
-            if let id = selection { pendingDelete = appState.connection(id) }
+            if let id = selection {
+                pendingDelete = appState.connection(id)
+            }
         }
     }
 
@@ -162,7 +170,9 @@ struct ConnectionListView: View {
 
     private var version: String {
         #if DEBUG
-        if let version = DebugHooks.version { return version }
+        if let version = DebugHooks.version {
+            return version
+        }
         #endif
         return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
     }
@@ -201,7 +211,9 @@ struct ConnectionListView: View {
                 .scrollContentBackground(.hidden)
                 .contextMenu(forSelectionType: UUID.self) { _ in
                 } primaryAction: { ids in
-                    if let id = ids.first { open(id) }
+                    if let id = ids.first {
+                        open(id)
+                    }
                 }
                 // Edit > Paste with the list focused: a copied connection string becomes a new connection.
                 .onPasteCommand(of: [.plainText]) { providers in pasteConnectionString(providers) }
@@ -214,7 +226,9 @@ struct ConnectionListView: View {
                 Text("Double-click to connect · ⌫ to delete").font(.system(size: 10)).foregroundStyle(.tertiary)
                 Spacer()
                 BarButton(symbol: "pencil", help: "Edit") {
-                    if let config = appState.connection(selection) { edit(config) }
+                    if let config = appState.connection(selection) {
+                        edit(config)
+                    }
                 }
                 .disabled(selection == nil)
                 BarButton(symbol: "plus", help: "New connection") {

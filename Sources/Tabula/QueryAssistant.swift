@@ -60,7 +60,9 @@ final class QueryAssistant {
                 prompt = ""
                 showPrompt = false
             } catch {
-                if !Task.isCancelled { self.error = error.localizedDescription }
+                if !Task.isCancelled {
+                    self.error = error.localizedDescription
+                }
             }
         }
     }
@@ -92,7 +94,9 @@ final class QueryAssistant {
                     continuation.finish()
                 }
             }
-            if let reply = try? await receive(stream, id: id) { apply(SQLPrompts.cleanSQL(reply)) }
+            if let reply = try? await receive(stream, id: id) {
+                apply(SQLPrompts.cleanSQL(reply))
+            }
         }
     }
     #endif

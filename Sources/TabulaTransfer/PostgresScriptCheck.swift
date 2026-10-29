@@ -28,7 +28,9 @@ public enum PostgresScriptCheck {
             }
             carry = Data(carry[start...])
         }
-        if !carry.isEmpty { try scanner.line(carry[...]) }
+        if !carry.isEmpty {
+            try scanner.line(carry[...])
+        }
     }
 
     /// Checks text already in memory; for tests.
@@ -220,9 +222,13 @@ public enum PostgresScriptCheck {
         }
 
         mutating func record(_ c: UInt8) {
-            if head.count < 160 { head.append(c) }
+            if head.count < 160 {
+                head.append(c)
+            }
             tail.append(c)
-            if tail.count > 64 { tail.removeFirst(tail.count - 64) }
+            if tail.count > 64 {
+                tail.removeFirst(tail.count - 64)
+            }
         }
 
         /// `COPY … FROM stdin` (pg_dump's data blocks), judged by the statement's start and end.

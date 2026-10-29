@@ -83,7 +83,9 @@ package enum CivilTime {
     }
 
     private static func appendDate(_ date: Day, to text: inout String) {
-        if date.year < 0 { text.append("-") }
+        if date.year < 0 {
+            text.append("-")
+        }
         appendPadded(abs(date.year), width: 4, to: &text)
         text.append("-")
         appendPadded(date.month, width: 2, to: &text)
@@ -101,7 +103,9 @@ package enum CivilTime {
 
     package static func appendPadded(_ value: Int64, width: Int, to text: inout String) {
         let digits = String(value)
-        if digits.count < width { text.append(String(repeating: "0", count: width - digits.count)) }
+        if digits.count < width {
+            text.append(String(repeating: "0", count: width - digits.count))
+        }
         text.append(digits)
     }
 

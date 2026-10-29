@@ -121,8 +121,12 @@ public enum MetricFormat {
         let hours = seconds / Units.secondsPerHour
         seconds %= Units.secondsPerHour
         let minutes = seconds / Units.secondsPerMinute
-        if days > 0 { return "\(days)d \(hours)h" }
-        if hours > 0 { return "\(hours)h \(minutes)m" }
+        if days > 0 {
+            return "\(days)d \(hours)h"
+        }
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
         return "\(minutes)m \(seconds % Units.secondsPerMinute)s"
     }
 

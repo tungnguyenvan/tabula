@@ -45,7 +45,9 @@ public struct MongoStatement: Sendable {
 
     public var method: String? { calls.first?.name }
     public var collection: String? {
-        if case .collection(let name) = target { return name }
+        if case .collection(let name) = target {
+            return name
+        }
         return nil
     }
 
@@ -112,7 +114,9 @@ public struct MongoStatement: Sendable {
                 }
                 collection = named
             } else {
-                if !path.isEmpty { collection = path.joined(separator: ".") }
+                if !path.isEmpty {
+                    collection = path.joined(separator: ".")
+                }
                 calls.append(Call(name, arguments))
             }
         }
@@ -144,8 +148,12 @@ public struct MongoStatement: Sendable {
         case .database, .collection: break
         }
         var text = "db"
-        if let database { text += ".getSiblingDB(\(MongoShell.quoted(database)))" }
-        if let collection { text += Self.collectionAccessor(collection) }
+        if let database {
+            text += ".getSiblingDB(\(MongoShell.quoted(database)))"
+        }
+        if let collection {
+            text += Self.collectionAccessor(collection)
+        }
         for call in calls {
             text +=
                 "." + call.name + "("

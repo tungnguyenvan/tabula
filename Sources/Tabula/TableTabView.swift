@@ -50,7 +50,11 @@ struct TableTabView: View {
                     onRestore: { model.restoreRows($0) },
                     onFilterByValue: { row, column in
                         let value: String? =
-                            if case .value(let text) = model.cell(row: row, column: column) { text } else { nil }
+                            if case .value(let text) = model.cell(row: row, column: column) {
+                                text
+                            } else {
+                                nil
+                            }
                         Task { await model.filter(equalTo: value, column: column) }
                     },
                     onDuplicate: model.canInsert ? { model.duplicateRows($0) } : nil,
@@ -68,7 +72,9 @@ struct TableTabView: View {
         .onAppear { workspace.setSelection(selection, inTab: model.id) }
         .onChange(of: model.showPreviewRequest) { _, _ in if model.hasChanges { showingPreview = true } }
         .onChange(of: model.documentEditRequest) { _, row in
-            if let row, let text = model.documentText(row: row) { editingDocument = .init(row: row, text: text) }
+            if let row, let text = model.documentText(row: row) {
+                editingDocument = .init(row: row, text: text)
+            }
             model.documentEditRequest = nil
         }
         .sheet(item: $editingDocument) { target in
@@ -171,7 +177,9 @@ struct TableTabView: View {
             }
 
             if model.mode == .data {
-                if model.loading { ProgressView().controlSize(.mini) }
+                if model.loading {
+                    ProgressView().controlSize(.mini)
+                }
                 Text(model.pageDescription)
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -289,7 +297,9 @@ struct FilterBarView: View {
                             model.filterRules.removeAll { $0.id == rule.id }
                         }
                         BarButton(symbol: "plus.circle", help: "Add condition") { model.addFilterRule() }
-                        if rule.id == model.filterRules.first?.id { controls }
+                        if rule.id == model.filterRules.first?.id {
+                            controls
+                        }
                     }
                 }
                 if model.filterRules.isEmpty {
@@ -315,7 +325,11 @@ struct FilterBarView: View {
 
     private func focusValue() {
         DispatchQueue.main.async {
-            if model.useRawFilter { rawFocused = true } else { focusedRule = model.filterRules.last?.id }
+            if model.useRawFilter {
+                rawFocused = true
+            } else {
+                focusedRule = model.filterRules.last?.id
+            }
         }
     }
 
@@ -348,7 +362,11 @@ struct StructureView: View {
                         ? "Fields (from the first \(Defaults.Mongo.sampleSize) documents)" : "Columns"
                 )
                 .font(.headline).padding([.horizontal, .top], 10)
-                if model.driver.kind.isDocument { fieldsTable } else { columnsTable }
+                if model.driver.kind.isDocument {
+                    fieldsTable
+                } else {
+                    columnsTable
+                }
             }
         } bottom: {
             VStack(alignment: .leading, spacing: 4) {
@@ -375,7 +393,9 @@ struct StructureView: View {
         Table(model.columns) {
             TableColumn("Name") { column in
                 HStack(spacing: 4) {
-                    if column.isPrimaryKey { Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption) }
+                    if column.isPrimaryKey {
+                        Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption)
+                    }
                     Text(column.name).font(.body.monospaced())
                 }
             }
@@ -394,7 +414,9 @@ struct StructureView: View {
         Table(model.columns) {
             TableColumn("Name") { column in
                 HStack(spacing: 4) {
-                    if column.isPrimaryKey { Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption) }
+                    if column.isPrimaryKey {
+                        Image(systemName: "key.fill").foregroundStyle(.yellow).font(.caption)
+                    }
                     Text(column.name).font(.body.monospaced())
                 }
             }
@@ -452,7 +474,9 @@ struct DocumentEditorSheet: View {
                 Button("Format") { text = MongoShell.pretty(text) }
                     .help("Lay the document out over indented lines")
                 Spacer()
-                if saving { ProgressView().controlSize(.small) }
+                if saving {
+                    ProgressView().controlSize(.small)
+                }
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(target.row == nil ? "Insert" : "Save") { Task { await submit() } }
                     .keyboardShortcut(.defaultAction)
@@ -468,7 +492,11 @@ struct DocumentEditorSheet: View {
         guard !saving else { return }
         saving = true
         defer { saving = false }
-        if let message = await save(text) { error = message } else { dismiss() }
+        if let message = await save(text) {
+            error = message
+        } else {
+            dismiss()
+        }
     }
 }
 

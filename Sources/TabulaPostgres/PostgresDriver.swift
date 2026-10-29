@@ -57,7 +57,9 @@ public actor PostgresDriver: DatabaseDriver {
         )
         configuration.options.connectTimeout = .milliseconds(Int64(config.timeout * 1000))
         configuration.options.additionalStartupParameters = [("application_name", Defaults.applicationName)]
-        if let tlsServerName { configuration.options.tlsServerName = tlsServerName }
+        if let tlsServerName {
+            configuration.options.tlsServerName = tlsServerName
+        }
         do {
             let connection = try await withTimeout(
                 seconds: config.timeout,
@@ -146,7 +148,9 @@ public actor PostgresDriver: DatabaseDriver {
         }
         // Invalidate before awaiting: a delayed Stop must not acquire this execution's identity.
         activeExecution = nil
-        if let attachment { scope?.detach(attachment) }
+        if let attachment {
+            scope?.detach(attachment)
+        }
         // The next query cannot start until every cancellation request has drained. In particular, a
         // pg_cancel_backend signal must never overtake the statement it belonged to.
         if let cancellationTask, await cancellationTask.value == .requested, !closed {
@@ -172,7 +176,9 @@ public actor PostgresDriver: DatabaseDriver {
 
     private func cancelExecution(_ id: UUID, marker: String) async -> QueryCancelOutcome {
         guard !closed, activeExecution == id else { return .notRunning }
-        if let cancellationTask { return await cancellationTask.value }
+        if let cancellationTask {
+            return await cancellationTask.value
+        }
         let task = Task { await self.sendCancellation(id, marker: marker) }
         cancellationTask = task
         return await task.value
@@ -272,19 +278,27 @@ public actor PostgresDriver: DatabaseDriver {
     /// `positionOffset` takes text Tabula prepended to the user's statement out of error positions.
     static func describe(_ error: any Error, positionOffset: Int = 0) -> String {
         // Our own errors (timeouts, TLS setup) already read well.
-        if let database = error as? DatabaseError { return database.message }
+        if let database = error as? DatabaseError {
+            return database.message
+        }
         if let psql = error as? PSQLError {
             if let message = psql.serverInfo?[.message] {
                 var text = message
-                if let detail = psql.serverInfo?[.detail] { text += "\n" + detail }
-                if let hint = psql.serverInfo?[.hint] { text += "\nHint: " + hint }
+                if let detail = psql.serverInfo?[.detail] {
+                    text += "\n" + detail
+                }
+                if let hint = psql.serverInfo?[.hint] {
+                    text += "\nHint: " + hint
+                }
                 if let position = psql.serverInfo?[.position] {
                     let shown = Int(position).map { String(max(1, $0 - positionOffset)) } ?? position
                     text += "\n(at character \(shown))"
                 }
                 return text
             }
-            if let underlying = psql.underlying { return "\(underlying)" }
+            if let underlying = psql.underlying {
+                return "\(underlying)"
+            }
             return String(reflecting: psql.code)
         }
         return String(describing: error)

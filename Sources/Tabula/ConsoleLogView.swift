@@ -14,7 +14,9 @@ final class QueryLogModel {
 
     func append(_ entry: QueryLogEntry) {
         entries.append(entry)
-        if entries.count > Defaults.consoleLogLimit { entries.removeFirst(entries.count - Defaults.consoleLogLimit) }
+        if entries.count > Defaults.consoleLogLimit {
+            entries.removeFirst(entries.count - Defaults.consoleLogLimit)
+        }
     }
 
     func clear() { entries = [] }
@@ -67,7 +69,9 @@ struct ConsoleLogView: View {
                 .listStyle(.plain)
                 .environment(\.defaultMinListRowHeight, Layout.Console.rowHeight)
                 .onChange(of: log.entries.last?.id) { _, id in
-                    if let id { proxy.scrollTo(id, anchor: .bottom) }
+                    if let id {
+                        proxy.scrollTo(id, anchor: .bottom)
+                    }
                 }
                 .overlay {
                     if log.visible.isEmpty {
@@ -84,7 +88,9 @@ private struct ConsoleLogRow: View {
     let entry: QueryLogEntry
 
     private var failed: Bool {
-        if case .failed = entry.outcome { return true }
+        if case .failed = entry.outcome {
+            return true
+        }
         return false
     }
 

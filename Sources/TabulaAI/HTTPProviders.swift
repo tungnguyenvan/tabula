@@ -34,12 +34,16 @@ public struct AnthropicProvider: AIProvider {
             "messages": [["role": "user", "content": request.prompt]],
             "fallbacks": "default",
         ]
-        if stream { body["stream"] = true }
+        if stream {
+            body["stream"] = true
+        }
         // Inline suggestions must come back while the user is still looking at the caret.
         if request.purpose == .inline {
             body["output_config"] = ["effort": "low"]
         } else {
-            if let effort = endpoint.effort { body["output_config"] = ["effort": effort] }
+            if let effort = endpoint.effort {
+                body["output_config"] = ["effort": effort]
+            }
             // Current models think by default but return the reasoning empty unless asked for a summary.
             // Older ones (before 4.6) only take a token budget and would reject this.
             if Self.takesAdaptiveThinking(endpoint.model) {
@@ -134,7 +138,9 @@ public struct OpenAICompatibleProvider: AIProvider {
         )
         http.httpMethod = "POST"
         http.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if !endpoint.apiKey.isEmpty { http.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization") }
+        if !endpoint.apiKey.isEmpty {
+            http.setValue("Bearer \(endpoint.apiKey)", forHTTPHeaderField: "Authorization")
+        }
         var body: [String: Any] = [
             "model": model,
             "max_tokens": request.maxTokens,
@@ -142,9 +148,13 @@ public struct OpenAICompatibleProvider: AIProvider {
                 ["role": "system", "content": request.instructions], ["role": "user", "content": request.prompt],
             ],
         ]
-        if stream { body["stream"] = true }
+        if stream {
+            body["stream"] = true
+        }
         // OpenAI reasoning models (and LiteLLM, which maps it for others) take this.
-        if let effort = endpoint.effort { body["reasoning_effort"] = effort }
+        if let effort = endpoint.effort {
+            body["reasoning_effort"] = effort
+        }
         http.httpBody = try JSONSerialization.data(withJSONObject: body)
         return http
     }
@@ -188,10 +198,14 @@ public struct OpenAICompatibleProvider: AIProvider {
                     continuation.yield(.thinking(reasoning))
                 }
                 if let content = delta["content"] as? String, !content.isEmpty {
-                    for event in splitter.feed(content) { continuation.yield(event) }
+                    for event in splitter.feed(content) {
+                        continuation.yield(event)
+                    }
                 }
             }
-            for event in splitter.finish() { continuation.yield(event) }
+            for event in splitter.finish() {
+                continuation.yield(event)
+            }
         }
     }
 }

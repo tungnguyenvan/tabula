@@ -27,7 +27,9 @@ enum AboutPanel {
                 .foregroundColor: color,
                 .paragraphStyle: centered,
             ]
-            if let link, let url = URL(string: link) { attributes[.link] = url }
+            if let link, let url = URL(string: link) {
+                attributes[.link] = url
+            }
             text.append(NSAttributedString(string: string, attributes: attributes))
         }
 

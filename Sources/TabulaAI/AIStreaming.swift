@@ -49,7 +49,9 @@ extension AIStream {
     public func text() async throws -> String {
         var text = ""
         for try await event in self {
-            if case .text(let piece) = event { text += piece }
+            if case .text(let piece) = event {
+                text += piece
+            }
         }
         return text
     }
@@ -84,7 +86,9 @@ struct ThinkTagSplitter {
             case .thinking:
                 if let range = buffer.range(of: Self.close) {
                     let reasoning = String(buffer[..<range.lowerBound])
-                    if !reasoning.isEmpty { events.append(.thinking(reasoning)) }
+                    if !reasoning.isEmpty {
+                        events.append(.thinking(reasoning))
+                    }
                     buffer = String(buffer[range.upperBound...])
                     state = .text
                     trimLeading = true
@@ -92,17 +96,23 @@ struct ThinkTagSplitter {
                     let keep =
                         (1..<Self.close.count).reversed().first { buffer.hasSuffix(String(Self.close.prefix($0))) } ?? 0
                     let reasoning = String(buffer.dropLast(keep))
-                    if !reasoning.isEmpty { events.append(.thinking(reasoning)) }
+                    if !reasoning.isEmpty {
+                        events.append(.thinking(reasoning))
+                    }
                     buffer = String(buffer.suffix(keep))
                     return events
                 }
             case .text:
                 if trimLeading {
                     buffer = String(buffer.drop(while: \.isWhitespace))
-                    if buffer.isEmpty { return events }
+                    if buffer.isEmpty {
+                        return events
+                    }
                     trimLeading = false
                 }
-                if !buffer.isEmpty { events.append(.text(buffer)) }
+                if !buffer.isEmpty {
+                    events.append(.text(buffer))
+                }
                 buffer = ""
                 return events
             }
@@ -146,7 +156,9 @@ enum ServerSentEvents {
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             var body = Data()
-            for try await byte in bytes { body.append(byte) }
+            for try await byte in bytes {
+                body.append(byte)
+            }
             throw AIError.server(describeError(body))
         }
         for try await line in bytes.lines {

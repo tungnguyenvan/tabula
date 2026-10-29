@@ -48,8 +48,12 @@ enum MongoDecimal {
         let negative = high >> 63 == 1
         let sign = negative ? "-" : ""
         let combination = (high >> 58) & 0x1F
-        if combination == 0x1F { return "NaN" }
-        if combination == 0x1E { return sign + "Infinity" }
+        if combination == 0x1F {
+            return "NaN"
+        }
+        if combination == 0x1E {
+            return sign + "Infinity"
+        }
 
         var exponent: Int
         var significand: (high: UInt64, low: UInt64)
@@ -62,7 +66,9 @@ enum MongoDecimal {
             significand = (high & 0x1_FFFF_FFFF_FFFF, low)
         }
         var digits = decimalDigits(significand)
-        if digits.count > maxDigits { digits = "0" }
+        if digits.count > maxDigits {
+            digits = "0"
+        }
 
         let adjusted = exponent + digits.count - 1
         if exponent <= 0 && adjusted >= -6 {
@@ -75,7 +81,9 @@ enum MongoDecimal {
             return sign + "0." + String(repeating: "0", count: -point) + digits
         }
         var text = String(digits.prefix(1))
-        if digits.count > 1 { text += "." + digits.dropFirst() }
+        if digits.count > 1 {
+            text += "." + digits.dropFirst()
+        }
         return sign + text + "E" + (adjusted >= 0 ? "+" : "") + String(adjusted)
     }
 
@@ -101,7 +109,9 @@ enum MongoDecimal {
             let character = text[index]
             if character.isASCII, character.isNumber {
                 digits.append(character)
-                if seenPoint { exponent -= 1 }
+                if seenPoint {
+                    exponent -= 1
+                }
             } else if character == ".", !seenPoint {
                 seenPoint = true
             } else if character == "e" || character == "E" {
@@ -117,7 +127,9 @@ enum MongoDecimal {
         guard !digits.isEmpty else { return nil }
 
         digits = String(digits.drop(while: { $0 == "0" }))
-        if digits.isEmpty { digits = "0" }
+        if digits.isEmpty {
+            digits = "0"
+        }
         // Too many digits: drop trailing zeros (exact); anything else would need rounding.
         while digits.count > maxDigits, digits.last == "0" {
             digits.removeLast()
@@ -144,7 +156,9 @@ enum MongoDecimal {
             high = high &* 10 &+ lowProduct.high
             let (sum, overflow) = lowProduct.low.addingReportingOverflow(UInt64(character.wholeNumberValue ?? 0))
             low = sum
-            if overflow { high &+= 1 }
+            if overflow {
+                high &+= 1
+            }
         }
         let biased = UInt64(exponent + exponentBias)
         return make(high: signBit | (biased << 49) | high, low: low)

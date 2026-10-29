@@ -15,14 +15,20 @@ extension ConnectionConfig {
         if !user.isEmpty {
             components.percentEncodedUser = user.addingPercentEncoding(withAllowedCharacters: Self.userCharacters)
         }
-        if let password, !password.isEmpty { components.password = password }
+        if let password, !password.isEmpty {
+            components.password = password
+        }
         let path = kind == .redis ? (database.isEmpty ? "" : database) : database
-        if !path.isEmpty { components.path = "/" + path }
+        if !path.isEmpty {
+            components.path = "/" + path
+        }
         var parameters = tlsParameters
         if kind == .mongodb, let authSource, !authSource.isEmpty {
             parameters.append(URLQueryItem(name: "authSource", value: authSource))
         }
-        if !parameters.isEmpty { components.queryItems = parameters }
+        if !parameters.isEmpty {
+            components.queryItems = parameters
+        }
         // A replica set lists its members, "a:27017,b:27017", which URLComponents won't take as a host.
         if kind == .mongodb, resolvedHost.contains(",") {
             let placeholder = "tabula.hosts.invalid"
@@ -54,7 +60,9 @@ extension ConnectionConfig {
     /// TLS settings in each client's own spelling; rediss:// and mongodb+srv:// already imply them.
     private var tlsParameters: [URLQueryItem] {
         // A seed list means TLS unless the URL says otherwise.
-        if tls == .disable { return kind == .mongodb && srv == true ? [URLQueryItem(name: "tls", value: "false")] : [] }
+        if tls == .disable {
+            return kind == .mongodb && srv == true ? [URLQueryItem(name: "tls", value: "false")] : []
+        }
         switch kind {
         case .postgres: return [URLQueryItem(name: "sslmode", value: tls == .verifyFull ? "verify-full" : "require")]
         case .mysql: return [URLQueryItem(name: "ssl-mode", value: tls == .verifyFull ? "VERIFY_IDENTITY" : "REQUIRED")]

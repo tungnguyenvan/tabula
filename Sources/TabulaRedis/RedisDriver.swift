@@ -37,7 +37,9 @@ public struct RedisBytes: Hashable, Sendable, Comparable {
 
     /// Plain text when possible, otherwise redis-cli style escaped (without the surrounding quotes).
     public var display: String {
-        if let text { return text }
+        if let text {
+            return text
+        }
         return String(RedisCommandLine.quoted(bytes).dropFirst().dropLast())
     }
 
@@ -153,9 +155,15 @@ public actor RedisDriver {
     }
 
     static func describe(_ error: any Error) -> String {
-        if let redis = error as? RedisError { return redis.message.replacingOccurrences(of: "(Redis) ", with: "") }
-        if let database = error as? DatabaseError { return database.message }
-        if let ssl = error as? NIOSSLError { return "TLS error: \(ssl)" }
+        if let redis = error as? RedisError {
+            return redis.message.replacingOccurrences(of: "(Redis) ", with: "")
+        }
+        if let database = error as? DatabaseError {
+            return database.message
+        }
+        if let ssl = error as? NIOSSLError {
+            return "TLS error: \(ssl)"
+        }
         return String(describing: error)
     }
 
@@ -199,7 +207,9 @@ public actor RedisDriver {
     @discardableResult
     func run(_ arguments: [[UInt8]]) async throws -> RedisReply {
         let reply = try await send(arguments)
-        if case .error(let message) = reply { throw DatabaseError(message) }
+        if case .error(let message) = reply {
+            throw DatabaseError(message)
+        }
         return reply
     }
 
@@ -265,7 +275,9 @@ public actor RedisDriver {
             .text("SCAN"), .text(cursor), .text("MATCH"), .text(match.isEmpty ? "*" : match), .text("COUNT"),
             .text(String(count)),
         ]
-        if let type, type != .unknown { arguments += [.text("TYPE"), .text(type.rawValue)] }
+        if let type, type != .unknown {
+            arguments += [.text("TYPE"), .text(type.rawValue)]
+        }
         let reply = try await run(arguments).array
         guard reply.count == 2, let next = reply[0].string else { throw DatabaseError("Unexpected SCAN reply") }
         return (next, reply[1].array.compactMap(\.bytes).map(RedisBytes.init))
@@ -353,8 +365,12 @@ public actor RedisDriver {
             let pttl = Self.convert(try await ttlFutures[index].get()).int ?? RedisDriver.missingKeyTTL
             var length = 0
             var value = RedisReply.null
-            if let future = requests[index].length { length = Self.convert(try await future.get()).int ?? 0 }
-            if let future = requests[index].value { value = Self.convert(try await future.get()) }
+            if let future = requests[index].length {
+                length = Self.convert(try await future.get()).int ?? 0
+            }
+            if let future = requests[index].value {
+                value = Self.convert(try await future.get())
+            }
             // Keys that expired or were deleted since the scan (TYPE "none", PTTL -2) are dropped.
             guard types[index] != .unknown, pttl != RedisDriver.missingKeyTTL else { continue }
             summaries.append(
@@ -423,7 +439,9 @@ public actor RedisDriver {
             case .unknown: nil
             }
         var length = 0
-        if let lengthCommand { length = try await run([.text(lengthCommand), k]).int ?? 0 }
+        if let lengthCommand {
+            length = try await run([.text(lengthCommand), k]).int ?? 0
+        }
         let memory = try? await run([.text("MEMORY"), .text("USAGE"), k]).int
         let encoding = try? await run([.text("OBJECT"), .text("ENCODING"), k]).string
         return RedisKeyInfo(
@@ -510,7 +528,9 @@ public actor RedisDriver {
                 var fields: [String: RedisBytes] = [:]
                 for index in stride(from: 0, to: values.count - 1, by: 2) {
                     let name = RedisBytes(values[index]).display
-                    if !fieldNames.contains(name) { fieldNames.append(name) }
+                    if !fieldNames.contains(name) {
+                        fieldNames.append(name)
+                    }
                     fields[name] = RedisBytes(values[index + 1])
                 }
                 parsed.append((RedisBytes(id), fields))
@@ -530,7 +550,9 @@ public actor RedisDriver {
 
     public func setString(_ key: RedisBytes, to value: RedisBytes, keepTTL: Bool = true) async throws {
         var arguments: [RedisArgument] = [.text("SET"), .bytes(key.bytes), .bytes(value.bytes)]
-        if keepTTL { arguments.append(.text("KEEPTTL")) }
+        if keepTTL {
+            arguments.append(.text("KEEPTTL"))
+        }
         try await run(arguments)
     }
 
@@ -542,7 +564,9 @@ public actor RedisDriver {
     /// Renames without overwriting an existing key.
     public func rename(_ key: RedisBytes, to newKey: RedisBytes) async throws {
         let renamed = try await run([.text("RENAMENX"), .bytes(key.bytes), .bytes(newKey.bytes)]).int ?? 0
-        if renamed == 0 { throw DatabaseError("A key named “\(newKey.display)” already exists.") }
+        if renamed == 0 {
+            throw DatabaseError("A key named “\(newKey.display)” already exists.")
+        }
     }
 
     /// Sets a TTL in seconds, or removes it when nil.
@@ -662,16 +686,22 @@ public actor RedisDriver {
         do {
             for command in commands {
                 let reply = try await send(command.map(\.bytes))
-                if case .error(let message) = reply { throw DatabaseError(message) }
+                if case .error(let message) = reply {
+                    throw DatabaseError(message)
+                }
             }
         } catch {
             _ = try? await send(["DISCARD"].map { Array($0.utf8) })
             throw error
         }
         let results = try await run([.text("EXEC")])
-        if results == .null { throw DatabaseError("The transaction was aborted; nothing was changed.") }
+        if results == .null {
+            throw DatabaseError("The transaction was aborted; nothing was changed.")
+        }
         if let failure = results.array.first(where: {
-            if case .error = $0 { return true }
+            if case .error = $0 {
+                return true
+            }
             return false
         }), case .error(let message) = failure {
             throw DatabaseError(message)

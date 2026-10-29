@@ -7,7 +7,9 @@ extension WorkspaceModel {
         case .table(let table) where table.hasChanges:
             if table.confirmDiscard(action: "Discard and Close") { close(id) }
         case .query(let query):
-            if query.confirmClose() { close(id) }
+            if query.confirmClose() {
+                close(id)
+            }
         default:
             close(id)
         }

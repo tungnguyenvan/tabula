@@ -98,9 +98,15 @@ public func withTimeout<T: Sendable>(
         let work = Task {
             do {
                 let value = try await operation()
-                if gate.resume(.success(value)) { watchdog.cancel() } else { discard(value) }
+                if gate.resume(.success(value)) {
+                    watchdog.cancel()
+                } else {
+                    discard(value)
+                }
             } catch {
-                if gate.resume(.failure(error)) { watchdog.cancel() }
+                if gate.resume(.failure(error)) {
+                    watchdog.cancel()
+                }
             }
         }
         Task { if (try? await watchdog.value) == true { work.cancel() } }

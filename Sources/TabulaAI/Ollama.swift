@@ -28,7 +28,9 @@ public struct OllamaProvider: AIProvider {
         let inner = inner
         return AIStream.run { continuation in
             do {
-                for try await event in inner.stream(request) { continuation.yield(event) }
+                for try await event in inner.stream(request) {
+                    continuation.yield(event)
+                }
             } catch {
                 throw Self.explained(error)
             }

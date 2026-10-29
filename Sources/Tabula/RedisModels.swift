@@ -35,7 +35,9 @@ final class RedisWorkspaceModel {
             let single =
                 keySelection.count == 1
                 ? keySelection.first.flatMap { keys.indices.contains($0) ? keys[$0].key : nil } : nil
-            if single != selectedKey { selectedKey = single }
+            if single != selectedKey {
+                selectedKey = single
+            }
         }
     }
     private(set) var scanCursor = "0"
@@ -151,7 +153,9 @@ final class RedisWorkspaceModel {
             scanCursor = page.cursor
             keysError = nil
         } catch {
-            if generation == scanGeneration { keysError = error.localizedDescription }
+            if generation == scanGeneration {
+                keysError = error.localizedDescription
+            }
         }
     }
 
@@ -167,7 +171,9 @@ final class RedisWorkspaceModel {
     }
 
     private func openSelectedKey() {
-        if suppressReopen { return }
+        if suppressReopen {
+            return
+        }
         guard let driver, let key = selectedKey else {
             keyModel = nil
             return
@@ -194,9 +200,13 @@ final class RedisWorkspaceModel {
     /// Creates a key with its first value, refusing to overwrite an existing one.
     func create(key: RedisBytes, type: RedisKeyType, values: [RedisBytes], ttl: Int?) async throws {
         guard let driver else { return }
-        if try await driver.exists(key) { throw DatabaseError("A key named “\(key.display)” already exists.") }
+        if try await driver.exists(key) {
+            throw DatabaseError("A key named “\(key.display)” already exists.")
+        }
         try await driver.add(key, type: type, values: values)
-        if let ttl { try await driver.setTTL(key, seconds: ttl) }
+        if let ttl {
+            try await driver.setTTL(key, seconds: ttl)
+        }
         if let summary = try await driver.summaries(of: [key]).first {
             keys.append(summary)
             keys.sort(by: Self.naturalOrder)
@@ -218,7 +228,9 @@ final class RedisWorkspaceModel {
     /// Selects a key's row (and opens it below the table).
     func select(_ key: RedisBytes, reopen: Bool = true) {
         guard let index = keys.firstIndex(where: { $0.key == key }) else { return }
-        if !reopen { suppressReopen = true }
+        if !reopen {
+            suppressReopen = true
+        }
         keySelection = [index]
         suppressReopen = false
     }
@@ -276,7 +288,9 @@ final class RedisWorkspaceModel {
             NSSound.beep()
         }
         await refreshSummary(summary.key)
-        if keyModel?.key == summary.key { await keyModel?.reload() }
+        if keyModel?.key == summary.key {
+            await keyModel?.reload()
+        }
     }
 
     func confirmDelete(_ keysToDelete: [RedisBytes]) {
@@ -360,7 +374,9 @@ final class RedisKeyModel {
         defer { loading = false }
         do {
             let page = try await driver.page(key, type: type, after: next)
-            if page.columns.count > columns.count { columns = page.columns }
+            if page.columns.count > columns.count {
+                columns = page.columns
+            }
             rows += page.rows.map { row in
                 row + Array(repeating: RedisBytes(""), count: max(0, columns.count - row.count))
             }
@@ -498,7 +514,9 @@ final class RedisConsoleModel {
         let prompt = self.prompt
         input = ""
         historyIndex = nil
-        if history.last != line { history.append(line) }
+        if history.last != line {
+            history.append(line)
+        }
 
         if line.lowercased() == "clear" {
             entries = []
@@ -536,7 +554,9 @@ final class RedisConsoleModel {
         do {
             let reply = try await driver.send(arguments)
             var isError = false
-            if case .error = reply { isError = true }
+            if case .error = reply {
+                isError = true
+            }
             entries.append(Entry(prompt: prompt, command: line, output: reply.formatted(), isError: isError))
             let database = await driver.database
             await workspace?.databaseChanged(to: database)

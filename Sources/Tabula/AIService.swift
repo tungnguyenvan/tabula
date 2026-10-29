@@ -45,7 +45,9 @@ final class AIService {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(settings) { defaults.set(data, forKey: Self.settingsKey) }
+        if let data = try? JSONEncoder().encode(settings) {
+            defaults.set(data, forKey: Self.settingsKey)
+        }
     }
 
     private func item(for provider: AIProviderKind) -> KeychainItem {
@@ -61,13 +63,17 @@ final class AIService {
         // Test runs pass the key in the environment, so they never touch the Keychain.
         if let key = ProcessInfo.processInfo.environment["TABULA_AI_KEY"] { return key }
         #endif
-        if let key = keys[provider] { return key }
+        if let key = keys[provider] {
+            return key
+        }
         let item = item(for: provider)
         let key = await withCheckedContinuation { continuation in
             keychain.async { continuation.resume(returning: item.read() ?? "") }
         }
         // A failed read (locked Keychain, denied access) looks like "no key"; only remember real keys.
-        if !key.isEmpty { keys[provider] = key }
+        if !key.isEmpty {
+            keys[provider] = key
+        }
         return key
     }
 
@@ -83,7 +89,9 @@ final class AIService {
 
     /// Why AI can't be used for this connection, or nil when it can.
     func refusal(for connection: ConnectionConfig) -> String? {
-        if !settings.enabled { return "Turn on the AI assistant in Settings › AI." }
+        if !settings.enabled {
+            return "Turn on the AI assistant in Settings › AI."
+        }
         if connection.tag == .production && !settings.allowProduction {
             return "AI is off for Production connections. You can allow it in Settings › AI."
         }

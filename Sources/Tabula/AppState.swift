@@ -51,9 +51,13 @@ final class AppState {
 
     func password(for id: UUID) async -> String? {
         #if DEBUG
-        if let passwords = Self.testPasswords { return passwords[id.uuidString] }
+        if let passwords = Self.testPasswords {
+            return passwords[id.uuidString]
+        }
         #endif
-        if let cached = passwordCache[id] { return cached }
+        if let cached = passwordCache[id] {
+            return cached
+        }
         let store = store
         let password = await withCheckedContinuation { continuation in
             keychain.async { continuation.resume(returning: store.password(for: id)) }
@@ -65,7 +69,9 @@ final class AppState {
     private func setPassword(_ password: String?, for id: UUID) {
         passwordCache[id] = password?.isEmpty == false ? password : nil
         #if DEBUG
-        if Self.testPasswords != nil { return }
+        if Self.testPasswords != nil {
+            return
+        }
         #endif
         let store = store
         keychain.async {

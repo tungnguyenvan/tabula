@@ -84,9 +84,13 @@ public struct KeychainItem: Sendable {
             return
         }
         var attributes: [String: Any] = [kSecValueData as String: Data(value.utf8)]
-        if let label { attributes[kSecAttrLabel as String] = label }
+        if let label {
+            attributes[kSecAttrLabel as String] = label
+        }
         let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if updated == errSecSuccess { return }
+        if updated == errSecSuccess {
+            return
+        }
         guard updated == errSecItemNotFound else { throw KeychainError(status: updated) }
 
         let item = query.merging(attributes) { _, new in new }

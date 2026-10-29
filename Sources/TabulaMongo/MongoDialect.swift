@@ -118,7 +118,9 @@ enum MongoDialect {
     static func countRows(_ table: TableRef, filter: String?) -> String {
         // Views have no count metadata, and a filter needs real counting.
         let empty = filter?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-        if empty && table.kind == .table { return collection(table) + ".estimatedDocumentCount()" }
+        if empty && table.kind == .table {
+            return collection(table) + ".estimatedDocumentCount()"
+        }
         return collection(table) + ".countDocuments(\(filterText(filter)))"
     }
 
@@ -132,7 +134,9 @@ enum MongoDialect {
     /// Values typed in the grid, as a document (each read as shell text, falling back to a string).
     static func insert(_ table: TableRef, values: [(column: String, value: String?)]) -> String {
         var document = Document()
-        for (column, value) in values { document.appendValue(value.map(MongoChanges.typed) ?? Null(), forKey: column) }
+        for (column, value) in values {
+            document.appendValue(value.map(MongoChanges.typed) ?? Null(), forKey: column)
+        }
         return collection(table) + ".insertOne(\(MongoShell.format(document)))"
     }
 
@@ -142,7 +146,9 @@ enum MongoDialect {
     static func condition(_ rules: [FilterRule]) -> String {
         var groups: [[Document]] = []
         for rule in rules where !rule.op.needsValue || !rule.value.isEmpty {
-            if groups.isEmpty || rule.conjunction == .or { groups.append([]) }
+            if groups.isEmpty || rule.conjunction == .or {
+                groups.append([])
+            }
             groups[groups.count - 1].append(condition(rule))
         }
         func and(_ parts: [Document]) -> Document {
@@ -198,7 +204,9 @@ enum MongoDialect {
         if trimmed.first == "\"" || trimmed.first == "'", let string = try? MongoShell.parseValue(trimmed) as? String {
             return [string]
         }
-        if trimmed.count == 24, let id = ObjectId(trimmed) { return [id, trimmed] }
+        if trimmed.count == 24, let id = ObjectId(trimmed) {
+            return [id, trimmed]
+        }
         if trimmed.count >= 10, trimmed.first?.isNumber == true, trimmed.contains("-"),
             let date = MongoDates.parse(trimmed)
         {
@@ -288,18 +296,24 @@ public enum MongoChanges {
             return text
         case is Decimal128:
             // Read straight as a decimal, never through a double, so every digit is kept.
-            if let decimal = MongoDecimal.parse(text) { return decimal }
+            if let decimal = MongoDecimal.parse(text) {
+                return decimal
+            }
             guard let parsed else { throw invalid("a number") }
             return parsed
         case is Int32, is Int, is Double:
             guard let parsed else { throw invalid("a number") }
             return coerce(parsed, like: original!)
         case is Date:
-            if let date = MongoDates.parse(text) { return date }
+            if let date = MongoDates.parse(text) {
+                return date
+            }
             guard let parsed else { throw invalid("a date") }
             return parsed
         case is ObjectId:
-            if let id = ObjectId(text.trimmingCharacters(in: .whitespaces)) { return id }
+            if let id = ObjectId(text.trimmingCharacters(in: .whitespaces)) {
+                return id
+            }
             guard let parsed else { throw invalid("an ObjectId") }
             return parsed
         default:
@@ -313,7 +327,9 @@ public enum MongoChanges {
         guard let number = MongoShellParser.double(value), !(value is String) else { return value }
         switch original {
         case is Int:
-            if let int = value as? Int32 { return Int(int) }
+            if let int = value as? Int32 {
+                return Int(int)
+            }
             return value
         case is Double:
             return value is Int32 || value is Int ? number : value

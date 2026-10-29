@@ -77,7 +77,9 @@ extension ConnectionConfig {
         } else {
             config.host = authority
         }
-        if config.host.isEmpty { config.host = Defaults.host }
+        if config.host.isEmpty {
+            config.host = Defaults.host
+        }
         config.database = Self.decoded(Substring(path))
 
         var options = Options()
@@ -88,7 +90,9 @@ extension ConnectionConfig {
             Self.apply(key, value, to: &config, options: &options)
         }
         // Skipping certificate checks only weakens TLS that is on, whatever the order of the options.
-        if options.insecure && config.tls == .verifyFull { config.tls = .require }
+        if options.insecure && config.tls == .verifyFull {
+            config.tls = .require
+        }
         return (config, password ?? options.password)
     }
 
@@ -128,13 +132,17 @@ extension ConnectionConfig {
             options.insecure = lowered == "none"
         case "user", "username":
             // JDBC URLs give the login as options: jdbc:postgresql://host/db?user=app&password=secret
-            if config.user.isEmpty { config.user = value }
+            if config.user.isEmpty {
+                config.user = value
+            }
         case "password":
             options.password = value
         case "authsource":
             config.authSource = value.isEmpty ? nil : value
         case "name":
-            if !value.isEmpty { config.name = value }
+            if !value.isEmpty {
+                config.name = value
+            }
         case "env":
             switch lowered {
             case "local": config.tag = .local

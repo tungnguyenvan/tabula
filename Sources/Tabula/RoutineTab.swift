@@ -80,7 +80,11 @@ final class RoutineTabModel {
                 }
             }
             notice = "Saved."
-            if routine != nil { await load() } else { original = text }
+            if routine != nil {
+                await load()
+            } else {
+                original = text
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -155,7 +159,9 @@ struct RoutineTabView: View {
             if let notice = model.notice, !model.hasChanges {
                 Text(notice).font(Layout.Font.small).foregroundStyle(.secondary)
             }
-            if model.saving { ProgressView().controlSize(.small) }
+            if model.saving {
+                ProgressView().controlSize(.small)
+            }
             Button("Revert") { model.revert() }
                 .disabled(!model.hasChanges || model.original == nil)
             Button(model.routine == nil ? "Create" : "Save") { Task { await model.save() } }

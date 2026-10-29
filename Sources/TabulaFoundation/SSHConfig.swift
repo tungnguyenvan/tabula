@@ -19,17 +19,29 @@ public struct SSHConfig: Codable, Hashable, Sendable {
     /// What's wrong with these settings, or nil when they can be used. Checked again before every connection, since
     /// saved files can be edited by hand.
     public var problem: String? {
-        if host.isEmpty { return "Enter the SSH host." }
-        if !Self.isSafeName(host) { return "The SSH host isn't valid." }
-        if !(1...65535).contains(port) { return "The SSH port must be between 1 and 65535." }
-        if user.isEmpty { return "Enter the SSH user." }
-        if !Self.isSafeName(user) { return "The SSH user isn't valid." }
+        if host.isEmpty {
+            return "Enter the SSH host."
+        }
+        if !Self.isSafeName(host) {
+            return "The SSH host isn't valid."
+        }
+        if !(1...65535).contains(port) {
+            return "The SSH port must be between 1 and 65535."
+        }
+        if user.isEmpty {
+            return "Enter the SSH user."
+        }
+        if !Self.isSafeName(user) {
+            return "The SSH user isn't valid."
+        }
         if let identityFile {
             let path = (identityFile as NSString).expandingTildeInPath
             if path.isEmpty || path.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
                 return "The SSH key path isn't valid."
             }
-            if !FileManager.default.isReadableFile(atPath: path) { return "The SSH key file can't be read." }
+            if !FileManager.default.isReadableFile(atPath: path) {
+                return "The SSH key file can't be read."
+            }
         }
         return nil
     }

@@ -91,7 +91,9 @@ public enum SQLLexer {
                 }
                 emit(.number, from: start)
             } else if isWordUnit(c) {
-                while let u = at(i), isWordUnit(u) { i += 1 }
+                while let u = at(i), isWordUnit(u) {
+                    i += 1
+                }
                 emit(.word, from: start)
             } else {
                 // Two-character operators stay together so the formatter keeps them intact.

@@ -32,7 +32,9 @@ public enum ShellCommand {
         process.executableURL = URL(fileURLWithPath: shell)
         // -l and -i load the same profile files as a Terminal window, where PATH is set up.
         process.arguments = ["-l", "-i", "-c", script] + arguments
-        if let directory { process.currentDirectoryURL = directory }
+        if let directory {
+            process.currentDirectoryURL = directory
+        }
         let stdin = Pipe()
         process.standardInput = input == nil ? FileHandle.nullDevice : stdin
         let stdout = Pipe()
@@ -111,11 +113,15 @@ public enum ShellCommand {
         let shell = process.processIdentifier
         let children = childProcesses(of: shell)
         kill(shell, SIGKILL)
-        for child in children { kill(child, SIGTERM) }
+        for child in children {
+            kill(child, SIGTERM)
+        }
         // Whatever ignores SIGTERM is killed shortly after.
         DispatchQueue.global()
             .asyncAfter(deadline: .now() + Defaults.processTerminateGrace) {
-                for child in children where kill(child, 0) == 0 { kill(child, SIGKILL) }
+                for child in children where kill(child, 0) == 0 {
+                    kill(child, SIGKILL)
+                }
             }
     }
 
@@ -169,14 +175,20 @@ public enum ShellCommand {
         func complete(onlyIfDrained: Bool = false, throwing error: (any Error)? = nil) {
             let result: Result<Output, any Error>? = lock.withLock {
                 guard !completed else { return nil }
-                if onlyIfDrained && (status == nil || !stdoutClosed || !stderrClosed) { return nil }
+                if onlyIfDrained && (status == nil || !stdoutClosed || !stderrClosed) {
+                    return nil
+                }
                 completed = true
                 if !partialLine.isEmpty {
                     onLine?(String(decoding: partialLine, as: UTF8.self))
                     partialLine = Data()
                 }
-                if let error { return .failure(error) }
-                if expired { return .failure(TimedOut(seconds: timeout)) }
+                if let error {
+                    return .failure(error)
+                }
+                if expired {
+                    return .failure(TimedOut(seconds: timeout))
+                }
                 return .success(
                     Output(
                         stdout: String(decoding: out, as: UTF8.self),
@@ -185,7 +197,9 @@ public enum ShellCommand {
                     )
                 )
             }
-            if let result { onDone?(result) }
+            if let result {
+                onDone?(result)
+            }
         }
 
         /// Lines are handed on while the lock is held: the pipe handlers and completion run on different

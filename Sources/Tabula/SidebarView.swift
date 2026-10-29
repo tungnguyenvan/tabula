@@ -25,7 +25,11 @@ struct SidebarView: View {
 
     private func toggle(_ group: Group) {
         var collapsed = Set(collapsedGroups.split(separator: ",").map(String.init))
-        if isCollapsed(group) { collapsed.remove(group.rawValue) } else { collapsed.insert(group.rawValue) }
+        if isCollapsed(group) {
+            collapsed.remove(group.rawValue)
+        } else {
+            collapsed.insert(group.rawValue)
+        }
         withAnimation(.easeInOut(duration: 0.2)) { collapsedGroups = collapsed.sorted().joined(separator: ",") }
     }
 
@@ -99,7 +103,9 @@ struct SidebarView: View {
             .listStyle(.sidebar)
             .environment(\.defaultMinListRowHeight, 22)
             .contextMenu(forSelectionType: SidebarItem.self) { items in
-                if items.isEmpty, model.config.kind.supportsRoutines { newRoutineButtons() }
+                if items.isEmpty, model.config.kind.supportsRoutines {
+                    newRoutineButtons()
+                }
             } primaryAction: { items in
                 switch items.first {
                 case .table(let table): model.open(table)
@@ -197,7 +203,11 @@ struct SidebarView: View {
                 Button {
                     choose(item)
                 } label: {
-                    if item == selected { Label(item, systemImage: "checkmark") } else { Text(item) }
+                    if item == selected {
+                        Label(item, systemImage: "checkmark")
+                    } else {
+                        Text(item)
+                    }
                 }
             }
         } label: {
@@ -248,7 +258,9 @@ struct SidebarView: View {
     private var dialogTitle: String {
         guard let action = pendingAction else { return "" }
         let kind = model.config.kind
-        if action.kind == .truncate && kind.isDocument { return "Delete all documents in “\(action.table.name)”?" }
+        if action.kind == .truncate && kind.isDocument {
+            return "Delete all documents in “\(action.table.name)”?"
+        }
         let verb = action.kind == .drop ? "Drop" : kind.truncateTitle
         return "\(verb) \(action.table.kind == .view ? "view" : kind.tableNoun) “\(action.table.name)”?"
     }
@@ -326,9 +338,13 @@ struct SidebarView: View {
                     }
                     .onSubmit {
                         // Return in the filter opens the first match.
-                        if let first = model.filteredTables.first { model.open(first) }
+                        if let first = model.filteredTables.first {
+                            model.open(first)
+                        }
                     }
-                if model.loadingTables { ProgressView().controlSize(.mini) }
+                if model.loadingTables {
+                    ProgressView().controlSize(.mini)
+                }
                 if let error = model.tablesError {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.system(size: 11))
                         .help(error)

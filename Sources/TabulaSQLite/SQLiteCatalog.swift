@@ -83,7 +83,9 @@ struct SQLiteCatalog: DatabaseCatalog, RoutineCatalog {
                 sizes.compactMap { row in row["name"].map { ($0, row.int("size") ?? 0) } },
                 uniquingKeysWith: +
             )
-            for index in tables.indices { tables[index].dataBytes = byName[tables[index].name] }
+            for index in tables.indices {
+                tables[index].dataBytes = byName[tables[index].name]
+            }
         }
         tables.sort { ($0.rows ?? 0) > ($1.rows ?? 0) }
         return MetricsSample(

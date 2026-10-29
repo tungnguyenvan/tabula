@@ -113,7 +113,11 @@ struct DataGridView: NSViewRepresentable {
             }
             if parent.source.version != version {
                 version = parent.source.version
-                if tableView.currentEditor() == nil { tableView.reloadData() } else { reloadAfterEditing = true }
+                if tableView.currentEditor() == nil {
+                    tableView.reloadData()
+                } else {
+                    reloadAfterEditing = true
+                }
             }
             let descriptors = parent.sortColumn.map { [NSSortDescriptor(key: $0, ascending: parent.ascending)] } ?? []
             if tableView.sortDescriptors != descriptors {
@@ -129,7 +133,9 @@ struct DataGridView: NSViewRepresentable {
                     parent.selection.allSatisfy({ $0 < parent.source.rowCount })
                 {
                     tableView.selectRowIndexes(parent.selection, byExtendingSelection: false)
-                    if let first = parent.selection.first { tableView.scrollRowToVisible(first) }
+                    if let first = parent.selection.first {
+                        tableView.scrollRowToVisible(first)
+                    }
                 }
             }
             // A hidden tab's grid takes its focus request when the tab is shown, not from the tab in front.
@@ -293,7 +299,9 @@ struct DataGridView: NSViewRepresentable {
             tableView.scrollRowToVisible(row)
             tableView.window?.makeFirstResponder(tableView)
             moveFocus(toColumn: tableColumn)
-            if edit { beginEditing(row: row, column: focusedColumn) }
+            if edit {
+                beginEditing(row: row, column: focusedColumn)
+            }
         }
 
         /// Moves to the next/previous cell, wrapping across rows like a spreadsheet.
@@ -402,7 +410,9 @@ struct DataGridView: NSViewRepresentable {
                 field.isEditable = false
                 let row = tableView.row(for: field)
                 let column = tableView.column(for: field)
-                if row >= 0 && column >= 0 { tableView.reloadData(forRowIndexes: [row], columnIndexes: [column]) }
+                if row >= 0 && column >= 0 {
+                    tableView.reloadData(forRowIndexes: [row], columnIndexes: [column])
+                }
                 tableView.window?.makeFirstResponder(tableView)
                 return true
             case #selector(NSResponder.insertNewline(_:)):
@@ -436,7 +446,9 @@ struct DataGridView: NSViewRepresentable {
             let rows = tableView.selectedRowIndexes
             guard !rows.isEmpty else { return }
             var text = parent.source.copyText(rows)
-            if withHeader { text = parent.source.columns.joined(separator: "\t") + "\n" + text }
+            if withHeader {
+                text = parent.source.columns.joined(separator: "\t") + "\n" + text
+            }
             Clipboard.copy(text)
         }
 
@@ -454,7 +466,9 @@ struct DataGridView: NSViewRepresentable {
         func deleteSelection() {
             guard let tableView, let onDelete = parent.onDelete else { return }
             let rows = tableView.selectedRowIndexes
-            if !rows.isEmpty { onDelete(rows) }
+            if !rows.isEmpty {
+                onDelete(rows)
+            }
         }
 
         func setFocusedCellNull() {
@@ -560,7 +574,9 @@ struct DataGridView: NSViewRepresentable {
                 )
             }
             if let onDelete = parent.onDelete {
-                if parent.onDuplicate == nil { menu.addItem(.separator()) }
+                if parent.onDuplicate == nil {
+                    menu.addItem(.separator())
+                }
                 let deleted = rows.filter { parent.source.state($0, 0) == .deleted }
                 if !deleted.isEmpty, let onRestore = parent.onRestore {
                     menu.addItem(
@@ -611,10 +627,14 @@ final class GridTableView: NSTableView {
         switch (event.charactersIgnoringModifiers?.lowercased(), flags) {
         case ("z", [.command]):
             // Undo/redo the grid's own (per-tab) history directly; the menu item targets the window's manager.
-            if let undo = undoManager, undo.canUndo { undo.undo() }
+            if let undo = undoManager, undo.canUndo {
+                undo.undo()
+            }
             return true
         case ("z", [.command, .shift]):
-            if let undo = undoManager, undo.canRedo { undo.redo() }
+            if let undo = undoManager, undo.canRedo {
+                undo.redo()
+            }
             return true
         case ("c", [.command, .option]):
             coordinator.copyFocusedCell()
@@ -636,7 +656,9 @@ final class GridTableView: NSTableView {
         case 124 where flags.contains(.command), 119:  // ⌘→ / End: last column
             coordinator.moveFocus(toColumn: numberOfColumns - 1)
         case 126 where flags.contains(.command):  // ⌘↑: first row
-            if numberOfRows > 0 { coordinator.focus(row: 0, tableColumn: coordinator.focusedColumn, edit: false) }
+            if numberOfRows > 0 {
+                coordinator.focus(row: 0, tableColumn: coordinator.focusedColumn, edit: false)
+            }
         case 125 where flags.contains(.command):  // ⌘↓: last row
             if numberOfRows > 0 {
                 coordinator.focus(row: numberOfRows - 1, tableColumn: coordinator.focusedColumn, edit: false)
@@ -657,7 +679,11 @@ final class GridTableView: NSTableView {
         case 49 where flags.isEmpty:  // Space
             coordinator.showQuickLook()
         case 51, 117:  // ⌫ / ⌦
-            if flags.contains(.option) { coordinator.setFocusedCellNull() } else { coordinator.deleteSelection() }
+            if flags.contains(.option) {
+                coordinator.setFocusedCellNull()
+            } else {
+                coordinator.deleteSelection()
+            }
         case 53:  // Escape
             deselectAll(nil)
         default:

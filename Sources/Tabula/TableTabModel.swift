@@ -133,9 +133,13 @@ final class TableTabModel {
             }
             error = nil
             let count = try? await driver.countRows(table, filter: appliedFilter)
-            if generation == reloadGeneration { totalRows = count }
+            if generation == reloadGeneration {
+                totalRows = count
+            }
         } catch {
-            if generation == reloadGeneration { self.error = error.localizedDescription }
+            if generation == reloadGeneration {
+                self.error = error.localizedDescription
+            }
         }
     }
 
@@ -178,7 +182,9 @@ final class TableTabModel {
     /// Shows the filter bar, seeding a rule so there is something to edit.
     func toggleFilterBar() {
         showFilterBar.toggle()
-        if showFilterBar && filterRules.isEmpty && !useRawFilter { addFilterRule() }
+        if showFilterBar && filterRules.isEmpty && !useRawFilter {
+            addFilterRule()
+        }
     }
 
     /// ⌘F: open the filter bar, or jump into it if it is already open.
@@ -258,13 +264,19 @@ final class TableTabModel {
             guard let set = inserted[column] else { return .defaultValue }
             return set.map(Cell.value) ?? .null
         }
-        if let edit = edits[row]?[column] { return edit.map(Cell.value) ?? .null }
+        if let edit = edits[row]?[column] {
+            return edit.map(Cell.value) ?? .null
+        }
         return rows[row][column].map(Cell.value) ?? .null
     }
 
     func state(row: Int, column: Int) -> CellState {
-        if row >= rows.count { return .inserted }
-        if deletedRows.contains(row) { return .deleted }
+        if row >= rows.count {
+            return .inserted
+        }
+        if deletedRows.contains(row) {
+            return .deleted
+        }
         return edits[row]?[column] != nil ? .edited : .normal
     }
 
@@ -309,7 +321,9 @@ final class TableTabModel {
             insertedRows[row - rows.count][column] = .some(value)
         } else if rows[row][column] == value {
             edits[row]?[column] = nil
-            if edits[row]?.isEmpty == true { edits[row] = nil }
+            if edits[row]?.isEmpty == true {
+                edits[row] = nil
+            }
         } else {
             edits[row, default: [:]][column] = .some(value)
         }
@@ -375,7 +389,9 @@ final class TableTabModel {
 
     func restoreRows(_ indices: IndexSet) {
         registerUndo("Restore Rows")
-        for row in indices { deletedRows.remove(row) }
+        for row in indices {
+            deletedRows.remove(row)
+        }
         version += 1
     }
 
@@ -481,7 +497,9 @@ final class TableTabModel {
             .map { row in
                 (0..<resultColumns.count)
                     .map { column -> String in
-                        if case .value(let text) = cell(row: row, column: column) { return text }
+                        if case .value(let text) = cell(row: row, column: column) {
+                            return text
+                        }
                         return cell(row: row, column: column) == .null ? "NULL" : ""
                     }
                     .joined(separator: "\t")

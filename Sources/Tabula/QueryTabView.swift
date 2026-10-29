@@ -53,7 +53,9 @@ struct QueryTabView: View {
         }
         .onChange(of: model.assistant.submitRequest) { _, _ in askAI() }
         .onChange(of: model.insertRequest?.id) { _, _ in
-            if let sql = model.insertRequest?.sql { handle.insertReplacingSelection(sql) }
+            if let sql = model.insertRequest?.sql {
+                handle.insertReplacingSelection(sql)
+            }
         }
         .onChange(of: model.results.count) { _, _ in selection = [] }
         .onChange(of: model.selectedResult) { _, _ in selection = [] }
@@ -140,7 +142,9 @@ struct QueryTabView: View {
             )
 
             Menu {
-                if workspace.history.isEmpty { Text("No queries yet") }
+                if workspace.history.isEmpty {
+                    Text("No queries yet")
+                }
                 ForEach(Array(workspace.history.prefix(30).enumerated()), id: \.offset) { _, sql in
                     Button(String(sql.replacingOccurrences(of: "\n", with: " ").prefix(80))) { model.sql = sql }
                 }
@@ -159,7 +163,9 @@ struct QueryTabView: View {
                     : "Save SQL File (⌘S)"
             ) { model.save() }
 
-            if model.running { ProgressView().controlSize(.mini) }
+            if model.running {
+                ProgressView().controlSize(.mini)
+            }
             Spacer(minLength: 0)
             // A hint, not a control: it disappears when the bar is too narrow for it.
             ViewThatFits(in: .horizontal) {
@@ -195,7 +201,9 @@ struct QueryTabView: View {
                                 }
                                 .controlSize(.small)
                                 .disabled(model.assistant.busy)
-                                if model.assistant.busy { ProgressView().controlSize(.small) }
+                                if model.assistant.busy {
+                                    ProgressView().controlSize(.small)
+                                }
                                 if model.assistant.busy, !model.assistant.showPrompt,
                                     let progress = model.assistant.progress
                                 {
@@ -351,13 +359,17 @@ struct QueryTabView: View {
     }
 
     private func resultValue(_ result: QueryResult, editor: QueryResultEditor?, row: Int, column: Int) -> String? {
-        if let editor { return editor.value(row: row, column: column) }
+        if let editor {
+            return editor.value(row: row, column: column)
+        }
         return result.rows[row][column]
     }
 
     private func run(all: Bool) {
         let text = all ? nil : handle.textToRun(dialect: model.driver.dialect)
-        if !all && text == nil { return }
+        if !all && text == nil {
+            return
+        }
         Task { await model.run(text) }
     }
 

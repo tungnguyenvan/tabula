@@ -310,7 +310,9 @@ func benchmarkShellText() async throws -> [Step] {
     var steps: [Step] = []
     steps.append(
         try await measure("Parse \(count) documents", runs: 3) {
-            for _ in 0..<count { _ = try MongoShell.parseDocument(document) }
+            for _ in 0..<count {
+                _ = try MongoShell.parseDocument(document)
+            }
             return count
         }
     )
@@ -319,7 +321,9 @@ func benchmarkShellText() async throws -> [Step] {
         try await measure("Write \(count) documents and their cells", runs: 3) {
             for _ in 0..<count {
                 _ = MongoShell.format(parsed)
-                for pair in parsed.pairs { _ = MongoShell.cell(pair.value) }
+                for pair in parsed.pairs {
+                    _ = MongoShell.cell(pair.value)
+                }
             }
             return count
         }

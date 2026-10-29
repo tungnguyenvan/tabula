@@ -41,7 +41,9 @@ extension WorkspaceModel {
             case .diagram, .metrics, .routine:
                 continue
             }
-            if tab.id == selectedTabID { selected = saved.count - 1 }
+            if tab.id == selectedTabID {
+                selected = saved.count - 1
+            }
         }
         let database = currentDatabase.flatMap { $0 == savedDatabase ? nil : $0 }
         return WorkspaceState(
@@ -90,7 +92,9 @@ extension WorkspaceModel {
             switch saved {
             case .query(let title, let sql, let file):
                 let model = QueryTabModel(title: title, sql: sql, driver: driver, workspace: self)
-                if let file, let text = Self.contents(of: file) { model.attach(file, savedText: text) }
+                if let file, let text = Self.contents(of: file) {
+                    model.attach(file, savedText: text)
+                }
                 tab = .query(model)
             case .table(let schema, let name, let kind, let mode):
                 if schema == selectedSchema, !tables.contains(where: { $0.schema == schema && $0.name == name }) {
@@ -106,7 +110,9 @@ extension WorkspaceModel {
                 tab = .table(model)
             }
             restored.append(tab)
-            if index == state.selected { selected = tab.id }
+            if index == state.selected {
+                selected = tab.id
+            }
         }
         // Continue numbering after the restored "Query n" tabs.
         let numbers = restored.compactMap { tab -> Int? in

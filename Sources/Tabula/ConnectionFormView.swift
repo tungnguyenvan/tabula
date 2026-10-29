@@ -29,13 +29,19 @@ struct ConnectionFormView: View {
                         ForEach(DatabaseKind.allCases) { Text($0.displayName).tag($0) }
                     }
                     .onChange(of: config.kind) { old, new in
-                        if new != .postgres && new != .mysql { config.ssh = nil }
+                        if new != .postgres && new != .mysql {
+                            config.ssh = nil
+                        }
                         if applyingURL {
                             applyingURL = false
                             return
                         }
-                        if config.port == old.defaultPort || config.port == 0 { config.port = new.defaultPort }
-                        if new == .mysql && config.tls == .disable { config.tls = .require }
+                        if config.port == old.defaultPort || config.port == 0 {
+                            config.port = new.defaultPort
+                        }
+                        if new == .mysql && config.tls == .disable {
+                            config.tls = .require
+                        }
                         if new != .mongodb {
                             config.srv = nil
                             config.authSource = nil
@@ -68,7 +74,9 @@ struct ConnectionFormView: View {
                             .onChange(of: config.host) { old, host in
                                 // Typing "postgres://…" key by key, or deleting from the end, must stay typing.
                                 let typed = host.count == old.count + 1 && host.hasPrefix(old)
-                                if !typed && !old.hasPrefix(host) { applyURL(host, replacing: old) }
+                                if !typed && !old.hasPrefix(host) {
+                                    applyURL(host, replacing: old)
+                                }
                             }
                         if config.kind == .mongodb {
                             Toggle("DNS seed list (mongodb+srv)", isOn: srv)
@@ -244,13 +252,19 @@ struct ConnectionFormView: View {
         guard let (parsed, parsedPassword) = ConnectionConfig.parse(connectionString: text) else { return }
         var filled = parsed
         filled.id = config.id
-        if filled.name.isEmpty { filled.name = config.name }
-        if filled.tag == ConnectionConfig().tag { filled.tag = config.tag }
+        if filled.name.isEmpty {
+            filled.name = config.name
+        }
+        if filled.tag == ConnectionConfig().tag {
+            filled.tag = config.tag
+        }
         filled.connectTimeout = config.connectTimeout
         // A URL names the database, not how to reach it: the SSH server stays, for the kinds that can use it.
         filled.ssh = filled.kind == .postgres || filled.kind == .mysql ? config.ssh : nil
         let kindBeforeURL = config.kind
-        if filled.kind != config.kind { applyingURL = true }
+        if filled.kind != config.kind {
+            applyingURL = true
+        }
         config = filled
         // A URL without a password keeps the saved one only for the same server; it isn't sent to another.
         if let parsedPassword {
@@ -284,7 +298,9 @@ struct ConnectionFormView: View {
         } set: { on in
             config.srv = on ? true : nil
             // Seed lists (Atlas) always use TLS.
-            if on && config.tls == .disable { config.tls = .verifyFull }
+            if on && config.tls == .disable {
+                config.tls = .verifyFull
+            }
         }
     }
 
@@ -324,7 +340,9 @@ struct ConnectionFormView: View {
                     throw error
                 }
                 await redis.close()
-                if case .error(let message) = pong { throw DatabaseError(message) }
+                if case .error(let message) = pong {
+                    throw DatabaseError(message)
+                }
                 testState = .success(redis.serverDescription)
                 return
             }
@@ -355,6 +373,8 @@ struct ConnectionFormView: View {
             guard panel.runModal() == .OK, let url = panel.url else { return }
             config.filePath = url.path
         }
-        if config.name.isEmpty { config.name = (config.filePath as NSString).lastPathComponent }
+        if config.name.isEmpty {
+            config.name = (config.filePath as NSString).lastPathComponent
+        }
     }
 }

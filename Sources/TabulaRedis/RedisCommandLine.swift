@@ -79,7 +79,9 @@ public enum RedisCommandLine {
                 append(scalar)
             }
         }
-        if inArgument { arguments.append(current) }
+        if inArgument {
+            arguments.append(current)
+        }
         return arguments
     }
 
@@ -220,7 +222,9 @@ public indirect enum RedisReply: Equatable, Sendable {
         case .bulk(let bytes): return RedisCommandLine.quoted(bytes)
         case .null: return "(nil)"
         case .array(let items):
-            if items.isEmpty { return "(empty array)" }
+            if items.isEmpty {
+                return "(empty array)"
+            }
             let width = String(items.count).count
             return items.enumerated()
                 .map { index, item in
@@ -242,8 +246,12 @@ public indirect enum RedisReply: Equatable, Sendable {
     }
 
     public var bytes: [UInt8]? {
-        if case .bulk(let bytes) = self { return bytes }
-        if case .status(let text) = self { return Array(text.utf8) }
+        if case .bulk(let bytes) = self {
+            return bytes
+        }
+        if case .status(let text) = self {
+            return Array(text.utf8)
+        }
         return nil
     }
 
@@ -256,7 +264,9 @@ public indirect enum RedisReply: Equatable, Sendable {
     }
 
     public var array: [RedisReply] {
-        if case .array(let items) = self { return items }
+        if case .array(let items) = self {
+            return items
+        }
         return []
     }
 }

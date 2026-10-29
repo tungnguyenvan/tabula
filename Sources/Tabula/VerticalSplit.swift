@@ -68,7 +68,9 @@ struct VerticalSplit<Top: View, Bottom: View>: NSViewControllerRepresentable {
         (growing == .bottom ? topItem : bottomItem).holdingPriority = .defaultLow + 1
         controller.addSplitViewItem(topItem)
         controller.addSplitViewItem(bottomItem)
-        if let autosaveName { controller.splitView.autosaveName = autosaveName }
+        if let autosaveName {
+            controller.splitView.autosaveName = autosaveName
+        }
         return controller
     }
 

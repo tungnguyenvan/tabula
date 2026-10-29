@@ -65,8 +65,12 @@ enum DebugHooks {
         if environment["TABULA_DEBUG_DIAGRAM"] != nil { model.openDiagram() }
         if environment["TABULA_DEBUG_METRICS"] != nil { model.openMetrics() }
         if let count = environment["TABULA_DEBUG_TABS"].flatMap(Int.init) {
-            for table in model.tables { model.open(table) }
-            for _ in 0..<count { model.newQueryTab() }
+            for table in model.tables {
+                model.open(table)
+            }
+            for _ in 0..<count {
+                model.newQueryTab()
+            }
         }
         if let name = environment["TABULA_DEBUG_ROUTINE"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
@@ -173,7 +177,9 @@ enum DebugHooks {
 
     private static func firstView<T: NSView>(of type: T.Type, in view: NSView?) -> T? {
         guard let view, !view.isHidden else { return nil }
-        if let match = view as? T { return match }
+        if let match = view as? T {
+            return match
+        }
         for subview in view.subviews { if let match = firstView(of: type, in: subview) { return match } }
         return nil
     }
@@ -325,7 +331,9 @@ enum DebugHooks {
                 let name = token.dropFirst(5)
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     print("CALL", name)
-                    if let window = targetWindow { WorkspaceRegistry.makeActiveForTesting(window) }
+                    if let window = targetWindow {
+                        WorkspaceRegistry.makeActiveForTesting(window)
+                    }
                     // Connections switch in any workspace, Redis included.
                     if name == "closewindow" {
                         targetWindow?.performClose(nil)
@@ -422,7 +430,9 @@ enum DebugHooks {
                     // As in AppKit, a key equivalent nothing takes is a key press (⌘← and ⌘↑ in a text view).
                     if !handled { for event in events { NSApp.postEvent(event, atStart: false) } }
                 } else {
-                    for event in events { NSApp.postEvent(event, atStart: false) }
+                    for event in events {
+                        NSApp.postEvent(event, atStart: false)
+                    }
                 }
             }
             delay += 0.6
@@ -532,10 +542,14 @@ enum DebugHooks {
                         ? ""
                         : " [\(item.keyEquivalentModifierMask.rawValue >> 17):\(item.keyEquivalent.debugDescription)]"
                     print("MENU", path + item.title + key)
-                    if let submenu = item.submenu { walk(submenu, path + item.title + " > ") }
+                    if let submenu = item.submenu {
+                        walk(submenu, path + item.title + " > ")
+                    }
                 }
             }
-            if let main = NSApp.mainMenu { walk(main, "") }
+            if let main = NSApp.mainMenu {
+                walk(main, "")
+            }
             fflush(stdout)
         }
     }
@@ -801,7 +815,9 @@ final class WindowRecorder: @unchecked Sendable {
         )
         guard CGImageDestinationFinalize(destination) else { return }
         // Frames missed while this one was taken show the picture before.
-        for missed in (written + 1)..<frame { write(last ?? data as Data, frame: missed) }
+        for missed in (written + 1)..<frame {
+            write(last ?? data as Data, frame: missed)
+        }
         write(data as Data, frame: frame)
         written = frame
         last = data as Data

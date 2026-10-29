@@ -79,7 +79,9 @@ enum MongoSRV {
                 if let data, let target = MongoSRV.parse(UnsafeRawBufferPointer(start: data, count: Int(length))) {
                     answers.targets.append(target)
                 }
-                if flags & DNSServiceFlags(kDNSServiceFlagsMoreComing) == 0 { answers.done = true }
+                if flags & DNSServiceFlags(kDNSServiceFlagsMoreComing) == 0 {
+                    answers.done = true
+                }
             },
             context
         )
@@ -103,7 +105,9 @@ enum MongoSRV {
                 }
             }
         }
-        if answers.error == kDNSServiceErr_NoSuchRecord || answers.error == kDNSServiceErr_NoSuchName { return [] }
+        if answers.error == kDNSServiceErr_NoSuchRecord || answers.error == kDNSServiceErr_NoSuchName {
+            return []
+        }
         guard answers.error == kDNSServiceErr_NoError else {
             throw DatabaseError("DNS lookup for \(name) failed (error \(answers.error)).")
         }
@@ -121,7 +125,9 @@ enum MongoSRV {
         while index < bytes.count {
             let length = Int(bytes[index])
             index += 1
-            if length == 0 { break }
+            if length == 0 {
+                break
+            }
             guard index + length <= bytes.count else { return nil }
             labels.append(String(decoding: bytes[index..<index + length], as: UTF8.self))
             index += length

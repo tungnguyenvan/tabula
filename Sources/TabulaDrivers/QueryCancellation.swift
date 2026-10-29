@@ -48,7 +48,9 @@ public final class QueryCancelScope: @unchecked Sendable {
     public var isCancelled: Bool { lock.withLock { cancelled } }
 
     public func checkCancellation() throws {
-        if isCancelled { throw QueryCancelledError() }
+        if isCancelled {
+            throw QueryCancelledError()
+        }
     }
 
     /// Synchronously prevents further steps before the asynchronous server request gets scheduled.
@@ -100,7 +102,9 @@ package final class QueryExecutionGate: @unchecked Sendable {
                 busy = true
                 return true
             }
-            if ready { continuation.resume() }
+            if ready {
+                continuation.resume()
+            }
         }
     }
 

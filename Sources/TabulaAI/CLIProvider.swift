@@ -80,8 +80,12 @@ public struct CLIProvider: AIProvider {
                     "-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "stream-json",
                     "--verbose", "--include-partial-messages",
                 ]
-                if !model.isEmpty { arguments += ["--model", model] }
-                if let effort { arguments += ["--effort", effort] }
+                if !model.isEmpty {
+                    arguments += ["--model", model]
+                }
+                if let effort {
+                    arguments += ["--effort", effort]
+                }
                 let output = try await ShellCommand.run(
                     script: #"exec "$0" "$@""#,
                     arguments: [executable] + arguments,
@@ -90,7 +94,9 @@ public struct CLIProvider: AIProvider {
                     timeout: Defaults.AI.generateTimeout,
                     onLine: { events.claude($0) }
                 )
-                if let failure = events.failure { throw AIError.server(failure) }
+                if let failure = events.failure {
+                    throw AIError.server(failure)
+                }
                 if !events.sentText {
                     guard let result = events.result else { throw AIError.server(Self.failure("Claude Code", output)) }
                     continuation.yield(.text(result))
@@ -102,9 +108,15 @@ public struct CLIProvider: AIProvider {
                     answer.path,
                 ]
                 // Codex shares a summary of its reasoning only when asked; suggestions while typing don't show it.
-                if request.purpose != .inline { arguments += ["-c", "model_reasoning_summary=\"detailed\""] }
-                if !model.isEmpty { arguments += ["--model", model] }
-                if let effort { arguments += ["-c", "model_reasoning_effort=\"\(effort)\""] }
+                if request.purpose != .inline {
+                    arguments += ["-c", "model_reasoning_summary=\"detailed\""]
+                }
+                if !model.isEmpty {
+                    arguments += ["--model", model]
+                }
+                if let effort {
+                    arguments += ["-c", "model_reasoning_effort=\"\(effort)\""]
+                }
                 arguments.append("-")
                 let output = try await ShellCommand.run(
                     script: #"exec "$0" "$@""#,
@@ -207,7 +219,9 @@ final class CLIEvents: @unchecked Sendable {
                     defer { message = text }
                     return message
                 }
-                if let previous { yield(.thinking(previous + "\n\n")) }
+                if let previous {
+                    yield(.thinking(previous + "\n\n"))
+                }
             default: break
             }
             return

@@ -40,7 +40,9 @@ final class TabContainerView: NSView {
             host.removeFromSuperview()
             hosts[id] = nil
             focus[id] = nil
-            if shown == id { shown = nil }
+            if shown == id {
+                shown = nil
+            }
         }
         let selected = selectedID.flatMap { id in tabs.first { $0.id == id } }
         if let shown, shown != selected?.id, let host = hosts[shown] {
@@ -103,9 +105,13 @@ final class TabContainerView: NSView {
     }
 
     private static func first<T: NSView>(_ type: T.Type, in view: NSView) -> T? {
-        if let match = view as? T { return match }
+        if let match = view as? T {
+            return match
+        }
         for subview in view.subviews where !subview.isHidden {
-            if let match = first(type, in: subview) { return match }
+            if let match = first(type, in: subview) {
+                return match
+            }
         }
         return nil
     }

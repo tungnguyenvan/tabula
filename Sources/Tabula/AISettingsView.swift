@@ -128,8 +128,12 @@ struct AISettingsView: View {
                     )
                 }
 
-                if usesBuiltIn { BuiltInModelsSection() }
-                if usesOllama { LocalModelsSection(ollama: ollama) }
+                if usesBuiltIn {
+                    BuiltInModelsSection()
+                }
+                if usesOllama {
+                    LocalModelsSection(ollama: ollama)
+                }
 
                 PromptsSection()
 
@@ -191,7 +195,9 @@ private struct ProviderFields: View {
                 .foregroundStyle(.green)
             }
         case .ollama:
-            if showsShared { TextField("Server", text: baseURLBinding, prompt: Text(kind.defaultBaseURL)) }
+            if showsShared {
+                TextField("Server", text: baseURLBinding, prompt: Text(kind.defaultBaseURL))
+            }
             Picker("Model", selection: modelBinding) {
                 let current = ai.settings.model(kind, for: purpose)
                 if !ollama.installed.contains(where: { $0.name == current }) {
@@ -209,15 +215,21 @@ private struct ProviderFields: View {
                 text: modelBinding,
                 prompt: Text(purpose == .inline ? "Same as Ask AI" : "e.g. gpt-4.1, or a LiteLLM model name")
             )
-            if purpose == .generate { EffortPicker(kind: kind) }
+            if purpose == .generate {
+                EffortPicker(kind: kind)
+            }
         case .anthropic:
-            if showsShared { APIKeyField(kind: kind) }
+            if showsShared {
+                APIKeyField(kind: kind)
+            }
             TextField(
                 "Model",
                 text: modelBinding,
                 prompt: Text(purpose == .inline ? "Same as Ask AI; claude-haiku-5-5 is faster" : kind.defaultModel)
             )
-            if purpose == .generate { EffortPicker(kind: kind) }
+            if purpose == .generate {
+                EffortPicker(kind: kind)
+            }
         case .claudeCode, .codex:
             Group {
                 if lookingForCLI {
@@ -238,7 +250,9 @@ private struct ProviderFields: View {
                 lookingForCLI = false
             }
             TextField("Model", text: modelBinding, prompt: Text("The tool's default"))
-            if purpose == .generate { EffortPicker(kind: kind) }
+            if purpose == .generate {
+                EffortPicker(kind: kind)
+            }
         }
     }
 }
@@ -259,7 +273,9 @@ private struct APIKeyField: View {
                 key = await AIService.shared.apiKey(for: kind)
                 loaded = true
             }
-        if let error { Text(error).font(.caption).foregroundStyle(.red) }
+        if let error {
+            Text(error).font(.caption).foregroundStyle(.red)
+        }
     }
 
     private func save() {
@@ -285,7 +301,9 @@ private struct TestRow: View {
     var body: some View {
         HStack {
             Button("Test") { run() }.disabled(testing)
-            if testing { ProgressView().controlSize(.small) }
+            if testing {
+                ProgressView().controlSize(.small)
+            }
             Spacer()
             switch result {
             case .success(let reply):
@@ -342,11 +360,15 @@ private struct LocalModelsSection: View {
                     )
                 }
             }
-            if let error = ollama.error { Text(error).foregroundStyle(.red) }
+            if let error = ollama.error {
+                Text(error).foregroundStyle(.red)
+            }
         } header: {
             Text("Local models")
         } footer: {
-            if let version = ollama.version { Text("Ollama \(version). Models are downloaded to and run on this Mac.") }
+            if let version = ollama.version {
+                Text("Ollama \(version). Models are downloaded to and run on this Mac.")
+            }
         }
     }
 
@@ -405,7 +427,9 @@ private struct LocalModelsSection: View {
 
     private func useForTyping(_ name: String) {
         ai.settings.inlineSuggestions = true
-        if ai.settings.provider != .ollama { ai.settings.inlineProvider = .ollama }
+        if ai.settings.provider != .ollama {
+            ai.settings.inlineProvider = .ollama
+        }
         ai.settings.inlineModels[AIProviderKind.ollama.rawValue] = name
     }
 }
@@ -507,7 +531,9 @@ private struct BuiltInModelsSection: View {
                     NSWorkspace.shared.activateFileViewerSelecting([models.store.directory])
                 }
             }
-            if let error = models.error { Text(error).foregroundStyle(.red) }
+            if let error = models.error {
+                Text(error).foregroundStyle(.red)
+            }
         } header: {
             Text("Models on this Mac")
         } footer: {
@@ -600,7 +626,9 @@ private struct BuiltInModelsSection: View {
         let key = AIProviderKind.builtIn.rawValue
         if purpose == .inline {
             ai.settings.inlineSuggestions = true
-            if ai.settings.provider != .builtIn { ai.settings.inlineProvider = .builtIn }
+            if ai.settings.provider != .builtIn {
+                ai.settings.inlineProvider = .builtIn
+            }
             ai.settings.inlineModels[key] = id
         } else {
             ai.settings.provider = .builtIn

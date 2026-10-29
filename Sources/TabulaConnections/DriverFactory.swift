@@ -8,7 +8,9 @@ import TabulaSQLite
 
 public enum DriverFactory {
     public static func connect(_ config: ConnectionConfig, password: String?) async throws -> any DatabaseDriver {
-        if let ssh = config.ssh { return try await connectThroughSSH(config, ssh: ssh, password: password) }
+        if let ssh = config.ssh {
+            return try await connectThroughSSH(config, ssh: ssh, password: password)
+        }
         switch config.kind {
         case .sqlite:
             return try SQLiteDriver(path: config.filePath)

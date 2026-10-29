@@ -16,12 +16,16 @@ public enum MongoCompletion {
         let string = text as NSString
         let caret = min(max(0, caret), string.length)
         var start = caret
-        while start > 0, isWordUnit(string.character(at: start - 1)) { start -= 1 }
+        while start > 0, isWordUnit(string.character(at: start - 1)) {
+            start -= 1
+        }
         let range = NSRange(location: start, length: caret - start)
         let partial = string.substring(with: range)
         let before = string.substring(to: start)
         let statement = currentStatement(before)
-        if isInsideString(statement) { return (range, []) }
+        if isInsideString(statement) {
+            return (range, [])
+        }
 
         // Groups in priority order; each is sorted shortest first.
         let candidates: [[String]]
@@ -115,7 +119,9 @@ public enum MongoCompletion {
                 match.numberOfRanges > 1
             else { continue }
             let name = (statement as NSString).substring(with: match.range(at: 1))
-            if !MongoStatement.databaseMethods.contains(name) { return name }
+            if !MongoStatement.databaseMethods.contains(name) {
+                return name
+            }
         }
         return nil
     }
@@ -143,7 +149,9 @@ public enum MongoCompletion {
                 continue
             }
             if let open = quote {
-                if character == open { quote = nil }
+                if character == open {
+                    quote = nil
+                }
             } else if character == "\"" || character == "'" {
                 quote = character
             }

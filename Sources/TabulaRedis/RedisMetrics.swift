@@ -9,7 +9,9 @@ extension RedisDriver {
         var info: [String: String] = [:]
         for line in text.split(whereSeparator: \.isNewline) where !line.hasPrefix("#") {
             let parts = line.split(separator: ":", maxSplits: 1)
-            if parts.count == 2 { info[String(parts[0])] = String(parts[1]) }
+            if parts.count == 2 {
+                info[String(parts[0])] = String(parts[1])
+            }
         }
         let n = { (key: String) in Double(info[key] ?? "") ?? 0 }
         let hits = n("keyspace_hits")

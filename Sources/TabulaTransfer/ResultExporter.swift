@@ -55,7 +55,9 @@ public enum ResultExporter {
             let keys = uniqueNames(columns)
             let objects: [[String: Any]] = rows.map { row in
                 var object: [String: Any] = [:]
-                for (column, value) in zip(keys, row) { object[column] = value ?? NSNull() }
+                for (column, value) in zip(keys, row) {
+                    object[column] = value ?? NSNull()
+                }
                 return object
             }
             let data = try JSONSerialization.data(withJSONObject: objects, options: [.prettyPrinted, .sortedKeys])

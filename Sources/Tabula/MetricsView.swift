@@ -45,7 +45,9 @@ final class MetricsModel {
     }
 
     private func tick() async -> Double {
-        if !paused { await refresh() }
+        if !paused {
+            await refresh()
+        }
         return interval
     }
 
@@ -71,7 +73,9 @@ final class MetricsModel {
                     rates = current
                 }
             }
-            for (name, value) in sample.gauges { points.append(Point(time: sample.time, series: name, value: value)) }
+            for (name, value) in sample.gauges {
+                points.append(Point(time: sample.time, series: name, value: value))
+            }
             let cutoff = sample.time.addingTimeInterval(-600)
             points.removeAll { $0.time < cutoff }
             previous = sample
@@ -128,7 +132,9 @@ struct MetricsView: View {
                         ) {
                             ForEach(sample.groups) { group in card(group) }
                         }
-                        if !sample.tables.isEmpty { tables(sample.tables, collections: sample.tablesAreCollections) }
+                        if !sample.tables.isEmpty {
+                            tables(sample.tables, collections: sample.tablesAreCollections)
+                        }
                     }
                     .padding(14)
                 }
@@ -165,7 +171,9 @@ struct MetricsView: View {
                         .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
                         .frame(height: 70)
                         .overlay {
-                            if points.count < 2 { Text("collecting…").font(.caption2).foregroundStyle(.tertiary) }
+                            if points.count < 2 {
+                                Text("collecting…").font(.caption2).foregroundStyle(.tertiary)
+                            }
                         }
                     }
                     .padding(10)

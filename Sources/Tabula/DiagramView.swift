@@ -109,7 +109,9 @@ final class DiagramModel {
                     changed = true
                 }
             }
-            if !changed { break }
+            if !changed {
+                break
+            }
         }
         let connected = Set(references.keys).union(references.values.flatMap { $0 })
         var columnHeights: [Int: CGFloat] = [:]
@@ -183,7 +185,9 @@ struct DiagramView: View {
                 .gesture(
                     MagnifyGesture()
                         .onChanged { value in
-                            if pinchStart == nil { pinchStart = model.zoom }
+                            if pinchStart == nil {
+                                pinchStart = model.zoom
+                            }
                             model.zoom = (pinchStart ?? 1) * value.magnification
                         }
                         .onEnded { _ in pinchStart = nil }

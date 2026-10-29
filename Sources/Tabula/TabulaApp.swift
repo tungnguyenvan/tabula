@@ -131,17 +131,23 @@ final class ActiveWorkspace {
     private(set) weak var session: ConnectionSession?
 
     var model: WorkspaceModel? {
-        if case .sql(let model) = session?.active { return model }
+        if case .sql(let model) = session?.active {
+            return model
+        }
         return nil
     }
 
     var redis: RedisWorkspaceModel? {
-        if case .redis(let model) = session?.active { return model }
+        if case .redis(let model) = session?.active {
+            return model
+        }
         return nil
     }
 
     fileprivate func update(_ session: ConnectionSession?) {
-        if self.session !== session { self.session = session }
+        if self.session !== session {
+            self.session = session
+        }
     }
 }
 
@@ -200,14 +206,18 @@ enum WorkspaceRegistry {
     /// Saves the open tabs of every SQL workspace (when Tabula quits).
     static func saveAllStates() {
         for session in sessions.values.compactMap(\.session) {
-            for case .sql(let model) in session.connections { model.saveState() }
+            for case .sql(let model) in session.connections {
+                model.saveState()
+            }
         }
     }
 
     /// The workspace window nearest the front, where newly opened connections go.
     static var frontmostSession: (ConnectionSession, NSWindow)? {
         for window in NSApp.orderedWindows where window.isVisible {
-            if let session = sessions[window.windowNumber]?.session { return (session, window) }
+            if let session = sessions[window.windowNumber]?.session {
+                return (session, window)
+            }
         }
         return nil
     }
@@ -239,7 +249,9 @@ struct WorkspaceCommands: Commands {
     private var table: TableTabModel? { workspace?.selectedTableTab }
 
     private var query: QueryTabModel? {
-        if case .query(let model) = workspace?.selectedTab { return model }
+        if case .query(let model) = workspace?.selectedTab {
+            return model
+        }
         return nil
     }
 
@@ -250,7 +262,11 @@ struct WorkspaceCommands: Commands {
 
         CommandGroup(after: .newItem) {
             Button(redis != nil ? "Console" : "New Query Tab") {
-                if let redis { redis.mode = .console } else { workspace?.newQueryTab() }
+                if let redis {
+                    redis.mode = .console
+                } else {
+                    workspace?.newQueryTab()
+                }
             }
             .keyboardShortcut("t", modifiers: .command)
             .disabled(noWorkspace)
@@ -296,7 +312,9 @@ struct WorkspaceCommands: Commands {
                 .keyboardShortcut("[", modifiers: [.command, .control])
                 .disabled(noWorkspace)
             Button("Close Connection") {
-                if let session = ActiveWorkspace.shared.session, let id = session.active?.id { session.close(id) }
+                if let session = ActiveWorkspace.shared.session, let id = session.active?.id {
+                    session.close(id)
+                }
             }
             .disabled(noWorkspace)
         }
@@ -327,7 +345,11 @@ struct WorkspaceCommands: Commands {
                 .keyboardShortcut("3", modifiers: [.command, .option])
                 .disabled(noWorkspace || workspace?.config.kind.supportsDiagram == false)
             Button("Server Metrics") {
-                if let redis { redis.mode = .metrics } else { workspace?.openMetrics() }
+                if let redis {
+                    redis.mode = .metrics
+                } else {
+                    workspace?.openMetrics()
+                }
             }
             .keyboardShortcut("4", modifiers: [.command, .option])
             .disabled(noWorkspace)
@@ -397,7 +419,9 @@ struct WorkspaceCommands: Commands {
             .keyboardShortcut("i", modifiers: .command)
             .disabled(noWorkspace)
             Button("Duplicate Row") {
-                if let rows = workspace?.inspectedRows, !rows.isEmpty { table?.duplicateRows(rows) }
+                if let rows = workspace?.inspectedRows, !rows.isEmpty {
+                    table?.duplicateRows(rows)
+                }
             }
             .keyboardShortcut("d", modifiers: .command)
             .disabled(noWorkspace)
@@ -424,12 +448,16 @@ struct WorkspaceCommands: Commands {
 
         CommandMenu("Query") {
             Button("Run Current Statement") {
-                if let query, !query.running { query.runRequest = (false, query.runRequest.id + 1) }
+                if let query, !query.running {
+                    query.runRequest = (false, query.runRequest.id + 1)
+                }
             }
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(noWorkspace)
             Button("Run All") {
-                if let query, !query.running { query.runRequest = (true, query.runRequest.id + 1) }
+                if let query, !query.running {
+                    query.runRequest = (true, query.runRequest.id + 1)
+                }
             }
             .keyboardShortcut(.return, modifiers: [.command, .shift])
             .disabled(noWorkspace)

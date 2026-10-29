@@ -51,8 +51,12 @@ enum MongoReadOnlyCheck {
     private static func blockedKey(in value: Primitive) -> String? {
         guard let document = value as? Document else { return nil }
         for pair in document.pairs {
-            if blockedKeys.contains(pair.key) { return pair.key }
-            if let found = blockedKey(in: pair.value) { return found }
+            if blockedKeys.contains(pair.key) {
+                return pair.key
+            }
+            if let found = blockedKey(in: pair.value) {
+                return found
+            }
         }
         return nil
     }

@@ -62,7 +62,9 @@ private struct TableRowInspector: View {
             HStack {
                 Text(row >= table.rows.count ? "New row" : "Row \(row + 1 + table.offset)")
                     .font(.system(size: 12, weight: .semibold))
-                if count > 1 { Text("(\(count) selected)").font(.system(size: 11)).foregroundStyle(.secondary) }
+                if count > 1 {
+                    Text("(\(count) selected)").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 Spacer()
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
@@ -107,9 +109,13 @@ private struct FieldView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                if isKey { Image(systemName: "key.fill").font(.system(size: 9)).foregroundStyle(.yellow) }
+                if isKey {
+                    Image(systemName: "key.fill").font(.system(size: 9)).foregroundStyle(.yellow)
+                }
                 Text(name).font(.system(size: 11, weight: .semibold))
-                if let type { Text(type).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary) }
+                if let type {
+                    Text(type).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
+                }
                 Spacer()
                 if editable {
                     Menu {
@@ -153,7 +159,9 @@ private struct FieldView: View {
     }
 
     private var currentText: String {
-        if case .value(let value) = cell { return value }
+        if case .value(let value) = cell {
+            return value
+        }
         return ""
     }
 

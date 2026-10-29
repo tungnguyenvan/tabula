@@ -64,14 +64,20 @@ public enum SQLFormatter {
 
         func newline(_ level: Int) {
             while out.last == " " { out.removeLast() }
-            if !out.isEmpty { out += "\n" }
+            if !out.isEmpty {
+                out += "\n"
+            }
             out += String(repeating: indentUnit, count: max(0, level))
             lineHasContent = false
             forceBreak = false
         }
         func write(_ text: String, spaced: Bool) {
-            if forceBreak { newline(frames[frames.count - 1].level + 1) }
-            if spaced && lineHasContent { out += " " }
+            if forceBreak {
+                newline(frames[frames.count - 1].level + 1)
+            }
+            if spaced && lineHasContent {
+                out += " "
+            }
             out += text
             lineHasContent = true
         }
@@ -81,7 +87,9 @@ public enum SQLFormatter {
             if ["(", ".", "::"].contains(previous.text) { return false }
             if token.text == "(" {
                 // Function calls and table(column) lists hug their parenthesis; keywords like IN and VALUES don't.
-                if previous.kind == .quotedIdentifier { return false }
+                if previous.kind == .quotedIdentifier {
+                    return false
+                }
                 if previous.kind == .word {
                     return SQLKeywords.set.contains(previous.keyword)
                         && !SQLKeywords.functions.contains(previous.keyword)
@@ -128,7 +136,9 @@ public enum SQLFormatter {
                 lineHasContent = true
                 frame.clause = name
                 frames[frames.count - 1] = frame
-                if blockClauses.contains(name) { forceBreak = true }
+                if blockClauses.contains(name) {
+                    forceBreak = true
+                }
                 previous = tokens[index + length - 1]
                 index += length
                 continue

@@ -18,8 +18,12 @@ extension ConnectionConfig {
             guard path.hasPrefix("/") || path.hasPrefix("~") else { return nil }
             return (ConnectionConfig(kind: .sqlite, filePath: (path as NSString).expandingTildeInPath), nil)
         }
-        if let pairs = libpqPairs(text) { return keyValueConnection(pairs, libpq: true) }
-        if let pairs = semicolonPairs(text) { return keyValueConnection(pairs, libpq: false) }
+        if let pairs = libpqPairs(text) {
+            return keyValueConnection(pairs, libpq: true)
+        }
+        if let pairs = semicolonPairs(text) {
+            return keyValueConnection(pairs, libpq: false)
+        }
         return nil
     }
 
@@ -40,7 +44,9 @@ extension ConnectionConfig {
         libpq: Bool
     ) -> (config: ConnectionConfig, password: String?)? {
         var values: [String: String] = [:]
-        for pair in pairs { values[normalized(pair.key)] = pair.value }
+        for pair in pairs {
+            values[normalized(pair.key)] = pair.value
+        }
         let host = values.first { hostKeys.contains($0.key) }?.value
         // A host never holds spaces; one that does is text that only looks like key=value pairs.
         // Without a host, only a libpq string still names a connection (to the local server).
@@ -97,7 +103,9 @@ extension ConnectionConfig {
             skipSpaces()
             var value = ""
             let quoted = index < text.endIndex && text[index] == "'"
-            if quoted { index = text.index(after: index) }
+            if quoted {
+                index = text.index(after: index)
+            }
             var closed = !quoted
             while index < text.endIndex {
                 let character = text[index]
@@ -106,7 +114,9 @@ extension ConnectionConfig {
                     index = text.index(after: index)
                     break
                 }
-                if !quoted, character.isWhitespace { break }
+                if !quoted, character.isWhitespace {
+                    break
+                }
                 if character == "\\", text.index(after: index) < text.endIndex {
                     index = text.index(after: index)
                     value.append(text[index])

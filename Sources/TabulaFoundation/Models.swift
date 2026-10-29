@@ -126,21 +126,31 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
     public var timeout: Double { connectTimeout ?? Defaults.connectTimeout }
 
     public var displayName: String {
-        if !name.isEmpty { return name }
-        if kind.isFileBased { return (filePath as NSString).lastPathComponent }
-        if kind == .redis { return "\(host):\(port)" }
+        if !name.isEmpty {
+            return name
+        }
+        if kind.isFileBased {
+            return (filePath as NSString).lastPathComponent
+        }
+        if kind == .redis {
+            return "\(host):\(port)"
+        }
         return database.isEmpty ? "\(host):\(port)" : "\(database) @ \(host)"
     }
 
     public var subtitle: String {
-        if kind.isFileBased { return filePath }
+        if kind.isFileBased {
+            return filePath
+        }
         let userPart = user.isEmpty ? "" : "\(user)@"
         if kind == .redis {
             return "\(userPart)\(host):\(port) · db\(database.isEmpty ? "0" : database)"
         }
         let dbPart = database.isEmpty ? "" : "/\(database)"
         // A DNS seed list names no port; the servers' ports come from DNS.
-        if kind == .mongodb && srv == true { return "\(userPart)\(host)\(dbPart) · DNS seed list" }
+        if kind == .mongodb && srv == true {
+            return "\(userPart)\(host)\(dbPart) · DNS seed list"
+        }
         return "\(userPart)\(host):\(port)\(dbPart)"
     }
 }

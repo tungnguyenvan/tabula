@@ -13,7 +13,9 @@ struct WorkspaceWindow: View {
     var body: some View {
         HStack(spacing: 0) {
             // With one connection the rail would only repeat the toolbar; it appears once a second one opens.
-            if session.connections.count > 1 { ConnectionRail(session: session) }
+            if session.connections.count > 1 {
+                ConnectionRail(session: session)
+            }
             activeConnection
         }
         .environment(session)
@@ -318,7 +320,9 @@ struct ConnectionPill: View {
         case .connecting: return "Connecting…"
         case .failed: return "Disconnected"
         case .connected:
-            if config.kind == .sqlite { return (config.filePath as NSString).abbreviatingWithTildeInPath }
+            if config.kind == .sqlite {
+                return (config.filePath as NSString).abbreviatingWithTildeInPath
+            }
             return "\(config.host):\(config.port)" + (location.map { " : \($0)" } ?? "")
         }
     }
@@ -467,7 +471,9 @@ private struct TabButton: View {
                     .foregroundStyle(selected ? Color.accentColor : .secondary)
                 Text(tab.title).font(.system(size: 12, weight: selected ? .medium : .regular)).italic(isPreview)
                     .lineLimit(1)
-                if hasChanges { Circle().fill(.orange).frame(width: 6, height: 6) }
+                if hasChanges {
+                    Circle().fill(.orange).frame(width: 6, height: 6)
+                }
             }
             .padding(.horizontal, 22)
             HStack {
@@ -490,19 +496,25 @@ private struct TabButton: View {
             ignoresSafeAreaEdges: []
         )
         .overlay(alignment: .top) {
-            if selected { Rectangle().fill(Color.accentColor).frame(height: 2) }
+            if selected {
+                Rectangle().fill(Color.accentColor).frame(height: 2)
+            }
         }
         .contentShape(Rectangle())
         // One tap gesture selects at once; a separate double-tap gesture would hold every single click for the
         // double-click interval before selecting.
         .onTapGesture {
             select()
-            if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { pin() }
+            if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
+                pin()
+            }
         }
         .onHover { hovering = $0 }
         .help(isPreview ? "Preview tab — double-click to keep it open" : "")
         .contextMenu {
-            if isPreview { Button("Keep Open", action: pin) }
+            if isPreview {
+                Button("Keep Open", action: pin)
+            }
             Button("Close Tab", action: close)
             Button("Close Other Tabs", action: closeOthers)
         }
@@ -575,7 +587,9 @@ private struct ConnectionPicker: View {
                                         .lineLimit(1)
                                 }
                                 Spacer()
-                                if let color = connection.tag.color { Circle().fill(color).frame(width: 7, height: 7) }
+                                if let color = connection.tag.color {
+                                    Circle().fill(color).frame(width: 7, height: 7)
+                                }
                             }
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .contentShape(Rectangle())
@@ -618,17 +632,25 @@ struct ConnectionInfoPopover: View {
 
     private var rows: [(String, String)] {
         var rows: [(String, String)] = [("Type", config.kind.displayName)]
-        if let serverVersion { rows.append(("Server", serverVersion)) }
+        if let serverVersion {
+            rows.append(("Server", serverVersion))
+        }
         if config.kind == .sqlite {
             rows.append(("File", (config.filePath as NSString).abbreviatingWithTildeInPath))
         } else {
             rows.append(("Host", "\(config.host):\(config.port)"))
-            if !config.user.isEmpty { rows.append(("User", config.user)) }
+            if !config.user.isEmpty {
+                rows.append(("User", config.user))
+            }
             let databaseLabel = config.kind == .postgres ? "Database.Schema" : "Database"
-            if let location { rows.append((databaseLabel, location)) }
+            if let location {
+                rows.append((databaseLabel, location))
+            }
             rows.append(("TLS", config.tls.displayName))
         }
-        if config.tag != .none { rows.append(("Tag", config.tag.displayName)) }
+        if config.tag != .none {
+            rows.append(("Tag", config.tag.displayName))
+        }
         switch status {
         case .connected:
             rows.append(
@@ -681,7 +703,9 @@ struct ConnectionInfoPopover: View {
                                 HStack(spacing: 8) {
                                     KindBadge(kind: other.kind, size: 18)
                                     Text(other.displayName).lineLimit(1)
-                                    if let color = other.tag.color { Circle().fill(color).frame(width: 6, height: 6) }
+                                    if let color = other.tag.color {
+                                        Circle().fill(color).frame(width: 6, height: 6)
+                                    }
                                     Spacer()
                                     Text(other.kind.displayName).font(.caption).foregroundStyle(.tertiary)
                                 }
@@ -739,6 +763,8 @@ struct WindowAccessor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        if let window = nsView.window { onWindow(window) }
+        if let window = nsView.window {
+            onWindow(window)
+        }
     }
 }

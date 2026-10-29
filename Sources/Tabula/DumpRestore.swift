@@ -61,7 +61,9 @@ final class DatabaseTransfer: Identifiable {
         restoreOptions.serverMajor = serverMajor
         restoreOptions.serverIsMariaDB = serverIsMariaDB
         // A restore needs its file first: which tools it takes depends on what the file holds.
-        if direction == .dump { findTool() }
+        if direction == .dump {
+            findTool()
+        }
     }
 
     var isPostgres: Bool { config.kind == .postgres }
@@ -95,7 +97,9 @@ final class DatabaseTransfer: Identifiable {
                     self?.toolProblem = "\(kind.rawValue) isn't installed. \(kind.installHint)"
                     return
                 }
-                if first == nil { first = found }
+                if first == nil {
+                    first = found
+                }
             }
             guard !Task.isCancelled else { return }
             self?.tool = first
@@ -112,7 +116,9 @@ final class DatabaseTransfer: Identifiable {
         // TABULA_DEBUG_RESTORE_FROM: this file without the panel, for scripted checks.
         chosen = ProcessInfo.processInfo.environment["TABULA_DEBUG_RESTORE_FROM"].map { URL(fileURLWithPath: $0) }
         #endif
-        if chosen == nil, panel.runModal() == .OK { chosen = panel.url }
+        if chosen == nil, panel.runModal() == .OK {
+            chosen = panel.url
+        }
         guard let url = chosen else { return false }
         do {
             fileKind = try DatabaseDump.kind(of: url)
@@ -130,8 +136,12 @@ final class DatabaseTransfer: Identifiable {
         guard tool != nil, phase == .options, !database.isEmpty else { return false }
         if direction == .restore {
             guard file != nil else { return false }
-            if isProduction && typedConfirmation != database { return false }
-            if fileKind == .postgresArchive && !isPostgres { return false }
+            if isProduction && typedConfirmation != database {
+                return false
+            }
+            if fileKind == .postgresArchive && !isPostgres {
+                return false
+            }
         }
         return true
     }
@@ -151,7 +161,9 @@ final class DatabaseTransfer: Identifiable {
             // TABULA_DEBUG_DUMP_TO: save there without the panel, for scripted checks.
             chosen = ProcessInfo.processInfo.environment["TABULA_DEBUG_DUMP_TO"].map { URL(fileURLWithPath: $0) }
             #endif
-            if chosen == nil, panel.runModal() == .OK { chosen = panel.url }
+            if chosen == nil, panel.runModal() == .OK {
+                chosen = panel.url
+            }
             guard let url = chosen else { return }
             var options = dumpOptions
             options.format = format
@@ -275,7 +287,11 @@ struct DatabaseTransferSheet: View {
     @ViewBuilder
     private var options: some View {
         Form {
-            if transfer.direction == .dump { dumpOptions } else { restoreOptions }
+            if transfer.direction == .dump {
+                dumpOptions
+            } else {
+                restoreOptions
+            }
             Section {
                 if let tool = transfer.tool {
                     LabeledContent("Tool") {

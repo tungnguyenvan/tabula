@@ -153,7 +153,9 @@ struct CommandPaletteView: View {
                 }
                 .frame(maxHeight: 320)
                 .onChange(of: highlighted) { _, index in
-                    if results.indices.contains(index) { proxy.scrollTo(results[index].id) }
+                    if results.indices.contains(index) {
+                        proxy.scrollTo(results[index].id)
+                    }
                 }
             }
             Divider()

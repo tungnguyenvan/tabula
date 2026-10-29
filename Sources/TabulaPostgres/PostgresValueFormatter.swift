@@ -68,7 +68,9 @@ enum PostgresValueFormatter {
             }
             return "(\(Double(bitPattern: x)),\(Double(bitPattern: y)))"
         default:
-            if let array = array(&buffer) { return array }
+            if let array = array(&buffer) {
+                return array
+            }
             // text, varchar, bpchar, name, json, xml, enums and most extension types are UTF-8 text in binary form.
             let readerIndex = buffer.readerIndex
             if let text = buffer.readString(length: buffer.readableBytes),
@@ -109,7 +111,9 @@ enum PostgresValueFormatter {
         default: break
         }
         var digits: [Int16] = []
-        for _ in 0..<count { digits.append(buffer.readInteger(as: Int16.self) ?? 0) }
+        for _ in 0..<count {
+            digits.append(buffer.readInteger(as: Int16.self) ?? 0)
+        }
 
         var integerPart = ""
         if weight < 0 {
@@ -138,15 +142,23 @@ enum PostgresValueFormatter {
 
     private static func date(_ buffer: inout ByteBuffer) -> String {
         guard let days = buffer.readInteger(as: Int32.self) else { return "" }
-        if days == Int32.max { return "infinity" }
-        if days == Int32.min { return "-infinity" }
+        if days == Int32.max {
+            return "infinity"
+        }
+        if days == Int32.min {
+            return "-infinity"
+        }
         return CivilTime.dateText(days: epochDays + Int64(days))
     }
 
     private static func timestamp(_ buffer: inout ByteBuffer, withZone: Bool) -> String {
         guard let micros = buffer.readInteger(as: Int64.self) else { return "" }
-        if micros == Int64.max { return "infinity" }
-        if micros == Int64.min { return "-infinity" }
+        if micros == Int64.max {
+            return "infinity"
+        }
+        if micros == Int64.min {
+            return "-infinity"
+        }
         let (seconds, remainder) = floorDivide(micros, 1_000_000)
         let text = CivilTime.dateTimeText(seconds: Int64(epochOffset) + seconds)
         return text + fractional(remainder) + (withZone ? "+00" : "")
@@ -181,9 +193,15 @@ enum PostgresValueFormatter {
         var parts: [String] = []
         let years = months / 12
         let remainingMonths = months % 12
-        if years != 0 { parts.append("\(years) year\(years.magnitude == 1 ? "" : "s")") }
-        if remainingMonths != 0 { parts.append("\(remainingMonths) mon\(remainingMonths.magnitude == 1 ? "" : "s")") }
-        if days != 0 { parts.append("\(days) day\(days.magnitude == 1 ? "" : "s")") }
+        if years != 0 {
+            parts.append("\(years) year\(years.magnitude == 1 ? "" : "s")")
+        }
+        if remainingMonths != 0 {
+            parts.append("\(remainingMonths) mon\(remainingMonths.magnitude == 1 ? "" : "s")")
+        }
+        if days != 0 {
+            parts.append("\(days) day\(days.magnitude == 1 ? "" : "s")")
+        }
         if micros != 0 || parts.isEmpty {
             parts.append((micros < 0 ? "-" : "") + timeOfDay(micros.magnitude > UInt64(Int64.max) ? 0 : abs(micros)))
         }

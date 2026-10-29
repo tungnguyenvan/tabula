@@ -147,7 +147,9 @@ final class WorkspaceModel {
 
     func setSelection(_ rows: IndexSet, inTab id: UUID) {
         tabSelections[id] = rows
-        if selectedTabID == id { inspectedRows = rows }
+        if selectedTabID == id {
+            inspectedRows = rows
+        }
     }
     /// Numbers new query tabs (Query 1, Query 2…); restored tabs carry it on.
     var queryCounter = 0
@@ -184,7 +186,9 @@ final class WorkspaceModel {
     func openRoutine(_ routine: RoutineInfo) {
         guard let driver else { return }
         if let existing = tabs.first(where: {
-            if case .routine(let model) = $0 { return model.routine?.id == routine.id }
+            if case .routine(let model) = $0 {
+                return model.routine?.id == routine.id
+            }
             return false
         }) {
             selectedTabID = existing.id
@@ -210,7 +214,9 @@ final class WorkspaceModel {
     var selectedTab: Tab? { tabs.first { $0.id == selectedTabID } }
 
     var selectedTableTab: TableTabModel? {
-        if case .table(let model) = selectedTab { return model }
+        if case .table(let model) = selectedTab {
+            return model
+        }
         return nil
     }
 
@@ -225,8 +231,12 @@ final class WorkspaceModel {
                 return
             }
             await setUp(driver)
-            if tabs.isEmpty { await restoreState() }
-            if tabs.isEmpty { newQueryTab() }
+            if tabs.isEmpty {
+                await restoreState()
+            }
+            if tabs.isEmpty {
+                newQueryTab()
+            }
             // Files opened from Finder while no connection was ready.
             PendingSQLFiles.take().forEach(openSQLFile)
             #if DEBUG
@@ -264,7 +274,9 @@ final class WorkspaceModel {
         // Shown in the toolbar when the server reports them; a failed query is in the console log.
         serverVersion = try? await driver.serverVersion()
         currentDatabase = (try? await driver.currentDatabase()) ?? nil
-        if savedDatabase == nil { savedDatabase = currentDatabase }
+        if savedDatabase == nil {
+            savedDatabase = currentDatabase
+        }
         databases = await catalogRead([]) { try await driver.serverDatabases() }
         schemas = await catalogRead([]) { try await driver.schemas() }
         let preferred = await catalogRead("") { try await driver.defaultSchema() }
@@ -275,7 +287,9 @@ final class WorkspaceModel {
 
     private func confirmDiscardQueryResults() -> Bool {
         for case .query(let query) in tabs where query.hasResultChanges || query.committingResults {
-            if !query.confirmDiscardResults() { return false }
+            if !query.confirmDiscardResults() {
+                return false
+            }
         }
         return true
     }
@@ -300,7 +314,9 @@ final class WorkspaceModel {
 
     func disconnect() async {
         connectionGeneration += 1
-        for case .query(let query) in tabs { query.cancelRun() }
+        for case .query(let query) in tabs {
+            query.cancelRun()
+        }
         // A dump or restore stops with its window; a restore in one transaction is rolled back.
         transfer?.cancel()
         // An answer in progress would go on using the closed connection (and open another).
@@ -485,13 +501,17 @@ final class WorkspaceModel {
         previewTabID = nil
         // Closed tables belonged to the old database; closed queries can come back.
         closedTabs.removeAll {
-            if case .table = $0 { return true }
+            if case .table = $0 {
+                return true
+            }
             return false
         }
         inspectedRows = []
         schemaTableCache = [:]
         loadingSchemaTables = []
-        if startingNewChat { chat.newConversation() }
+        if startingNewChat {
+            chat.newConversation()
+        }
         await setUp(newDriver)
         if queries.isEmpty {
             newQueryTab()
@@ -529,7 +549,9 @@ final class WorkspaceModel {
             tables = loaded
             await loadRoutines()
             if tabs.contains(where: {
-                if case .query = $0 { return true }
+                if case .query = $0 {
+                    return true
+                }
                 return false
             }) {
                 prefetchColumns()
@@ -544,7 +566,9 @@ final class WorkspaceModel {
 
     func refresh() async {
         await loadTables()
-        if let table = selectedTableTab { await table.reload() }
+        if let table = selectedTableTab {
+            await table.reload()
+        }
     }
 
     /// The tab opened by browsing the sidebar; the next browse replaces it instead of adding a tab
@@ -554,12 +578,18 @@ final class WorkspaceModel {
     /// Opens a table. `preview` (sidebar browsing) reuses the preview tab when it has nothing worth keeping.
     func open(_ table: TableRef, mode: TableTabModel.Mode = .data, preview: Bool = false) {
         if let existing = tabs.first(where: {
-            if case .table(let model) = $0 { return model.table == table }
+            if case .table(let model) = $0 {
+                return model.table == table
+            }
             return false
         }) {
             selectedTabID = existing.id
-            if case .table(let model) = existing { model.mode = mode }
-            if !preview && existing.id == previewTabID { previewTabID = nil }
+            if case .table(let model) = existing {
+                model.mode = mode
+            }
+            if !preview && existing.id == previewTabID {
+                previewTabID = nil
+            }
             return
         }
         guard let driver else { return }
@@ -582,14 +612,18 @@ final class WorkspaceModel {
 
     /// Keeps the preview tab open for good (double-click on it, or when it gains state worth keeping).
     func pin(_ id: UUID) {
-        if previewTabID == id { previewTabID = nil }
+        if previewTabID == id {
+            previewTabID = nil
+        }
     }
 
     /// Opens (or switches to) the relationship diagram of the current schema.
     func openDiagram() {
         guard let driver, config.kind.supportsDiagram else { return }
         if let existing = tabs.first(where: {
-            if case .diagram(let model) = $0 { return model.schema == selectedSchema }
+            if case .diagram(let model) = $0 {
+                return model.schema == selectedSchema
+            }
             return false
         }) {
             selectedTabID = existing.id
@@ -603,7 +637,9 @@ final class WorkspaceModel {
     func openMetrics() {
         guard let driver else { return }
         if let existing = tabs.first(where: {
-            if case .metrics = $0 { return true }
+            if case .metrics = $0 {
+                return true
+            }
             return false
         }) {
             selectedTabID = existing.id
@@ -659,9 +695,13 @@ final class WorkspaceModel {
 
     /// Table names of another schema, for completing `schema.`; nil while they load.
     func tableNames(inSchema schema: String) -> [String]? {
-        if schema.caseInsensitiveCompare(selectedSchema) == .orderedSame { return tables.map(\.name) }
+        if schema.caseInsensitiveCompare(selectedSchema) == .orderedSame {
+            return tables.map(\.name)
+        }
         let key = schema.lowercased()
-        if let cached = schemaTableCache[key] { return cached }
+        if let cached = schemaTableCache[key] {
+            return cached
+        }
         guard let driver, !loadingSchemaTables.contains(key),
             let name = schemas.first(where: { $0.caseInsensitiveCompare(schema) == .orderedSame })
         else { return nil }
@@ -700,14 +740,18 @@ final class WorkspaceModel {
         let deadline = ContinuousClock.now + .seconds(Defaults.AI.schemaWait)
         for (index, table) in (named + others).enumerated() where columnCache[Self.columnKey(table)] == nil {
             // Stop (the user cancelled) or run out of time: send what is known.
-            if Task.isCancelled || (index >= named.count && ContinuousClock.now >= deadline) { break }
+            if Task.isCancelled || (index >= named.count && ContinuousClock.now >= deadline) {
+                break
+            }
             let columns = (try? await driver.columns(of: table)) ?? []
             guard generation == cacheGeneration else { return aiSchema() }
             columnCache[Self.columnKey(table)] = columns
         }
         if foreignKeyCache == nil, !Task.isCancelled, ContinuousClock.now < deadline {
             let keys = (try? await driver.foreignKeys(in: selectedSchema)) ?? []
-            if generation == cacheGeneration { foreignKeyCache = keys }
+            if generation == cacheGeneration {
+                foreignKeyCache = keys
+            }
         }
         return aiSchema(extra: extra)
     }
@@ -784,7 +828,9 @@ final class WorkspaceModel {
         case .diagram, .metrics, .routine:
             break
         }
-        if closedTabs.count > 20 { closedTabs.removeFirst() }
+        if closedTabs.count > 20 {
+            closedTabs.removeFirst()
+        }
         tabs.remove(at: index)
         if selectedTabID == id {
             selectedTabID = tabs.isEmpty ? nil : tabs[min(index, tabs.count - 1)].id
@@ -792,7 +838,9 @@ final class WorkspaceModel {
     }
 
     func closeSelectedTab() {
-        if let id = selectedTabID { close(id) }
+        if let id = selectedTabID {
+            close(id)
+        }
     }
 
     /// Whether closing this tab would throw away uncommitted rows or unsaved edits to its file.
@@ -813,7 +861,9 @@ final class WorkspaceModel {
             open(table, mode: mode)
         case .query(let title, let sql):
             newQueryTab(sql: sql)
-            if case .query(let model) = selectedTab { model.title = title }
+            if case .query(let model) = selectedTab {
+                model.title = title
+            }
         case .file(let url):
             openSQLFile(url)
         }
@@ -823,7 +873,9 @@ final class WorkspaceModel {
     func selectTab(number: Int) {
         guard !tabs.isEmpty else { return }
         let index = number == 9 ? tabs.count - 1 : number - 1
-        if tabs.indices.contains(index) { selectedTabID = tabs[index].id }
+        if tabs.indices.contains(index) {
+            selectedTabID = tabs[index].id
+        }
     }
 
     func selectAdjacentTab(_ offset: Int) {
@@ -834,7 +886,9 @@ final class WorkspaceModel {
     func recordHistory(_ sql: String) {
         history.removeAll { $0 == sql }
         history.insert(sql, at: 0)
-        if history.count > Defaults.historyLimit { history.removeLast(history.count - Defaults.historyLimit) }
+        if history.count > Defaults.historyLimit {
+            history.removeLast(history.count - Defaults.historyLimit)
+        }
     }
 
     /// A table's column names if already loaded; otherwise starts loading them and returns nil,
@@ -854,7 +908,9 @@ final class WorkspaceModel {
             return nil
         }
         let key = Self.columnKey(ref)
-        if let cached = columnCache[key] { return cached.map(\.name) }
+        if let cached = columnCache[key] {
+            return cached.map(\.name)
+        }
         guard let driver, !loadingColumns.contains(key) else { return nil }
         loadingColumns.insert(key)
         let generation = cacheGeneration
@@ -874,10 +930,14 @@ final class WorkspaceModel {
         _ = try await driver.execute(sql)
         if sql.hasPrefix("DROP") {
             tabs.removeAll {
-                if case .table(let model) = $0 { return model.table == table }
+                if case .table(let model) = $0 {
+                    return model.table == table
+                }
                 return false
             }
-            if selectedTab == nil { selectedTabID = tabs.last?.id }
+            if selectedTab == nil {
+                selectedTabID = tabs.last?.id
+            }
         }
         await refresh()
     }

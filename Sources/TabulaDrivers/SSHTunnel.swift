@@ -60,7 +60,9 @@ public actor SSHTunnel {
         timeout: Double,
         knownHosts: String?
     ) async throws -> SSHTunnel {
-        if let problem = ssh.problem { throw DatabaseError(problem) }
+        if let problem = ssh.problem {
+            throw DatabaseError(problem)
+        }
         guard SSHConfig.isSafeName(targetHost), (1...65535).contains(targetPort) else {
             throw DatabaseError("The database host isn't valid for an SSH tunnel.")
         }
@@ -183,7 +185,9 @@ public actor SSHTunnel {
                     let bindFailure = text.contains("Address already in use") || text.contains("cannot listen to port")
                     throw TunnelError(message: describe(text, ssh: ssh), retryable: bindFailure)
                 }
-                if isListening(port: port) { return tunnel }
+                if isListening(port: port) {
+                    return tunnel
+                }
                 try await Task.sleep(for: .milliseconds(100))
             }
             throw TunnelError(
@@ -221,7 +225,9 @@ public actor SSHTunnel {
         // ssh exits on SIGTERM; one that doesn't is killed shortly after.
         DispatchQueue.global()
             .asyncAfter(deadline: .now() + 2) {
-                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                if process.isRunning {
+                    kill(process.processIdentifier, SIGKILL)
+                }
             }
     }
 
@@ -234,7 +240,9 @@ public actor SSHTunnel {
     /// Stops every tunnel at once; for when the app quits.
     /// Closing each tunnel's lifeline makes its watcher stop ssh.
     public static func terminateAll() {
-        for lifeline in live.all { try? lifeline.close() }
+        for lifeline in live.all {
+            try? lifeline.close()
+        }
     }
 
     private final class LiveProcesses: @unchecked Sendable {
@@ -291,7 +299,9 @@ public actor SSHTunnel {
         func append(_ more: Data) {
             lock.withLock {
                 data.append(more)
-                if data.count > 8192 { data = data.suffix(8192) }
+                if data.count > 8192 {
+                    data = data.suffix(8192)
+                }
             }
         }
 

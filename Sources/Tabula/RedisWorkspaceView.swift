@@ -45,7 +45,9 @@ enum RedisFormat {
     static func ttl(_ milliseconds: Int?) -> String {
         guard let milliseconds else { return "No expiry" }
         var seconds = milliseconds / 1000
-        if seconds == 0 { return "< 1s" }
+        if seconds == 0 {
+            return "< 1s"
+        }
         let days = seconds / 86_400
         seconds %= 86_400
         let hours = seconds / 3600
@@ -131,7 +133,9 @@ struct RedisWorkspaceView: View {
             case .console:
                 RedisConsoleView(model: model.console)
             case .metrics:
-                if let metrics = model.metrics { MetricsView(model: metrics) }
+                if let metrics = model.metrics {
+                    MetricsView(model: metrics)
+                }
             case .keys:
                 RedisKeysPane(model: model)
             }
@@ -145,7 +149,9 @@ struct RedisSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let color = model.config.tag.color { Rectangle().fill(color).frame(height: 3) }
+            if let color = model.config.tag.color {
+                Rectangle().fill(color).frame(height: 3)
+            }
             List(
                 selection: Binding(
                     get: { model.database },
@@ -282,7 +288,9 @@ private struct RedisKeysPane: View {
             Text("Double-click key, TTL (e.g. 1h 30m, ∞ for none) or a short string value to edit")
                 .font(.system(size: 11)).foregroundStyle(.tertiary)
             Spacer()
-            if model.loadingKeys { ProgressView().controlSize(.mini) }
+            if model.loadingKeys {
+                ProgressView().controlSize(.mini)
+            }
             let total = model.databases.first(where: { $0.index == model.database })?.keys
             Text("\(model.keys.count) keys" + (total.map { " of \($0)" } ?? ""))
                 .font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
@@ -379,8 +387,12 @@ struct RedisKeyView: View {
                         info.type == .string ? RedisFormat.bytes(info.length) : "\(info.length) items",
                         systemImage: "number"
                     )
-                    if let memory = info.memoryBytes { Label(RedisFormat.bytes(memory), systemImage: "memorychip") }
-                    if let encoding = info.encoding { Text(encoding).foregroundStyle(.tertiary) }
+                    if let memory = info.memoryBytes {
+                        Label(RedisFormat.bytes(memory), systemImage: "memorychip")
+                    }
+                    if let encoding = info.encoding {
+                        Text(encoding).foregroundStyle(.tertiary)
+                    }
                 }
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 Button {
@@ -393,7 +405,9 @@ struct RedisKeyView: View {
                 .font(.system(size: 11))
                 .help("Set expiry (TTL)")
             }
-            if model.loading { ProgressView().controlSize(.mini) }
+            if model.loading {
+                ProgressView().controlSize(.mini)
+            }
             BarButton(symbol: "arrow.clockwise", help: "Reload key") { Task { await model.reload() } }
             BarButton(symbol: "trash", help: "Delete key") { workspace.confirmDelete([model.key]) }
         }
@@ -654,7 +668,9 @@ private struct NewRedisKeySheet: View {
                 TextField("Expiry (seconds, optional)", text: $ttl)
             }
             ElementFields(type: type, first: $first, second: $second)
-            if let error { Text(error).font(.callout).foregroundStyle(.red) }
+            if let error {
+                Text(error).font(.callout).foregroundStyle(.red)
+            }
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
@@ -714,7 +730,9 @@ struct RedisConsoleView: View {
                     .padding(10)
                 }
                 .onChange(of: model.entries.count) { _, _ in
-                    if let last = model.entries.last { proxy.scrollTo(last.id, anchor: .bottom) }
+                    if let last = model.entries.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
                 }
             }
             .background(Color(nsColor: .textBackgroundColor))
@@ -739,7 +757,9 @@ struct RedisConsoleView: View {
                         model.historyDown()
                         return .handled
                     }
-                if model.running { ProgressView().controlSize(.mini) }
+                if model.running {
+                    ProgressView().controlSize(.mini)
+                }
                 BarButton(symbol: "trash", help: "Clear output") { model.clear() }
             }
             .padding(.horizontal, 10)

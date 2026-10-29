@@ -132,8 +132,12 @@ public enum MongoShell {
         if inline {
             output += document.isArray ? "[" : "{ "
             for (index, item) in items.enumerated() {
-                if index > 0 { output += ", " }
-                if let key = item.key { output += key.isEmpty ? "\"\": " : self.key(key) + ": " }
+                if index > 0 {
+                    output += ", "
+                }
+                if let key = item.key {
+                    output += key.isEmpty ? "\"\": " : self.key(key) + ": "
+                }
                 write(item.value, into: &output, indent: nil)
             }
             output += document.isArray ? "]" : " }"
@@ -144,7 +148,9 @@ public enum MongoShell {
         output += open + "\n"
         for (index, item) in items.enumerated() {
             output += inner
-            if let key = item.key { output += (key.isEmpty ? "\"\"" : self.key(key)) + ": " }
+            if let key = item.key {
+                output += (key.isEmpty ? "\"\"" : self.key(key)) + ": "
+            }
             write(item.value, into: &output, indent: level + 1)
             output += index < items.count - 1 ? ",\n" : "\n"
         }
@@ -153,8 +159,12 @@ public enum MongoShell {
 
     /// Doubles always show a decimal point or exponent, so they read back as doubles, not integers.
     static func number(_ double: Double) -> String {
-        if double.isNaN { return "NaN" }
-        if double.isInfinite { return double < 0 ? "-Infinity" : "Infinity" }
+        if double.isNaN {
+            return "NaN"
+        }
+        if double.isInfinite {
+            return double < 0 ? "-Infinity" : "Infinity"
+        }
         let text = "\(double)"
         return text.contains(where: { $0 == "." || $0 == "e" || $0 == "E" }) ? text : text + ".0"
     }
@@ -296,7 +306,9 @@ struct MongoShellParser {
                 index += 1
             } else if byte == UInt8(ascii: "/"), peek(1) == UInt8(ascii: "/") {
                 sawComment = true
-                while let next = peek(), next != 0x0A { index += 1 }
+                while let next = peek(), next != 0x0A {
+                    index += 1
+                }
             } else if byte == UInt8(ascii: "/"), peek(1) == UInt8(ascii: "*") {
                 sawComment = true
                 index += 2
@@ -352,7 +364,9 @@ struct MongoShellParser {
         skipSpace()
         guard let first = peek(), Self.isIdentifierStart(first) else { return nil }
         let start = index
-        while let byte = peek(), Self.isIdentifierPart(byte) { index += 1 }
+        while let byte = peek(), Self.isIdentifierPart(byte) {
+            index += 1
+        }
         return String(decoding: bytes[start..<index], as: UTF8.self)
     }
 
@@ -390,7 +404,9 @@ struct MongoShellParser {
                 key = name
             } else if let byte = peek(), byte >= 0x30 && byte <= 0x39 {
                 let start = index
-                while let digit = peek(), digit >= 0x30 && digit <= 0x39 { index += 1 }
+                while let digit = peek(), digit >= 0x30 && digit <= 0x39 {
+                    index += 1
+                }
                 key = String(decoding: bytes[start..<index], as: UTF8.self)
             } else {
                 throw error("Expected a field name")
@@ -428,8 +444,12 @@ struct MongoShellParser {
         while true {
             guard let byte = peek() else { throw error("Unterminated string") }
             index += 1
-            if byte == quote { break }
-            if byte == 0x0A { throw error("Unterminated string") }
+            if byte == quote {
+                break
+            }
+            if byte == 0x0A {
+                throw error("Unterminated string")
+            }
             guard byte == UInt8(ascii: "\\") else {
                 output.append(byte)
                 continue
@@ -536,7 +556,9 @@ struct MongoShellParser {
             pattern.append(byte)
         }
         let start = index
-        while let byte = peek(), byte >= 0x61 && byte <= 0x7A { index += 1 }
+        while let byte = peek(), byte >= 0x61 && byte <= 0x7A {
+            index += 1
+        }
         let options = String(decoding: bytes[start..<index], as: UTF8.self)
         return RegularExpression(pattern: String(decoding: pattern, as: UTF8.self), options: String(options.sorted()))
     }
@@ -573,8 +595,12 @@ struct MongoShellParser {
             arguments.indices.contains(position) ? arguments[position] : nil
         }
         func text(_ position: Int) throws -> String {
-            if let string = argument(position) as? String { return string }
-            if let number = argument(position) { return MongoShell.format(number) }
+            if let string = argument(position) as? String {
+                return string
+            }
+            if let number = argument(position) {
+                return MongoShell.format(number)
+            }
             throw error("\(name) needs an argument")
         }
 
@@ -599,15 +625,21 @@ struct MongoShellParser {
                 return Date(timeIntervalSince1970: milliseconds / 1000)
             }
         case "NumberLong", "Long", "Long.fromString", "Long.fromNumber":
-            if let int = argument(0) as? Int { return int }
-            if let int = argument(0) as? Int32 { return Int(int) }
+            if let int = argument(0) as? Int {
+                return int
+            }
+            if let int = argument(0) as? Int32 {
+                return Int(int)
+            }
             let value = try text(0)
             guard let int = Int(value) ?? Self.double(argument(0) ?? Null()).flatMap({ Int(exactly: $0) }) else {
                 throw error("“\(value)” isn't a 64-bit integer")
             }
             return int
         case "NumberInt", "Int32":
-            if let int = argument(0) as? Int32 { return int }
+            if let int = argument(0) as? Int32 {
+                return int
+            }
             let value = try text(0)
             guard let int = Int32(value) ?? Self.double(argument(0) ?? Null()).flatMap({ Int32(exactly: $0) }) else {
                 throw error("“\(value)” isn't a 32-bit integer")
@@ -658,7 +690,9 @@ struct MongoShellParser {
             return RegularExpression(pattern: pattern, options: String(((argument(1) as? String) ?? "").sorted()))
         case "Code":
             let code = try text(0)
-            if let scope = argument(1) as? Document { return JavaScriptCodeWithScope(code, scope: scope) }
+            if let scope = argument(1) as? Document {
+                return JavaScriptCodeWithScope(code, scope: scope)
+            }
             return JavaScriptCode(code)
         default:
             index = wordStart
@@ -807,7 +841,9 @@ enum MongoDates {
         for candidate in candidates {
             for options in variants {
                 formatter.formatOptions = options
-                if let date = formatter.date(from: candidate) { return date }
+                if let date = formatter.date(from: candidate) {
+                    return date
+                }
             }
         }
         return nil

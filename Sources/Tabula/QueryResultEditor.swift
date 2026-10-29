@@ -29,7 +29,9 @@ final class QueryResultEditor {
     }
 
     func value(row: Int, column: Int) -> String? {
-        if let edited = edits[row]?[column] { return edited }
+        if let edited = edits[row]?[column] {
+            return edited
+        }
         return rows[row][column]
     }
 
@@ -40,7 +42,9 @@ final class QueryResultEditor {
         registerUndo()
         if rows[row][column] == value {
             edits[row]?[column] = nil
-            if edits[row]?.isEmpty == true { edits[row] = nil }
+            if edits[row]?.isEmpty == true {
+                edits[row] = nil
+            }
         } else {
             edits[row, default: [:]][column] = .some(value)
         }
@@ -74,7 +78,9 @@ final class QueryResultEditor {
     func pendingStatements() throws -> [String] { try changes.map { try target.statement(for: $0) } }
 
     func applied(_ returned: [Int: [String?]]) {
-        for (index, row) in returned where rows.indices.contains(index) { rows[index] = row }
+        for (index, row) in returned where rows.indices.contains(index) {
+            rows[index] = row
+        }
         edits = [:]
         error = nil
         undoManager.removeAllActions()

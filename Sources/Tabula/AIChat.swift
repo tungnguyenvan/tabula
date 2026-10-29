@@ -60,7 +60,9 @@ final class AIChatModel {
     }
 
     func delete(_ id: UUID) {
-        if id == currentID { newConversation() }
+        if id == currentID {
+            newConversation()
+        }
         conversations.removeAll { $0.id == id }
         deleted.insert(id)
         persist()
@@ -107,7 +109,9 @@ final class AIChatModel {
             return
         }
         let history = Self.history(messages.suffix(Defaults.AI.chatHistoryMessages))
-        if currentID == nil { currentID = UUID() }
+        if currentID == nil {
+            currentID = UUID()
+        }
         messages.append(Message(role: .user, text: question))
         save()
         input = ""
@@ -136,7 +140,9 @@ final class AIChatModel {
                 var steps: [(call: AgentToolCall, result: String)] = []
                 for step in 0..<Defaults.AI.agentMaxSteps {
                     let last = step == Defaults.AI.agentMaxSteps - 1
-                    if step > 0 { reply = startReply(preparing: false) }
+                    if step > 0 {
+                        reply = startReply(preparing: false)
+                    }
                     let request = SQLPrompts.chat(
                         question: question,
                         history: history,
@@ -169,7 +175,9 @@ final class AIChatModel {
                     save()
                 }
             } catch {
-                if !Task.isCancelled { self.error = error.localizedDescription }
+                if !Task.isCancelled {
+                    self.error = error.localizedDescription
+                }
             }
         }
     }
@@ -204,7 +212,9 @@ final class AIChatModel {
             let allowed = await withCheckedContinuation { continuation in
                 // Stopped meanwhile: answer at once instead of waiting for a button that is gone.
                 guard self.run == run, !Task.isCancelled else { return continuation.resume(returning: false) }
-                if let earlier = approval { earlier.continuation.resume(returning: false) }
+                if let earlier = approval {
+                    earlier.continuation.resume(returning: false)
+                }
                 approval = (step.id, continuation)
             }
             try Task.checkCancellation()
@@ -286,7 +296,9 @@ final class AIChatModel {
             case .text(let piece): text += piece
             case .thinking(let piece): thinking += piece
             }
-            if Date().timeIntervalSince(lastRefresh) >= Defaults.AI.streamRefreshInterval { flush() }
+            if Date().timeIntervalSince(lastRefresh) >= Defaults.AI.streamRefreshInterval {
+                flush()
+            }
         }
     }
 
@@ -327,7 +339,9 @@ final class AIChatModel {
 
     /// Ends a reply: it stops showing progress, and one that never got any text disappears.
     private func finish(_ id: UUID) {
-        if replyID == id { replyID = nil }
+        if replyID == id {
+            replyID = nil
+        }
         update(id) {
             $0.streaming = false
             $0.preparing = false
@@ -347,7 +361,9 @@ final class AIChatModel {
             self.approval = nil
             approval.continuation.resume(returning: false)
         }
-        if let replyID { finish(replyID) }
+        if let replyID {
+            finish(replyID)
+        }
         for index in messages.indices
         where messages[index].tool.map({ $0.status == .running || $0.status == .awaitingApproval }) == true {
             messages[index].tool?.status = .stopped
@@ -371,7 +387,9 @@ struct AIChatView: View {
     @State private var atBottom = true
 
     private var queryTab: QueryTabModel? {
-        if case .query(let query) = workspace.selectedTab { return query }
+        if case .query(let query) = workspace.selectedTab {
+            return query
+        }
         return nil
     }
 
@@ -382,7 +400,9 @@ struct AIChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Layout.Chat.spacing) {
-                        if chat.messages.isEmpty { emptyState }
+                        if chat.messages.isEmpty {
+                            emptyState
+                        }
                         ForEach(chat.messages) { message in
                             MessageView(message: message, insert: insert, run: run, answer: chat.answer).id(message.id)
                         }
@@ -402,7 +422,9 @@ struct AIChatView: View {
                 }
                 // Follow an answer as it streams in, unless the user scrolled away from the end.
                 .onChange(of: chat.revision) { _, _ in
-                    if atBottom { proxy.scrollTo(Self.endID, anchor: .bottom) }
+                    if atBottom {
+                        proxy.scrollTo(Self.endID, anchor: .bottom)
+                    }
                 }
             }
             Divider()
@@ -552,7 +574,9 @@ struct AIChatView: View {
                         .accessibilityLabel("Ask the AI")
                         // Return sends; Shift-Return starts a new line.
                         .onKeyPress(.return, phases: .down) { press in
-                            if press.modifiers.contains(.shift) { return .ignored }
+                            if press.modifiers.contains(.shift) {
+                                return .ignored
+                            }
                             send()
                             return .handled
                         }
@@ -585,7 +609,9 @@ struct AIChatView: View {
         insert(sql)
         // Inserted SQL is selected, so running "the selection" runs exactly it.
         DispatchQueue.main.async {
-            if let query = self.queryTab { query.runRequest = (false, query.runRequest.id + 1) }
+            if let query = self.queryTab {
+                query.runRequest = (false, query.runRequest.id + 1)
+            }
         }
     }
 }
@@ -659,7 +685,9 @@ extension MessageView {
     }
 
     private var thinkingTitle: String {
-        if message.streaming && message.text.isEmpty { return "Thinking…" }
+        if message.streaming && message.text.isEmpty {
+            return "Thinking…"
+        }
         guard let seconds = message.thoughtFor else { return "Thinking" }
         return seconds < 1 ? "Thought briefly" : "Thought for \(Int(seconds.rounded())) s"
     }
@@ -697,7 +725,9 @@ private struct ToolStepView: View {
                 }
             } label: {
                 HStack(spacing: Layout.barPadding / 2) {
-                    if step.status == .running { ProgressView().controlSize(.mini) }
+                    if step.status == .running {
+                        ProgressView().controlSize(.mini)
+                    }
                     Label(title, systemImage: icon).font(.callout).foregroundStyle(.secondary)
                 }
             }
@@ -878,9 +908,15 @@ private struct ModelPicker: View {
             ai.settings.provider == kind && (model.isEmpty || ai.settings.model(kind, for: .generate) == model)
         return Button {
             ai.settings.provider = kind
-            if !model.isEmpty { ai.settings.models[kind.rawValue] = model }
+            if !model.isEmpty {
+                ai.settings.models[kind.rawValue] = model
+            }
         } label: {
-            if selected { Label(title, systemImage: "checkmark") } else { Text(title) }
+            if selected {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
         }
     }
 }

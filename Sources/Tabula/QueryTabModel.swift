@@ -132,7 +132,9 @@ final class QueryTabModel {
         var interrupted = false
         for (index, statement) in statements.enumerated() {
             // Stop (or closing the tab) ends the run here: no further statement is sent.
-            if scope.isCancelled || Task.isCancelled { break }
+            if scope.isCancelled || Task.isCancelled {
+                break
+            }
             do {
                 let limited = rowLimit.map { driver.dialect.applyingRowLimit(statement, limit: $0) } ?? statement
                 let result = try await driver.execute(limited)
@@ -177,12 +179,16 @@ final class QueryTabModel {
 
     private static func stoppedMessage(completed: Int, total: Int, interrupted: Bool, detail: String?) -> String {
         var text = interrupted ? "Query cancelled." : "Stopped."
-        if total > 1 { text += " \(completed) of \(total) statements completed; the rest were not run." }
+        if total > 1 {
+            text += " \(completed) of \(total) statements completed; the rest were not run."
+        }
         if interrupted {
             text +=
                 " If a transaction was open, PostgreSQL has marked it failed: run ROLLBACK (or ROLLBACK TO SAVEPOINT) before continuing."
         }
-        if let detail { text += "\n" + detail }
+        if let detail {
+            text += "\n" + detail
+        }
         return text
     }
 
@@ -224,7 +230,9 @@ final class QueryTabModel {
     }
 
     func suspendResultEditing() {
-        for editor in resultEditors.values { editor.suspended = true }
+        for editor in resultEditors.values {
+            editor.suspended = true
+        }
     }
 
     func confirmDiscardResults() -> Bool {

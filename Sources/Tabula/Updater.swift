@@ -66,7 +66,9 @@ final class Updater {
         }
         #endif
         guard automaticallyChecks, Bundle.main.bundleURL.pathExtension == "app" else { return }
-        if let lastCheck, Date().timeIntervalSince(lastCheck) < Defaults.Updates.checkInterval { return }
+        if let lastCheck, Date().timeIntervalSince(lastCheck) < Defaults.Updates.checkInterval {
+            return
+        }
         Task { await check(userInitiated: false) }
     }
 
@@ -76,7 +78,9 @@ final class Updater {
             return
         }
         state = .checking
-        if userInitiated { showWindow = true }
+        if userInitiated {
+            showWindow = true
+        }
         do {
             guard let feedURL else { throw DatabaseError("This build doesn't say where its releases are published.") }
             let update = try await UpdateFeed.check(feed: feedURL, current: Self.currentVersion)
@@ -92,7 +96,9 @@ final class Updater {
             }
         } catch {
             state = .failed(error.localizedDescription)
-            if !userInitiated { showWindow = false }
+            if !userInitiated {
+                showWindow = false
+            }
         }
     }
 
@@ -105,7 +111,9 @@ final class Updater {
     func cancelDownload() {
         downloadTask?.cancel()
         downloadTask = nil
-        if case .downloading(let update, _) = state { state = .available(update) }
+        if case .downloading(let update, _) = state {
+            state = .available(update)
+        }
     }
 
     // MARK: Install
@@ -117,7 +125,9 @@ final class Updater {
         if bundle.path.contains("/AppTranslocation/") { return .failure(.translocated) }
         if bundle.path.hasPrefix("/Volumes/") {
             let values = try? bundle.resourceValues(forKeys: [.volumeIsReadOnlyKey])
-            if values?.volumeIsReadOnly == true { return .failure(.readOnlyVolume) }
+            if values?.volumeIsReadOnly == true {
+                return .failure(.readOnlyVolume)
+            }
         }
         guard FileManager.default.isWritableFile(atPath: bundle.deletingLastPathComponent().path),
             FileManager.default.isWritableFile(atPath: bundle.path)
@@ -150,7 +160,9 @@ final class Updater {
                 let target = try Self.installLocation().get()
                 let newApp = try await Self.prepare(update) { progress in
                     Task { @MainActor in
-                        if case .downloading = self?.state { self?.state = .downloading(update, progress: progress) }
+                        if case .downloading = self?.state {
+                            self?.state = .downloading(update, progress: progress)
+                        }
                     }
                 }
                 try Task.checkCancellation()
@@ -244,7 +256,9 @@ final class Updater {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         var hasher = SHA256()
-        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty { hasher.update(data: chunk) }
+        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 

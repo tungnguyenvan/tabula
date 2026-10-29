@@ -21,7 +21,9 @@ public enum MySQLScriptCheck {
             }
             carry = Data(carry[start...])
         }
-        if !carry.isEmpty { try check(line: carry[...], number: lineNumber + 1) }
+        if !carry.isEmpty {
+            try check(line: carry[...], number: lineNumber + 1)
+        }
     }
 
     static func check(line: Data.SubSequence, number: Int) throws {

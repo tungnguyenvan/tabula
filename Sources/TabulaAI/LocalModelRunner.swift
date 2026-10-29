@@ -169,13 +169,17 @@ public final class LocalModelRunner: @unchecked Sendable {
         // room for the answer.
         let room = Int(llama_n_ctx(context)) - maxTokens - 1
         guard room > 0 else { throw AIError.server("The model's context is too small.") }
-        if tokens.count > room { tokens = Array(tokens.suffix(room)) }
+        if tokens.count > room {
+            tokens = Array(tokens.suffix(room))
+        }
 
         // The prompt goes in batches no larger than the context's batch size.
         let batchSize = Int(Defaults.AI.localBatchSize)
         var start = 0
         while start < tokens.count {
-            if cancelled.isSet { throw CancellationError() }
+            if cancelled.isSet {
+                throw CancellationError()
+            }
             let end = min(start + batchSize, tokens.count)
             var chunk = Array(tokens[start..<end])
             let status = chunk.withUnsafeMutableBufferPointer { buffer in
@@ -200,13 +204,19 @@ public final class LocalModelRunner: @unchecked Sendable {
         /// Bytes already passed to `onText`; a token can end in the middle of a UTF-8 character.
         var sent = 0
         for _ in 0..<maxTokens {
-            if cancelled.isSet { throw CancellationError() }
+            if cancelled.isSet {
+                throw CancellationError()
+            }
             var token = llama_sampler_sample(sampler, context, -1)
-            if llama_vocab_is_eog(vocab, token) || (fimPad >= 0 && token == fimPad) { break }
+            if llama_vocab_is_eog(vocab, token) || (fimPad >= 0 && token == fimPad) {
+                break
+            }
             // Small models sometimes loop on one token ("1000000…"); stop before the run gets long.
             repeats = token == previous ? repeats + 1 : 0
             previous = token
-            if repeats >= Defaults.AI.localRepeatLimit { break }
+            if repeats >= Defaults.AI.localRepeatLimit {
+                break
+            }
             let length = llama_token_to_piece(vocab, token, &piece, Int32(piece.count), 0, false)
             if length > 0 { output.append(contentsOf: piece[0..<Int(length)].map { UInt8(bitPattern: $0) }) }
             if let onText {
@@ -226,7 +236,9 @@ public final class LocalModelRunner: @unchecked Sendable {
     static func completeUTF8Length(_ data: Data) -> Int {
         var index = data.count
         // Walk back over continuation bytes (10xxxxxx) to the lead byte of the last character.
-        while index > 0, data.count - index < 4, data[data.startIndex + index - 1] & 0xC0 == 0x80 { index -= 1 }
+        while index > 0, data.count - index < 4, data[data.startIndex + index - 1] & 0xC0 == 0x80 {
+            index -= 1
+        }
         guard index > 0 else { return data.count }
         let lead = data[data.startIndex + index - 1]
         let needed = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1
@@ -234,7 +246,9 @@ public final class LocalModelRunner: @unchecked Sendable {
     }
 
     private func load(_ path: String) throws -> (OpaquePointer, OpaquePointer) {
-        if let loaded, loaded.path == path { return (loaded.model, loaded.context) }
+        if let loaded, loaded.path == path {
+            return (loaded.model, loaded.context)
+        }
         release()
         guard FileManager.default.fileExists(atPath: path) else {
             throw AIError.notConfigured("The model file is missing. Download it again in Settings › AI.")

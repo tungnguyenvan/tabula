@@ -55,10 +55,14 @@ public enum SQLSplitter {
             switch word {
             case "BEGIN", "CASE":
                 // "END CASE" closes a CASE that was already counted when it opened.
-                if !afterEnd { blockDepth += 1 }
+                if !afterEnd {
+                    blockDepth += 1
+                }
             case "IF", "LOOP", "WHILE", "REPEAT":
                 // END IF / END LOOP / ... close constructs that weren't counted, so undo that END's step.
-                if afterEnd { blockDepth += 1 }
+                if afterEnd {
+                    blockDepth += 1
+                }
             case "END":
                 blockDepth = max(0, blockDepth - 1)
             default:
@@ -178,7 +182,9 @@ public enum SQLSplitter {
         }
         guard j < chars.count, chars[j] == "$" else { return nil }
         // "$1" is a parameter placeholder, not a tag.
-        if j > start + 1, chars[start + 1].isNumber { return nil }
+        if j > start + 1, chars[start + 1].isNumber {
+            return nil
+        }
         return Array(chars[start...j])
     }
 
