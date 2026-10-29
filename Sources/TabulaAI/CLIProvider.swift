@@ -128,6 +128,9 @@ public struct CLIProvider: AIProvider {
                 var arguments = [
                     "exec", "--skip-git-repo-check", "--sandbox", "read-only", "--json", "--output-last-message",
                     answer.path,
+                    // The user's MCP servers start before every answer, and Tabula uses none of them: one that
+                    // was slow to start held an answer for over a minute. An override works on every version.
+                    "-c", "mcp_servers={}",
                 ]
                 // Codex shares a summary of its reasoning only when asked; suggestions while typing don't show it.
                 if request.purpose != .inline {
