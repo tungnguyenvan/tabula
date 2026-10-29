@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Stop a running SQLite query** with **Stop** or ⌘., as on PostgreSQL. A statement that never ends, such as a recursive query without a stop condition, no longer leaves quitting Tabula as the only way out ([#141](https://github.com/tungnguyenvan/tabula/issues/141)).
+
 ### Fixed
 - **Tabula no longer quits when a new row disappears from Row Details**: committing a new row, or undoing it, while Row Details showed it closed the app ([#131](https://github.com/tungnguyenvan/tabula/issues/131)).
 - **AI chat with Claude Code or Codex no longer hangs on Thinking** ([#80](https://github.com/tungnguyenvan/tabula/issues/80)).
@@ -30,6 +33,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - Coming back to Tabula no longer refreshes every query tab when the library hasn't changed.
 - **The AI assistant can no longer act on the PostgreSQL server through a read-only query** ([#137](https://github.com/tungnguyenvan/tabula/issues/137)): functions that run SQL given as text (`query_to_xml`, `ts_stat`, `crosstab`) are refused, as are ones that a read-only transaction doesn't stop: advisory locks, statistics resets, WAL switches and replication slots.
 - **The AI assistant's MongoDB queries stop after 15 seconds** like its PostgreSQL and MySQL ones, instead of running on the server with no limit ([#139](https://github.com/tungnguyenvan/tabula/issues/139)).
+- **The AI assistant's SQLite queries stop after 15 seconds** too ([#141](https://github.com/tungnguyenvan/tabula/issues/141)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 

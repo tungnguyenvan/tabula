@@ -83,7 +83,7 @@ struct ShortcutsView: View {
             items: [
                 ("⌘↩", "Run: the selection, or the statement at the cursor"),
                 ("⇧⌘↩", "Run everything"),
-                ("⌘.", "Stop the running PostgreSQL query"),
+                ("⌘.", "Stop the running PostgreSQL or SQLite query"),
                 ("⌘/", "Comment / uncomment lines"),
                 ("⇥", "Accept the inline suggestion"),
                 ("⎋ or ⌃Space", "Show suggestions: tables, columns, keywords"),

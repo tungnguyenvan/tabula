@@ -5,6 +5,7 @@ import XCTest
 @testable import TabulaMySQL
 @testable import TabulaPostgres
 @testable import TabulaSQL
+@testable import TabulaSQLite
 
 final class QueryCancellationTests: XCTestCase {
     func testStopBeforeStartRejectsAttachment() async throws {
@@ -292,6 +293,93 @@ final class PostgresCancellationTests: XCTestCase {
         } catch { XCTAssertTrue(error is QueryCancelledError, "\(error)") }
         let result = try await driver.execute("SELECT 1")
         XCTAssertEqual(result.rows, [["1"]])
+        await driver.close()
+    }
+}
+
+final class SQLiteCancellationTests: XCTestCase {
+    private var path = ""
+    /// Counts forever; only an interrupt ends it.
+    private let endless = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c"
+
+    override func setUp() {
+        path =
+            FileManager.default.temporaryDirectory.appendingPathComponent("tabula-stop-\(UUID().uuidString).sqlite")
+            .path
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
+    func testStopInterruptsTheRunningStatementOnly() async throws {
+        let driver = try SQLiteDriver(path: path)
+        XCTAssertEqual(driver.queryCancellation, .server)
+        let scope = QueryCancelScope()
+        let run = Task { [endless] in
+            try await QueryCancelScope.$current.withValue(scope) { try await driver.execute(endless) }
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        let outcome = await scope.cancel()
+        XCTAssertEqual(outcome, .requested)
+        do {
+            _ = try await run.value
+            XCTFail("expected the statement to be interrupted")
+        } catch {
+            XCTAssertEqual((error as? QueryCancelledError)?.serverInterrupted, true, "\(error)")
+        }
+        // A Stop that comes late reaches nothing, and the connection keeps working.
+        let late = await scope.cancel()
+        XCTAssertEqual(late, .notRunning)
+        let next = try await driver.execute("SELECT 42")
+        XCTAssertEqual(next.rows, [["42"]])
+        await driver.close()
+    }
+
+    /// SQLite rolls back the whole transaction when it interrupts a statement that changes rows.
+    func testStoppedWriteRollsTheTransactionBack() async throws {
+        let driver = try SQLiteDriver(path: path)
+        _ = try await driver.executeScript(
+            """
+            CREATE TABLE t (n INTEGER);
+            BEGIN;
+            INSERT INTO t VALUES (1);
+            """
+        )
+        let scope = QueryCancelScope()
+        let run = Task {
+            try await QueryCancelScope.$current.withValue(scope) {
+                try await driver.execute(
+                    "INSERT INTO t WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c"
+                )
+            }
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        _ = await scope.cancel()
+        _ = try? await run.value
+        let rows = try await driver.execute("SELECT count(*) FROM t")
+        XCTAssertEqual(rows.rows, [["0"]], "the earlier INSERT went with the transaction")
+        let autocommit = try await driver.execute("INSERT INTO t VALUES (2)")
+        XCTAssertEqual(autocommit.affectedRows, 1, "no transaction is left open")
+        await driver.close()
+    }
+
+    func testTimeLimitOfTheAssistantsConnection() async throws {
+        let driver = try SQLiteDriver(path: path)
+        try await driver.catalog.prepareReadOnlySession(timeoutSeconds: 1, on: driver)
+        let started = Date()
+        do {
+            _ = try await driver.execute(endless)
+            XCTFail("expected the time limit to stop the statement")
+        } catch {
+            XCTAssertEqual(
+                error.localizedDescription,
+                "The statement ran past the 1-second time limit and was stopped."
+            )
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 4)
+        let next = try await driver.execute("SELECT 1")
+        XCTAssertEqual(next.rows, [["1"]])
         await driver.close()
     }
 }
