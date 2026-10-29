@@ -1,5 +1,6 @@
 import { Composition, staticFile } from "remotion";
 import { Demo, demoDuration, FPS, recordings, type DemoProps, type InputEvent } from "./Demo";
+import { HalloweenIcon, halloweenDuration } from "./HalloweenIcon";
 import { WhatsNew, whatsNewDuration, whatsNewRecordings, type WhatsNewProps } from "./WhatsNew";
 
 /// Each recording's input (clicks, keys) is read from public/<directory>/events.json before rendering.
@@ -36,5 +37,7 @@ export const Root: React.FC = () => (
       defaultProps={{ events: {} } as WhatsNewProps}
       calculateMetadata={async () => ({ props: await loadEvents(whatsNewRecordings, (name) => `whatsnew/${name}`) })}
     />
+    {/* The icon turning into its Halloween version (scripts/render-halloween.sh). */}
+    <Composition id="HalloweenIcon" component={HalloweenIcon} durationInFrames={halloweenDuration} fps={FPS} width={1080} height={1080} />
   </>
 );

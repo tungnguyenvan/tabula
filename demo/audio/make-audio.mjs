@@ -5,7 +5,7 @@
 // music.wav: calm and airy, in the manner of product videos: warm major-seventh chords on a soft electric
 // piano, a mallet arpeggio, a pad, a sub bass and a light shaker, with a stereo echo for space (96 BPM).
 // Effects, all quiet: click (mouse), key1–key4 (typing), keycap (Tab, ⌘↩), tink (titles, windows),
-// chime (an answer arriving).
+// chime (an answer arriving). halloween.wav: the soundtrack of the Halloween icon clip.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -175,5 +175,93 @@ effect("chime.wav", 1.6, (t) => {
   const bell = (frequency, start) => (t < start ? 0 : (Math.sin(2 * Math.PI * frequency * (t - start)) + 0.25 * Math.sin(2 * Math.PI * frequency * 2.76 * (t - start)) * Math.exp(-(t - start) * 8)) * Math.exp(-(t - start) * 3.2));
   return bell(midi(79), 0) + bell(midi(86), 0.11);
 }, 0.3);
+
+
+// MARK: Halloween icon video
+
+// halloween.wav: the soundtrack of the 5-second icon video (demo/src/HalloweenIcon.tsx), timed to its picture.
+// The old icon pops in (0.35 s), spins with a rising then falling whoosh (0.7–2.9 s), turns into the Halloween icon
+// with a shimmer (2.0 s), lands on a low minor bell with a drone (2.9 s), then bats flutter and squeak around it.
+{
+  const length = 5;
+  const sound = buffer(length);
+  // Pop-in: the glassy tink, lower.
+  add(sound, 0.35, 0.6, 0, (t) => Math.sin(2 * Math.PI * midi(81) * t) * Math.exp(-t * 10) * 0.35);
+  // Whoosh: noise through a moving one-pole low-pass, swelling with the spin's speed and panning across.
+  {
+    const start = 0.7;
+    const span = 2.2;
+    let low = 0;
+    let lower = 0;
+    const from = Math.floor(start * rate);
+    const count = Math.floor(span * rate);
+    for (let i = 0; i < count; i++) {
+      const progress = i / count;
+      const speed = Math.sin(Math.PI * progress);
+      const cutoff = 0.02 + 0.25 * speed;
+      low += cutoff * (noise() - low);
+      lower += cutoff * (low - lower);
+      const value = lower * speed * speed * 0.9;
+      const pan = Math.sin(progress * Math.PI * 6) * 0.6;
+      sound[0][from + i] += value * Math.cos(((pan + 1) * Math.PI) / 4);
+      sound[1][from + i] += value * Math.sin(((pan + 1) * Math.PI) / 4);
+    }
+  }
+  // Shimmer as it turns: a quick upward run of soft bells.
+  [76, 79, 83, 88, 91].forEach((note, index) => {
+    add(sound, 1.95 + index * 0.05, 0.9, (index - 2) * 0.3, (t) =>
+      Math.sin(2 * Math.PI * midi(note) * t) * Math.exp(-t * 7) * 0.14);
+  });
+  // Landing: a low bell on a minor chord, and a drone under the bats.
+  const bell = (frequency) => (t) =>
+    (Math.sin(2 * Math.PI * frequency * t) + 0.3 * Math.sin(2 * Math.PI * frequency * 2.4 * t) * Math.exp(-t * 4))
+      * Math.exp(-t * 1.6);
+  for (const note of [45, 52, 57, 60]) {
+    add(sound, 2.9, 2.1, 0, (t) => bell(midi(note))(t) * 0.22);
+  }
+  add(sound, 2.9, 2.1, 0, (t) => {
+    const swell = Math.min(1, t / 0.4) * Math.min(1, (2.1 - t) / 0.5);
+    return (Math.sin(2 * Math.PI * midi(33) * t) + 0.4 * Math.sin(2 * Math.PI * midi(40) * t)) * swell * 0.18;
+  });
+  // Bats: bursts of wing flutter (noise pulsed about 18 times a second) that pass from side to side.
+  const flutter = (start, span, fromPan, toPan) => {
+    let low = 0;
+    const from = Math.floor(start * rate);
+    const count = Math.floor(span * rate);
+    for (let i = 0; i < count; i++) {
+      const t = i / rate;
+      const progress = i / count;
+      low += 0.18 * (noise() - low);
+      const beat = Math.pow(Math.max(0, Math.sin(2 * Math.PI * 18 * t)), 3);
+      const envelope = Math.sin(Math.PI * progress);
+      const value = low * beat * envelope * 0.5;
+      const pan = fromPan + (toPan - fromPan) * progress;
+      sound[0][from + i] += value * Math.cos(((pan + 1) * Math.PI) / 4);
+      sound[1][from + i] += value * Math.sin(((pan + 1) * Math.PI) / 4);
+    }
+  };
+  flutter(3.0, 0.9, -0.9, 0.7);
+  flutter(3.5, 0.8, 0.8, -0.6);
+  flutter(4.0, 0.9, -0.5, 0.9);
+  // Squeaks: short high chirps that slide down.
+  const squeak = (start, pan, pitch) =>
+    add(sound, start, 0.09, pan, (t) => {
+      const frequency = pitch * (1 - t * 3);
+      return Math.sin(2 * Math.PI * frequency * t) * Math.sin((Math.PI * t) / 0.09) * 0.12;
+    });
+  squeak(3.15, -0.6, 5200);
+  squeak(3.3, -0.4, 6100);
+  squeak(3.75, 0.7, 5600);
+  squeak(4.2, -0.2, 6400);
+  squeak(4.35, 0.1, 5000);
+  // Fade the last half second.
+  const fadeFrom = Math.floor(4.5 * rate);
+  for (let i = fadeFrom; i < sound[0].length; i++) {
+    const fade = 1 - (i - fadeFrom) / (sound[0].length - fadeFrom);
+    sound[0][i] *= fade;
+    sound[1][i] *= fade;
+  }
+  writeWav("halloween.wav", sound, 0.85);
+}
 
 console.log(`Wrote music.wav (${seconds} s) and effects to ${directory}`);
