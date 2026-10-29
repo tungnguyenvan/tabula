@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import TabulaDrivers
 import TabulaFoundation
+import TabulaMongo
 import TabulaTransfer
 
 @MainActor @Observable
@@ -303,9 +304,16 @@ final class QueryTabModel {
         guard let result = currentResult else {
             throw DatabaseError("Run a query that returns rows first.")
         }
+        // MongoDB INSERTs are written from the documents, so every value keeps its type.
+        let exported =
+            if format == .sqlInsert, let documents = result.documents {
+                try MongoChanges.rowsForCopy(of: documents, columns: result.columns)
+            } else {
+                result.rows
+            }
         return try ResultExporter.export(
             columns: result.columns,
-            rows: result.rows,
+            rows: exported,
             format: format,
             binaryColumns: result.binaryColumns,
             dialect: driver.dialect

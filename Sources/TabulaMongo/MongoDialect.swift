@@ -366,6 +366,36 @@ public enum MongoChanges {
 
     /// Text in a field with no type yet: a shell value when it reads as one, otherwise a string. A number counts
     /// only when it reads back the same, so "02134" or a 20-digit account number stays text.
+    /// The fields of `document` as cells for a copy of it (Duplicate Row, INSERT export), keyed by their index in
+    /// `columns`: a value's cell text where that reads back as the same value, otherwise the value as the shell
+    /// writes it (NumberDecimal("0.1000"), ISODate(…), NumberLong(5), "5" for a string of digits), so the copy
+    /// keeps every type. Fields the document lacks are left out.
+    public static func cellsForCopy(of document: String, columns: [String]) throws -> [Int: String?] {
+        let parsed = try MongoShell.parseDocument(document)
+        var cells: [Int: String?] = [:]
+        for (index, column) in columns.enumerated() {
+            guard let value = parsed[column] else { continue }
+            cells[index] = .some(cellForCopy(value))
+        }
+        return cells
+    }
+
+    /// Every document's cells for a copy (`cellsForCopy`), a missing field as null, for an INSERT export.
+    public static func rowsForCopy(of documents: DocumentTexts, columns: [String]) throws -> [[String?]] {
+        try documents.map { document in
+            let cells = try cellsForCopy(of: document, columns: columns)
+            return columns.indices.map { cells[$0] ?? nil }
+        }
+    }
+
+    private static func cellForCopy(_ value: Primitive) -> String? {
+        guard let plain = MongoShell.cell(value) else {
+            return nil
+        }
+        // The same value back means the same text from the shell's own writer.
+        return MongoShell.format(typed(plain)) == MongoShell.format(value) ? plain : MongoShell.format(value)
+    }
+
     static func typed(_ text: String) -> Primitive {
         guard let value = try? MongoShell.parseValue(text) else {
             return text
