@@ -10,6 +10,9 @@
 #                  exists, so Keychain access survives rebuilds; otherwise the app is signed ad-hoc.
 #   LOCAL_IDENTITY name of that local identity (default: "Tabula Local Signing")
 #   COPYRIGHT      shown in Finder and the About panel
+#   APP_ICON       the icon in Finder and the Dock (default Resources/AppIcon.icns), e.g.
+#                  Resources/AppIcon-Halloween.icns for a release during Halloween. The regular icon always ships
+#                  as RegularIcon.icns too, so the Dock goes back to it after the season.
 #   REPOSITORY     GitHub owner/name checked for updates (default: the RELEASES_REPOSITORY file)
 #
 # The app ships without symbol tables; they are saved in dist/Tabula.app.dSYM for crash reports.
@@ -34,7 +37,9 @@ APP="dist/Tabula.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Tabula"
-cp Resources/AppIcon.icns Resources/Credits.html Resources/THIRD_PARTY_NOTICES.txt LICENSE "$APP/Contents/Resources/"
+cp Resources/Credits.html Resources/THIRD_PARTY_NOTICES.txt LICENSE "$APP/Contents/Resources/"
+cp "${APP_ICON:-Resources/AppIcon.icns}" "$APP/Contents/Resources/AppIcon.icns"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/RegularIcon.icns"
 # llama.cpp (local models) ships inside the app; the executable finds it through this rpath.
 mkdir -p "$APP/Contents/Frameworks"
 ditto "$(dirname "$BIN")/llama.framework" "$APP/Contents/Frameworks/llama.framework"
