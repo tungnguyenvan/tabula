@@ -128,6 +128,7 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 
 **Editing**
 - Edit in the grid or in the row details panel (⌥⌘0). You can set NULL or an empty string, and add, duplicate or delete rows.
+- Binary values (bytea, BLOB, BINARY, VARBINARY, BIT) show as `\x` and hex on every database, as psql shows them, and are written back as bytes: a `\x…` value in such a column is saved as those bytes, anything else typed there as text.
 - Pending changes are highlighted. Undo and redo work per tab.
 - Commit (⌘S) runs every change in one transaction and rolls back if any statement fails. Preview the exact SQL first with ⇧⌘S.
 - Closing a tab with uncommitted changes asks you first.

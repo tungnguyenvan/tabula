@@ -29,6 +29,8 @@ final class TableTabModel {
     private(set) var indexes: [IndexInfo] = []
     private(set) var resultColumns: [String] = []
     private(set) var rows: [[String?]] = []
+    /// Columns of the page whose values are bytes; written back as hex literals.
+    private(set) var binaryColumns: Set<Int> = []
     /// MongoDB: each row's whole document, so edits keep field types.
     private(set) var documents: DocumentTexts?
     private(set) var totalRows: Int?
@@ -133,6 +135,7 @@ final class TableTabModel {
             guard generation == reloadGeneration else { return }
             resultColumns = page.columns.isEmpty ? columns.map(\.name) : page.columns
             rows = page.rows
+            binaryColumns = page.binaryColumns
             documents = page.documents
             clearPending()
             undoManager.removeAllActions()
@@ -492,7 +495,8 @@ final class TableTabModel {
                 keyColumns: primaryKeyIndices,
                 deleted: changes.deletedRows,
                 edited: changes.edits,
-                inserted: changes.insertedRows
+                inserted: changes.insertedRows,
+                binaryColumns: binaryColumns
             )
         )
     }
@@ -563,6 +567,7 @@ final class TableTabModel {
             rows: rows,
             format: format,
             table: table,
+            binaryColumns: binaryColumns,
             dialect: driver.dialect
         )
     }

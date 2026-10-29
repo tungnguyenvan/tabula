@@ -48,12 +48,15 @@ final class SQLDialectTests: XCTestCase {
         let d = SQLDialect(flavor: .postgres)
         let table = TableRef(schema: "public", name: "users")
         XCTAssertEqual(
-            d.update(table, set: [("name", "Ann")], key: [("id", "1"), ("org", nil)]),
+            d.update(table, set: [("name", "Ann")], key: [("id", "1"), ("org", nil)], binaryColumns: []),
             "UPDATE \"public\".\"users\" SET \"name\" = 'Ann' WHERE \"id\" = '1' AND \"org\" IS NULL"
         )
-        XCTAssertEqual(d.insert(table, values: []), "INSERT INTO \"public\".\"users\" DEFAULT VALUES")
         XCTAssertEqual(
-            SQLDialect(flavor: .mysql).insert(TableRef(schema: "db", name: "t"), values: []),
+            d.insert(table, values: [], binaryColumns: []),
+            "INSERT INTO \"public\".\"users\" DEFAULT VALUES"
+        )
+        XCTAssertEqual(
+            SQLDialect(flavor: .mysql).insert(TableRef(schema: "db", name: "t"), values: [], binaryColumns: []),
             "INSERT INTO `db`.`t` () VALUES ()"
         )
         XCTAssertEqual(

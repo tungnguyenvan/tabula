@@ -277,6 +277,7 @@ public actor MySQLDriver: DatabaseDriver {
             duration: Date().timeIntervalSince(started),
             statement: sql
         )
+        result.binaryColumns = Set(definitions.indices.filter { Self.isBinary(definitions[$0]) })
         if !definitions.isEmpty {
             result.mysqlOrigins = definitions.map {
                 .init(
@@ -292,10 +293,25 @@ public actor MySQLDriver: DatabaseDriver {
         return result
     }
 
+    /// The string and BIT types that hold bytes: BINARY, VARBINARY, the BLOBs and BIT have the binary character
+    /// set. (Numbers, dates and JSON report it too, but aren't these types.)
+    private static let byteTypes: Set<UInt8> = [
+        MySQLProtocol.DataType.tinyBlob, .mediumBlob, .longBlob, .blob, .varString, .string, .varchar, .bit,
+    ]
+    .map(\.rawValue)
+    .reduce(into: []) { $0.insert($1) }
+
+    static func isBinary(_ column: MySQLProtocol.ColumnDefinition41) -> Bool {
+        column.characterSet == .binary && byteTypes.contains(column.columnType.rawValue)
+    }
+
     private static func values(_ row: MySQLRow) -> [String?] {
         zip(row.columnDefinitions, row.values)
             .map { column, buffer in
-                guard let buffer else { return nil }
+                guard var buffer else { return nil }
+                if isBinary(column) {
+                    return BinaryText.text(buffer.readBytes(length: buffer.readableBytes) ?? [])
+                }
                 let data = MySQLData(
                     type: column.columnType,
                     format: row.format,
@@ -311,8 +327,7 @@ public actor MySQLDriver: DatabaseDriver {
                 if let date = data.date {
                     return dateFormatter.string(from: date)
                 }
-                var copy = buffer
-                return (copy.readBytes(length: copy.readableBytes) ?? []).map { String(format: "%02x", $0) }.joined()
+                return BinaryText.text(buffer.readBytes(length: buffer.readableBytes) ?? [])
             }
     }
 

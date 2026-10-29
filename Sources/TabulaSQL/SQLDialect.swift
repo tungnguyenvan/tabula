@@ -24,6 +24,15 @@ public struct SQLDialect: QueryDialect, Equatable {
         return quoteIdentifier(table.schema) + "." + quoteIdentifier(table.name)
     }
 
+    /// A value of a column that holds bytes: `\x…` hex becomes a hex literal (PostgreSQL reads the `\x` text form
+    /// itself); anything else in the column was typed as text and is written as text.
+    public func literal(_ value: String?, binary: Bool) -> String {
+        guard binary, let value, flavor != .postgres, let hex = BinaryText.hexDigits(value) else {
+            return literal(value)
+        }
+        return "X'\(hex.uppercased())'"
+    }
+
     public func literal(_ value: String?) -> String {
         guard let value else {
             return "NULL"
@@ -56,7 +65,7 @@ public struct SQLDialect: QueryDialect, Equatable {
     }
 
     /// Without a key nothing may match: an empty predicate would touch every row.
-    private func matchPrimaryKey(_ key: [(column: String, value: String?)]) -> String {
+    private func matchPrimaryKey(_ key: [(column: String, value: String?)], binaryColumns: Set<String>) -> String {
         guard !key.isEmpty else {
             return "1 = 0"
         }
@@ -64,32 +73,48 @@ public struct SQLDialect: QueryDialect, Equatable {
             key.map { pair in
                 pair.value == nil
                     ? "\(quoteIdentifier(pair.column)) IS NULL"
-                    : "\(quoteIdentifier(pair.column)) = \(literal(pair.value))"
+                    : "\(quoteIdentifier(pair.column)) = \(literal(pair.value, binary: binaryColumns.contains(pair.column)))"
             }
             .joined(separator: " AND ")
     }
 
+    /// `binaryColumns`: the names of the columns that hold bytes (see `literal(_:binary:)`).
     public func update(
         _ table: TableRef,
         set values: [(column: String, value: String?)],
-        key: [(column: String, value: String?)]
+        key: [(column: String, value: String?)],
+        binaryColumns: Set<String>
     ) -> String {
-        let assignments = values.map { "\(quoteIdentifier($0.column)) = \(literal($0.value))" }.joined(separator: ", ")
-        return "UPDATE \(qualified(table)) SET \(assignments) WHERE \(matchPrimaryKey(key))"
+        let assignments =
+            values.map {
+                "\(quoteIdentifier($0.column)) = \(literal($0.value, binary: binaryColumns.contains($0.column)))"
+            }
+            .joined(separator: ", ")
+        return
+            "UPDATE \(qualified(table)) SET \(assignments) WHERE \(matchPrimaryKey(key, binaryColumns: binaryColumns))"
     }
 
-    public func delete(_ table: TableRef, key: [(column: String, value: String?)]) -> String {
-        "DELETE FROM \(qualified(table)) WHERE \(matchPrimaryKey(key))"
+    public func delete(
+        _ table: TableRef,
+        key: [(column: String, value: String?)],
+        binaryColumns: Set<String>
+    ) -> String {
+        "DELETE FROM \(qualified(table)) WHERE \(matchPrimaryKey(key, binaryColumns: binaryColumns))"
     }
 
-    public func insert(_ table: TableRef, values: [(column: String, value: String?)]) -> String {
+    public func insert(
+        _ table: TableRef,
+        values: [(column: String, value: String?)],
+        binaryColumns: Set<String>
+    ) -> String {
         guard !values.isEmpty else {
             return flavor == .mysql
                 ? "INSERT INTO \(qualified(table)) () VALUES ()"
                 : "INSERT INTO \(qualified(table)) DEFAULT VALUES"
         }
         let columns = values.map { quoteIdentifier($0.column) }.joined(separator: ", ")
-        let literals = values.map { literal($0.value) }.joined(separator: ", ")
+        let literals = values.map { literal($0.value, binary: binaryColumns.contains($0.column)) }
+            .joined(separator: ", ")
         return "INSERT INTO \(qualified(table)) (\(columns)) VALUES (\(literals))"
     }
 
@@ -101,9 +126,12 @@ public struct SQLDialect: QueryDialect, Equatable {
         if changes.keyColumns.isEmpty, !changes.deleted.isEmpty || !changes.updates.isEmpty {
             throw DatabaseError("\(changes.table.name) has no primary key, so its rows can't be changed or deleted.")
         }
-        return changes.deleted.sorted().map { delete(changes.table, key: key($0)) }
-            + changes.updates.map { update(changes.table, set: $0.values, key: key($0.row)) }
-            + changes.insertions.map { insert(changes.table, values: $0) }
+        let binary = Set(
+            changes.binaryColumns.compactMap { changes.columns.indices.contains($0) ? changes.columns[$0] : nil }
+        )
+        return changes.deleted.sorted().map { delete(changes.table, key: key($0), binaryColumns: binary) }
+            + changes.updates.map { update(changes.table, set: $0.values, key: key($0.row), binaryColumns: binary) }
+            + changes.insertions.map { insert(changes.table, values: $0, binaryColumns: binary) }
     }
 
     public func selectSample(_ table: TableRef, limit: Int) -> String {

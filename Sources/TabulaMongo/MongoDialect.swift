@@ -35,7 +35,14 @@ public struct MongoQueryDialect: QueryDialect {
     public func countRows(_ table: TableRef, filter: String?) -> String {
         MongoDialect.countRows(table, filter: filter)
     }
-    public func insert(_ table: TableRef, values: [(column: String, value: String?)]) -> String {
+    /// The shell writes binary values as BinData itself; a document's fields need no column list.
+    public func insert(
+        _ table: TableRef,
+        values: [(column: String, value: String?)],
+        binaryColumns: Set<String>
+    )
+        -> String
+    {
         MongoDialect.insert(table, values: values)
     }
     public func selectSample(_ table: TableRef, limit: Int) -> String { MongoDialect.sample(table, limit: limit) }

@@ -44,6 +44,7 @@ public enum ResultExporter {
         rows: [[String?]],
         format: ExportFormat,
         table: TableRef? = nil,
+        binaryColumns: Set<Int>,
         dialect: any QueryDialect
     ) throws -> String {
         switch format {
@@ -64,9 +65,11 @@ public enum ResultExporter {
             return String(decoding: data, as: UTF8.self)
         case .sqlInsert:
             let target = table ?? TableRef(schema: "main", name: "results")
+            let binary = Set(binaryColumns.compactMap { columns.indices.contains($0) ? columns[$0] : nil })
             return
                 rows.map { row in
-                    dialect.insert(target, values: Array(zip(columns, row)).map { ($0.0, $0.1) }) + ";"
+                    dialect.insert(target, values: Array(zip(columns, row)).map { ($0.0, $0.1) }, binaryColumns: binary)
+                        + ";"
                 }
                 .joined(separator: "\n")
         }

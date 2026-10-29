@@ -192,7 +192,8 @@ func editStatements(_ page: QueryResult, table: TableRef, dialect: any QueryDial
             keyColumns: keyColumns,
             deleted: [],
             edited: edits,
-            inserted: []
+            inserted: [],
+            binaryColumns: page.binaryColumns
         )
     )
 }

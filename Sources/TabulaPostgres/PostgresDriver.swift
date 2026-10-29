@@ -6,6 +6,8 @@ import TabulaFoundation
 import TabulaSQL
 
 public actor PostgresDriver: DatabaseDriver {
+    /// bytea, shown as `\x` hex (the same `BinaryText` form every database uses).
+    static let byteaOID: UInt32 = 17
     public nonisolated let kind: DatabaseKind = .postgres
     public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .postgres)
     public nonisolated let catalog: any DatabaseCatalog = PostgresCatalog()
@@ -258,6 +260,7 @@ public actor PostgresDriver: DatabaseDriver {
             result.origins = metadata.map {
                 QueryColumnOrigin(tableOID: UInt32(bitPattern: $0.tableOID), attribute: $0.columnAttributeNumber)
             }
+            result.binaryColumns = Set(columns.indices.filter { columns[$0].oid == Self.byteaOID })
             return result
         }
 
