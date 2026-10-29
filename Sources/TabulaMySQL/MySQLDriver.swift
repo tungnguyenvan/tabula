@@ -1,7 +1,9 @@
 import Foundation
 import Logging
 import MySQLNIO
+import NIOCore
 import NIOPosix
+import NIOSSL
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
@@ -10,15 +12,57 @@ public actor MySQLDriver: DatabaseDriver {
     /// ER_UNSUPPORTED_PS: the statement can't be prepared and must be sent as text.
     static let unsupportedPreparedStatement: UInt16 = 1295
 
+    /// ER_QUERY_INTERRUPTED: KILL QUERY ended the statement.
+    static let queryInterrupted: UInt16 = 1317
+
     public nonisolated let kind: DatabaseKind = .mysql
     public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .mysql)
     public nonisolated let catalog: any DatabaseCatalog = MySQLCatalog()
+    public nonisolated let queryCancellation: QueryCancellationSupport
     private let connection: MySQLConnection
     private let initialDatabase: String
+    /// How to open the control connection Stop sends KILL QUERY from.
+    private let settings: Settings
+    /// The server's id of this connection, nil when it couldn't be read (then Stop isn't offered).
+    private let connectionID: UInt64?
+    private let executionGate = QueryExecutionGate()
+    private var activeExecution: UUID?
+    private var cancellationTask: Task<QueryCancelOutcome, Never>?
+    private var closed = false
 
-    private init(connection: MySQLConnection, initialDatabase: String) {
+    /// What a connection to the same server, as the same user, needs.
+    private struct Settings: Sendable {
+        let address: SocketAddress
+        let user: String
+        let database: String
+        let password: String?
+        let tls: TLSConfiguration?
+        let serverHostname: String?
+        let logger: Logger
+
+        func connect(timeout: TimeInterval, describing what: String) async throws -> MySQLConnection {
+            try await withTimeout(seconds: timeout, what, discard: { _ = $0.close() }) {
+                try await MySQLConnection.connect(
+                    to: address,
+                    username: user,
+                    database: database,
+                    password: password,
+                    tlsConfiguration: tls,
+                    serverHostname: serverHostname,
+                    logger: logger,
+                    on: MultiThreadedEventLoopGroup.singleton.next()
+                )
+                .get()
+            }
+        }
+    }
+
+    private init(connection: MySQLConnection, initialDatabase: String, settings: Settings, connectionID: UInt64?) {
         self.connection = connection
         self.initialDatabase = initialDatabase
+        self.settings = settings
+        self.connectionID = connectionID
+        self.queryCancellation = connectionID == nil ? .afterCurrentStatement : .server
     }
 
     /// `tlsServerName` overrides the name TLS checks, for connections through an SSH tunnel to 127.0.0.1.
@@ -34,29 +78,30 @@ public actor MySQLDriver: DatabaseDriver {
         let tls = config.tlsConfiguration()
 
         do {
-            let address = try await config.resolveAddress()
-            let user = config.user
-            let database = config.database
-            let password = password?.isEmpty == true ? nil : password
-            let serverHostname = tlsServerName ?? config.serverName(usingTLS: tls != nil)
-            let connection = try await withTimeout(
-                seconds: config.timeout,
-                "Connecting to \(host):\(port)",
-                discard: { _ = $0.close() }
-            ) { [logger] in
-                try await MySQLConnection.connect(
-                    to: address,
-                    username: user,
-                    database: database,
-                    password: password,
-                    tlsConfiguration: tls,
-                    serverHostname: serverHostname,
-                    logger: logger,
-                    on: MultiThreadedEventLoopGroup.singleton.next()
-                )
-                .get()
-            }
-            return MySQLDriver(connection: connection, initialDatabase: database)
+            let settings = Settings(
+                address: try await config.resolveAddress(),
+                user: config.user,
+                database: config.database,
+                password: password?.isEmpty == true ? nil : password,
+                tls: tls,
+                serverHostname: tlsServerName ?? config.serverName(usingTLS: tls != nil),
+                logger: logger
+            )
+            let connection = try await settings.connect(
+                timeout: config.timeout,
+                describing: "Connecting to \(host):\(port)"
+            )
+            // Without its id Stop can't find the statement; the connection works as before without Stop.
+            let id = try? await connection.simpleQuery("SELECT CONNECTION_ID()").get().first
+                .flatMap {
+                    Self.values($0).first ?? nil
+                }
+            return MySQLDriver(
+                connection: connection,
+                initialDatabase: config.database,
+                settings: settings,
+                connectionID: id.flatMap(UInt64.init)
+            )
         } catch MySQLError.secureConnectionRequired {
             throw DatabaseError(
                 "The server requires an encrypted connection to authenticate this user (caching_sha2_password). Set TLS to “Required”."
@@ -67,6 +112,7 @@ public actor MySQLDriver: DatabaseDriver {
     }
 
     public func close() async {
+        closed = true
         try? await connection.close().get()
     }
 
@@ -85,34 +131,134 @@ public actor MySQLDriver: DatabaseDriver {
     }
 
     public func execute(_ sql: String) async throws -> QueryResult {
-        let started = Date()
-        do {
-            if SQLSplitter.returnsRows(sql) {
-                return try await textQuery(sql, started: started)
+        let scope = QueryCancelScope.current
+        try scope?.checkCancellation()
+        await executionGate.acquire()
+        defer { executionGate.release() }
+        try scope?.checkCancellation()
+        guard let scope, connectionID != nil else {
+            do { return try await perform(sql, wireSQL: sql) } catch { throw DatabaseError(Self.describe(error)) }
+        }
+        let id = UUID()
+        // At the start, on the same line, so PROCESSLIST shows it and error line numbers stay the user's.
+        let marker = "/* tabula-run:\(id.uuidString) */"
+        let token = scope.attach { [weak self] in
+            guard let self else {
+                return .notRunning
             }
-            // The prepared-statement protocol reports affected rows.
-            let affected = AffectedRowsBox()
-            do {
-                let rows = try await connection.query(sql, onMetadata: { affected.value = Int($0.affectedRows) }).get()
-                if !rows.isEmpty {
-                    return Self.result(rows, started: started, sql: sql)
+            return await self.cancelExecution(id, marker: marker)
+        }
+        guard let token else {
+            throw QueryCancelledError()
+        }
+        activeExecution = id
+        let result: Result<QueryResult, any Error>
+        do {
+            result = .success(try await perform(sql, wireSQL: marker + " " + sql))
+        } catch {
+            result = .failure(error)
+        }
+        // Invalidate before awaiting: a delayed Stop must not take this execution for a later one.
+        activeExecution = nil
+        scope.detach(token)
+        // KILL QUERY may land after the statement ended; a harmless statement takes it before the next query
+        // can, since that waits for the gate.
+        if let cancellationTask, await cancellationTask.value == .requested, !closed {
+            _ = try? await connection.simpleQuery("DO 0 /* tabula-cancel-drain */").get()
+        }
+        cancellationTask = nil
+        guard case .failure(let error) = result else {
+            return try result.get()
+        }
+        if scope.isCancelled, case MySQLError.server(let packet) = error,
+            packet.errorCode.rawValue == Self.queryInterrupted
+        {
+            throw QueryCancelledError(serverInterrupted: true)
+        }
+        throw DatabaseError(Self.describe(error))
+    }
+
+    private func cancelExecution(_ id: UUID, marker: String) async -> QueryCancelOutcome {
+        guard !closed, activeExecution == id else {
+            return .notRunning
+        }
+        if let cancellationTask {
+            return await cancellationTask.value
+        }
+        let task = Task { await self.sendCancellation(id, marker: marker) }
+        cancellationTask = task
+        return await task.value
+    }
+
+    /// Finds this execution's statement by connection id and marker, then sends KILL QUERY from a connection
+    /// of its own. Stop can arrive before the server lists the statement, so it looks again for a moment.
+    private func sendCancellation(_ id: UUID, marker: String) async -> QueryCancelOutcome {
+        guard let connectionID else {
+            return .unsupported
+        }
+        let control: MySQLConnection
+        do {
+            control = try await settings.connect(
+                timeout: 5,
+                describing: "Opening the MySQL connection that stops queries"
+            )
+        } catch {
+            return .failed(Self.describe(error))
+        }
+        let find = """
+            SELECT ID FROM information_schema.PROCESSLIST
+            WHERE ID = \(connectionID) AND LEFT(INFO, \(marker.count)) = \(dialect.literal(marker))
+            """
+        var outcome = QueryCancelOutcome.notRunning
+        let deadline = Date().addingTimeInterval(3)
+        do {
+            while !closed, activeExecution == id {
+                if try await !control.simpleQuery(find).get().isEmpty {
+                    _ = try await control.simpleQuery("KILL QUERY \(connectionID)").get()
+                    outcome = .requested
+                    break
                 }
-                return QueryResult(
-                    affectedRows: affected.value,
-                    duration: Date().timeIntervalSince(started),
-                    statement: sql
-                )
-            } catch MySQLError.server(let packet) where packet.errorCode.rawValue == Self.unsupportedPreparedStatement {
-                // ER_UNSUPPORTED_PS: statement not allowed as a prepared statement; use the text protocol.
-                return try await textQuery(sql, started: started)
+                guard Date() < deadline else {
+                    outcome = .failed("The running statement could not be found in the process list.")
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(50))
             }
         } catch {
-            throw DatabaseError(Self.describe(error))
+            outcome = .failed(Self.describe(error))
+        }
+        try? await control.close().get()
+        return outcome
+    }
+
+    /// Runs `wireSQL`, the statement as sent (with a marker), reporting `sql`. Throws MySQLNIO's error unchanged,
+    /// so `execute` can still read its code.
+    private func perform(_ sql: String, wireSQL: String) async throws -> QueryResult {
+        let started = Date()
+        if SQLSplitter.returnsRows(sql) {
+            return try await textQuery(wireSQL, sql: sql, started: started)
+        }
+        // The prepared-statement protocol reports affected rows.
+        let affected = AffectedRowsBox()
+        do {
+            let rows = try await connection.query(wireSQL, onMetadata: { affected.value = Int($0.affectedRows) })
+                .get()
+            if !rows.isEmpty {
+                return Self.result(rows, started: started, sql: sql)
+            }
+            return QueryResult(
+                affectedRows: affected.value,
+                duration: Date().timeIntervalSince(started),
+                statement: sql
+            )
+        } catch MySQLError.server(let packet) where packet.errorCode.rawValue == Self.unsupportedPreparedStatement {
+            // ER_UNSUPPORTED_PS: statement not allowed as a prepared statement; use the text protocol.
+            return try await textQuery(wireSQL, sql: sql, started: started)
         }
     }
 
-    private func textQuery(_ sql: String, started: Date) async throws -> QueryResult {
-        let rows = try await connection.simpleQuery(sql).get()
+    private func textQuery(_ wireSQL: String, sql: String, started: Date) async throws -> QueryResult {
+        let rows = try await connection.simpleQuery(wireSQL).get()
         return Self.result(rows, started: started, sql: sql)
     }
 
