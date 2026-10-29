@@ -58,7 +58,7 @@ final class RedisWorkspaceModel {
     init(config: ConnectionConfig, password: String?) {
         self.config = config
         self.password = password
-        self.console = RedisConsoleModel(config: config)
+        self.console = RedisConsoleModel(config: config, password: password)
     }
 
     var hasMoreKeys: Bool { scanCursor != "0" }

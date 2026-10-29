@@ -83,7 +83,7 @@ struct ShortcutsView: View {
             items: [
                 ("⌘↩", "Run: the selection, or the statement at the cursor"),
                 ("⇧⌘↩", "Run everything"),
-                ("⌘.", "Stop the running query (not Redis)"),
+                ("⌘.", "Stop the running query, or a Redis script or blocking command"),
                 ("⌘/", "Comment / uncomment lines"),
                 ("⇥", "Accept the inline suggestion"),
                 ("⎋ or ⌃Space", "Show suggestions: tables, columns, keywords"),

@@ -16,15 +16,45 @@ final class RedisConsoleModel {
     }
 
     let config: ConnectionConfig
+    /// For the short-lived connection Stop sends its request from.
+    private let password: String?
     var driver: RedisDriver?
     weak var workspace: RedisWorkspaceModel?
     private(set) var entries: [Entry] = []
     var input = ""
     private(set) var running = false
+    /// How the running command can be ended; `.unsupported` while nothing runs.
+    private(set) var runningStop = RedisStop.unsupported
+    private(set) var stopping = false
     private var history: [String] = []
     private var historyIndex: Int?
 
-    init(config: ConnectionConfig) { self.config = config }
+    init(config: ConnectionConfig, password: String?) {
+        self.config = config
+        self.password = password
+    }
+
+    var canStop: Bool { running && !stopping && runningStop != .unsupported }
+
+    /// Ends the running script, function or blocking command; the command's entry then shows the server's error.
+    func stop() async {
+        guard canStop, let driver else { return }
+        let stop = runningStop
+        if stop == .script || stop == .function, config.tag == .production {
+            let confirmed = Confirmation.ask(
+                "Stop the running \(stop == .script ? "script" : "function")?",
+                detail:
+                    "Redis can't tell whose script is running: on a shared PRODUCTION server this stops whichever one is.",
+                action: "Stop"
+            )
+            guard confirmed else { return }
+        }
+        stopping = true
+        defer { stopping = false }
+        if let failure = await driver.stopRunningCommand(stop, config: config, password: password) {
+            entries.append(Entry(prompt: prompt, command: "(Stop)", output: failure, isError: true))
+        }
+    }
 
     var prompt: String {
         let database = workspace?.database ?? 0
@@ -73,7 +103,11 @@ final class RedisConsoleModel {
         }
 
         running = true
-        defer { running = false }
+        runningStop = RedisStop(for: arguments)
+        defer {
+            running = false
+            runningStop = .unsupported
+        }
         do {
             let reply = try await driver.send(arguments)
             var isError = false
