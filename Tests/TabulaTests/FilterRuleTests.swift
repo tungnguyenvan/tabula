@@ -45,6 +45,10 @@ final class FilterRuleTests: XCTestCase {
         // With the first rule unticked, the next used one leads and its OR has nothing to join.
         let untickedFirst = FilterRule(column: "a", value: "1", isEnabled: false)
         XCTAssertEqual(d.condition([untickedFirst, c]), "\"c\" = '3'")
+        // Unticking the rule that starts an OR group keeps the OR: a OR (b AND c) without b is a OR c.
+        let orB = FilterRule(column: "b", value: "2", conjunction: .or, isEnabled: false)
+        let andC = FilterRule(column: "c", value: "3", conjunction: .and)
+        XCTAssertEqual(d.condition([a, orB, andC]), "\"a\" = '1' OR \"c\" = '3'")
         let isNullUnticked = FilterRule(column: "x", op: .isNull, isEnabled: false)
         XCTAssertEqual(d.condition([isNullUnticked]), "", "an unticked rule without a value is left out too")
         XCTAssertFalse(isNullUnticked.isUsed)

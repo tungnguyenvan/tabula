@@ -277,7 +277,7 @@ struct FilterBarView: View {
                             .toggleStyle(.checkbox)
                             .labelsHidden()
                             .help("Use this condition. Unticked ones stay here but are left out when you apply.")
-                        if rule.id == model.filterRules.first?.id {
+                        if rule.id == leadingRuleID {
                             Text(filterKeyword).font(Layout.Font.smallBold.monospaced()).foregroundStyle(.secondary)
                                 .frame(width: Layout.Filter.conjunctionWidth, alignment: .leading)
                         } else {
@@ -329,6 +329,11 @@ struct FilterBarView: View {
         .onAppear(perform: focusValue)
         .onChange(of: model.filterFocusRequest) { _, _ in focusValue() }
         .onExitCommand { model.showFilterBar = false }  // Esc closes the bar; the applied filter stays.
+    }
+
+    /// The rule that opens the condition: the first ticked one, whose AND/OR would join nothing.
+    private var leadingRuleID: UUID? {
+        model.filterRules.first(where: \.isEnabled)?.id ?? model.filterRules.first?.id
     }
 
     private var isDocument: Bool { model.driver.kind.isDocument }

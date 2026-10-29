@@ -27,6 +27,12 @@ final class AppSeasonTests: XCTestCase {
         XCTAssertEqual(AppSeason.on(date(2026, 12, 25), calendar: calendar), .regular)
     }
 
+    /// The default calendar is Gregorian, even for a user who reads dates in another calendar.
+    func testDefaultCalendarIsGregorian() {
+        XCTAssertEqual(AppSeason.userCalendar.identifier, .gregorian)
+        XCTAssertEqual(AppSeason.userCalendar.timeZone, .current)
+    }
+
     /// The day is read in the calendar's time zone: the same instant can be Halloween in one place only.
     func testTheDayIsTheUsersLocalDay() {
         var utc = Calendar(identifier: .gregorian)

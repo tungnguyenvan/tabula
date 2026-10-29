@@ -61,12 +61,22 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         /// The SQL condition applied to the rows, exactly as it ran; empty when the filter wasn't applied. The bar
         /// may hold edits made after applying it.
         public var appliedCondition: String
+        /// The `DatabaseKind` the condition was written for. A connection can be switched to another engine,
+        /// where the saved condition would mean something else or fail. Nil in filters saved before 0.10.1.
+        public var engine: String?
 
-        public init(rules: [Rule], rawCondition: String, usesRawCondition: Bool, appliedCondition: String) {
+        public init(
+            rules: [Rule],
+            rawCondition: String,
+            usesRawCondition: Bool,
+            appliedCondition: String,
+            engine: String?
+        ) {
             self.rules = rules
             self.rawCondition = rawCondition
             self.usesRawCondition = usesRawCondition
             self.appliedCondition = appliedCondition
+            self.engine = engine
         }
     }
 

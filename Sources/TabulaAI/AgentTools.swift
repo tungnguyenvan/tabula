@@ -192,10 +192,7 @@ public struct AgentToolbox: Sendable {
                 }
                 return try await runQuery(query)
             case .searchSavedQueries:
-                guard let search = call.search else {
-                    return "Error: search_saved_queries needs words to search for."
-                }
-                return Self.text(of: SavedQuery.search(savedQueries, for: search), searchedFor: search)
+                return Self.searchSavedQueries(savedQueries, for: call.search)
             }
         } catch {
             return "Error: \(SQLPrompts.redacted(error.localizedDescription, kind: driver.kind))"
@@ -307,6 +304,15 @@ public struct AgentToolbox: Sendable {
         // A failed ROLLBACK leaves the connection inside the transaction, so it is reported rather than ignored.
         _ = try await driver.execute("ROLLBACK")
         return result
+    }
+
+    /// search_saved_queries: reads only the library, so it is answered without the assistant's database
+    /// connection (which may be unreachable).
+    public static func searchSavedQueries(_ queries: [SavedQuery], for search: String?) -> String {
+        guard let search else {
+            return "Error: search_saved_queries needs words to search for."
+        }
+        return text(of: SavedQuery.search(queries, for: search), searchedFor: search)
     }
 
     /// Saved queries for the model: keyword, folder and SQL, best matches first, cut to the total limit.

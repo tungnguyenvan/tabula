@@ -782,6 +782,8 @@ final class WorkspaceModel {
         }
         _ = try await driver.execute(sql)
         if sql.hasPrefix("DROP") {
+            // A new table of the same name must not get this one's filter.
+            tableFilters[filterKey(table)] = nil
             tabs.removeAll {
                 if case .table(let model) = $0 {
                     return model.table == table

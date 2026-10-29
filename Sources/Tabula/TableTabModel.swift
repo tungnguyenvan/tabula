@@ -240,6 +240,10 @@ final class TableTabModel {
     /// The filter bar as the workspace remembers it for this table, or nil when it holds nothing worth keeping
     /// (not applied, no raw condition, and only rules still waiting for a value).
     var rememberedFilter: WorkspaceState.TableFilter? {
+        // A filter this version couldn't read is kept as it was until the bar holds one of its own.
+        if let kept = unreadableFilter, filterRules.isEmpty, filterText.isEmpty, !isFiltered {
+            return kept
+        }
         let hasRuleContent = filterRules.contains { rule in
             !rule.op.needsValue || !rule.value.isEmpty
         }
@@ -260,19 +264,30 @@ final class TableTabModel {
             rules: rules,
             rawCondition: filterText,
             usesRawCondition: useRawFilter,
-            appliedCondition: appliedFilter
+            appliedCondition: appliedFilter,
+            engine: driver.kind.rawValue
         )
     }
 
+    /// A remembered filter this version can't read (a newer version's operator), kept rather than lost.
+    private var unreadableFilter: WorkspaceState.TableFilter?
+
     /// Puts a remembered filter back in the bar, before the first load. The condition that was applied is applied
-    /// again, as it ran, and the bar shown, so the rows it hides are not a surprise. Nothing is restored when a rule names an operator
-    /// this version doesn't know (a state written by another version).
+    /// again, as it ran, and the bar shown, so the rows it hides are not a surprise.
+    ///
+    /// Not restored: a filter written for another engine (the connection was switched, so the condition would mean
+    /// something else), which is forgotten; and one with an operator this version doesn't know (written by a
+    /// newer version), which is kept for that version.
     func restoreFilter(_ remembered: WorkspaceState.TableFilter) {
+        if let engine = remembered.engine, engine != driver.kind.rawValue {
+            return
+        }
         var rules: [FilterRule] = []
         for saved in remembered.rules {
             guard let op = FilterRule.Operator(rawValue: saved.op),
                 let conjunction = FilterRule.Conjunction(rawValue: saved.conjunction)
             else {
+                unreadableFilter = remembered
                 return
             }
             let rule = FilterRule(

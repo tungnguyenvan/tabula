@@ -109,7 +109,7 @@ public struct CLIProvider: AIProvider {
                 try request.prompt.write(to: prompt, atomically: true, encoding: .utf8)
                 let output = try await ShellCommand.run(
                     script: Self.fromPromptFile,
-                    arguments: [executable] + Self.claudeArguments(request, model: model, effort: effort),
+                    arguments: [executable, prompt.path] + Self.claudeArguments(request, model: model, effort: effort),
                     directory: directory,
                     timeout: Defaults.AI.generateTimeout,
                     onLine: { events.claude($0) }
@@ -147,7 +147,7 @@ public struct CLIProvider: AIProvider {
                     .write(to: prompt, atomically: true, encoding: .utf8)
                 let output = try await ShellCommand.run(
                     script: Self.fromPromptFile,
-                    arguments: [executable] + arguments,
+                    arguments: [executable, prompt.path] + arguments,
                     directory: directory,
                     timeout: Defaults.AI.generateTimeout,
                     onLine: { events.codex($0) }
@@ -166,8 +166,9 @@ public struct CLIProvider: AIProvider {
         }
     }
 
-    /// Runs the tool (the first argument) with prompt.txt, in the working directory, as its standard input.
-    static let fromPromptFile = #"exec "$0" "$@" < prompt.txt"#
+    /// Runs the tool (the first argument) with the prompt file (the second, an absolute path) as its standard input.
+    /// The path is absolute because a shell profile may change directory before the command runs.
+    static let fromPromptFile = #"prompt="$1"; shift; exec "$0" "$@" < "$prompt""#
 
     /// `claude -p` for one answer, with the user's own Claude Code setup kept out (#80): hooks (a SessionStart
     /// hook can add its own instructions or take long), MCP servers (each is started before the answer, and one

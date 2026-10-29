@@ -45,7 +45,8 @@ public struct QueryLibrary: Sendable {
     public struct Contents: Equatable, Sendable {
         /// Sorted by group and keyword.
         public var queries: [SavedQuery]
-        /// .sql files that couldn't be read as text (an unknown encoding, no permission), to tell the user.
+        /// .sql files that couldn't be read (an unknown text encoding, no permission, a link to somewhere outside
+        /// the library), to tell the user. Their keywords are still taken.
         public var unreadable: [URL]
     }
 
@@ -54,7 +55,8 @@ public struct QueryLibrary: Sendable {
         guard FileManager.default.fileExists(atPath: directory.path) else {
             return Contents(queries: [], unreadable: [])
         }
-        let keys: [URLResourceKey] = [.isRegularFileKey]
+        let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
+        let root = directory.resolvingSymlinksInPath().standardizedFileURL.path + "/"
         guard
             let enumerator = FileManager.default.enumerator(
                 at: directory,
@@ -69,13 +71,22 @@ public struct QueryLibrary: Sendable {
         let rootComponents = directory.standardizedFileURL.pathComponents
         for case let file as URL in enumerator where file.pathExtension.lowercased() == "sql" {
             let values = try file.resourceValues(forKeys: Set(keys))
-            guard values.isRegularFile == true else {
+            var source = file
+            if values.isSymbolicLink == true {
+                // A link is read when it leads to a file inside the library, and reported otherwise.
+                source = file.resolvingSymlinksInPath()
+                let target = try? source.resourceValues(forKeys: [.isRegularFileKey])
+                guard source.standardizedFileURL.path.hasPrefix(root), target?.isRegularFile == true else {
+                    unreadable.append(file)
+                    continue
+                }
+            } else if values.isRegularFile != true {
                 continue
             }
             var encoding = String.Encoding.utf8
             let sql: String
             do {
-                sql = try String(contentsOf: file, usedEncoding: &encoding)
+                sql = try String(contentsOf: source, usedEncoding: &encoding)
             } catch {
                 unreadable.append(file)
                 continue
@@ -110,8 +121,11 @@ public struct QueryLibrary: Sendable {
         guard folders.allSatisfy({ !$0.hasPrefix(".") && !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else {
             throw LibraryError.invalidFolder(group)
         }
-        let existing = try load()
-        if existing.contains(where: { $0.keyword.caseInsensitiveCompare(keyword) == .orderedSame }) {
+        // Files that couldn't be read count too: saving must never replace one of them.
+        let existing = try contents()
+        let taken =
+            existing.queries.map(\.keyword) + existing.unreadable.map { $0.deletingPathExtension().lastPathComponent }
+        if taken.contains(where: { $0.caseInsensitiveCompare(keyword) == .orderedSame }) {
             throw LibraryError.keywordTaken(keyword)
         }
         var folder = directory
@@ -119,7 +133,16 @@ public struct QueryLibrary: Sendable {
             folder.appendPathComponent(part, isDirectory: true)
         }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // A folder that is a link to elsewhere would take the query out of the library.
+        let root = directory.resolvingSymlinksInPath().standardizedFileURL.path
+        let resolvedFolder = folder.resolvingSymlinksInPath().standardizedFileURL.path
+        guard resolvedFolder == root || resolvedFolder.hasPrefix(root + "/") else {
+            throw LibraryError.invalidFolder(group)
+        }
         let file = folder.appendingPathComponent(keyword).appendingPathExtension("sql")
+        guard !FileManager.default.fileExists(atPath: file.path) else {
+            throw LibraryError.keywordTaken(keyword)
+        }
         try sql.write(to: file, atomically: true, encoding: .utf8)
         return SavedQuery(file: file, keyword: keyword, group: folders.joined(separator: "/"), sql: sql)
     }
