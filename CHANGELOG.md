@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-29
+
 ### Added
 - **A Halloween icon** ([#109](https://github.com/tungnguyenvan/tabula/issues/109)). From 25 October to 1 November the icon in the Dock and Tabula's logo in its windows dress up with a witch hat, a bat and orange cells, then go back to normal. The icon in Finder doesn't change.
 
