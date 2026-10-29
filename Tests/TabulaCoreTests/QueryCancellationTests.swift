@@ -103,6 +103,7 @@ private actor CancellationCounter {
 private actor ScriptStopDriver: DatabaseDriver {
     nonisolated let kind: DatabaseKind = .mysql
     nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .mysql)
+    nonisolated let catalog: any DatabaseCatalog = MySQLCatalog()
     private(set) var statements: [String] = []
     func execute(_ sql: String) async throws -> QueryResult {
         statements.append(sql)

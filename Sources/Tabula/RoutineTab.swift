@@ -86,8 +86,9 @@ final class RoutineTabModel {
         guard Confirmation.ask("Delete \(routine.kind.displayName.lowercased()) “\(routine.displayName)”?", detail: detail, action: "Delete") else {
             return false
         }
+        guard let routines = driver.routineCatalog else { return false }
         do {
-            _ = try await driver.execute(driver.dropStatement(for: routine))
+            _ = try await driver.execute(routines.dropStatement(for: routine))
             await workspace.loadRoutines()
             return true
         } catch {

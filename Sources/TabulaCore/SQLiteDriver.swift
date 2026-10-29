@@ -5,6 +5,7 @@ import SQLite3
 public actor SQLiteDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind = .sqlite
     public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .sqlite)
+    public nonisolated let catalog: any DatabaseCatalog = SQLiteCatalog()
     private var db: OpaquePointer?
 
     /// Opens (or creates) the database file at `path`.

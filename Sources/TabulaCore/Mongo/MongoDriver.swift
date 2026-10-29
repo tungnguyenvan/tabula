@@ -8,13 +8,12 @@ import MongoKitten
 public actor MongoDriver: DatabaseDriver {
     public nonisolated let kind = DatabaseKind.mongodb
     public nonisolated let dialect: any QueryDialect = MongoQueryDialect()
+    public nonisolated let catalog: any DatabaseCatalog = MongoCatalog()
     private let cluster: MongoCluster
     /// The database `db` refers to; `use` changes it.
     private var currentDatabase: String
     /// Field order learned per collection ("db.collection"), so pages show columns in a steady order.
     private var fieldOrder: [String: [String]] = [:]
-    /// The metrics' largest collections, measured now and then (see `largestCollections`).
-    var collectionStats: (database: String, time: Date, stats: [MetricsSample.TableStat])?
 
     private init(cluster: MongoCluster, database: String) {
         self.cluster = cluster

@@ -1,11 +1,33 @@
 import BSON
 import Foundation
 
-extension DatabaseDriver {
+/// MongoDB's catalog: server and database commands. It has no foreign keys, routines or separate databases
+/// list (databases are the schemas). Collection sizes take a round trip each, so they are cached for a while.
+actor MongoCatalog: DatabaseCatalog {
+    private var collectionStats: (database: String, time: Date, stats: [MetricsSample.TableStat])?
+
+    nonisolated var routines: (any RoutineCatalog)? { nil }
+
+    func serverVersion(on driver: any DatabaseDriver) async throws -> String {
+        guard let version = try await driver.value("db.version()") else { throw DatabaseError("The server didn't report its version.") }
+        return "MongoDB " + version
+    }
+
+    func useSchema(_ schema: String, on driver: any DatabaseDriver) async throws {
+        _ = try await driver.execute("use \(schema)")
+    }
+
+    func serverDatabases(on driver: any DatabaseDriver) async throws -> [String] { [] }
+    func currentDatabase(on driver: any DatabaseDriver) async throws -> String? { nil }
+    func foreignKeys(in schema: String, on driver: any DatabaseDriver) async throws -> [ForeignKeyInfo] { [] }
+
     /// serverStatus and dbStats as a metrics sample: connections, operations, memory, cache, storage, collections.
-    func mongoMetrics(database: String) async throws -> MetricsSample {
+    func metrics(schema database: String, on driver: any DatabaseDriver) async throws -> MetricsSample {
         func document(_ statement: String) async throws -> Document {
-            try MongoShell.parseDocument(try await execute(statement).documents?.first ?? "")
+            guard let text = try await driver.execute(statement).documents?.first else {
+                throw DatabaseError("The server returned nothing for \(statement).")
+            }
+            return try MongoShell.parseDocument(text)
         }
         let status = try await document("db.adminCommand({ serverStatus: 1 })")
         let stats = try await document("db.getSiblingDB(\(MongoShell.quoted(database))).runCommand({ dbStats: 1 })")
@@ -23,7 +45,7 @@ extension DatabaseDriver {
         let current = number(connections, "current"), available = number(connections, "available")
         let operationNames = ["insert", "query", "update", "delete", "getmore", "command"]
 
-        let tables = try await (self as? MongoDriver)?.largestCollections(in: database) ?? []
+        let tables = try await largestCollections(in: database, on: driver)
 
         var sample = MetricsSample(
             groups: [
@@ -63,19 +85,18 @@ extension DatabaseDriver {
         sample.tablesAreCollections = true
         return sample
     }
-}
 
-extension MongoDriver {
-    /// The largest collections by data plus index size. Sizes take a round trip per collection, so they are
-    /// measured for up to `statsCollectionLimit` collections and reused for `statsRefreshInterval` seconds.
-    func largestCollections(in database: String) async throws -> [MetricsSample.TableStat] {
+    /// The largest collections by data plus index size, measured for up to `statsCollectionLimit` collections and
+    /// reused for `statsRefreshInterval` seconds.
+    private func largestCollections(in database: String, on driver: any DatabaseDriver) async throws -> [MetricsSample.TableStat] {
         if let cached = collectionStats, cached.database == database,
            Date().timeIntervalSince(cached.time) < Defaults.Mongo.statsRefreshInterval {
             return cached.stats
         }
         var stats: [MetricsSample.TableStat] = []
-        for table in try await tables(in: database).filter({ $0.kind == .table }).prefix(Defaults.Mongo.statsCollectionLimit) {
-            guard let result = try? await execute(MongoDialect.collection(table) + ".stats()"),
+        for table in try await driver.tables(in: database).filter({ $0.kind == .table }).prefix(Defaults.Mongo.statsCollectionLimit) {
+            // A collection the account may not read the stats of is left out of the ranking.
+            guard let result = try? await driver.execute(MongoDialect.collection(table) + ".stats()"),
                   let text = result.documents?.first, let stat = try? MongoShell.parseDocument(text),
                   let storage = stat["storageStats"] as? Document else { continue }
             func number(_ key: String) -> Int { storage[key].flatMap(MongoShellParser.double).map { Int($0) } ?? 0 }

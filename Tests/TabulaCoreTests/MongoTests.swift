@@ -317,12 +317,16 @@ final class MongoIntegrationTests: XCTestCase {
         _ = try await driver.execute("use other_db")
         let value10 = try await driver.execute("db.getName()").rows.first?.first
         XCTAssertEqual(value10, "other_db")
-        let value11 = await driver.serverVersion()?.hasPrefix("MongoDB 8") == true
+        let value11 = try await driver.serverVersion().hasPrefix("MongoDB 8")
         XCTAssertTrue(value11)
 
         let metrics = try await driver.metrics(schema: "tabula_test")
         XCTAssertTrue(metrics.groups.contains { $0.title == "Server" })
         XCTAssertTrue(metrics.tables.contains { $0.name == "many" && $0.rows == 1200 })
+        // The app wraps every driver in LoggingDriver; collection sizes must come through it too.
+        let logged = LoggingDriver(driver) { _ in }
+        let loggedMetrics = try await logged.metrics(schema: "tabula_test")
+        XCTAssertTrue(loggedMetrics.tables.contains { $0.name == "many" && $0.rows == 1200 })
         _ = try await driver.execute("db.getSiblingDB(\"tabula_test\").dropDatabase()")
     }
 
@@ -343,8 +347,8 @@ final class MongoIntegrationTests: XCTestCase {
     func testSeedListConnection() async throws {
         guard let seed = env["TABULA_TEST_MONGO_SRV_SEED"] else { throw XCTSkip("TABULA_TEST_MONGO_SRV_SEED not set") }
         let driver = try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, host: seed, tls: .disable, srv: true), password: nil)
-        let version = await driver.serverVersion()
-        XCTAssertTrue(version?.hasPrefix("MongoDB") == true, version ?? "nil")
+        let version = try await driver.serverVersion()
+        XCTAssertTrue(version.hasPrefix("MongoDB"), version)
         await driver.close()
     }
 

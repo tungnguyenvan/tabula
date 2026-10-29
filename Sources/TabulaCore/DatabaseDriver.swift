@@ -6,6 +6,8 @@ public protocol DatabaseDriver: AnyObject, Sendable {
     var kind: DatabaseKind { get }
     /// The database's query language: quoting, generated statements and script handling.
     var dialect: any QueryDialect { get }
+    /// The database's catalog queries: version, schemas, foreign keys, metrics, routines.
+    var catalog: any DatabaseCatalog { get }
     /// Whether Stop can interrupt the current server statement, or only skip subsequent statements.
     var queryCancellation: QueryCancellationSupport { get }
 
@@ -81,53 +83,6 @@ extension DatabaseDriver {
             results.append(try await execute(statement))
         }
         return results
-    }
-
-    /// Makes `schema` the one unqualified names refer to, as the sidebar's schema picker promises:
-    /// `SET search_path` on PostgreSQL (keeping public for extensions and shared tables), `USE` on MySQL.
-    public func useSchema(_ schema: String) async throws {
-        guard !schema.isEmpty else { return }
-        let d = dialect
-        switch kind {
-        case .postgres:
-            let path = schema == "public" ? [schema] : [schema, "public"]
-            _ = try await execute("SET search_path TO " + path.map(d.quoteIdentifier).joined(separator: ", "))
-        case .mysql:
-            _ = try await execute("USE \(d.quoteIdentifier(schema))")
-        case .mongodb:
-            _ = try await execute("use \(schema)")
-        case .sqlite, .redis:
-            break
-        }
-    }
-
-    /// The other databases on the server this login may open (PostgreSQL, where a connection reaches one
-    /// database). Empty for the rest: MySQL and MongoDB list their databases as schemas.
-    public func serverDatabases() async throws -> [String] {
-        guard kind == .postgres else { return [] }
-        let result = try await execute("""
-            SELECT datname FROM pg_database
-            WHERE datallowconn AND NOT datistemplate AND has_database_privilege(datname, 'CONNECT')
-            ORDER BY datname
-            """)
-        return result.rows.compactMap { $0.first ?? nil }
-    }
-
-    /// The database this connection is in (PostgreSQL); nil for the others.
-    public func currentDatabase() async -> String? {
-        guard kind == .postgres else { return nil }
-        return (try? await execute("SELECT current_database()")).flatMap { $0.rows.first?.first ?? nil }
-    }
-
-    /// Server version as reported by the database, e.g. "PostgreSQL 16.11 on aarch64…".
-    public func serverVersion() async -> String? {
-        if kind == .mongodb {
-            return (try? await execute("db.version()")).flatMap { $0.rows.first?.first ?? nil }.map { "MongoDB " + $0 }
-        }
-        let sql = kind == .sqlite ? "SELECT 'SQLite ' || sqlite_version()" : "SELECT version()"
-        guard let result = try? await execute(sql), let value = result.rows.first?.first ?? nil else { return nil }
-        if kind == .mysql { return "MySQL " + value }
-        return value
     }
 
     public func fetchPage(_ request: TablePageRequest) async throws -> QueryResult {

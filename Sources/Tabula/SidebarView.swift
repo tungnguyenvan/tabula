@@ -255,7 +255,7 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func newRoutineButtons() -> some View {
-        if model.driver?.supportsFunctions == true {
+        if model.driver?.routineCatalog?.kinds.contains(.function) == true {
             Button("New Function…") { model.newRoutine(.function) }
             Button("New Procedure…") { model.newRoutine(.procedure) }
         }

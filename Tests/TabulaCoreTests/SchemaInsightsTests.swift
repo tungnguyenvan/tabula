@@ -46,8 +46,8 @@ final class SchemaInsightsTests: XCTestCase {
         XCTAssertGreaterThan(first.gauges["Connections"] ?? 0, 0)
         XCTAssertGreaterThanOrEqual(second.counters["Transactions/s"] ?? 0, first.counters["Transactions/s"] ?? 0)
         XCTAssertTrue(first.tables.contains { $0.name == "fk_test.books" })
-        let version = await driver.serverVersion()
-        XCTAssertTrue(version?.hasPrefix("PostgreSQL") == true, version ?? "nil")
+        let version = try await driver.serverVersion()
+        XCTAssertTrue(version.hasPrefix("PostgreSQL"), version)
         _ = try await driver.execute("DROP SCHEMA fk_test CASCADE")
         await driver.close()
     }
@@ -61,8 +61,8 @@ final class SchemaInsightsTests: XCTestCase {
         XCTAssertTrue(metrics.groups.flatMap(\.items).contains { $0.label == "Buffer pool hit ratio" })
         XCTAssertGreaterThan(metrics.counters["Queries/s"] ?? 0, 0)
         XCTAssertTrue(metrics.tables.contains { $0.name == "books" })
-        let version = await driver.serverVersion()
-        XCTAssertTrue(version?.hasPrefix("MySQL 8") == true, version ?? "nil")
+        let version = try await driver.serverVersion()
+        XCTAssertTrue(version.hasPrefix("MySQL 8"), version)
         _ = try await driver.executeScript("DROP TABLE copies, editions, books, authors;")
         await driver.close()
     }

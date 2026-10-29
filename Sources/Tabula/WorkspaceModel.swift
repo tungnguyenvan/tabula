@@ -178,8 +178,8 @@ final class WorkspaceModel {
     }
 
     func newRoutine(_ kind: RoutineInfo.Kind, table: String? = nil) {
-        guard let driver else { return }
-        let model = RoutineTabModel(newKind: kind, template: driver.template(for: kind, schema: selectedSchema, table: table),
+        guard let driver, let routines = driver.routineCatalog else { return }
+        let model = RoutineTabModel(newKind: kind, template: routines.template(for: kind, schema: selectedSchema, table: table),
                                     driver: driver, workspace: self)
         tabs.append(.routine(model))
         selectedTabID = model.id
@@ -223,17 +223,29 @@ final class WorkspaceModel {
         }
     }
 
+    /// A catalog read for the sidebar. A failure leaves `empty` in place and shows in the sidebar, so a login
+    /// that may not list schemas still gets a window to work in.
+    private func catalogRead<Value>(_ empty: Value, _ read: () async throws -> Value) async -> Value {
+        do {
+            return try await read()
+        } catch {
+            tablesError = error.localizedDescription
+            return empty
+        }
+    }
+
     /// Makes `driver` the window's connection and loads what the sidebar shows.
     private func setUp(_ driver: LoggingDriver) async {
         self.driver = driver
         status = .connected
         connectedAt = Date()
-        serverVersion = await driver.serverVersion()
-        currentDatabase = await driver.currentDatabase()
+        // Shown in the toolbar when the server reports them; a failed query is in the console log.
+        serverVersion = try? await driver.serverVersion()
+        currentDatabase = (try? await driver.currentDatabase()) ?? nil
         if savedDatabase == nil { savedDatabase = currentDatabase }
-        databases = (try? await driver.serverDatabases()) ?? []
-        schemas = (try? await driver.schemas()) ?? []
-        let preferred = (try? await driver.defaultSchema()) ?? ""
+        databases = await catalogRead([]) { try await driver.serverDatabases() }
+        schemas = await catalogRead([]) { try await driver.schemas() }
+        let preferred = await catalogRead("") { try await driver.defaultSchema() }
         selectedSchema = schemas.contains(preferred) ? preferred : (schemas.first ?? preferred)
         await applySchema()
         await loadTables()

@@ -292,6 +292,7 @@ public actor SSHTunnel {
 public actor TunneledDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind
     public nonisolated var dialect: any QueryDialect { inner.dialect }
+    public nonisolated var catalog: any DatabaseCatalog { inner.catalog }
     /// PostgreSQL's Stop opens its control connection through the same tunnel.
     public nonisolated var queryCancellation: QueryCancellationSupport { inner.queryCancellation }
     private let inner: any DatabaseDriver

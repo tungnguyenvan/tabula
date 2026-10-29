@@ -37,14 +37,14 @@ final class DriverIntegrationTests: XCTestCase {
         XCTAssertTrue(databases.contains("tabula_switch_test"), "\(databases)")
         XCTAssertFalse(databases.contains("template0"))
         XCTAssertEqual(databases, databases.sorted())
-        let current = await driver.currentDatabase()
+        let current = try await driver.currentDatabase()
         XCTAssertEqual(current, "tabula")
         await driver.close()
 
         var other = config
         other.database = "tabula_switch_test"
         let switched = try await DriverFactory.connect(other, password: "tabula")
-        let switchedCurrent = await switched.currentDatabase()
+        let switchedCurrent = try await switched.currentDatabase()
         XCTAssertEqual(switchedCurrent, "tabula_switch_test")
         await switched.close()
 
@@ -57,7 +57,7 @@ final class DriverIntegrationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(atPath: path) }
         let sqlite = try SQLiteDriver(path: path)
         let sqliteDatabases = try await sqlite.serverDatabases()
-        let sqliteCurrent = await sqlite.currentDatabase()
+        let sqliteCurrent = try await sqlite.currentDatabase()
         XCTAssertEqual(sqliteDatabases, [])
         XCTAssertNil(sqliteCurrent)
         await sqlite.close()
@@ -264,7 +264,7 @@ final class RoutineTests: XCTestCase {
         _ = try await driver.execute("UPDATE items SET name = 'b' WHERE id = 1")
         let updated = try await driver.execute("SELECT updated FROM items").rows.first?.first
         XCTAssertEqual(updated, "v2")
-        _ = try await driver.execute(driver.dropStatement(for: trigger))
+        _ = try await driver.execute(try XCTUnwrap(driver.routineCatalog).dropStatement(for: trigger))
         let after = try await driver.routines(in: "main")
         XCTAssertTrue(after.isEmpty)
     }
