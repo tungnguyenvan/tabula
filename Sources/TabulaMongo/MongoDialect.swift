@@ -171,11 +171,28 @@ enum MongoDialect {
             // Ranges compare within one type, so use the value as typed (a number stays a number).
             [field: [op: candidates.first ?? rule.value] as Document]
         }
-        func pattern(_ prefix: String, _ suffix: String) -> RegularExpression {
-            RegularExpression(
-                pattern: prefix + NSRegularExpression.escapedPattern(for: rule.value) + suffix,
-                options: "i"
-            )
+        func pattern(_ prefix: String, _ suffix: String) -> String {
+            prefix + NSRegularExpression.escapedPattern(for: rule.value) + suffix
+        }
+        /// Text matching as the SQL engines do it: strings (and arrays of strings, element by element) by the regex
+        /// itself, and numbers, dates or ids by their text, which a regex alone never matches.
+        func textMatch(_ pattern: String) -> Document {
+            let asText: Document = [
+                "$convert": ["input": "$" + field, "to": "string", "onError": Null(), "onNull": Null()] as Document
+            ]
+            let converted: Document = [
+                "$expr": [
+                    "$regexMatch": [
+                        "input": ["$ifNull": [asText, ""] as Document] as Document, "regex": pattern, "options": "i",
+                    ]
+                        as Document
+                ] as Document
+            ]
+            return [
+                "$or": MongoDriver.array([
+                    [field: RegularExpression(pattern: pattern, options: "i")] as Document, converted,
+                ])
+            ]
         }
         switch rule.op {
         case .equals:
@@ -187,10 +204,10 @@ enum MongoDialect {
         case .greater: return operand("$gt")
         case .lessOrEqual: return operand("$lte")
         case .greaterOrEqual: return operand("$gte")
-        case .contains: return [field: pattern("", "")]
-        case .notContains: return [field: ["$not": pattern("", "")] as Document]
-        case .startsWith: return [field: pattern("^", "")]
-        case .endsWith: return [field: pattern("", "$")]
+        case .contains: return textMatch(pattern("", ""))
+        case .notContains: return ["$nor": MongoDriver.array([textMatch(pattern("", ""))])]
+        case .startsWith: return textMatch(pattern("^", ""))
+        case .endsWith: return textMatch(pattern("", "$"))
         case .isNull: return [field: Null()]
         case .isNotNull: return [field: ["$ne": Null()] as Document]
         case .inList:
@@ -217,7 +234,16 @@ enum MongoDialect {
         }
         if let value = try? MongoShell.parseValue(trimmed), !(value is Document) {
             switch value {
-            case is Int32, is Int, is Double: return [value, trimmed]
+            case is Int32, is Int:
+                // Integers compare with decimals by value already.
+                return [value, trimmed]
+            case is Double:
+                // A decimal field holds 0.1000 exactly, which no double equals; the decimal form finds it.
+                guard let decimal = MongoDecimal.parse(trimmed) else {
+                    return [value, trimmed]
+                }
+                return [value, decimal, trimmed]
+            case is Bool: return [value, trimmed]
             case is String: return [value]
             default: return [value]
             }

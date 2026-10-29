@@ -48,6 +48,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **MongoDB: Duplicate Row and the INSERT export keep every type**: decimals and dates no longer become strings, and a duplicate no longer gains null fields the original lacked ([#175](https://github.com/tungnguyenvan/tabula/issues/175)).
 - **SQLite: the filter bar ignores case in any language**: “contains hà nội” now finds “HÀ NỘI”; SQLite’s own LIKE folds only ASCII letters ([#177](https://github.com/tungnguyenvan/tabula/issues/177)).
 - **Copy URL** works for a connection to an IPv6 address; it used to copy an empty string ([#179](https://github.com/tungnguyenvan/tabula/issues/179)).
+- **MongoDB filter bar** ([#183](https://github.com/tungnguyenvan/tabula/issues/183)): “= true” also finds the string "true", “= 0.1000” finds a NumberDecimal as the grid shows it, and contains / starts with / ends with also match numbers, dates and ids by their text, as on the SQL databases (MongoDB 4.2 or later).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 
