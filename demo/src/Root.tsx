@@ -25,7 +25,7 @@ export const Root: React.FC = () => (
       defaultProps={{ events: {} } as DemoProps}
       calculateMetadata={async () => ({ props: await loadEvents(recordings, (name) => name) })}
     />
-    {/* What's new in 0.5.0–0.5.2 (scripts/render-whats-new.sh). */}
+    {/* What's new in 0.6.0–0.7.0 (scripts/render-whats-new.sh). */}
     <Composition
       id="WhatsNew"
       component={WhatsNew}

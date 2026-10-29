@@ -18,10 +18,9 @@ import {
   type InputEvent,
 } from "./Demo";
 
-/// What's new from 0.5.0 to 0.5.4, each feature in the real app (scripts/render-whats-new.sh lists the recordings).
-/// Chat scenes use the current development composer, explicitly labelled because it is not in release 0.5.4.
+/// What's new in 0.6.0 and 0.7.0, each feature in the real app (scripts/render-whats-new.sh lists the recordings).
 /// The pointer shows only where it clicks. Timed in thirtieths of a second, as in Demo.tsx.
-export const whatsNewRecordings = ["tools", "history", "state", "sidebar", "sqlfile", "connstring"] as const;
+export const whatsNewRecordings = ["ssh", "stop", "mysql", "tabs", "dump", "restore"] as const;
 type Name = (typeof whatsNewRecordings)[number];
 export type WhatsNewProps = { events: Partial<Record<Name, InputEvent[]>> };
 
@@ -29,8 +28,6 @@ export type WhatsNewProps = { events: Partial<Record<Name, InputEvent[]>> };
 const connectionsAspect = 1280 / 2000;
 /// The zoom that shows that whole window under the titles.
 const connectionsFit = 0.84;
-/// Puts the window's right edge, where the AI panel is, near the right of the picture at this zoom.
-const rightEdge = (zoom: number) => 1.0 + 40 / (stageWidth * zoom) - 960 / (stageWidth * zoom);
 
 const file = (name: Name) => `whatsnew/${name}`;
 
@@ -48,7 +45,7 @@ const Mark: React.FC<{ from: number; to: number; left: number; top: number; widt
   );
 };
 
-const versions = ["0.5.0", "0.5.1", "0.5.2", "0.5.3", "0.5.4"];
+const versions = ["0.6.0", "0.7.0"];
 
 const Intro: React.FC<{ duration: number }> = ({ duration }) => {
   const frame = useFrame();
@@ -76,127 +73,109 @@ const Intro: React.FC<{ duration: number }> = ({ duration }) => {
 
 type SceneProps = { duration: number; events: InputEvent[] };
 
-/// Actual saved conversation, reopened in the current UI with a 520-point inspector: chat at 181,
-/// query disclosure at 244, collapsed again at 337. This is not a simulated live AI answer.
-const Tools: React.FC<SceneProps> = ({ duration, events }) => (
+/// Editing the PostgreSQL connection: Connect over SSH at 208, the SSH host typed at 295–387, the user at 420–460.
+const SSH: React.FC<SceneProps> = ({ duration, events }) => (
   <Background>
     <Enter duration={duration}>
-      <Title text="See what the AI looked up" sub="Read-only queries, visible steps and answers in tables" />
-      <Recording name={file("tools")} events={events} duration={duration} pointer="clicks"
-        timeline={[[0, 166], [15, 181], [62, 244], [112, 294], [155, 337], [duration, 387]]}
-        camera={[
-          { at: 0, x: 0.5, y: 0.5, zoom: fit },
-          { at: 24, x: 0.5, y: 0.5, zoom: fit },
-          { at: 54, x: rightEdge(1.15), y: 0.45, zoom: 1.15 },
-          { at: 150, x: rightEdge(1.15), y: 0.45, zoom: 1.15 },
-          { at: duration, x: 0.5, y: 0.5, zoom: fit },
-        ]} />
-      <Caption from={24} to={58}>A real saved conversation, reopened</Caption>
-    </Enter>
-  </Background>
-);
-
-/// Current chat UI, widened for legible model and effort labels. History menu at 244; Escape at 328;
-/// New Chat at 376; composer focus at 434; then typing an unsent draft.
-const History: React.FC<SceneProps> = ({ duration, events }) => (
-  <Background>
-    <Enter duration={duration}>
-      <Title text="Keep your conversations" sub="Reopen earlier chats, or start fresh in the new composer" />
-      <Recording name={file("history")} events={events} duration={duration} pointer="clicks"
-        timeline={[[0, 224], [20, 244], [62, 328], [86, 376], [115, 434], [128, 460], [duration, 508]]}
-        camera={[
-          { at: 0, x: 0.5, y: 0.5, zoom: fit },
-          { at: 25, x: rightEdge(1.1), y: 0.4, zoom: 1.1 },
-          { at: 78, x: rightEdge(1.1), y: 0.4, zoom: 1.1 },
-          { at: 113, x: rightEdge(1.1), y: 0.7, zoom: 1.1 },
-          { at: duration, x: rightEdge(1.1), y: 0.7, zoom: 1.1 },
-        ]} />
-      <Caption from={117} to={duration}>New composer · current development build</Caption>
-    </Enter>
-  </Background>
-);
-
-/// Recorded after closing the connection, so the empty window really has no connection. Opening PostgreSQL at
-/// frame 304 restores all four tabs; the Orders tab is selected at 398 and the file tab at 470.
-const WorkspaceState: React.FC<SceneProps> = ({ duration, events }) => (
-  <Background>
-    <Enter duration={duration}>
-      <Title text="Pick up where you left off" sub="Each connection remembers its tabs, SQL, schema and query history" />
-      <Recording name={file("state")} events={events} duration={duration} pointer="clicks"
-        timeline={[[0, 286], [18, 304], [42, 328], [84, 398], [126, 440], [156, 470], [duration, 544]]}
-        camera={[
-          { at: 0, x: 0.5, y: 0.47, zoom: 1.15 },
-          { at: 24, x: 0.5, y: 0.47, zoom: 1.15 },
-          { at: 52, x: 0.48, y: 0.28, zoom: 1.45 },
-          { at: 190, x: 0.48, y: 0.28, zoom: 1.45 },
-          { at: duration, x: 0.5, y: 0.5, zoom: fit },
-        ]}>
-        <Mark from={44} to={78} left={0.184} top={0.068} width={0.65} height={0.038} label="Your tabs, restored" />
-      </Recording>
-      <Caption from={44} to={80}>Your SQL comes back. It is not run automatically.</Caption>
-      <Caption from={166} to={214}>Table tabs and .sql files, together</Caption>
-    </Enter>
-  </Background>
-);
-
-/// Recorded at 30 frames a second: Triggers, Functions, Views and Tables collapse at 181, 227, 272 and 316; Tables
-/// opens again at 379.
-const Sidebar: React.FC<SceneProps> = ({ duration, events }) => (
-  <Background>
-    <Enter duration={duration}>
-      <Title text="Fold the sidebar" sub="Collapse Tables, Views, Functions or Triggers; Tabula remembers" />
-      <Recording name={file("sidebar")} events={events} duration={duration} pointer="clicks"
-        timeline={[[0, 168], [13, 181], [36, 227], [59, 272], [81, 316], [113, 379], [duration, 426]]}
-        camera={[
-          { at: 0, x: 0.5, y: 0.5, zoom: fit },
-          { at: 14, x: 0.32, y: 0.42, zoom: 1.6 },
-          { at: duration, x: 0.32, y: 0.38, zoom: 1.7 },
-        ]} />
-    </Enter>
-  </Background>
-);
-
-/// Recorded at 30 frames a second: the file opens at 243 (as from Finder), the caret moves at 304–358, typing
-/// 385–424, Save at 471, ⌘↩ at 534.
-const SQLFile: React.FC<SceneProps> = ({ duration, events }) => (
-  <Background>
-    <Enter duration={duration}>
-      <Title text="Open and save .sql files" sub="⌘O opens, a dot marks unsaved edits, ⌘S saves" />
-      <Recording name={file("sqlfile")} events={events} duration={duration} pointer="clicks"
-        timeline={[[0, 228], [15, 243], [45, 303], [72, 358], [85, 385], [105, 424], [128, 471], [159, 534], [duration, 580]]}
-        camera={[
-          { at: 0, x: 0.5, y: 0.5, zoom: fit },
-          { at: 20, x: 0.42, y: 0.2, zoom: 2.0 },
-          { at: 150, x: 0.42, y: 0.2, zoom: 2.0 },
-          { at: 170, x: 0.5, y: 0.35, zoom: 1.2 },
-          { at: duration, x: 0.5, y: 0.35, zoom: 1.25 },
-        ]}>
-        <Mark from={92} to={128} left={0.185} top={0.068} width={0.17} height={0.04} label="Unsaved" />
-      </Recording>
-      <Caption from={15} to={44}>A file opened from Finder</Caption>
-      <Caption from={112} to={150}><Key>⌘</Key><Key>S</Key> or the Save button</Caption>
-      <Caption from={154} to={duration}><Key>⌘</Key><Key>Return</Key> runs it</Caption>
-    </Enter>
-  </Background>
-);
-
-/// Recorded at 30 frames a second in the Connections window: Connection String… at 167, the field at 221, the
-/// string pasted at 262, Continue at 347, the filled-in form from about 352.
-const ConnString: React.FC<SceneProps> = ({ duration, events }) => (
-  <Background>
-    <Enter duration={duration}>
-      <Title text="Paste a connection string" sub="URLs, JDBC or key=value pairs: Tabula fills in the form" />
-      <Recording name={file("connstring")} events={events} duration={duration} pointer="clicks" aspect={connectionsAspect} shape="connections"
-        timeline={[[0, 150], [17, 167], [44, 221], [65, 262], [107, 347], [duration, 425]]}
+      <Title text="Connect over SSH" sub="PostgreSQL and MySQL through a bastion, with your SSH keys" />
+      <Recording name={file("ssh")} events={events} duration={duration} pointer="clicks" aspect={connectionsAspect} shape="connections"
+        timeline={[[0, 160], [15, 208], [35, 262], [50, 295], [80, 387], [95, 420], [115, 470], [duration, 560]]}
         camera={[
           { at: 0, x: 0.5, y: 0.5, zoom: connectionsFit },
-          { at: 10, x: 0.3, y: 0.7, zoom: 1.2 },
-          { at: 34, x: 0.5, y: 0.47, zoom: 1.25 },
-          { at: 106, x: 0.5, y: 0.47, zoom: 1.25 },
-          { at: 128, x: 0.5, y: 0.5, zoom: connectionsFit * 1.12 },
-          { at: duration, x: 0.5, y: 0.5, zoom: connectionsFit * 1.15 },
+          { at: 12, x: 0.5, y: 0.72, zoom: 1.35 },
+          { at: duration, x: 0.5, y: 0.74, zoom: 1.45 },
         ]} />
-      <Caption from={62} to={100}><Key>⌘</Key><Key>V</Key> and Tabula shows what it read</Caption>
+      <Caption from={95} to={duration}>Key authentication only; host keys from known_hosts</Caption>
+    </Enter>
+  </Background>
+);
+
+/// A 30-second pg_sleep: typed at 181–208, run (⌘↩) at 237, Stop clicked at 360, the cancelled message from about 365.
+const Stop: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Stop a running query" sub="PostgreSQL cancels it on the server; your transaction is left to you" />
+      <Recording name={file("stop")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 165], [25, 237], [45, 300], [65, 360], [100, 420], [duration, 520]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.5, zoom: fit },
+          { at: 14, x: 0.45, y: 0.22, zoom: 1.6 },
+          { at: duration, x: 0.48, y: 0.24, zoom: 1.6 },
+        ]}>
+        <Mark from={70} to={115} left={0.2} top={0.265} width={0.65} height={0.04} label="Cancelled on the server" />
+      </Recording>
+      <Caption from={30} to={64}>Running… <Key>⌘</Key><Key>.</Key> or Stop</Caption>
+    </Enter>
+  </Background>
+);
+
+/// MySQL employees: run at 214, salary of row 2 edited at 367–421, dept of row 4 at 553–609, Commit 2 clicked at 693.
+const MySQLEdit: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Edit MySQL query results" sub="Change cells in a SELECT's result, then commit them in one transaction" />
+      <Recording name={file("mysql")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 200], [15, 230], [30, 304], [50, 367], [70, 421], [88, 490], [103, 553], [123, 609], [145, 693], [165, 760], [duration, 850]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.5, zoom: fit },
+          { at: 20, x: 0.36, y: 0.36, zoom: 1.75 },
+          { at: 126, x: 0.36, y: 0.36, zoom: 1.75 },
+          { at: 140, x: 0.45, y: 0.62, zoom: 1.12 },
+          { at: duration, x: 0.45, y: 0.62, zoom: 1.15 },
+        ]} />
+      <Caption from={125} to={160}>Commit, or <Key>⌘</Key><Key>S</Key></Caption>
+    </Enter>
+  </Background>
+);
+
+/// Query 1 runs at 217 and row 4 is selected at 307; customers opens at 389, order_items at 488; back to Query 1 at 586.
+const Tabs: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Switch tabs instantly" sub="Each tab keeps its results, scroll position, selection and caret" />
+      <Recording name={file("tabs")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 165], [20, 217], [40, 300], [50, 307], [75, 389], [100, 488], [125, 586], [duration, 700]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.5, zoom: fit },
+          { at: 20, x: 0.5, y: 0.4, zoom: 1.12 },
+          { at: duration, x: 0.5, y: 0.4, zoom: 1.15 },
+        ]}>
+        <Mark from={128} to={duration - 4} left={0.2} top={0.383} width={0.255} height={0.03} label="Same result, same row" />
+      </Recording>
+    </Enter>
+  </Background>
+);
+
+/// The Dump sheet opens at about 190, Dump… is clicked at 307 (saving to a set file), pg_dump finishes at about 362.
+const Dump: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Dump a database" sub="With the pg_dump or mysqldump you have installed; passwords never on a command line" />
+      <Recording name={file("dump")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 190], [30, 274], [42, 307], [70, 362], [duration, 470]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.5, zoom: fit },
+          { at: 14, x: 0.5, y: 0.5, zoom: 1.35 },
+          { at: duration, x: 0.5, y: 0.5, zoom: 1.4 },
+        ]} />
+      <Caption from={74} to={duration}>File › Dump Database…, or Dump Table… in the sidebar</Caption>
+    </Enter>
+  </Background>
+);
+
+/// That dump restored into an empty database: the sheet at about 195, Restore clicked at 322, done at about 400.
+const Restore: React.FC<SceneProps> = ({ duration, events }) => (
+  <Background>
+    <Enter duration={duration}>
+      <Title text="Restore from a dump" sub="PostgreSQL restores all or nothing, in one transaction" />
+      <Recording name={file("restore")} events={events} duration={duration} pointer="clicks"
+        timeline={[[0, 195], [30, 290], [42, 322], [90, 400], [duration, 480]]}
+        camera={[
+          { at: 0, x: 0.5, y: 0.5, zoom: fit },
+          { at: 14, x: 0.5, y: 0.5, zoom: 1.35 },
+          { at: duration, x: 0.5, y: 0.5, zoom: 1.4 },
+        ]} />
+      <Caption from={94} to={duration}>Production restores ask for the database name first</Caption>
     </Enter>
   </Background>
 );
@@ -210,7 +189,7 @@ const Outro: React.FC = () => {
       <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
         <Img src={staticFile("icon.png")} style={{ width: 150, height: 150, transform: `scale(${icon})` }} />
         <Sfx at={18} name="chime" volume={0.6} />
-        <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula 0.5.4" top={10} at={4} /></div>
+        <div style={{ height: 120, position: "relative", width: "100%" }}><Title text="Tabula 0.7.0" top={10} at={4} /></div>
         <div style={{ fontSize: 34, color: "rgba(255,255,255,0.8)", opacity: spring({ frame: frame - 12, fps: unit, config: { damping: 200 } }) }}>
           Free · Native · No account, no telemetry
         </div>
@@ -224,12 +203,12 @@ const Outro: React.FC = () => {
 
 const scenes: { duration: number; render: (duration: number, props: WhatsNewProps) => React.ReactNode }[] = [
   { duration: 80, render: (d) => <Intro duration={d} /> },
-  { duration: 205, render: (d, p) => <Tools duration={d} events={p.events.tools ?? []} /> },
-  { duration: 165, render: (d, p) => <History duration={d} events={p.events.history ?? []} /> },
-  { duration: 230, render: (d, p) => <WorkspaceState duration={d} events={p.events.state ?? []} /> },
-  { duration: 150, render: (d, p) => <Sidebar duration={d} events={p.events.sidebar ?? []} /> },
-  { duration: 205, render: (d, p) => <SQLFile duration={d} events={p.events.sqlfile ?? []} /> },
-  { duration: 185, render: (d, p) => <ConnString duration={d} events={p.events.connstring ?? []} /> },
+  { duration: 150, render: (d, p) => <SSH duration={d} events={p.events.ssh ?? []} /> },
+  { duration: 140, render: (d, p) => <Stop duration={d} events={p.events.stop ?? []} /> },
+  { duration: 185, render: (d, p) => <MySQLEdit duration={d} events={p.events.mysql ?? []} /> },
+  { duration: 160, render: (d, p) => <Tabs duration={d} events={p.events.tabs ?? []} /> },
+  { duration: 120, render: (d, p) => <Dump duration={d} events={p.events.dump ?? []} /> },
+  { duration: 140, render: (d, p) => <Restore duration={d} events={p.events.restore ?? []} /> },
   { duration: 85, render: () => <Outro /> },
 ];
 
