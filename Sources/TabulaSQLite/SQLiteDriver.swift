@@ -29,9 +29,36 @@ public actor SQLiteDriver: DatabaseDriver {
             throw DatabaseError(message)
         }
         sqlite3_busy_timeout(handle, Defaults.sqliteBusyTimeoutMilliseconds)
+        Self.registerCaseFold(on: handle)
         db = handle
         interrupter = SQLiteInterrupter(handle: handle)
         catalog = SQLiteCatalog(interrupter: interrupter)
+    }
+
+    /// `tabula_casefold(text)`: the text with Unicode case folded, for the filter bar's text operators
+    /// (`SQLDialect.caseFoldFunction`). SQLite's own LIKE and lower() fold only ASCII letters, so "hà nội" wouldn't
+    /// find "HÀ NỘI".
+    private static func registerCaseFold(on handle: OpaquePointer) {
+        sqlite3_create_function_v2(
+            handle,
+            SQLDialect.caseFoldFunction,
+            1,
+            SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+            nil,
+            { context, count, arguments in
+                guard count == 1, let argument = arguments?[0], sqlite3_value_type(argument) != SQLITE_NULL,
+                    let text = sqlite3_value_text(argument)
+                else {
+                    sqlite3_result_null(context)
+                    return
+                }
+                let folded = String(cString: text).folding(options: .caseInsensitive, locale: nil)
+                sqlite3_result_text(context, folded, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            },
+            nil,
+            nil,
+            nil
+        )
     }
 
     public func close() {

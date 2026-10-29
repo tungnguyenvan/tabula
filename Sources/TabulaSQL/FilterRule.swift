@@ -83,15 +83,29 @@ public struct FilterRule: Identifiable, Hashable, Sendable {
 }
 
 extension SQLDialect {
-    /// SQL for one rule. Text matching casts to text on Postgres so it also works on numeric columns.
+    /// A function SQLiteDriver registers on its connections: the text with Unicode case folded.
+    public static let caseFoldFunction = "tabula_casefold"
+
+    /// SQL for one rule. Text matching ignores case: ILIKE on PostgreSQL (with a cast, so numeric columns work too),
+    /// the column's collation on MySQL, and Unicode case folding on SQLite, whose LIKE folds only ASCII letters.
     public func condition(_ rule: FilterRule) -> String {
         let column = quoteIdentifier(rule.column)
-        let asText = flavor == .postgres ? "CAST(\(column) AS TEXT)" : column
+        let asText =
+            switch flavor {
+            case .postgres: "CAST(\(column) AS TEXT)"
+            case .sqlite: "\(Self.caseFoldFunction)(\(column))"
+            case .mysql: column
+            }
         let like = flavor == .postgres ? "ILIKE" : "LIKE"
         func pattern(_ prefix: String, _ suffix: String) -> String {
             let escaped = rule.value.replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
-            return literal(prefix + escaped + suffix) + (flavor == .mysql ? "" : " ESCAPE '\\'")
+            let text = literal(prefix + escaped + suffix)
+            switch flavor {
+            case .postgres: return text + " ESCAPE '\\'"
+            case .sqlite: return "\(Self.caseFoldFunction)(\(text)) ESCAPE '\\'"
+            case .mysql: return text
+            }
         }
         switch rule.op {
         case .equals: return "\(column) = \(literal(rule.value))"
