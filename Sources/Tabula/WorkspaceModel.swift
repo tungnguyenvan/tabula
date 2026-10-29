@@ -61,27 +61,13 @@ final class WorkspaceModel {
     private(set) var currentDatabase: String?
     var selectedSchema: String = ""
     private(set) var tables: [TableRef] = [] {
-        // Reloading tables (refresh, schema switch, DDL) drops what completion knew; loads still in flight
-        // for the old list see the generation change and throw their results away.
+        // Reloading tables (refresh, schema switch, DDL) drops what completion knew.
         didSet {
-            columnCache = [:]
-            foreignKeyCache = nil
-            loadingColumns = []
-            cacheGeneration += 1
+            names.tablesChanged()
         }
     }
-    /// Column names per table, filled on demand for SQL completion.
-    /// "schema.table" (lower-cased) → columns.
-    private var columnCache: [String: [ColumnInfo]] = [:]
-    /// Foreign keys of the selected schema, loaded for the AI the first time it is asked.
-    private var foreignKeyCache: [ForeignKeyInfo]?
-    private var cacheGeneration = 0
-    private var loadingColumns: Set<String> = []
-    private var prefetchingColumns = false
-    private var schemaTableCache: [String: [String]] = [:]
-    /// Bumped when completion learns new table or column names, so the editor can refresh its suggestion.
-    private(set) var completionVersion = 0
-    private var loadingSchemaTables: Set<String> = []
+    /// Column and table names for completion and the AI, loaded as they are needed.
+    let names = SchemaNames()
     var tableSearch = ""
     var tablesError: String?
     private(set) var loadingTables = false
@@ -330,14 +316,9 @@ final class WorkspaceModel {
         transfer?.cancel()
         // An answer in progress would go on using the closed connection (and open another).
         chat.stop()
-        agentGeneration += 1
-        agentOpening?.cancel()
-        agentOpening = nil
-        let agent = agentDriver
-        agentDriver = nil
         await driver?.close()
         driver = nil
-        await agent?.close()
+        await agent.close()
     }
 
     /// The dump or restore sheet shown in this window.
@@ -414,48 +395,12 @@ final class WorkspaceModel {
 
     /// The chat assistant's own connection: read-only where the server allows it, so its queries can't change
     /// data or interfere with the user's transactions. Opened on first use; its statements show in the console.
-    private var agentDriver: LoggingDriver?
-    private var agentSchema: String?
-    /// The agent's connection being opened; callers meanwhile wait for the same one.
-    private var agentOpening: Task<LoggingDriver, any Error>?
-    /// Bumped by `disconnect`, so a connection that finishes opening for the old database is closed, not kept.
-    private var agentGeneration = 0
+    private let agent = AgentConnection()
 
     func agentToolbox() async throws -> AgentToolbox {
-        let generation = agentGeneration
-        let driver: LoggingDriver
-        if let agentDriver {
-            driver = agentDriver
-        } else {
-            let target = config
-            let opening =
-                agentOpening
-                ?? Task {
-                    let opened = try await openDriver(target)
-                    do {
-                        try await AgentToolbox.prepare(opened)
-                        try Task.checkCancellation()
-                    } catch {
-                        await opened.close()
-                        throw error
-                    }
-                    return opened
-                }
-            agentOpening = opening
-            let opened = try await opening.value
-            guard generation == agentGeneration else {
-                await opened.close()
-                throw CancellationError()
-            }
-            agentOpening = nil
-            agentDriver = opened
-            agentSchema = nil
-            driver = opened
-        }
-        // Unqualified names resolve as in the user's queries.
-        if agentSchema != selectedSchema {
-            try await driver.useSchema(selectedSchema)
-            agentSchema = selectedSchema
+        let target = config
+        let driver = try await agent.driver(selectedSchema: selectedSchema) { [unowned self] in
+            try await openDriver(target)
         }
         return AgentToolbox(
             driver: driver,
@@ -525,8 +470,7 @@ final class WorkspaceModel {
             return false
         }
         inspectedRows = []
-        schemaTableCache = [:]
-        loadingSchemaTables = []
+        names.databaseChanged()
         if startingNewChat {
             chat.newConversation()
         }
@@ -692,149 +636,44 @@ final class WorkspaceModel {
         prefetchColumns()
     }
 
-    /// Loads the columns of the schema's tables in the background, so completion knows them before the
-    /// statement names a table.
+    // MARK: Names
+
+    private var nameSource: SchemaNames.Source {
+        SchemaNames.Source(
+            driver: driver,
+            kind: driver?.kind ?? config.kind,
+            tables: tables,
+            schemas: schemas,
+            selectedSchema: selectedSchema
+        )
+    }
+
+    /// Bumped when completion learns names, so the editor can refresh its suggestion.
+    var completionVersion: Int { names.version }
+
     func prefetchColumns() {
-        guard let driver, !prefetchingColumns else { return }
-        let pending = tables.prefix(Defaults.completionPrefetchLimit).filter { columnCache[Self.columnKey($0)] == nil }
-        guard !pending.isEmpty else { return }
-        prefetchingColumns = true
-        let generation = cacheGeneration
-        Task {
-            defer { prefetchingColumns = false }
-            for table in pending {
-                let key = Self.columnKey(table)
-                guard generation == cacheGeneration else { return }
-                guard columnCache[key] == nil, !loadingColumns.contains(key) else { continue }
-                loadingColumns.insert(key)
-                let columns = (try? await driver.columns(of: table)) ?? []
-                guard generation == cacheGeneration else { return }
-                loadingColumns.remove(key)
-                columnCache[key] = columns
-                completionVersion += 1
-            }
-        }
+        names.prefetchColumns(from: nameSource)
     }
 
     /// Table names of another schema, for completing `schema.`; nil while they load.
     func tableNames(inSchema schema: String) -> [String]? {
-        if schema.caseInsensitiveCompare(selectedSchema) == .orderedSame {
-            return tables.map(\.name)
-        }
-        let key = schema.lowercased()
-        if let cached = schemaTableCache[key] {
-            return cached
-        }
-        guard let driver, !loadingSchemaTables.contains(key),
-            let name = schemas.first(where: { $0.caseInsensitiveCompare(schema) == .orderedSame })
-        else { return nil }
-        loadingSchemaTables.insert(key)
-        Task {
-            let names = (try? await driver.tables(in: name).map(\.name)) ?? []
-            guard driver === self.driver else { return }
-            schemaTableCache[key] = names
-            completionVersion += 1
-            loadingSchemaTables.remove(key)
-        }
-        return nil
+        names.tableNames(inSchema: schema, from: nameSource)
     }
 
-    /// The schema for Ask AI and Fix with AI: waits for columns still loading (up to the prefetch limit)
-    /// and for foreign keys, and adds tables of other schemas that `sql` names.
     func loadedAISchema(for sql: String) async -> SQLPrompts.Schema {
-        guard let driver else {
-            return aiSchema()
-        }
-        let generation = cacheGeneration
-        // Tables the text names come first and are always loaded; the others only while time allows.
-        var named: [TableRef] = []
-        var extra: [TableRef] = []
-        for reference in driver.dialect.referencedTables(in: sql) {
-            if let schemaName = reference.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame {
-                guard let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame })
-                else { continue }
-                let table = TableRef(schema: schema, name: reference.name)
-                named.append(table)
-                extra.append(table)
-            } else if let table = tables.first(where: { $0.name.caseInsensitiveCompare(reference.name) == .orderedSame }
-            ) {
-                named.append(table)
-            }
-        }
-        let others = tables.prefix(Defaults.completionPrefetchLimit).filter { table in !named.contains(table) }
-        let deadline = ContinuousClock.now + .seconds(Defaults.AI.schemaWait)
-        for (index, table) in (named + others).enumerated() where columnCache[Self.columnKey(table)] == nil {
-            // Stop (the user cancelled) or run out of time: send what is known.
-            if Task.isCancelled || (index >= named.count && ContinuousClock.now >= deadline) {
-                break
-            }
-            let columns = (try? await driver.columns(of: table)) ?? []
-            guard generation == cacheGeneration else {
-                return aiSchema()
-            }
-            columnCache[Self.columnKey(table)] = columns
-        }
-        if foreignKeyCache == nil, !Task.isCancelled, ContinuousClock.now < deadline {
-            let keys = (try? await driver.foreignKeys(in: selectedSchema)) ?? []
-            if generation == cacheGeneration {
-                foreignKeyCache = keys
-            }
-        }
-        return aiSchema(extra: extra)
+        await names.loadedAISchema(for: sql, from: nameSource)
     }
 
-    /// The schema as the AI sees it: names written as SQL needs them (schema-qualified), column types,
-    /// primary and foreign keys. Never rows. With `focus`, only those tables get their columns, which keeps
-    /// requests made while typing small.
     func aiSchema(focus: Set<String>? = nil, extra: [TableRef] = []) -> SQLPrompts.Schema {
-        let kind = driver?.kind ?? config.kind
-        func described(_ table: TableRef) -> SQLPrompts.Schema.Table {
-            let name = aiName(table, kind: kind)
-            let inFocus = focus.map { $0.contains(table.name.lowercased()) || $0.contains(name.lowercased()) } ?? true
-            let columns =
-                inFocus
-                ? (columnCache[Self.columnKey(table)] ?? [])
-                    .map {
-                        SQLPrompts.Schema.Column(name: $0.name, type: $0.dataType, isPrimaryKey: $0.isPrimaryKey)
-                    } : []
-            return SQLPrompts.Schema.Table(name: name, columns: columns)
-        }
-        let keys = (foreignKeyCache ?? [])
-            .compactMap { key -> String? in
-                guard let target = key.referencedColumns.first, let column = key.columns.first else { return nil }
-                return
-                    "\(aiName(key.table, kind: kind)).\(column) -> \(aiName(key.referencedTable, kind: kind)).\(target)"
-            }
-        let defaultSchema = kind == .sqlite ? nil : selectedSchema
-        var schema = SQLPrompts.Schema(
-            tables: (tables + extra).map(described),
-            foreignKeys: focus == nil ? keys : [],
-            defaultSchema: defaultSchema
-        )
-        schema.isDocument = kind.isDocument
-        return schema
+        names.aiSchema(focus: focus, extra: extra, from: nameSource)
     }
 
-    /// `schema.table`, quoting names that need it; SQLite's main database needs no prefix.
-    private func aiName(_ table: TableRef, kind: DatabaseKind) -> String {
-        guard let flavor = SQLFlavor(kind) else {
-            // MongoDB: collections are named as the shell reaches them from the current database.
-            return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name)"
-        }
-        let dialect = SQLDialect(flavor: flavor)
-        func part(_ name: String) -> String {
-            name.range(of: "^[a-z_][a-z0-9_]*$", options: .regularExpression) != nil
-                ? name : dialect.quoteIdentifier(name)
-        }
-        if flavor == .sqlite && table.schema == "main" { return part(table.name) }
-        return "\(part(table.schema)).\(part(table.name))"
+    /// A table's column names if already loaded; otherwise starts loading them and returns nil.
+    func columnNames(of table: SQLCompletion.TableName) -> [String]? {
+        names.columnNames(of: table, from: nameSource)
     }
 
-    /// Every column name loaded so far, for completion before a table is named.
-    var knownColumnNames: [String] {
-        let prefix = selectedSchema.lowercased() + "."
-        return Array(Set(columnCache.filter { $0.key.hasPrefix(prefix) }.values.joined().map(\.name))).sorted()
-    }
+    // MARK: Filters
 
     /// Where a table's filter is remembered: the table in the database the window is in.
     func filterKey(_ table: TableRef) -> WorkspaceState.TableKey {
@@ -851,10 +690,6 @@ final class WorkspaceModel {
         for case .table(let model) in tabs {
             rememberFilter(of: model)
         }
-    }
-
-    private static func columnKey(_ table: TableRef) -> String {
-        "\(table.schema.lowercased()).\(table.name.lowercased())"
     }
 
     func close(_ id: UUID) {
@@ -937,39 +772,6 @@ final class WorkspaceModel {
         }
     }
 
-    /// A table's column names if already loaded; otherwise starts loading them and returns nil,
-    /// so completion offers them from the next keystroke on.
-    func columnNames(of table: SQLCompletion.TableName) -> [String]? {
-        let ref: TableRef
-        if let schemaName = table.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame {
-            // Another schema: only one the database has. A mistyped one gets no columns rather than a
-            // same-named table's from the selected schema.
-            guard let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame }) else {
-                return nil
-            }
-            ref = TableRef(schema: schema, name: table.name)
-        } else if let known = tables.first(where: { $0.name.caseInsensitiveCompare(table.name) == .orderedSame }) {
-            ref = known
-        } else {
-            return nil
-        }
-        let key = Self.columnKey(ref)
-        if let cached = columnCache[key] {
-            return cached.map(\.name)
-        }
-        guard let driver, !loadingColumns.contains(key) else { return nil }
-        loadingColumns.insert(key)
-        let generation = cacheGeneration
-        Task {
-            let columns = (try? await driver.columns(of: ref)) ?? []
-            guard generation == cacheGeneration else { return }
-            loadingColumns.remove(key)
-            columnCache[key] = columns
-            completionVersion += 1
-        }
-        return nil
-    }
-
     /// Runs a destructive table operation (truncate/drop) after the UI has confirmed it.
     func perform(_ sql: String, on table: TableRef) async throws {
         guard let driver else {
@@ -995,5 +797,5 @@ final class WorkspaceModel {
 extension WorkspaceModel: CompletionCatalog {
     var tableNames: [String] { tables.map(\.name) }
     var schemaNames: [String] { schemas }
-    var allColumnNames: [String] { knownColumnNames }
+    var allColumnNames: [String] { names.knownColumnNames(inSchema: selectedSchema) }
 }
