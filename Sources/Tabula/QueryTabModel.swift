@@ -40,6 +40,8 @@ final class QueryTabModel {
         switch driver.kind {
         case .sqlite:
             return cancel + " SQLite rolls back an open transaction when the stopped statement changes rows."
+        case .mongodb:
+            return cancel + " Documents the command already changed stay changed."
         default:
             return cancel + " The transaction is not committed or rolled back."
         }
@@ -206,6 +208,8 @@ final class QueryTabModel {
             text += " If a transaction was open and the statement changed rows, SQLite has rolled the transaction back."
         case .mysql:
             text += " An open transaction stays open, with the changes made before the stopped statement."
+        case .mongodb:
+            text += " Documents the command had already changed stay changed."
         default:
             break
         }

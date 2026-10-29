@@ -18,10 +18,30 @@ public actor MongoDriver: DatabaseDriver {
     private var currentDatabase: String
     /// Field order learned per collection ("db.collection"), so pages show columns in a steady order.
     private var fieldOrder: [String: [String]] = [:]
+    /// Stop ends the server operations of the statement it was pressed for (`killOp`), on MongoDB 4.4 and later:
+    /// older servers refuse the `comment` that marks them on most commands.
+    public nonisolated let queryCancellation: QueryCancellationSupport
+    /// Markers of the statements Stop can still reach.
+    private var stoppableRuns: Set<String> = []
 
-    private init(cluster: MongoCluster, database: String) {
+    /// The `comment` each command of a stoppable statement carries, so `$currentOp` finds its operations.
+    private enum RunMarker {
+        @TaskLocal static var current: String?
+    }
+
+    /// For the connection Stop opens: the cluster's own may be busy with the very command to stop.
+    private let settings: ConnectionSettings
+
+    private init(
+        cluster: MongoCluster,
+        database: String,
+        settings: ConnectionSettings,
+        queryCancellation: QueryCancellationSupport
+    ) {
         self.cluster = cluster
         self.currentDatabase = database
+        self.settings = settings
+        self.queryCancellation = queryCancellation
     }
 
     public static func connect(_ config: ConnectionConfig, password: String?) async throws -> MongoDriver {
@@ -43,18 +63,22 @@ public actor MongoDriver: DatabaseDriver {
             try await openCluster(settings)
         }
         let database = config.database.trimmingCharacters(in: .whitespaces)
-        let driver = MongoDriver(
-            cluster: cluster,
-            database: database.isEmpty ? Defaults.Mongo.defaultDatabase : database
-        )
         do {
+            // The server's version comes with the handshake of the first connection.
+            let wireVersion = try await cluster.next(for: .basic).serverHandshake?.maxWireVersion
+            let driver = MongoDriver(
+                cluster: cluster,
+                database: database.isEmpty ? Defaults.Mongo.defaultDatabase : database,
+                settings: settings,
+                queryCancellation: wireVersion.map { $0 >= .mongo4_4 } == true ? .server : .afterCurrentStatement
+            )
             // Fails fast on a wrong password, which the cluster only finds out on first use.
             _ = try await driver.command(["ping": Int32(1)], in: Defaults.Mongo.authDatabase)
+            return driver
         } catch {
             await cluster.disconnect()
             throw error
         }
-        return driver
     }
 
     /// `members`: the servers a seed list resolved to (`MongoSRV`); nil reads them from the host field.
@@ -243,10 +267,98 @@ public actor MongoDriver: DatabaseDriver {
     public func execute(_ text: String) async throws -> QueryResult {
         let started = Date()
         let statement = try MongoStatement.parse(text)
-        var result = try await run(statement)
+        var result: QueryResult
+        if let scope = QueryCancelScope.current, queryCancellation == .server {
+            result = try await runStoppable(statement, scope: scope)
+        } else {
+            result = try await run(statement)
+        }
         result.duration = Date().timeIntervalSince(started)
         result.statement = text
         return result
+    }
+
+    /// Runs `statement` with every command marked, so Stop can find its operations and only those.
+    private func runStoppable(_ statement: MongoStatement, scope: QueryCancelScope) async throws -> QueryResult {
+        try scope.checkCancellation()
+        let marker = "tabula-run:" + UUID().uuidString
+        let token = scope.attach { [weak self] in
+            guard let self else {
+                return .notRunning
+            }
+            return await self.stop(marker)
+        }
+        guard let token else {
+            throw QueryCancelledError()
+        }
+        stoppableRuns.insert(marker)
+        defer {
+            stoppableRuns.remove(marker)
+            scope.detach(token)
+        }
+        return try await RunMarker.$current.withValue(marker) {
+            try await run(statement)
+        }
+    }
+
+    /// Kills the operations marked `marker`, from a connection of its own. Stop can arrive before the server
+    /// lists them, so it looks again for a moment while the statement is still running.
+    private func stop(_ marker: String) async -> QueryCancelOutcome {
+        let control: MongoCluster
+        do {
+            control = try await withTimeout(
+                seconds: 5,
+                "Opening the MongoDB connection that stops queries",
+                discard: { cluster in
+                    Task { await cluster.disconnect() }
+                }
+            ) { [settings] in
+                try await Self.openCluster(settings)
+            }
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        let outcome = await kill(marker, from: control)
+        await control.disconnect()
+        return outcome
+    }
+
+    private func kill(_ marker: String, from control: MongoCluster) async -> QueryCancelOutcome {
+        func command(_ command: Document) async throws -> Document {
+            let connection = try await control.next(for: .basic)
+            return try await run(command, in: Defaults.Mongo.authDatabase, on: connection)
+        }
+        let find: Document = [
+            "aggregate": Int32(1),
+            "pipeline": [
+                ["$currentOp": Document()] as Document,
+                ["$match": ["command.comment": marker] as Document] as Document,
+            ] as Document,
+            "cursor": Document(),
+        ]
+        let deadline = Date().addingTimeInterval(3)
+        do {
+            while stoppableRuns.contains(marker) {
+                let reply = try await command(find)
+                let operations = Self.documents((reply["cursor"] as? Document)?["firstBatch"] ?? Document())
+                let ids = operations.compactMap { $0["opid"] }
+                if !ids.isEmpty {
+                    for id in ids {
+                        _ = try await command(["killOp": Int32(1), "op": id])
+                    }
+                    return .requested
+                }
+                guard Date() < deadline else {
+                    return .failed(
+                        "The running command could not be found on the server. A command with a comment of its own can't be stopped."
+                    )
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        return .notRunning
     }
 
     private func run(_ statement: MongoStatement) async throws -> QueryResult {
@@ -650,13 +762,23 @@ public actor MongoDriver: DatabaseDriver {
 
     private func run(_ command: Document, in database: String, on connection: MongoConnection) async throws -> Document
     {
+        var marked = try await limitingTime(command)
+        // A comment of the user's own stays; Stop then can't find the command.
+        if let marker = RunMarker.current, marked["comment"] == nil {
+            marked["comment"] = marker
+        }
         let reply = try await connection.execute(
-            try await limitingTime(command),
+            marked,
             namespace: MongoNamespace(to: "$cmd", inDatabase: database),
             sessionId: connection.implicitSessionId
         )
         let document = try reply.getDocument()
         guard MongoShellParser.double(document["ok"] ?? Int32(0)) == 1 || document["ok"] as? Bool == true else {
+            if RunMarker.current != nil, QueryCancelScope.current?.isCancelled == true,
+                document["codeName"] as? String == "Interrupted"
+            {
+                throw QueryCancelledError(serverInterrupted: true)
+            }
             throw Self.error(from: document)
         }
         if let errors = document["writeErrors"] as? Document, let first = errors.values.first as? Document {

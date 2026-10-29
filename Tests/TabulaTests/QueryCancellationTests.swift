@@ -1,5 +1,6 @@
 import XCTest
 
+@testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
 @testable import TabulaMySQL
@@ -465,6 +466,70 @@ final class MySQLCancellationTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("at line 2"), error.localizedDescription)
             XCTAssertFalse(error.localizedDescription.contains("tabula-run"), error.localizedDescription)
         }
+        await driver.close()
+    }
+}
+
+final class MongoCancellationTests: XCTestCase {
+    private func connect() async throws -> any DatabaseDriver {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_MONGO_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MONGO_PORT not set")
+        }
+        return try await DriverFactory.connect(
+            ConnectionConfig(kind: .mongodb, port: port, user: "tabula", database: "tabula_stop"),
+            password: "tabula"
+        )
+    }
+
+    private func seed(_ driver: any DatabaseDriver) async throws {
+        _ = try await driver.execute("db.slow.drop()")
+        _ = try await driver.execute("db.slow.insertMany([{ n: 1 }, { n: 2 }, { n: 3 }, { n: 4 }, { n: 5 }, { n: 6 }])")
+    }
+
+    private let slowFind = "db.slow.find({ $where: \"sleep(1000) || true\" })"
+
+    func testStopKillsTheRunningFind() async throws {
+        let driver = try await connect()
+        try await seed(driver)
+        XCTAssertEqual(driver.queryCancellation, .server)
+        let scope = QueryCancelScope()
+        let run = Task { [slowFind] in
+            try await QueryCancelScope.$current.withValue(scope) { try await driver.execute(slowFind) }
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        let started = Date()
+        let outcome = await scope.cancel()
+        XCTAssertEqual(outcome, .requested)
+        do {
+            _ = try await run.value
+            XCTFail("expected the find to be killed")
+        } catch {
+            XCTAssertEqual((error as? QueryCancelledError)?.serverInterrupted, true, "\(error)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 3)
+        let late = await scope.cancel()
+        XCTAssertEqual(late, .notRunning)
+        let count = try await driver.execute("db.slow.countDocuments({})")
+        XCTAssertEqual(count.rows, [["6"]])
+        _ = try await driver.execute("db.slow.drop()")
+        await driver.close()
+    }
+
+    /// Stop reaches only its own statement: one running at the same time without a scope finishes.
+    func testStopLeavesOtherStatementsRunning() async throws {
+        let driver = try await connect()
+        try await seed(driver)
+        let other = Task { [slowFind] in try await driver.execute(slowFind + ".limit(2)") }
+        let scope = QueryCancelScope()
+        let run = Task { [slowFind] in
+            try await QueryCancelScope.$current.withValue(scope) { try await driver.execute(slowFind) }
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        _ = await scope.cancel()
+        _ = try? await run.value
+        let result = try await other.value
+        XCTAssertEqual(result.rows.count, 2)
+        _ = try await driver.execute("db.slow.drop()")
         await driver.close()
     }
 }
