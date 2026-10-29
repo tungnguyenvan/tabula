@@ -200,6 +200,12 @@ extension DebugHooks {
                     switch name {
                     case "ai": workspace.toggleRightPanel(.ai)
                     case "queries": workspace.toggleRightPanel(.queries)
+                    case "rowdetails": workspace.toggleRightPanel(.rowDetails)
+                    // select-<row>: selects that grid row in the tab shown, as a click would.
+                    case let call where call.hasPrefix("select-"):
+                        if let row = Int(call.dropFirst("select-".count)), let id = workspace.selectedTabID {
+                            workspace.setSelection([row], inTab: id)
+                        }
                     case "resultundo":
                         workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?
                             .undoManager.undo()
