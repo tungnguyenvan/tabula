@@ -249,43 +249,18 @@ struct ConnectionFormView: View {
 
     /// Fills the form from a connection string (a URL, JDBC URL or key=value pairs) pasted into the Host field.
     private func applyURL(_ text: String, replacing oldHost: String) {
-        guard let (parsed, parsedPassword) = ConnectionConfig.parse(connectionString: text) else { return }
-        var filled = parsed
-        filled.id = config.id
-        if filled.name.isEmpty {
-            filled.name = config.name
+        guard let pasted = ConnectionFormRules.pasted(text, over: config, password: password, oldHost: oldHost) else {
+            return
         }
-        if filled.tag == ConnectionConfig().tag {
-            filled.tag = config.tag
-        }
-        filled.connectTimeout = config.connectTimeout
-        // A URL names the database, not how to reach it: the SSH server stays, for the kinds that can use it.
-        filled.ssh = filled.kind == .postgres || filled.kind == .mysql ? config.ssh : nil
-        let kindBeforeURL = config.kind
-        if filled.kind != config.kind {
+        if pasted.changedKind {
             applyingURL = true
         }
-        config = filled
-        // A URL without a password keeps the saved one only for the same server; it isn't sent to another.
-        if let parsedPassword {
-            password = parsedPassword
-        } else if filled.host != oldHost || filled.kind != kindBeforeURL {
-            password = ""
-        }
+        config = pasted.config
+        password = pasted.password
         testState = .idle
     }
 
-    private var isValid: Bool {
-        switch config.kind {
-        case .sqlite: return !config.filePath.isEmpty
-        case .redis:
-            let database = config.database.trimmingCharacters(in: .whitespaces)
-            return (1...65535).contains(config.port) && (database.isEmpty || (Int(database).map { $0 >= 0 } ?? false))
-        case .postgres, .mysql:
-            return !config.user.isEmpty && (1...65535).contains(config.port) && config.ssh?.problem == nil
-        case .mongodb: return !config.host.isEmpty && (config.srv == true || (1...65535).contains(config.port))
-        }
-    }
+    private var isValid: Bool { ConnectionFormRules.isValid(config) }
 
     private var hostPrompt: String {
         guard config.kind == .mongodb else {
