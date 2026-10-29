@@ -498,6 +498,8 @@ TABULA_TEST_PG_PORT=55432 TABULA_TEST_MYSQL_PORT=53306 TABULA_TEST_REDIS_PORT=56
 TABULA_TEST_MONGO_PORT=57017 TABULA_TEST_NETWORK=1 swift test
 ```
 
+**SSH tunnel tests** need an SSH server: `scripts/test-sshd.sh start` runs a throwaway one on `127.0.0.1:52222` with its own keys (your `~/.ssh` isn't used), then `TABULA_TEST_SSH_DIR=/tmp/tabula-sshd TABULA_TEST_PG_PORT=55432 swift test --filter SSHTunnelTests` tunnels to the Postgres container; `scripts/test-sshd.sh stop` ends it.
+
 `TABULA_TEST_NETWORK=1` also checks the live GitHub release feed. `TABULA_TEST_MONGO_PORT` can also point at a replica set (user and password `tabula`), and `TABULA_TEST_MONGO_PLAIN_PORT` at a server without authentication. With `TABULA_TEST_NETWORK=1` the seed-list checks use MongoDB's public test records, and `TABULA_TEST_MONGO_SRV_SEED=test1.test.build.10gen.cc` connects through them to a server without authentication on `localhost:27017`.
 
 **Sample data.** This creates a SQLite file, plus Postgres, MySQL, Redis and MongoDB data if the containers above are running, in a separate store that leaves your real connections alone. Debug builds read that store's passwords from `passwords.json`, so test runs never touch your Keychain:
