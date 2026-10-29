@@ -89,7 +89,9 @@ public struct ChatConversation: Identifiable, Equatable, Codable, Sendable {
     public static func title(for messages: [ChatMessage]) -> String {
         let question = messages.first { $0.role == .user }?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let line = question.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        guard !line.isEmpty else { return "New Chat" }
+        guard !line.isEmpty else {
+            return "New Chat"
+        }
         return line.count > Defaults.AI.conversationTitleLength
             ? String(line.prefix(Defaults.AI.conversationTitleLength)) + "…" : line
     }

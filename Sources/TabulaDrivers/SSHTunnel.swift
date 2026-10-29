@@ -257,7 +257,9 @@ public actor SSHTunnel {
     /// A port nothing listens on, found by binding port 0 on 127.0.0.1.
     static func freeLocalPort() throws -> Int {
         let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
-        guard socket >= 0 else { throw DatabaseError("Couldn't find a free local port for the SSH tunnel.") }
+        guard socket >= 0 else {
+            throw DatabaseError("Couldn't find a free local port for the SSH tunnel.")
+        }
         defer { Darwin.close(socket) }
         var address = sockaddr_in()
         address.sin_family = sa_family_t(AF_INET)
@@ -267,11 +269,15 @@ public actor SSHTunnel {
         let bound = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(socket, $0, length) }
         }
-        guard bound == 0 else { throw DatabaseError("Couldn't find a free local port for the SSH tunnel.") }
+        guard bound == 0 else {
+            throw DatabaseError("Couldn't find a free local port for the SSH tunnel.")
+        }
         let named = withUnsafeMutablePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(socket, $0, &length) }
         }
-        guard named == 0 else { throw DatabaseError("Couldn't find a free local port for the SSH tunnel.") }
+        guard named == 0 else {
+            throw DatabaseError("Couldn't find a free local port for the SSH tunnel.")
+        }
         return Int(UInt16(bigEndian: address.sin_port))
     }
 
@@ -326,7 +332,9 @@ public actor TunneledDriver: DatabaseDriver {
     }
 
     private func checkTunnel() async throws {
-        guard await tunnel.isAlive else { throw DatabaseError("The SSH tunnel closed. Reconnect to continue.") }
+        guard await tunnel.isAlive else {
+            throw DatabaseError("The SSH tunnel closed. Reconnect to continue.")
+        }
     }
 
     public func schemas() async throws -> [String] {

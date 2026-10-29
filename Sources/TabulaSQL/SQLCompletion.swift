@@ -174,7 +174,9 @@ public enum SQLCompletion {
     }
 
     private static func unquoted(_ name: String) -> String {
-        guard let first = name.first, ["\"", "`"].contains(first), name.count >= 2 else { return name }
+        guard let first = name.first, ["\"", "`"].contains(first), name.count >= 2 else {
+            return name
+        }
         return String(name.dropFirst().dropLast())
     }
 }

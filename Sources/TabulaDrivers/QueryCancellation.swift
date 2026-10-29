@@ -79,7 +79,9 @@ public final class QueryCancelScope: @unchecked Sendable {
             defer { handler = nil }
             return handler?.cancel
         }
-        guard let running else { return .notRunning }
+        guard let running else {
+            return .notRunning
+        }
         return await running()
     }
 }

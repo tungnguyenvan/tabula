@@ -6,7 +6,9 @@ import TabulaSQL
 extension QueryEditTarget {
     /// Hex text needs no quote/backslash escaping and means the same thing with NO_BACKSLASH_ESCAPES enabled.
     static func mysqlLiteral(_ value: String?) -> String {
-        guard let value else { return "NULL" }
+        guard let value else {
+            return "NULL"
+        }
         return "_utf8mb4 X'" + value.utf8.map { String(format: "%02x", $0) }.joined() + "'"
     }
 
@@ -65,7 +67,9 @@ extension QueryEditTarget {
                     Self.mysqlTextTypes.contains(columns[index].mysqlType ?? "")
                     ? "CONVERT(\(name) USING utf8mb4)" : "CAST(\(name) AS CHAR CHARACTER SET utf8mb4)"
                 let exact = "CAST(\(displayed) AS BINARY) <=> CAST(\(value) AS BINARY)"
-                guard columns[index].isKey, let key = edit.original[index] else { return exact }
+                guard columns[index].isKey, let key = edit.original[index] else {
+                    return exact
+                }
                 // Also give the optimizer an indexable equality, so FOR UPDATE locks one key rather than scanning.
                 let lookup =
                     Self.mysqlNumericTypes.contains(columns[index].mysqlType ?? "")
@@ -207,7 +211,9 @@ extension MySQLDriver {
 
     /// The caller supplies a separate session; never commit an interactive user transaction implicitly.
     public func commitQueryEdits(_ edits: [QueryRowEdit], target: QueryEditTarget) async throws -> [Int: [String?]] {
-        guard !edits.isEmpty else { return [:] }
+        guard !edits.isEmpty else {
+            return [:]
+        }
         guard target.kind == .mysql, target.mysqlTableIdentity != nil,
             Set(edits.map(\.row)).count == edits.count
         else { throw DatabaseError("Invalid MySQL result edit.") }
@@ -239,7 +245,9 @@ extension MySQLDriver {
             for (edit, sql) in zip(edits, statements) {
                 let predicate = try target.mysqlPredicate(for: edit, includeOriginals: true)
                 let matched = try await execute(from + " WHERE " + predicate + " FOR UPDATE")
-                guard matched.rows.count == 1 else { throw Self.mysqlEditConflict }
+                guard matched.rows.count == 1 else {
+                    throw Self.mysqlEditConflict
+                }
                 let updated = try await execute(sql)
                 // We already proved and locked exactly one matched row. MySQL reports *changed* rows, which
                 // can be zero for a legitimate no-op such as DECIMAL 1.00 -> 1.0, or one with FOUND_ROWS enabled.
@@ -248,7 +256,9 @@ extension MySQLDriver {
                 }
                 let key = try target.mysqlPredicate(for: edit, includeOriginals: false)
                 let after = try await execute(from + " WHERE " + key + " FOR UPDATE")
-                guard after.rows.count == 1 else { throw Self.mysqlEditConflict }
+                guard after.rows.count == 1 else {
+                    throw Self.mysqlEditConflict
+                }
                 returned[edit.row] = after.rows[0]
             }
             _ = try await execute("COMMIT")

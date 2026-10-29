@@ -98,7 +98,9 @@ public struct CLIProvider: AIProvider {
                     throw AIError.server(failure)
                 }
                 if !events.sentText {
-                    guard let result = events.result else { throw AIError.server(Self.failure("Claude Code", output)) }
+                    guard let result = events.result else {
+                        throw AIError.server(Self.failure("Claude Code", output))
+                    }
                     continuation.yield(.text(result))
                 }
             case .codex:

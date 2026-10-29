@@ -87,7 +87,9 @@ extension SQLDialect {
             }
             groups[groups.count - 1].append(condition(rule))
         }
-        guard groups.count > 1 else { return groups.first?.joined(separator: " AND ") ?? "" }
+        guard groups.count > 1 else {
+            return groups.first?.joined(separator: " AND ") ?? ""
+        }
         return groups.map { $0.count == 1 ? $0[0] : "(\($0.joined(separator: " AND ")))" }.joined(separator: " OR ")
     }
 }

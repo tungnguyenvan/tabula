@@ -22,7 +22,9 @@ enum MongoSRV {
             )
         }
         let targets = try await Task.detached { try lookup("_mongodb._tcp." + host, timeout: timeout) }.value
-        guard !targets.isEmpty else { throw DatabaseError("DNS has no MongoDB servers for \(host).") }
+        guard !targets.isEmpty else {
+            throw DatabaseError("DNS has no MongoDB servers for \(host).")
+        }
         try validate(targets, seed: host)
         return targets
     }
@@ -94,10 +96,14 @@ enum MongoSRV {
         let deadline = Date().addingTimeInterval(timeout)
         while !answers.done {
             let remaining = deadline.timeIntervalSinceNow
-            guard remaining > 0 else { throw DatabaseError("DNS lookup for \(name) timed out.") }
+            guard remaining > 0 else {
+                throw DatabaseError("DNS lookup for \(name) timed out.")
+            }
             var descriptor = pollfd(fd: socket, events: Int16(POLLIN), revents: 0)
             let ready = poll(&descriptor, 1, Int32(remaining * 1000))
-            guard ready >= 0 else { throw DatabaseError("DNS lookup for \(name) failed.") }
+            guard ready >= 0 else {
+                throw DatabaseError("DNS lookup for \(name) failed.")
+            }
             if ready > 0 {
                 let processed = DNSServiceProcessResult(reference)
                 guard processed == kDNSServiceErr_NoError else {

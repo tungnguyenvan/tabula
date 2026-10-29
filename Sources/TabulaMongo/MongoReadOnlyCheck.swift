@@ -18,8 +18,12 @@ enum MongoReadOnlyCheck {
     /// Why the command can't run, or nil when it only reads.
     static func violation(_ text: String) -> String? {
         let statements = MongoSplitter.statements(in: text)
-        guard statements.count == 1 else { return "Run one command at a time." }
-        guard let statement = try? MongoStatement.parse(text) else { return "The command couldn't be read." }
+        guard statements.count == 1 else {
+            return "Run one command at a time."
+        }
+        guard let statement = try? MongoStatement.parse(text) else {
+            return "The command couldn't be read."
+        }
         switch statement.target {
         case .show(let what):
             return ["dbs", "databases", "collections", "tables"].contains(what)

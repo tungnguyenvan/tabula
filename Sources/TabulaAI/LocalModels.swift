@@ -137,7 +137,9 @@ public struct LocalModelStore: Sendable {
 
     /// Downloads a model, checking its size and SHA-256 when known. Progress is reported as a fraction.
     public func download(_ model: LocalModel, progress: @escaping @Sendable (Double) -> Void) async throws {
-        guard let url = model.url else { throw AIError.notConfigured("This model has no download address.") }
+        guard let url = model.url else {
+            throw AIError.notConfigured("This model has no download address.")
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let delegate = DownloadProgress(expected: model.size, report: progress)
         let (temporary, response) = try await URLSession.shared.download(from: url, delegate: delegate)
@@ -179,7 +181,9 @@ public struct LocalModelStore: Sendable {
         try Self.checkGGUF(file)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let target = path(for: file.lastPathComponent)
-        guard !FileManager.default.fileExists(atPath: target.path) else { return target.lastPathComponent }
+        guard !FileManager.default.fileExists(atPath: target.path) else {
+            return target.lastPathComponent
+        }
         try FileManager.default.copyItem(at: file, to: target)
         return target.lastPathComponent
     }
@@ -250,7 +254,9 @@ public struct BuiltInProvider: AIProvider {
     }
 
     public func complete(_ request: AIRequest) async throws -> String {
-        guard !endpoint.model.isEmpty else { throw AIError.notConfigured("Download or add a model in Settings › AI.") }
+        guard !endpoint.model.isEmpty else {
+            throw AIError.notConfigured("Download or add a model in Settings › AI.")
+        }
         guard store.isInstalled(endpoint.model) else {
             throw AIError.notConfigured("\(endpoint.model) isn't downloaded yet. Download it in Settings › AI.")
         }

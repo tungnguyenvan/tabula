@@ -91,14 +91,18 @@ public struct KeychainItem: Sendable {
         if updated == errSecSuccess {
             return
         }
-        guard updated == errSecItemNotFound else { throw KeychainError(status: updated) }
+        guard updated == errSecItemNotFound else {
+            throw KeychainError(status: updated)
+        }
 
         let item = query.merging(attributes) { _, new in new }
         let added = SecItemAdd(item as CFDictionary, nil)
         // Another writer may have created it since the update found nothing. Keep that item's access controls too.
         if added == errSecDuplicateItem {
             let retried = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-            guard retried == errSecSuccess else { throw KeychainError(status: retried) }
+            guard retried == errSecSuccess else {
+                throw KeychainError(status: retried)
+            }
         } else if added != errSecSuccess {
             throw KeychainError(status: added)
         }

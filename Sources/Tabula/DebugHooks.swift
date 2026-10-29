@@ -360,7 +360,9 @@ enum DebugHooks {
                         }
                         return
                     }
-                    guard let workspace = WorkspaceRegistry.key else { return print("CALL no workspace") }
+                    guard let workspace = WorkspaceRegistry.key else {
+                        return print("CALL no workspace")
+                    }
                     switch name {
                     case "ai": workspace.toggleRightPanel(.ai)
                     case "resultundo":

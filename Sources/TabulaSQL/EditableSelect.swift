@@ -282,7 +282,9 @@ private struct Parser {
         repeat { try selectItem(&qualifiers) } while acceptPunctuation(",")
         try expect("FROM")
         try tableReference()
-        guard qualifiers.allSatisfy({ $0 == reference }) else { throw Rejected() }
+        guard qualifiers.allSatisfy({ $0 == reference }) else {
+            throw Rejected()
+        }
         if accept("WHERE") { try orExpression() }
         if accept("ORDER") {
             try expect("BY")
@@ -302,7 +304,9 @@ private struct Parser {
             }
         }
         _ = acceptPunctuation(";")
-        guard current == nil else { throw Rejected() }
+        guard current == nil else {
+            throw Rejected()
+        }
     }
 
     /// `*`, `ref.*`, or a column with an optional alias. Qualifiers are checked once FROM names the table.
@@ -336,7 +340,9 @@ private struct Parser {
     mutating func columnReference() throws {
         let first = try identifier()
         if acceptPunctuation(".") {
-            guard first == reference else { throw Rejected() }
+            guard first == reference else {
+                throw Rejected()
+            }
             _ = try identifier()
         }
     }
@@ -345,7 +351,9 @@ private struct Parser {
         try columnReference()
         if !accept("ASC") { _ = accept("DESC") }
         if flavor == .postgres && accept("NULLS") {
-            guard accept("FIRST") || accept("LAST") else { throw Rejected() }
+            guard accept("FIRST") || accept("LAST") else {
+                throw Rejected()
+            }
         }
     }
 
@@ -361,7 +369,9 @@ private struct Parser {
     mutating func orExpression() throws {
         depth += 1
         defer { depth -= 1 }
-        guard depth <= 64 else { throw Rejected() }
+        guard depth <= 64 else {
+            throw Rejected()
+        }
         try andExpression()
         while accept("OR") { try andExpression() }
     }
@@ -375,7 +385,9 @@ private struct Parser {
         var negations = 0
         while accept("NOT") {
             negations += 1
-            guard negations <= 64 else { throw Rejected() }
+            guard negations <= 64 else {
+                throw Rejected()
+            }
         }
         try predicate()
     }
@@ -389,7 +401,9 @@ private struct Parser {
         }
         if accept("IS") {
             _ = accept("NOT")
-            guard accept("NULL") || accept("TRUE") || accept("FALSE") else { throw Rejected() }
+            guard accept("NULL") || accept("TRUE") || accept("FALSE") else {
+                throw Rejected()
+            }
             return
         }
         let negated = accept("NOT")
@@ -435,9 +449,13 @@ private struct Parser {
 
     mutating func literal(signed: Bool) throws {
         if signed && (acceptPunctuation("-") || acceptPunctuation("+")) {
-            guard current?.kind == .number else { throw Rejected() }
+            guard current?.kind == .number else {
+                throw Rejected()
+            }
         }
-        guard isLiteral else { throw Rejected() }
+        guard isLiteral else {
+            throw Rejected()
+        }
         index += 1
     }
 }

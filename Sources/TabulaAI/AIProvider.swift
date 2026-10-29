@@ -178,7 +178,9 @@ public struct AISettings: Codable, Equatable, Sendable {
     /// The model to use; empty means the provider's own default (Apple, the CLIs).
     public func model(_ kind: AIProviderKind, for purpose: AIRequest.Purpose) -> String {
         let main = models[kind.rawValue].flatMap { $0.isEmpty ? nil : $0 } ?? kind.defaultModel
-        guard purpose == .inline else { return main }
+        guard purpose == .inline else {
+            return main
+        }
         return inlineModels[kind.rawValue].flatMap { $0.isEmpty ? nil : $0 } ?? kind.defaultInlineModel ?? main
     }
 
@@ -290,7 +292,9 @@ public enum SQLPrompts {
             }
             lines += tables.prefix(Defaults.AI.schemaTableLimit)
                 .map { table in
-                    guard !table.columns.isEmpty else { return table.name }
+                    guard !table.columns.isEmpty else {
+                        return table.name
+                    }
                     let columns = table.columns.map { column in
                         [column.name, column.type, column.isPrimaryKey ? "PK" : nil].compactMap { $0 }
                             .joined(separator: " ")

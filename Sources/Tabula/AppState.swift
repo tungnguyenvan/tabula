@@ -8,7 +8,9 @@ import TabulaStorage
 final class AppState {
     /// TABULA_DATA_DIR points the app at a separate store (used for testing).
     let store: ConnectionStore = {
-        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else { return ConnectionStore() }
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else {
+            return ConnectionStore()
+        }
         return ConnectionStore(
             directory: URL(fileURLWithPath: directory),
             keychainService: "app.tabula.connections.test"
@@ -16,7 +18,9 @@ final class AppState {
     }()
     /// Saved AI conversations, next to the connections (in TABULA_DATA_DIR when that is set).
     nonisolated static let chatStore: ChatStore = {
-        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else { return ChatStore() }
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else {
+            return ChatStore()
+        }
         return ChatStore(base: URL(fileURLWithPath: directory))
     }()
     private(set) var connections: [ConnectionConfig] = []

@@ -138,7 +138,9 @@ package enum CivilTime {
         // Rejects dates that don't exist, such as February 30.
         guard civil(fromDays: dayNumber) == date else { return nil }
         var milliseconds = dayNumber * secondsPerDay * 1000
-        guard !scanner.isEmpty else { return milliseconds }
+        guard !scanner.isEmpty else {
+            return milliseconds
+        }
 
         guard take("T") || take(" "), let hour = number(2), take(":"), let minute = number(2), hour < 24, minute < 60
         else { return nil }

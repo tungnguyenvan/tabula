@@ -25,7 +25,9 @@ public struct SQLDialect: QueryDialect, Equatable {
     }
 
     public func literal(_ value: String?) -> String {
-        guard let value else { return "NULL" }
+        guard let value else {
+            return "NULL"
+        }
         // MySQL treats backslash as an escape character unless NO_BACKSLASH_ESCAPES is set.
         let unescaped =
             flavor.lexicalRules.backslashEscapes ? value.replacingOccurrences(of: "\\", with: "\\\\") : value
@@ -55,7 +57,9 @@ public struct SQLDialect: QueryDialect, Equatable {
 
     /// Without a key nothing may match: an empty predicate would touch every row.
     private func matchPrimaryKey(_ key: [(column: String, value: String?)]) -> String {
-        guard !key.isEmpty else { return "1 = 0" }
+        guard !key.isEmpty else {
+            return "1 = 0"
+        }
         return
             key.map { pair in
                 pair.value == nil
@@ -139,7 +143,9 @@ public struct SQLDialect: QueryDialect, Equatable {
                 return statement
             }
         }
-        guard let last = significant.last(where: { $0.text != ";" }) else { return statement }
+        guard let last = significant.last(where: { $0.text != ";" }) else {
+            return statement
+        }
         let text = statement as NSString
         let end = NSMaxRange(last.range)
         return text.substring(to: end) + " LIMIT \(limit)" + text.substring(from: end)

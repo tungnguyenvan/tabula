@@ -51,7 +51,9 @@ public enum RedisCommandLine {
                         append(next)
                     }
                 }
-                guard closed else { throw DatabaseError("Unbalanced double quotes") }
+                guard closed else {
+                    throw DatabaseError("Unbalanced double quotes")
+                }
                 if let next = scalars.first, next != " " && next != "\t" {
                     throw DatabaseError("Closing quote must be followed by a space")
                 }
@@ -70,7 +72,9 @@ public enum RedisCommandLine {
                     }
                     append(next)
                 }
-                guard closed else { throw DatabaseError("Unbalanced single quotes") }
+                guard closed else {
+                    throw DatabaseError("Unbalanced single quotes")
+                }
                 if let next = scalars.first, next != " " && next != "\t" {
                     throw DatabaseError("Closing quote must be followed by a space")
                 }
@@ -287,7 +291,9 @@ public enum RedisTTL {
         let trimmed = text.trimmingCharacters(in: .whitespaces).lowercased()
         if ["", "none", "-", "∞", "no expiry", "persist", "never"].contains(trimmed) { return nil }
         if let seconds = Int(trimmed) {
-            guard seconds > 0 else { throw DatabaseError("TTL must be at least 1 second.") }
+            guard seconds > 0 else {
+                throw DatabaseError("TTL must be at least 1 second.")
+            }
             return seconds
         }
         let units: [Character: Int] = ["s": 1, "m": 60, "h": 3600, "d": 86_400, "w": 604_800]

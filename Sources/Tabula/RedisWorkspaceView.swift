@@ -43,7 +43,9 @@ struct RedisTypeBadge: View {
 
 enum RedisFormat {
     static func ttl(_ milliseconds: Int?) -> String {
-        guard let milliseconds else { return "No expiry" }
+        guard let milliseconds else {
+            return "No expiry"
+        }
         var seconds = milliseconds / 1000
         if seconds == 0 {
             return "< 1s"

@@ -68,7 +68,9 @@ extension DatabaseDriver {
     }
 
     private func requiredRoutines() throws -> any RoutineCatalog {
-        guard let routines = catalog.routines else { throw DatabaseError("\(kind.displayName) stores no routines.") }
+        guard let routines = catalog.routines else {
+            throw DatabaseError("\(kind.displayName) stores no routines.")
+        }
         return routines
     }
 }

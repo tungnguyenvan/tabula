@@ -288,7 +288,9 @@ struct ConnectionFormView: View {
     }
 
     private var hostPrompt: String {
-        guard config.kind == .mongodb else { return Defaults.host }
+        guard config.kind == .mongodb else {
+            return Defaults.host
+        }
         return config.srv == true ? "cluster0.example.mongodb.net" : "\(Defaults.host)  (or a:27017,b:27017)"
     }
 

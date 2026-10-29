@@ -97,7 +97,9 @@ public struct MongoStatement: Sendable {
                 continue
             }
             try parser.expect(".")
-            guard let name = parser.identifier() else { throw parser.error("Expected a collection or method name") }
+            guard let name = parser.identifier() else {
+                throw parser.error("Expected a collection or method name")
+            }
             guard let arguments = try parser.optionalArguments() else {
                 path.append(name)
                 continue
@@ -121,7 +123,9 @@ public struct MongoStatement: Sendable {
             }
         }
         while parser.take(".") {
-            guard let name = parser.identifier() else { throw parser.error("Expected a method name") }
+            guard let name = parser.identifier() else {
+                throw parser.error("Expected a method name")
+            }
             guard let arguments = try parser.optionalArguments() else {
                 throw parser.error("Expected “(” after \(name)")
             }

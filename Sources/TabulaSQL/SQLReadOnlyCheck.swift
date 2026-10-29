@@ -27,7 +27,9 @@ public enum SQLReadOnlyCheck {
     /// Why the statement can't run, or nil when it only reads.
     public static func violation(_ statement: String, flavor: SQLFlavor) -> String? {
         let statements = SQLSplitter.split(statement, flavor: flavor)
-        guard statements.count == 1 else { return "Run one statement at a time." }
+        guard statements.count == 1 else {
+            return "Run one statement at a time."
+        }
         let tokens = SQLLexer.tokens(statement, flavor: flavor)
         // Where Tabula's lexer and the server could read the text differently, it isn't run: comments (MySQL
         // runs /*! … */ and doesn't take --x as one) and backslashes (escape rules differ by server and setting).

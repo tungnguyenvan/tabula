@@ -131,7 +131,9 @@ public enum MetricFormat {
     }
 
     public static func percent(_ part: Double, of total: Double) -> String {
-        guard total > 0 else { return "—" }
+        guard total > 0 else {
+            return "—"
+        }
         return (part / total).formatted(.percent.precision(.fractionLength(1)))
     }
 

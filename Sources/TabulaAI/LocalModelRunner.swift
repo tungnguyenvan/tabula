@@ -105,7 +105,9 @@ public final class LocalModelRunner: @unchecked Sendable {
         unloadWork?.cancel()
         defer { scheduleUnload() }
         let (model, context) = try load(path)
-        guard let vocab = llama_model_get_vocab(model) else { throw AIError.server("The model has no vocabulary.") }
+        guard let vocab = llama_model_get_vocab(model) else {
+            throw AIError.server("The model has no vocabulary.")
+        }
         llama_memory_clear(llama_get_memory(context), true)
 
         let formatted = chat(model: model, instructions: instructions, prompt: prompt)
@@ -134,7 +136,9 @@ public final class LocalModelRunner: @unchecked Sendable {
         unloadWork?.cancel()
         defer { scheduleUnload() }
         let (model, context) = try load(path)
-        guard let vocab = llama_model_get_vocab(model) else { throw AIError.server("The model has no vocabulary.") }
+        guard let vocab = llama_model_get_vocab(model) else {
+            throw AIError.server("The model has no vocabulary.")
+        }
         let pre = llama_vocab_fim_pre(vocab)
         let suf = llama_vocab_fim_suf(vocab)
         let mid = llama_vocab_fim_mid(vocab)
@@ -168,7 +172,9 @@ public final class LocalModelRunner: @unchecked Sendable {
         // Keep the end of an over-long prompt (the question, or the text at the caret, is last) and leave
         // room for the answer.
         let room = Int(llama_n_ctx(context)) - maxTokens - 1
-        guard room > 0 else { throw AIError.server("The model's context is too small.") }
+        guard room > 0 else {
+            throw AIError.server("The model's context is too small.")
+        }
         if tokens.count > room {
             tokens = Array(tokens.suffix(room))
         }
@@ -185,7 +191,9 @@ public final class LocalModelRunner: @unchecked Sendable {
             let status = chunk.withUnsafeMutableBufferPointer { buffer in
                 llama_decode(context, llama_batch_get_one(buffer.baseAddress, Int32(buffer.count)))
             }
-            guard status == 0 else { throw AIError.server("The model couldn't read the prompt (error \(status)).") }
+            guard status == 0 else {
+                throw AIError.server("The model couldn't read the prompt (error \(status)).")
+            }
             start = end
         }
 
@@ -239,7 +247,9 @@ public final class LocalModelRunner: @unchecked Sendable {
         while index > 0, data.count - index < 4, data[data.startIndex + index - 1] & 0xC0 == 0x80 {
             index -= 1
         }
-        guard index > 0 else { return data.count }
+        guard index > 0 else {
+            return data.count
+        }
         let lead = data[data.startIndex + index - 1]
         let needed: Int
         switch lead {
@@ -303,7 +313,9 @@ public final class LocalModelRunner: @unchecked Sendable {
     /// The prompt in the model's own chat format, or a plain fallback for models without one.
     private func chat(model: OpaquePointer, instructions: String, prompt: String) -> String {
         let fallback = "\(instructions)\n\n\(prompt)\n\n"
-        guard let template = llama_model_chat_template(model, nil) else { return fallback }
+        guard let template = llama_model_chat_template(model, nil) else {
+            return fallback
+        }
         return instructions.withCString { system in
             prompt.withCString { user in
                 "system"
@@ -337,7 +349,9 @@ public final class LocalModelRunner: @unchecked Sendable {
                                         Int32(buffer.count)
                                     )
                                 }
-                                guard length > 0 else { return fallback }
+                                guard length > 0 else {
+                                    return fallback
+                                }
                                 return String(
                                     decoding: buffer[0..<Int(length)].map { UInt8(bitPattern: $0) },
                                     as: UTF8.self

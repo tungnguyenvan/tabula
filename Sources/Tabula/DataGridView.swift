@@ -238,7 +238,9 @@ struct DataGridView: NSViewRepresentable {
                     return view
                 }()
             // The table can ask for a cell before it has caught up with a new result (while editing, say).
-            guard row < parent.source.rowCount, column < parent.source.columns.count else { return view }
+            guard row < parent.source.rowCount, column < parent.source.columns.count else {
+                return view
+            }
             view.configure(parent.source.cell(row, column), state: parent.source.state(row, column))
             view.isFocusedCell =
                 row == tableView.selectedRow
@@ -622,7 +624,9 @@ final class GridTableView: NSTableView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard window?.firstResponder === self, let coordinator else { return super.performKeyEquivalent(with: event) }
+        guard window?.firstResponder === self, let coordinator else {
+            return super.performKeyEquivalent(with: event)
+        }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         switch (event.charactersIgnoringModifiers?.lowercased(), flags) {
         case ("z", [.command]):
@@ -648,7 +652,9 @@ final class GridTableView: NSTableView {
     }
 
     override func keyDown(with event: NSEvent) {
-        guard let coordinator else { return super.keyDown(with: event) }
+        guard let coordinator else {
+            return super.keyDown(with: event)
+        }
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
         switch event.keyCode {
         case 123 where flags.contains(.command), 115:  // ⌘← / Home: first column
@@ -670,7 +676,9 @@ final class GridTableView: NSTableView {
         case 48:  // Tab / ⇧Tab
             coordinator.advance(by: flags.contains(.shift) ? -1 : 1, edit: false)
         case 36, 76, 120:  // Return, Enter, F2
-            guard flags.isEmpty else { return super.keyDown(with: event) }
+            guard flags.isEmpty else {
+                return super.keyDown(with: event)
+            }
             if coordinator.canEditFocusedCell {
                 coordinator.beginEditing(row: selectedRow, column: coordinator.focusedColumn)
             } else {

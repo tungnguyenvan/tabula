@@ -82,7 +82,9 @@ final class Updater {
             showWindow = true
         }
         do {
-            guard let feedURL else { throw DatabaseError("This build doesn't say where its releases are published.") }
+            guard let feedURL else {
+                throw DatabaseError("This build doesn't say where its releases are published.")
+            }
             let update = try await UpdateFeed.check(feed: feedURL, current: Self.currentVersion)
             defaults.set(Date(), forKey: Self.lastCheckKey)
             if let update, userInitiated || update.version.description != defaults.string(forKey: Self.skippedKey) {
@@ -121,7 +123,9 @@ final class Updater {
     /// Where the running app lives, or why it can't be replaced in place.
     static func installLocation() -> Result<URL, InstallError> {
         let bundle = Bundle.main.bundleURL.resolvingSymlinksInPath()
-        guard bundle.pathExtension == "app" else { return .failure(.notABundle) }
+        guard bundle.pathExtension == "app" else {
+            return .failure(.notABundle)
+        }
         if bundle.path.contains("/AppTranslocation/") { return .failure(.translocated) }
         if bundle.path.hasPrefix("/Volumes/") {
             let values = try? bundle.resourceValues(forKeys: [.volumeIsReadOnlyKey])

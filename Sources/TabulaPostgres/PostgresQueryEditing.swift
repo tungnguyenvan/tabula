@@ -25,7 +25,9 @@ struct PostgresResultEditWriter: ResultEditWriter {
         let d = SQLDialect(flavor: .postgres)
         // E strings are independent of standard_conforming_strings, including backslashes in pasted values.
         func literal(_ value: String?, column: QueryEditTarget.Column) throws -> String {
-            guard let value else { return "NULL" }
+            guard let value else {
+                return "NULL"
+            }
             guard !value.contains("\0") else {
                 throw DatabaseError("PostgreSQL text values cannot contain a NUL character.")
             }
@@ -124,7 +126,9 @@ extension PostgresDriver {
 
     /// A separate session is supplied by the UI for commits, so no active user transaction is committed implicitly.
     public func commitQueryEdits(_ edits: [QueryRowEdit], target: QueryEditTarget) async throws -> [Int: [String?]] {
-        guard !edits.isEmpty else { return [:] }
+        guard !edits.isEmpty else {
+            return [:]
+        }
         let statements = try edits.map { try target.statement(for: $0) }
         _ = try await execute("BEGIN")
         do {

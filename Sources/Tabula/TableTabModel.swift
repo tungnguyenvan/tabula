@@ -237,7 +237,9 @@ final class TableTabModel {
     }
 
     var pageDescription: String {
-        guard !rows.isEmpty else { return totalRows.map { "\($0) rows" } ?? "No rows" }
+        guard !rows.isEmpty else {
+            return totalRows.map { "\($0) rows" } ?? "No rows"
+        }
         let range = "\(offset + 1)–\(offset + rows.count)"
         return totalRows.map { "\(range) of \($0)" } ?? range
     }
@@ -261,7 +263,9 @@ final class TableTabModel {
     func cell(row: Int, column: Int) -> Cell {
         if row >= rows.count {
             let inserted = insertedRows[row - rows.count]
-            guard let set = inserted[column] else { return .defaultValue }
+            guard let set = inserted[column] else {
+                return .defaultValue
+            }
             return set.map(Cell.value) ?? .null
         }
         if let edit = edits[row]?[column] {
@@ -445,7 +449,9 @@ final class TableTabModel {
             } else {
                 statement = try MongoChanges.insertDocument(table, text: text)
             }
-            guard confirmProductionWrite() else { return "Save cancelled. Your document has not been changed." }
+            guard confirmProductionWrite() else {
+                return "Save cancelled. Your document has not been changed."
+            }
             _ = try await driver.execute(statement)
             await reload()
             return nil

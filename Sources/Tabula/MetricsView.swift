@@ -184,7 +184,9 @@ struct MetricsView: View {
     }
 
     private func format(_ value: Double?) -> String {
-        guard let value else { return "—" }
+        guard let value else {
+            return "—"
+        }
         return value >= 100 ? MetricFormat.number(value) : String(format: "%.1f", value)
     }
 

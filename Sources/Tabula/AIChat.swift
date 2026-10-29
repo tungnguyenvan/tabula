@@ -156,7 +156,9 @@ final class AIChatModel {
                     try await receive(AIService.shared.stream(request), into: reply)
                     // A cancelled stream ends without an error; a stopped answer must not go on to use a tool.
                     try Task.checkCancellation()
-                    guard self.run == run else { throw CancellationError() }
+                    guard self.run == run else {
+                        throw CancellationError()
+                    }
                     guard !last,
                         let call = messages.first(where: { $0.id == reply })
                             .flatMap({ AgentProtocol.call(in: $0.text) })
@@ -211,14 +213,18 @@ final class AIChatModel {
         if isQuery && askFirst {
             let allowed = await withCheckedContinuation { continuation in
                 // Stopped meanwhile: answer at once instead of waiting for a button that is gone.
-                guard self.run == run, !Task.isCancelled else { return continuation.resume(returning: false) }
+                guard self.run == run, !Task.isCancelled else {
+                    return continuation.resume(returning: false)
+                }
                 if let earlier = approval {
                     earlier.continuation.resume(returning: false)
                 }
                 approval = (step.id, continuation)
             }
             try Task.checkCancellation()
-            guard self.run == run else { throw CancellationError() }
+            guard self.run == run else {
+                throw CancellationError()
+            }
             guard allowed else {
                 return done(.denied, "The user didn't allow this query. Answer without it, or suggest it as SQL.")
             }
@@ -226,7 +232,9 @@ final class AIChatModel {
         }
         let toolbox = try await workspace.agentToolbox()
         try Task.checkCancellation()
-        guard self.run == run else { throw CancellationError() }
+        guard self.run == run else {
+            throw CancellationError()
+        }
         let result = await toolbox.run(call)
         try Task.checkCancellation()
         return done(.done, result)
@@ -688,7 +696,9 @@ extension MessageView {
         if message.streaming && message.text.isEmpty {
             return "Thinking…"
         }
-        guard let seconds = message.thoughtFor else { return "Thinking" }
+        guard let seconds = message.thoughtFor else {
+            return "Thinking"
+        }
         return seconds < 1 ? "Thought briefly" : "Thought for \(Int(seconds.rounded())) s"
     }
 }

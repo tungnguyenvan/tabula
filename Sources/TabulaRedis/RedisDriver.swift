@@ -279,7 +279,9 @@ public actor RedisDriver {
             arguments += [.text("TYPE"), .text(type.rawValue)]
         }
         let reply = try await run(arguments).array
-        guard reply.count == 2, let next = reply[0].string else { throw DatabaseError("Unexpected SCAN reply") }
+        guard reply.count == 2, let next = reply[0].string else {
+            throw DatabaseError("Unexpected SCAN reply")
+        }
         return (next, reply[1].array.compactMap(\.bytes).map(RedisBytes.init))
     }
 
@@ -586,7 +588,9 @@ public actor RedisDriver {
     /// Sets a TTL in seconds, or removes it when nil.
     public func setTTL(_ key: RedisBytes, seconds: Int?) async throws {
         if let seconds {
-            guard seconds > 0 else { throw DatabaseError("TTL must be at least 1 second.") }
+            guard seconds > 0 else {
+                throw DatabaseError("TTL must be at least 1 second.")
+            }
             try await run([.text("EXPIRE"), .bytes(key.bytes), .text(String(seconds))])
         } else {
             try await run([.text("PERSIST"), .bytes(key.bytes)])
@@ -607,7 +611,9 @@ public actor RedisDriver {
             guard let value = values.first else { return }
             try await setString(key, to: value, keepTTL: false)
         case .hash:
-            guard v.count == 2 else { throw DatabaseError("A hash entry needs a field and a value.") }
+            guard v.count == 2 else {
+                throw DatabaseError("A hash entry needs a field and a value.")
+            }
             try await run([.text("HSET"), k] + v)
         case .list:
             guard let value = v.first else { return }
@@ -621,7 +627,9 @@ public actor RedisDriver {
             }
             try await run([.text("ZADD"), k, .text(score), v[0]])
         case .stream:
-            guard !v.isEmpty, v.count % 2 == 0 else { throw DatabaseError("A stream entry needs field/value pairs.") }
+            guard !v.isEmpty, v.count % 2 == 0 else {
+                throw DatabaseError("A stream entry needs field/value pairs.")
+            }
             try await run([.text("XADD"), k, .text("*")] + v)
         case .unknown:
             throw DatabaseError("Unsupported key type.")

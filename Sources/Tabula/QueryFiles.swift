@@ -76,7 +76,9 @@ extension QueryTabModel {
 extension WorkspaceModel {
     /// Asks for .sql files (⌘O) and opens each in a query tab.
     func chooseSQLFiles() {
-        guard driver != nil else { return NSSound.beep() }
+        guard driver != nil else {
+            return NSSound.beep()
+        }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [SQLFile.type, .plainText]
         panel.allowsMultipleSelection = true

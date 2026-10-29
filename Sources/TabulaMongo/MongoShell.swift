@@ -250,7 +250,9 @@ public enum MongoShell {
 
     /// A document (not an array); empty text is the empty document.
     public static func parseDocument(_ text: String) throws -> Document {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Document() }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return Document()
+        }
         guard let document = try parseValue(text) as? Document, !document.isArray else {
             throw ParseError("Expected a document like { field: value }.")
         }
@@ -326,7 +328,9 @@ struct MongoShellParser {
             index += 1
             skipSpace()
         }
-        guard isAtEnd else { throw error("Unexpected text") }
+        guard isAtEnd else {
+            throw error("Unexpected text")
+        }
     }
 
     /// Consumes `byte` (after optional space) when it is next.
@@ -338,7 +342,9 @@ struct MongoShellParser {
     }
 
     mutating func expect(_ character: Character) throws {
-        guard take(character) else { throw error("Expected “\(character)”") }
+        guard take(character) else {
+            throw error("Expected “\(character)”")
+        }
     }
 
     func error(_ message: String) -> MongoShell.ParseError {
@@ -374,7 +380,9 @@ struct MongoShellParser {
 
     mutating func value() throws -> Primitive {
         skipSpace()
-        guard let byte = peek() else { throw error("Expected a value") }
+        guard let byte = peek() else {
+            throw error("Expected a value")
+        }
         switch byte {
         case UInt8(ascii: "{"):
             return try MongoExtendedJSON.convert(object())
@@ -387,7 +395,9 @@ struct MongoShellParser {
         case UInt8(ascii: "-"), UInt8(ascii: "+"), UInt8(ascii: "."), UInt8(ascii: "0")...UInt8(ascii: "9"):
             return try number()
         default:
-            guard Self.isIdentifierStart(byte) else { throw error("Expected a value") }
+            guard Self.isIdentifierStart(byte) else {
+                throw error("Expected a value")
+            }
             return try word()
         }
     }
@@ -442,7 +452,9 @@ struct MongoShellParser {
         index += 1
         var output: [UInt8] = []
         while true {
-            guard let byte = peek() else { throw error("Unterminated string") }
+            guard let byte = peek() else {
+                throw error("Unterminated string")
+            }
             index += 1
             if byte == quote {
                 break
@@ -454,7 +466,9 @@ struct MongoShellParser {
                 output.append(byte)
                 continue
             }
-            guard let escaped = peek() else { throw error("Unterminated string") }
+            guard let escaped = peek() else {
+                throw error("Unterminated string")
+            }
             index += 1
             switch escaped {
             case UInt8(ascii: "n"): output.append(0x0A)
@@ -532,7 +546,9 @@ struct MongoShellParser {
         if isInteger, let int = Int(text.hasPrefix("+") ? String(text.dropFirst()) : text) {
             return Int32(exactly: int).map { $0 as Primitive } ?? int
         }
-        guard let double = Double(text) else { throw error("Invalid number") }
+        guard let double = Double(text) else {
+            throw error("Invalid number")
+        }
         return double
     }
 
@@ -541,7 +557,9 @@ struct MongoShellParser {
         var pattern: [UInt8] = []
         var inClass = false
         while true {
-            guard let byte = peek(), byte != 0x0A else { throw error("Unterminated regular expression") }
+            guard let byte = peek(), byte != 0x0A else {
+                throw error("Unterminated regular expression")
+            }
             index += 1
             if byte == UInt8(ascii: "\\"), let next = peek() {
                 index += 1
@@ -566,7 +584,9 @@ struct MongoShellParser {
     /// Keywords and constructors: true, null, ObjectId("…"), new Date(…), NumberLong(…), …
     private mutating func word() throws -> Primitive {
         let wordStart = index
-        guard var name = identifier() else { throw error("Expected a value") }
+        guard var name = identifier() else {
+            throw error("Expected a value")
+        }
         if name == "new", let constructor = identifier() { name = constructor }
         // Qualified constructors: Binary.createFromBase64, Decimal128.fromString, …
         while peek() == UInt8(ascii: "."), let next = peek(1), Self.isIdentifierStart(next) {
@@ -610,7 +630,9 @@ struct MongoShellParser {
                 madeValue = true
                 return ObjectId()
             }
-            guard let id = ObjectId(hex) else { throw error("“\(hex)” isn't a valid ObjectId (24 hex digits)") }
+            guard let id = ObjectId(hex) else {
+                throw error("“\(hex)” isn't a valid ObjectId (24 hex digits)")
+            }
             return id
         case "ISODate", "Date":
             switch argument(0) {
@@ -618,10 +640,14 @@ struct MongoShellParser {
                 madeValue = true
                 return Date()
             case let string as String:
-                guard let date = MongoDates.parse(string) else { throw error("“\(string)” isn't a date") }
+                guard let date = MongoDates.parse(string) else {
+                    throw error("“\(string)” isn't a date")
+                }
                 return date
             case let value?:
-                guard let milliseconds = Self.double(value) else { throw error("Date needs a string or milliseconds") }
+                guard let milliseconds = Self.double(value) else {
+                    throw error("Date needs a string or milliseconds")
+                }
                 return Date(timeIntervalSince1970: milliseconds / 1000)
             }
         case "NumberLong", "Long", "Long.fromString", "Long.fromNumber":
@@ -652,14 +678,18 @@ struct MongoShellParser {
             return double
         case "NumberDecimal", "Decimal128", "Decimal128.fromString":
             let value = try text(0)
-            guard let decimal = MongoDecimal.parse(value) else { throw error("“\(value)” isn't a decimal number") }
+            guard let decimal = MongoDecimal.parse(value) else {
+                throw error("“\(value)” isn't a decimal number")
+            }
             return decimal
         case "UUID":
             guard let string = argument(0) as? String else {
                 madeValue = true
                 return MongoBinary.uuid(UUID())
             }
-            guard let binary = MongoBinary.uuid(string) else { throw error("“\(string)” isn't a UUID") }
+            guard let binary = MongoBinary.uuid(string) else {
+                throw error("“\(string)” isn't a UUID")
+            }
             return binary
         case "BinData":
             guard let sub = argument(0).flatMap(Self.double), let base64 = argument(1) as? String,
@@ -739,49 +769,71 @@ struct MongoShellParser {
 enum MongoExtendedJSON {
     static func convert(_ document: Document) throws -> Primitive {
         let keys = document.keys
-        guard let first = keys.first, first.hasPrefix("$") else { return document }
+        guard let first = keys.first, first.hasPrefix("$") else {
+            return document
+        }
         if keys.count == 2, Set(keys) == ["$binary", "$type"], let base64 = document["$binary"] as? String,
             let type = document["$type"] as? String, let data = Data(base64Encoded: base64),
             let sub = UInt8(type, radix: 16)
         {
             return MongoBinary.make(data, subtype: sub)
         }
-        guard keys.count == 1, let value = document[first] else { return document }
+        guard keys.count == 1, let value = document[first] else {
+            return document
+        }
         func fail() -> MongoShell.ParseError { MongoShell.ParseError("Invalid Extended JSON value for \(first).") }
         switch first {
         case "$oid":
-            guard let hex = value as? String, let id = ObjectId(hex) else { throw fail() }
+            guard let hex = value as? String, let id = ObjectId(hex) else {
+                throw fail()
+            }
             return id
         case "$date":
             switch value {
             case let string as String:
-                guard let date = MongoDates.parse(string) else { throw fail() }
+                guard let date = MongoDates.parse(string) else {
+                    throw fail()
+                }
                 return date
             case let wrapped as Document:
-                guard let text = wrapped["$numberLong"] as? String, let milliseconds = Int64(text) else { throw fail() }
+                guard let text = wrapped["$numberLong"] as? String, let milliseconds = Int64(text) else {
+                    throw fail()
+                }
                 return Date(timeIntervalSince1970: Double(milliseconds) / 1000)
             default:
-                guard let milliseconds = MongoShellParser.double(value) else { throw fail() }
+                guard let milliseconds = MongoShellParser.double(value) else {
+                    throw fail()
+                }
                 return Date(timeIntervalSince1970: milliseconds / 1000)
             }
         case "$numberLong":
-            guard let text = value as? String, let int = Int(text) else { throw fail() }
+            guard let text = value as? String, let int = Int(text) else {
+                throw fail()
+            }
             return int
         case "$numberInt":
-            guard let text = value as? String, let int = Int32(text) else { throw fail() }
+            guard let text = value as? String, let int = Int32(text) else {
+                throw fail()
+            }
             return int
         case "$numberDouble":
-            guard let text = value as? String else { throw fail() }
+            guard let text = value as? String else {
+                throw fail()
+            }
             switch text {
             case "Infinity": return Double.infinity
             case "-Infinity": return -Double.infinity
             case "NaN": return Double.nan
             default:
-                guard let double = Double(text) else { throw fail() }
+                guard let double = Double(text) else {
+                    throw fail()
+                }
                 return double
             }
         case "$numberDecimal":
-            guard let text = value as? String, let decimal = MongoDecimal.parse(text) else { throw fail() }
+            guard let text = value as? String, let decimal = MongoDecimal.parse(text) else {
+                throw fail()
+            }
             return decimal
         case "$binary":
             guard let wrapped = value as? Document, let base64 = wrapped["base64"] as? String,
@@ -794,24 +846,34 @@ enum MongoExtendedJSON {
                 subtype: (wrapped["subType"] as? String).flatMap { UInt8($0, radix: 16) } ?? 0
             )
         case "$uuid":
-            guard let text = value as? String, let binary = MongoBinary.uuid(text) else { throw fail() }
+            guard let text = value as? String, let binary = MongoBinary.uuid(text) else {
+                throw fail()
+            }
             return binary
         case "$regularExpression":
-            guard let wrapped = value as? Document, let pattern = wrapped["pattern"] as? String else { throw fail() }
+            guard let wrapped = value as? Document, let pattern = wrapped["pattern"] as? String else {
+                throw fail()
+            }
             return RegularExpression(
                 pattern: pattern,
                 options: String(((wrapped["options"] as? String) ?? "").sorted())
             )
         case "$timestamp":
-            guard let wrapped = value as? Document else { throw fail() }
+            guard let wrapped = value as? Document else {
+                throw fail()
+            }
             return MongoShellParser.timestamp(t: wrapped["t"], i: wrapped["i"])
         case "$minKey": return MinKey()
         case "$maxKey": return MaxKey()
         case "$symbol":
-            guard let text = value as? String else { throw fail() }
+            guard let text = value as? String else {
+                throw fail()
+            }
             return text
         case "$code":
-            guard let text = value as? String else { throw fail() }
+            guard let text = value as? String else {
+                throw fail()
+            }
             return JavaScriptCode(text)
         default:
             // An operator such as {$gt: 5}: a document, not a wrapped value.

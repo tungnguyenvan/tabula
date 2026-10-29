@@ -162,7 +162,9 @@ final class WorkspaceModel {
     }
 
     var filteredTables: [TableRef] {
-        guard !tableSearch.isEmpty else { return tables }
+        guard !tableSearch.isEmpty else {
+            return tables
+        }
         return tables.filter { $0.name.localizedCaseInsensitiveContains(tableSearch) }
     }
 
@@ -170,7 +172,9 @@ final class WorkspaceModel {
     private(set) var routines: [RoutineInfo] = []
 
     var filteredRoutines: [RoutineInfo] {
-        guard !tableSearch.isEmpty else { return routines }
+        guard !tableSearch.isEmpty else {
+            return routines
+        }
         return routines.filter {
             $0.name.localizedCaseInsensitiveContains(tableSearch)
                 || ($0.table?.localizedCaseInsensitiveContains(tableSearch) ?? false)
@@ -350,7 +354,9 @@ final class WorkspaceModel {
     private var choosingRestore = false
 
     func startDump(tables: [TableRef] = []) {
-        guard supportsDumps, transfer == nil, !choosingRestore else { return NSSound.beep() }
+        guard supportsDumps, transfer == nil, !choosingRestore else {
+            return NSSound.beep()
+        }
         transfer = DatabaseTransfer(
             direction: .dump,
             config: config,
@@ -364,7 +370,9 @@ final class WorkspaceModel {
 
     /// Restores a dump into the database, after choosing the file.
     func startRestore() async {
-        guard supportsDumps, transfer == nil, !choosingRestore, let driver else { return NSSound.beep() }
+        guard supportsDumps, transfer == nil, !choosingRestore, let driver else {
+            return NSSound.beep()
+        }
         choosingRestore = true
         defer { choosingRestore = false }
         var major: Int?
@@ -719,7 +727,9 @@ final class WorkspaceModel {
     /// The schema for Ask AI and Fix with AI: waits for columns still loading (up to the prefetch limit)
     /// and for foreign keys, and adds tables of other schemas that `sql` names.
     func loadedAISchema(for sql: String) async -> SQLPrompts.Schema {
-        guard let driver else { return aiSchema() }
+        guard let driver else {
+            return aiSchema()
+        }
         let generation = cacheGeneration
         // Tables the text names come first and are always loaded; the others only while time allows.
         var named: [TableRef] = []
@@ -744,7 +754,9 @@ final class WorkspaceModel {
                 break
             }
             let columns = (try? await driver.columns(of: table)) ?? []
-            guard generation == cacheGeneration else { return aiSchema() }
+            guard generation == cacheGeneration else {
+                return aiSchema()
+            }
             columnCache[Self.columnKey(table)] = columns
         }
         if foreignKeyCache == nil, !Task.isCancelled, ContinuousClock.now < deadline {
@@ -926,7 +938,9 @@ final class WorkspaceModel {
 
     /// Runs a destructive table operation (truncate/drop) after the UI has confirmed it.
     func perform(_ sql: String, on table: TableRef) async throws {
-        guard let driver else { throw DatabaseError("Not connected. Reconnect and try again.") }
+        guard let driver else {
+            throw DatabaseError("Not connected. Reconnect and try again.")
+        }
         _ = try await driver.execute(sql)
         if sql.hasPrefix("DROP") {
             tabs.removeAll {

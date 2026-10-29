@@ -271,7 +271,9 @@ public enum MongoChanges {
     public static func replace(_ table: TableRef, original: String, with text: String) throws -> String {
         let old = try MongoShell.parseDocument(original)
         let new = try MongoShell.parseDocument(text)
-        guard let id = old["_id"] else { throw DatabaseError("This document has no _id, so it can't be replaced.") }
+        guard let id = old["_id"] else {
+            throw DatabaseError("This document has no _id, so it can't be replaced.")
+        }
         return MongoDialect.collection(table)
             + ".replaceOne(\(MongoShell.format(["_id": id] as Document)), \(MongoShell.format(new)))"
     }
@@ -283,7 +285,9 @@ public enum MongoChanges {
 
     /// Text typed into a cell, in the type the field had.
     static func value(_ text: String?, original: Primitive?, field: String) throws -> Primitive {
-        guard let text else { return Null() }
+        guard let text else {
+            return Null()
+        }
         func invalid(_ kind: String) -> DatabaseError {
             DatabaseError(
                 "“\(text)” isn't \(kind) for \(field). Type a shell value such as \"text\" to change the field's type."
@@ -300,32 +304,44 @@ public enum MongoChanges {
             if let decimal = MongoDecimal.parse(text) {
                 return decimal
             }
-            guard let parsed else { throw invalid("a number") }
+            guard let parsed else {
+                throw invalid("a number")
+            }
             return parsed
         case is Int32, is Int, is Double:
-            guard let parsed else { throw invalid("a number") }
+            guard let parsed else {
+                throw invalid("a number")
+            }
             return coerce(parsed, like: original!)
         case is Date:
             if let date = MongoDates.parse(text) {
                 return date
             }
-            guard let parsed else { throw invalid("a date") }
+            guard let parsed else {
+                throw invalid("a date")
+            }
             return parsed
         case is ObjectId:
             if let id = ObjectId(text.trimmingCharacters(in: .whitespaces)) {
                 return id
             }
-            guard let parsed else { throw invalid("an ObjectId") }
+            guard let parsed else {
+                throw invalid("an ObjectId")
+            }
             return parsed
         default:
-            guard let parsed else { throw invalid("a valid value") }
+            guard let parsed else {
+                throw invalid("a valid value")
+            }
             return parsed
         }
     }
 
     /// A plain number typed over a number keeps the field's numeric type when it fits exactly.
     static func coerce(_ value: Primitive, like original: Primitive) -> Primitive {
-        guard let number = MongoShellParser.double(value), !(value is String) else { return value }
+        guard let number = MongoShellParser.double(value), !(value is String) else {
+            return value
+        }
         switch original {
         case is Int:
             if let int = value as? Int32 {
@@ -349,7 +365,9 @@ public enum MongoChanges {
     /// Text in a field with no type yet: a shell value when it reads as one, otherwise a string. A number counts
     /// only when it reads back the same, so "02134" or a 20-digit account number stays text.
     static func typed(_ text: String) -> Primitive {
-        guard let value = try? MongoShell.parseValue(text) else { return text }
+        guard let value = try? MongoShell.parseValue(text) else {
+            return text
+        }
         if value is Int32 || value is Int || value is Double,
             MongoShell.cell(value) != text.trimmingCharacters(in: .whitespaces)
         {

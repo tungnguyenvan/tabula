@@ -212,7 +212,8 @@ enum PostgresValueFormatter {
     }
 
     private static func inet(_ buffer: inout ByteBuffer) -> String {
-        guard let family = buffer.readInteger(as: UInt8.self),
+        // The address family comes first; the address length says the same, so it is skipped.
+        guard buffer.readInteger(as: UInt8.self) != nil,
             let bits = buffer.readInteger(as: UInt8.self),
             let isCIDR = buffer.readInteger(as: UInt8.self),
             let length = buffer.readInteger(as: UInt8.self),
@@ -282,7 +283,9 @@ enum PostgresValueFormatter {
     }
 
     private static func nest(_ elements: ArraySlice<String>, sizes: ArraySlice<Int>) -> String {
-        guard let size = sizes.first else { return elements.first ?? "" }
+        guard let size = sizes.first else {
+            return elements.first ?? ""
+        }
         let inner = sizes.dropFirst()
         let stride = inner.reduce(1, *)
         var groups: [String] = []
@@ -297,7 +300,9 @@ enum PostgresValueFormatter {
         let needsQuotes =
             text.isEmpty || text.uppercased() == "NULL"
             || text.contains(where: { " ,{}\"\\".contains($0) || $0.isNewline })
-        guard needsQuotes else { return text }
+        guard needsQuotes else {
+            return text
+        }
         return "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
             + "\""
     }

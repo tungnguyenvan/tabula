@@ -120,7 +120,9 @@ public enum AgentProtocol {
 
     /// The reply as the user sees it: anything before a tool request.
     public static func visibleText(_ reply: String) -> String {
-        guard let open = reply.range(of: fence) else { return reply }
+        guard let open = reply.range(of: fence) else {
+            return reply
+        }
         return String(reply[..<open.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -128,7 +130,9 @@ public enum AgentProtocol {
     /// tool request ("`", "``", "```", "```to"…). Once the fence turns out to be something else, it shows.
     public static func streamingText(_ reply: String) -> String {
         let text = visibleText(reply)
-        guard text.count == reply.count else { return text }
+        guard text.count == reply.count else {
+            return text
+        }
         if let start = text.range(of: "```", options: .backwards), fence.hasPrefix(text[start.lowerBound...]) {
             return String(text[..<start.lowerBound])
         }
@@ -159,10 +163,14 @@ public struct AgentToolbox: Sendable {
             switch call.tool {
             case .listTables: return try await listTables(call.schema)
             case .describeTable:
-                guard let name = call.table else { return "Error: describe_table needs a table." }
+                guard let name = call.table else {
+                    return "Error: describe_table needs a table."
+                }
                 return try await describe(name)
             case .runQuery:
-                guard let query = call.query else { return "Error: run_query needs a query." }
+                guard let query = call.query else {
+                    return "Error: run_query needs a query."
+                }
                 return try await runQuery(query)
             }
         } catch {
@@ -275,10 +283,14 @@ public struct AgentToolbox: Sendable {
 
     /// Rows as tab-separated text, cut to the row, cell and total limits.
     static func text(of result: QueryResult) -> String {
-        guard !result.columns.isEmpty else { return "No rows returned." }
+        guard !result.columns.isEmpty else {
+            return "No rows returned."
+        }
         let rows = result.rows.prefix(Defaults.AI.agentRowLimit)
         func cell(_ value: String?) -> String {
-            guard let value else { return "NULL" }
+            guard let value else {
+                return "NULL"
+            }
             let flat = value.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ")
             return flat.count > Defaults.AI.agentCellLength
                 ? String(flat.prefix(Defaults.AI.agentCellLength)) + "…" : flat
@@ -312,7 +324,9 @@ public struct AgentToolbox: Sendable {
         }
         return zip(lines, cells)
             .map { line, row in
-                guard let row else { return line }
+                guard let row else {
+                    return line
+                }
                 return row.enumerated()
                     .map { index, cell in
                         index == row.count - 1

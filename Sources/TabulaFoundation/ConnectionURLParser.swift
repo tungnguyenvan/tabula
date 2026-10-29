@@ -201,12 +201,16 @@ public enum PasswordEscapes {
     /// The error's message, with a note when the login failed and the password looks escaped.
     public static func message(for error: any Error, password: String?) -> String {
         let message = error.localizedDescription
-        guard let password, decoded(password) != nil else { return message }
+        guard let password, decoded(password) != nil else {
+            return message
+        }
         let lowered = message.lowercased()
         let loginFailures = [
             "authentication failed", "wrongpass", "access denied", "invalid username-password", "auth failed",
         ]
-        guard loginFailures.contains(where: lowered.contains) else { return message }
+        guard loginFailures.contains(where: lowered.contains) else {
+            return message
+        }
         return message + " The password contains URL escapes such as %3F (which stands for ?). If you copied it "
             + "from a URL or a dashboard, edit the connection and click Decode."
     }

@@ -13,7 +13,9 @@ public struct AnthropicProvider: AIProvider {
     }
 
     private func httpRequest(_ request: AIRequest, stream: Bool) throws -> URLRequest {
-        guard !endpoint.apiKey.isEmpty else { throw AIError.notConfigured("Add a Claude API key in Settings → AI.") }
+        guard !endpoint.apiKey.isEmpty else {
+            throw AIError.notConfigured("Add a Claude API key in Settings → AI.")
+        }
         guard let url = URL(string: endpoint.baseURL)?.appendingPathComponent("v1/messages") else {
             throw AIError.notConfigured("The API address isn't a valid URL.")
         }
@@ -129,7 +131,9 @@ public struct OpenAICompatibleProvider: AIProvider {
 
     private func httpRequest(_ request: AIRequest, stream: Bool) throws -> URLRequest {
         let model = endpoint.model
-        guard !model.isEmpty else { throw AIError.notConfigured("Choose a model in Settings → AI.") }
+        guard !model.isEmpty else {
+            throw AIError.notConfigured("Choose a model in Settings → AI.")
+        }
         guard let url = URL(string: endpoint.baseURL)?.appendingPathComponent("chat/completions") else {
             throw AIError.notConfigured("The API address isn't a valid URL.")
         }

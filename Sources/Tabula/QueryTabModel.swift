@@ -273,7 +273,9 @@ final class QueryTabModel {
     }
 
     func exportText(_ format: ExportFormat) throws -> String {
-        guard let result = currentResult else { throw DatabaseError("Run a query that returns rows first.") }
+        guard let result = currentResult else {
+            throw DatabaseError("Run a query that returns rows first.")
+        }
         return try ResultExporter.export(
             columns: result.columns,
             rows: result.rows,

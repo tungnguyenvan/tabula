@@ -137,7 +137,9 @@ public enum UpdateFeed {
         if status == 403 || status == 429 {
             throw DatabaseError("GitHub is limiting update checks right now. Try again later.")
         }
-        guard status == 200 else { throw DatabaseError("Update check failed (HTTP \(status)).") }
+        guard status == 200 else {
+            throw DatabaseError("Update check failed (HTTP \(status)).")
+        }
         return try update(from: data, current: current)
     }
 }

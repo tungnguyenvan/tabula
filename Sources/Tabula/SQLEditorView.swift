@@ -88,7 +88,9 @@ final class EditorHandle {
     func replace(_ original: String, with text: String) {
         guard let textView else { return }
         let range = (textView.string as NSString).range(of: original)
-        guard range.location != NSNotFound else { return insertReplacingSelection(text) }
+        guard range.location != NSNotFound else {
+            return insertReplacingSelection(text)
+        }
         replace(range, with: text)
         textView.setSelectedRange(NSRange(location: range.location, length: (text as NSString).length))
     }
@@ -350,7 +352,9 @@ final class SQLTextView: NSTextView {
     }
 
     override func insertTab(_ sender: Any?) {
-        guard let suggestion = inlineSuggestion else { return super.insertTab(sender) }
+        guard let suggestion = inlineSuggestion else {
+            return super.insertTab(sender)
+        }
         inlineSuggestion = nil
         insertText(suggestion.text, replacementRange: NSRange(location: suggestion.location, length: 0))
     }
@@ -404,7 +408,9 @@ final class SQLTextView: NSTextView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard window?.firstResponder === self else { return super.performKeyEquivalent(with: event) }
+        guard window?.firstResponder === self else {
+            return super.performKeyEquivalent(with: event)
+        }
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
         if event.keyCode == KeyCode.return || event.keyCode == KeyCode.enter,
             flags == [.command] || flags == [.command, .shift]
@@ -449,7 +455,9 @@ final class SQLTextView: NSTextView {
         let allCommented =
             !nonEmpty.isEmpty && nonEmpty.allSatisfy { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
         let updated = parts.map { line -> String in
-            guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return line }
+            guard !line.trimmingCharacters(in: .whitespaces).isEmpty else {
+                return line
+            }
             if allCommented, let range = line.range(of: "--") {
                 var result = line
                 let after = result.index(range.upperBound, offsetBy: 0)

@@ -72,7 +72,9 @@ enum MongoDecimal {
 
         let adjusted = exponent + digits.count - 1
         if exponent <= 0 && adjusted >= -6 {
-            guard exponent < 0 else { return sign + digits }
+            guard exponent < 0 else {
+                return sign + digits
+            }
             let point = digits.count + exponent
             if point > 0 {
                 let index = digits.index(digits.startIndex, offsetBy: point)
@@ -167,7 +169,9 @@ enum MongoDecimal {
     /// The 113-bit significand as decimal digits.
     private static func decimalDigits(_ value: (high: UInt64, low: UInt64)) -> String {
         var (high, low) = value
-        guard high != 0 || low != 0 else { return "0" }
+        guard high != 0 || low != 0 else {
+            return "0"
+        }
         var digits: [Character] = []
         while high != 0 || low != 0 {
             let (quotientHigh, remainderHigh) = high.quotientAndRemainder(dividingBy: 10)

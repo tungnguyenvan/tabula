@@ -36,7 +36,9 @@ struct ConnectionListView: View {
     }
 
     private var filtered: [ConnectionConfig] {
-        guard !search.isEmpty else { return appState.connections }
+        guard !search.isEmpty else {
+            return appState.connections
+        }
         return appState.connections.filter {
             $0.displayName.localizedCaseInsensitiveContains(search)
                 || $0.subtitle.localizedCaseInsensitiveContains(search)

@@ -234,7 +234,9 @@ final class DatabaseTransfer: Identifiable {
     /// The tool's message, with what it means for the data and what to try.
     private func explain(_ error: Error) -> String {
         var text = error.localizedDescription
-        guard direction == .restore else { return text + "\n\nNo file was saved." }
+        guard direction == .restore else {
+            return text + "\n\nNo file was saved."
+        }
         if text.contains("already exists") {
             text +=
                 isPostgres && fileKind == .postgresArchive
@@ -421,7 +423,9 @@ struct DatabaseTransferSheet: View {
         let bytes = ByteCountFormatter.string(fromByteCount: transfer.progress.bytes, countStyle: .file)
         let elapsed = Duration.seconds(now.timeIntervalSince(transfer.started ?? now))
             .formatted(.time(pattern: .minuteSecond))
-        guard transfer.progress.bytes > 0 else { return elapsed }
+        guard transfer.progress.bytes > 0 else {
+            return elapsed
+        }
         if let total = transfer.progress.total, total > 0 {
             return "\(bytes) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)) · \(elapsed)"
         }

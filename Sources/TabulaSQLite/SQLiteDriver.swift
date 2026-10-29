@@ -13,7 +13,9 @@ public actor SQLiteDriver: DatabaseDriver {
     /// Opens (or creates) the database file at `path`.
     public init(path: String) throws {
         let expanded = (path as NSString).expandingTildeInPath
-        guard !expanded.isEmpty else { throw DatabaseError("Choose a SQLite database file.") }
+        guard !expanded.isEmpty else {
+            throw DatabaseError("Choose a SQLite database file.")
+        }
         var handle: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         if sqlite3_open_v2(expanded, &handle, flags, nil) != SQLITE_OK {
@@ -31,7 +33,9 @@ public actor SQLiteDriver: DatabaseDriver {
     }
 
     private func requireHandle() throws -> OpaquePointer {
-        guard let db else { throw DatabaseError("The database is closed.") }
+        guard let db else {
+            throw DatabaseError("The database is closed.")
+        }
         return db
     }
 
@@ -53,7 +57,9 @@ public actor SQLiteDriver: DatabaseDriver {
             if step == SQLITE_DONE {
                 break
             }
-            guard step == SQLITE_ROW else { throw DatabaseError(String(cString: sqlite3_errmsg(db))) }
+            guard step == SQLITE_ROW else {
+                throw DatabaseError(String(cString: sqlite3_errmsg(db)))
+            }
             var row: [String?] = []
             row.reserveCapacity(columnCount)
             for index in 0..<Int32(columnCount) {
@@ -78,7 +84,9 @@ public actor SQLiteDriver: DatabaseDriver {
             return nil
         case SQLITE_BLOB:
             let count = Int(sqlite3_column_bytes(statement, index))
-            guard count > 0, let bytes = sqlite3_column_blob(statement, index) else { return "x''" }
+            guard count > 0, let bytes = sqlite3_column_blob(statement, index) else {
+                return "x''"
+            }
             let buffer = UnsafeRawBufferPointer(start: bytes, count: count)
             return "x'" + buffer.map { String(format: "%02x", $0) }.joined() + "'"
         default:

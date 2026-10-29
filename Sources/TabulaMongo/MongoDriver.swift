@@ -81,7 +81,9 @@ public actor MongoDriver: DatabaseDriver {
 
     /// NIO's connection errors print as nested structures; this gives "host:port: Connection refused".
     static func readable(_ error: any Error) -> String {
-        guard let connection = error as? NIOConnectionError else { return error.localizedDescription }
+        guard let connection = error as? NIOConnectionError else {
+            return error.localizedDescription
+        }
         let causes = connection.connectionErrors.map { failure -> String in
             let reason =
                 (failure.error as? IOError).map { String(cString: strerror($0.errnoCode)) }
@@ -115,7 +117,9 @@ public actor MongoDriver: DatabaseDriver {
                 if text.contains(":") { return try ConnectionSettings.Host(text, srv: false) }
                 return ConnectionSettings.Host(hostname: text, port: config.port)
             }
-        guard !hosts.isEmpty else { throw DatabaseError("Enter a host.") }
+        guard !hosts.isEmpty else {
+            throw DatabaseError("Enter a host.")
+        }
         return ConnectionSettings(
             authentication: authentication,
             authenticationSource: authSource,
@@ -392,7 +396,9 @@ public actor MongoDriver: DatabaseDriver {
                 case "sort", "projection", "project", "hint", "collation", "maxTimeMS", "skip", "limit", "batchSize",
                     "comment",
                     "allowDiskUse", "min", "max", "returnKey", "showRecordId":
-                    guard let value else { throw DatabaseError(".\(modifier.name)() needs an argument.") }
+                    guard let value else {
+                        throw DatabaseError(".\(modifier.name)() needs an argument.")
+                    }
                     command[modifier.name == "project" ? "projection" : modifier.name] = value
                 case "count", "size", "itcount":
                     let filter = command["filter"] as? Document ?? Document()
@@ -769,7 +775,9 @@ public actor MongoDriver: DatabaseDriver {
 
     /// Inserts get their `_id` here (first, as the server would place it), so the result can show it.
     private static func withId(_ document: Document) -> Document {
-        guard document["_id"] == nil else { return document }
+        guard document["_id"] == nil else {
+            return document
+        }
         var withId: Document = ["_id": ObjectId()]
         withId.append(contentsOf: document)
         return withId

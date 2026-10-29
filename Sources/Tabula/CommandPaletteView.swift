@@ -97,7 +97,9 @@ struct CommandPaletteView: View {
     }
 
     private var results: [Item] {
-        guard !query.isEmpty else { return Array(allItems.prefix(50)) }
+        guard !query.isEmpty else {
+            return Array(allItems.prefix(50))
+        }
         return
             allItems
             .compactMap { item in Self.score(item.title, query).map { (item, $0) } }
@@ -177,7 +179,9 @@ struct CommandPaletteView: View {
             return .handled
         }
         .onKeyPress(.return, phases: .down) { press in
-            guard press.modifiers.contains(.option) else { return .ignored }
+            guard press.modifiers.contains(.option) else {
+                return .ignored
+            }
             activate(results.indices.contains(highlighted) ? results[highlighted] : nil, structure: true)
             return .handled
         }

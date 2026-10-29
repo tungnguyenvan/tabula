@@ -121,7 +121,9 @@ public actor PostgresDriver: DatabaseDriver {
         try scope?.checkCancellation()
         await executionGate.acquire()
         defer { executionGate.release() }
-        guard !closed else { throw DatabaseError("The database is closed.") }
+        guard !closed else {
+            throw DatabaseError("The database is closed.")
+        }
         try scope?.checkCancellation()
         let id = UUID()
         // The marker is at the beginning so pg_stat_activity's query truncation cannot remove it.
@@ -131,7 +133,9 @@ public actor PostgresDriver: DatabaseDriver {
         if let scope {
             guard
                 let token = scope.attach({ [weak self] in
-                    guard let self else { return .notRunning }
+                    guard let self else {
+                        return .notRunning
+                    }
                     return await self.cancelExecution(id, marker: marker)
                 })
             else { throw QueryCancelledError() }
@@ -175,7 +179,9 @@ public actor PostgresDriver: DatabaseDriver {
     }
 
     private func cancelExecution(_ id: UUID, marker: String) async -> QueryCancelOutcome {
-        guard !closed, activeExecution == id else { return .notRunning }
+        guard !closed, activeExecution == id else {
+            return .notRunning
+        }
         if let cancellationTask {
             return await cancellationTask.value
         }

@@ -156,7 +156,9 @@ func benchmarkTables(
 /// Updates of the `status` column of every row in `page`, the way the grid builds them.
 func editStatements(_ page: QueryResult, table: TableRef, dialect: any QueryDialect) throws -> [String] {
     let value = "edited-\(Int.random(in: 0..<1_000_000))"
-    guard let status = page.columns.firstIndex(of: "status") else { throw DatabaseError("No status column") }
+    guard let status = page.columns.firstIndex(of: "status") else {
+        throw DatabaseError("No status column")
+    }
     let keyColumns = page.columns.firstIndex(of: "id").map { [$0] } ?? []
     let edits = Dictionary(uniqueKeysWithValues: page.rows.indices.map { ($0, [status: String?.some(value)]) })
     return try dialect.statements(
