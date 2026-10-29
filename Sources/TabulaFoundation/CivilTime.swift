@@ -9,9 +9,9 @@ package enum CivilTime {
     package static let secondsPerDay: Int64 = 86_400
 
     package struct Day: Equatable {
-        var year: Int64
-        var month: Int64
-        var day: Int64
+        package var year: Int64
+        package var month: Int64
+        package var day: Int64
     }
 
     /// The date `days` after 1970-01-01.
