@@ -229,6 +229,14 @@ extension DebugHooks {
                             if let row = Int(parts[1]) {
                                 table.deleteRows([row])
                             }
+                        case "tablenextpage": Task { await table.nextPage() }
+                        case "tablereload": Task { await table.reload() }
+                        case "tablefilter" where parts.count == 2:
+                            table.useRawFilter = true
+                            table.filterText = parts[1]
+                            Task { await table.applyFilter() }
+                        case "tablesort" where parts.count == 2:
+                            Task { await table.sort(by: parts[1], ascending: false) }
                         case "tableaddrow": table.addRow()
                         case "tableundo": table.undoManager.undo()
                         case "tablecommit": Task { await table.commit() }
@@ -389,7 +397,17 @@ extension DebugHooks {
             default: break
             }
         }
-        let (code, characters): (UInt16, String) = namedKeys[name] ?? (letterCodes[Character(name)] ?? 0, name)
+        let code: UInt16
+        let characters: String
+        if let named = namedKeys[name] {
+            (code, characters) = named
+        } else if name.count == 1, let letter = letterCodes[Character(name)] {
+            (code, characters) = (letter, name)
+        } else {
+            // A token that names no key (often text containing ";", which separates tokens): say so, press nothing.
+            print("KEY unknown:", token)
+            return []
+        }
         // Like a real keyboard: Shift changes `characters` but not `charactersIgnoringModifiers`.
         let typed = flags.contains(.shift) ? characters.uppercased() : characters
         return [true, false]
