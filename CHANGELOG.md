@@ -11,6 +11,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - Type a keyword in the editor and press ⌃Space: the saved query is in the completion list, and choosing it inserts its SQL.
   - The AI chat can search the library too (`search_saved_queries`), so “find my revenue query” works.
 
+### Changed
+- This release's icon in Finder and the Applications folder is the Halloween one. The Dock goes back to the regular icon by itself after 1 November.
+
 ## [0.9.0] - 2026-10-29
 
 ### Added

@@ -1,9 +1,9 @@
 import AppKit
 import TabulaFoundation
 
-/// Tabula's icon for the time of year. The regular one is the app bundle's icon (scripts/make-icon.swift); a season's
-/// icon is drawn here, at any size, and shown in the Dock and wherever the app shows its mark. The icon in Finder
-/// stays the regular one, since changing it would modify the signed app.
+/// Tabula's icon for the time of year. The regular one is scripts/make-icon.swift's; a season's icon is drawn here,
+/// at any size, and shown in the Dock and wherever the app shows its mark. Finder shows the bundle's icon, which a
+/// release may set to a season's (APP_ICON in scripts/build-app.sh); the app never changes its own bundle.
 enum SeasonalIcon {
     /// The icon to show for `season`, or nil for the bundle's own.
     static func image(for season: AppSeason) -> NSImage? {
@@ -37,10 +37,16 @@ enum SeasonalIcon {
         }
     }
 
+    /// The regular icon, which the app bundle always carries (scripts/build-app.sh), so the Dock shows it outside a
+    /// season even when a release ships a seasonal icon as the bundle's own. Nil when not run from a bundle.
+    @MainActor
+    private static let regular: NSImage? = Bundle.main.url(forResource: "RegularIcon", withExtension: "icns")
+        .flatMap(NSImage.init(contentsOf:))
+
     @MainActor
     private static func updateDockIcon() {
-        // nil puts the bundle's icon back.
-        NSApp.applicationIconImage = image(for: AppSeason.on(Date()))
+        // Without a bundle (swift run) there is no regular icon file; nil keeps the executable's default.
+        NSApp.applicationIconImage = image(for: AppSeason.on(Date())) ?? regular
     }
 }
 
