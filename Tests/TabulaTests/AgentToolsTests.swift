@@ -121,6 +121,25 @@ final class AgentReadOnlyTests: XCTestCase {
         XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 'a\\'' , SLEEP(5) -- '"))
     }
 
+    /// Found by running them on PostgreSQL inside BEGIN READ ONLY: they act anyway, or run SQL kept in a string.
+    func testFunctionsTheReadOnlyTransactionAllows() {
+        for sql in [
+            "SELECT query_to_xml('select pg_terminate_backend(pid) from pg_stat_activity', true, false, '')",
+            "SELECT * FROM ts_stat('select to_tsvector(pg_cancel_backend(1)::text)')",
+            "SELECT ts_rewrite('a'::tsquery, 'select pg_reload_conf()')",
+            "SELECT pg_advisory_lock_shared(42)", "SELECT pg_stat_reset()", "SELECT pg_switch_wal()",
+            "SELECT pg_create_restore_point('x')", "SELECT pg_logical_emit_message(false, 'p', 'x')",
+            "SELECT pg_drop_replication_slot('s')", "SELECT * FROM crosstab('select 1')",
+        ] {
+            XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
+        }
+        XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT RELEASE_ALL_LOCKS()"))
+        // Catalog views whose names start like blocked functions still read.
+        for sql in ["SELECT * FROM pg_file_settings", "SELECT slot_name FROM pg_replication_slots"] {
+            XCTAssertNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
+        }
+    }
+
     func testMongoEscapesAreReadBeforeTheCheck() {
         let out = MongoQueryDialect().readOnlyViolation("db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])")
         XCTAssertEqual(out, "$out writes to a collection, so the command can't run.")
