@@ -92,6 +92,8 @@ struct DataGridView: NSViewRepresentable {
         private var handledFocusRequest: UUID?
         /// Table-view column index of the focused cell; 0 is the row-number gutter, so data starts at 1.
         private(set) var focusedColumn = 1
+        /// Where Copy writes: the system pasteboard, except in tests.
+        var pasteboard = NSPasteboard.general
         private var focusedRow = -1
         private var popover: NSPopover?
         /// The binding value seen last; a different value means SwiftUI changed the selection itself.
@@ -451,7 +453,7 @@ struct DataGridView: NSViewRepresentable {
             if withHeader {
                 text = parent.source.columns.joined(separator: "\t") + "\n" + text
             }
-            Clipboard.copy(text)
+            Clipboard.copy(text, to: pasteboard)
         }
 
         func copyFocusedCell() {
@@ -462,7 +464,7 @@ struct DataGridView: NSViewRepresentable {
                 case .null: "NULL"
                 case .defaultValue: ""
                 }
-            Clipboard.copy(text)
+            Clipboard.copy(text, to: pasteboard)
         }
 
         func deleteSelection() {
@@ -504,7 +506,7 @@ struct DataGridView: NSViewRepresentable {
             self.popover = popover
         }
 
-        private static func prettyJSON(_ text: String) -> String? {
+        static func prettyJSON(_ text: String) -> String? {
             guard let first = text.trimmingCharacters(in: .whitespaces).first, first == "{" || first == "[",
                 let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)),
                 let data = try? JSONSerialization.data(
