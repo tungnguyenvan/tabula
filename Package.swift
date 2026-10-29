@@ -140,6 +140,8 @@ let package = Package(
         .testTarget(
             name: "TabulaTests",
             dependencies: [
+                // The app's models (tables, queries) are tested through @testable import.
+                "Tabula",
                 "TabulaFoundation",
                 "TabulaStorage",
                 "TabulaSQL",
