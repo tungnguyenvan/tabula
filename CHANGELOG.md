@@ -47,6 +47,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **Binary values are kept as bytes** ([#171](https://github.com/tungnguyenvan/tabula/issues/171)): MySQL BLOB, BINARY, VARBINARY and BIT values showed as garbled text (`�`), and SQLite blobs were exported and duplicated as text. Bytes now show as `\x` and hex on every database, as psql shows them, and SQL export, Duplicate Row and edits write them back as bytes. Filter by Value on a binary cell finds its row.
 - **MongoDB: Duplicate Row and the INSERT export keep every type**: decimals and dates no longer become strings, and a duplicate no longer gains null fields the original lacked ([#175](https://github.com/tungnguyenvan/tabula/issues/175)).
 - **SQLite: the filter bar ignores case in any language**: “contains hà nội” now finds “HÀ NỘI”; SQLite’s own LIKE folds only ASCII letters ([#177](https://github.com/tungnguyenvan/tabula/issues/177)).
+- **Copy URL** works for a connection to an IPv6 address; it used to copy an empty string ([#179](https://github.com/tungnguyenvan/tabula/issues/179)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 

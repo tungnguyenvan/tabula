@@ -9,7 +9,12 @@ extension ConnectionConfig {
         }
         var components = URLComponents()
         components.scheme = urlScheme
-        components.host = resolvedHost
+        // An IPv6 address goes in brackets, or URLComponents gives no URL at all.
+        if resolvedHost.contains(":"), !resolvedHost.contains(","), !resolvedHost.hasPrefix("[") {
+            components.percentEncodedHost = "[\(resolvedHost)]"
+        } else {
+            components.host = resolvedHost
+        }
         components.port = kind == .mongodb && srv == true ? nil : port
         // URLComponents leaves ":" in a user name, where it would start the password.
         if !user.isEmpty {
