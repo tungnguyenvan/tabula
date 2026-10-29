@@ -14,10 +14,15 @@ public struct SQLToken: Equatable, Sendable {
     public var keyword: String { kind == .word ? text.uppercased() : "" }
 }
 
-/// Splits SQL into tokens, treating quotes, comments and (for Postgres) dollar-quoted bodies as single tokens.
-/// Shared by the formatter, the row limit and completion so they agree on what is code and what is text.
+/// Splits query text into tokens, treating quotes, comments and dollar-quoted bodies as single tokens, as the
+/// language's `LexicalRules` define them. Shared by highlighting, the formatter, the row limit and completion so
+/// they agree on what is code and what is text.
 public enum SQLLexer {
-    public static func tokens(_ sql: String, kind: DatabaseKind) -> [SQLToken] {
+    public static func tokens(_ sql: String, flavor: SQLFlavor) -> [SQLToken] {
+        tokens(sql, rules: flavor.lexicalRules)
+    }
+
+    public static func tokens(_ sql: String, rules: LexicalRules) -> [SQLToken] {
         let chars = Array(sql.utf16)
         var tokens: [SQLToken] = []
         var i = 0
@@ -37,9 +42,8 @@ public enum SQLLexer {
             let start = i
             let c = chars[i]
             let next = at(i + 1)
-            let document = kind == .mongodb
-            if (c == unit("-") && next == unit("-") && !document) || (c == unit("#") && kind == .mysql)
-                || (c == unit("/") && next == unit("/") && document) {
+            if (c == unit("-") && next == unit("-") && rules.dashDashComments) || (c == unit("#") && rules.hashComments)
+                || (c == unit("/") && next == unit("/") && rules.slashSlashComments) {
                 while let u = at(i), u != unit("\n") { i += 1 }
                 emit(.comment, from: start)
             } else if c == unit("/") && next == unit("*") {
@@ -50,18 +54,18 @@ public enum SQLLexer {
             } else if c == unit("'") || c == unit("\"") || c == unit("`") {
                 i += 1
                 while i < chars.count {
-                    if chars[i] == unit("\\") && (kind == .mysql || document) { i += 2; continue }
+                    if chars[i] == unit("\\") && rules.backslashEscapes { i += 2; continue }
                     if chars[i] == c {
-                        if at(i + 1) == c && !document { i += 2; continue } // doubled quote
+                        if at(i + 1) == c && rules.doubledQuotes { i += 2; continue } // doubled quote
                         i += 1
                         break
                     }
                     i += 1
                 }
                 i = min(i, chars.count)
-                // The shell has no quoted identifiers: every quote is a string.
-                emit(c == unit("'") || document ? .string : .quotedIdentifier, from: start)
-            } else if c == unit("$") && kind == .postgres, let tag = dollarTag(chars, at: i) {
+                // Without quoted identifiers (the shell) every quote is a string.
+                emit(c == unit("'") || !rules.quotedIdentifiers ? .string : .quotedIdentifier, from: start)
+            } else if c == unit("$") && rules.dollarQuotes, let tag = dollarTag(chars, at: i) {
                 i += tag.count
                 while i < chars.count && !(chars[i] == unit("$") && Array(chars[i..<min(chars.count, i + tag.count)]) == tag) { i += 1 }
                 i = min(chars.count, i + tag.count)

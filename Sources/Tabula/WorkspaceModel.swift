@@ -611,7 +611,7 @@ final class WorkspaceModel {
         // Tables the text names come first and are always loaded; the others only while time allows.
         var named: [TableRef] = []
         var extra: [TableRef] = []
-        for reference in SQLCompletion.tables(in: sql, kind: driver.kind) {
+        for reference in driver.dialect.referencedTables(in: sql) {
             if let schemaName = reference.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame {
                 guard let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame }) else { continue }
                 let table = TableRef(schema: schema, name: reference.name)
@@ -662,13 +662,15 @@ final class WorkspaceModel {
 
     /// `schema.table`, quoting names that need it; SQLite's main database needs no prefix.
     private func aiName(_ table: TableRef, kind: DatabaseKind) -> String {
-        let d = SQLDialect(kind: kind)
-        func part(_ name: String) -> String {
-            name.range(of: "^[a-z_][a-z0-9_]*$", options: .regularExpression) != nil ? name : d.quoteIdentifier(name)
+        guard let flavor = SQLFlavor(kind) else {
+            // MongoDB: collections are named as the shell reaches them from the current database.
+            return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name)"
         }
-        if kind == .sqlite && table.schema == "main" { return part(table.name) }
-        // Collections are named as the shell reaches them from the current database.
-        if kind.isDocument { return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name)" }
+        let dialect = SQLDialect(flavor: flavor)
+        func part(_ name: String) -> String {
+            name.range(of: "^[a-z_][a-z0-9_]*$", options: .regularExpression) != nil ? name : dialect.quoteIdentifier(name)
+        }
+        if flavor == .sqlite && table.schema == "main" { return part(table.name) }
         return "\(part(table.schema)).\(part(table.name))"
     }
 
@@ -789,4 +791,11 @@ final class WorkspaceModel {
         }
         await refresh()
     }
+}
+
+/// What completion offers in this workspace's editors.
+extension WorkspaceModel: CompletionCatalog {
+    var tableNames: [String] { tables.map(\.name) }
+    var schemaNames: [String] { schemas }
+    var allColumnNames: [String] { knownColumnNames }
 }

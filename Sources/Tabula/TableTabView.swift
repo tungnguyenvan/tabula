@@ -70,7 +70,7 @@ struct TableTabView: View {
             }
         }
         .sheet(isPresented: $showingPreview) {
-            SQLPreviewSheet(kind: model.driver.kind, pending: Result { try model.pendingStatements() }) {
+            SQLPreviewSheet(kind: model.driver.kind, dialect: model.driver.dialect, pending: Result { try model.pendingStatements() }) {
                 showingPreview = false
                 Task { await model.commit() }
             } onCancel: {
@@ -115,7 +115,7 @@ struct TableTabView: View {
                           help: "Filter (⌘F)", active: model.showFilterBar || model.isFiltered) {
                     model.toggleFilterBar()
                 }
-                ExportMenu(suggestedName: model.table.name) { model.exportText($0) }
+                ExportMenu(suggestedName: model.table.name) { try model.exportText($0) }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
             }
@@ -387,7 +387,7 @@ struct DocumentEditorSheet: View {
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.callout).lineLimit(4)
             }
-            SQLEditorView(text: $text, handle: handle, kind: .mongodb,
+            SQLEditorView(text: $text, handle: handle, dialect: MongoQueryDialect(),
                           suggest: { _, caret in (NSRange(location: caret, length: 0), []) },
                           undoManager: undoManager) { _ in Task { await submit() } }
                 .border(Color(nsColor: .separatorColor))
@@ -417,6 +417,7 @@ struct DocumentEditorSheet: View {
 
 struct SQLPreviewSheet: View {
     let kind: DatabaseKind
+    let dialect: any QueryDialect
     let pending: Result<[String], any Error>
     let onCommit: () -> Void
     let onCancel: () -> Void
@@ -427,7 +428,7 @@ struct SQLPreviewSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Pending changes").font(.headline)
-            Text(kind.isDocument
+            Text(dialect.beginTransaction == nil
                  ? "These commands run one after another. If one fails, the ones before it stay saved."
                  : "These statements run in a single transaction. If any fails, all are rolled back.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -470,7 +471,7 @@ struct ErrorBanner: View {
 
 struct ExportMenu: View {
     let suggestedName: String
-    let text: (ExportFormat) -> String
+    let text: (ExportFormat) throws -> String
 
     var body: some View {
         Menu {
@@ -482,7 +483,11 @@ struct ExportMenu: View {
             Section("Copy to clipboard") {
                 ForEach(ExportFormat.allCases) { format in
                     Button("Copy as \(format.displayName)") {
-                        Clipboard.copy(text(format))
+                        do {
+                            Clipboard.copy(try text(format))
+                        } catch {
+                            Confirmation.report("Couldn’t copy the rows as \(format.displayName).", error: error)
+                        }
                     }
                 }
             }

@@ -113,7 +113,7 @@ final class MongoStatementTests: XCTestCase {
               { $group: { _id: "$customer", n: { $sum: 1 } } }
             ])
             """)
-        XCTAssertEqual(SQLFormatter.format("db.a.find({x:1})\n// note\ndb.b.find( {} ) // why", kind: .mongodb),
+        XCTAssertEqual(MongoQueryDialect().beautify("db.a.find({x:1})\n// note\ndb.b.find( {} ) // why"),
                        "db.a.find({ x: 1 })\n// note\ndb.b.find( {} ) // why")
         XCTAssertEqual(MongoStatement.collectionAccessor("stats"), ".getCollection(\"stats\")")
 
@@ -135,7 +135,7 @@ final class MongoStatementTests: XCTestCase {
 
             // just a comment
             """
-        let statements = SQLSplitter.statements(in: script, kind: .mongodb)
+        let statements = MongoQueryDialect().statements(in: script)
         XCTAssertEqual(statements.map(\.text).count, 4, statements.map(\.text).description)
         XCTAssertEqual(statements[0].text, "use shop")
         XCTAssertTrue(statements[1].text.hasSuffix(".sort({ at: -1 })"), statements[1].text)
@@ -147,7 +147,7 @@ final class MongoStatementTests: XCTestCase {
 
 final class MongoDialectTests: XCTestCase {
     private let table = TableRef(schema: "shop", name: "users")
-    private let dialect = SQLDialect(kind: .mongodb)
+    private let dialect = MongoQueryDialect()
 
     func testPagingAndCounting() {
         let page = dialect.selectPage(TablePageRequest(table: table, limit: 50, offset: 100, orderBy: "created at", ascending: false, filter: "{ a: 1 }"))
@@ -398,8 +398,8 @@ final class MongoReviewFixTests: XCTestCase {
 
     func testBeautifyKeepsValuesMadeAtRunTime() {
         let text = "db.logs.insertOne({_id:ObjectId(),at:new Date(),u:UUID()})"
-        XCTAssertEqual(SQLFormatter.format(text, kind: .mongodb), text)
-        XCTAssertEqual(SQLFormatter.format("db.logs.find({a:1})", kind: .mongodb), "db.logs.find({ a: 1 })")
+        XCTAssertEqual(MongoQueryDialect().beautify(text), text)
+        XCTAssertEqual(MongoQueryDialect().beautify("db.logs.find({a:1})"), "db.logs.find({ a: 1 })")
     }
 
     func testDecimalAndUntypedValuesKeepEveryDigit() throws {
@@ -474,14 +474,14 @@ final class SplitterSecurityTests: XCTestCase {
     /// see the quote, so nothing inside the name can end the statement.
     func testCombiningMarkAfterQuoteDoesNotSplit() {
         let name = "\u{0301});db.adminCommand({createUser:'mallory',pwd:'pw',roles:['root']});//"
-        let mongo = SQLDialect(kind: .mongodb).selectSample(TableRef(schema: "shop", name: name), limit: 100)
-        let statements = SQLSplitter.statements(in: mongo, kind: .mongodb)
+        let mongo = MongoQueryDialect().selectSample(TableRef(schema: "shop", name: name), limit: 100)
+        let statements = MongoQueryDialect().statements(in: mongo)
         XCTAssertEqual(statements.map(\.text), [mongo])
-        XCTAssertEqual(SQLSplitter.statement(at: (mongo as NSString).length, in: mongo, kind: .mongodb)?.text, mongo)
+        XCTAssertEqual(MongoQueryDialect().statement(at: (mongo as NSString).length, in: mongo)?.text, mongo)
         XCTAssertEqual(try MongoStatement.parse(mongo).collection, name)
 
         let sqlName = "\u{0301}\"; DROP TABLE users; --"
-        let sql = SQLDialect(kind: .postgres).selectSample(TableRef(schema: "public", name: sqlName), limit: 100)
-        XCTAssertEqual(SQLSplitter.split(sql, kind: .postgres), [String(sql.dropLast())])
+        let sql = SQLDialect(flavor: .postgres).selectSample(TableRef(schema: "public", name: sqlName), limit: 100)
+        XCTAssertEqual(SQLSplitter.split(sql, flavor: .postgres), [String(sql.dropLast())])
     }
 }

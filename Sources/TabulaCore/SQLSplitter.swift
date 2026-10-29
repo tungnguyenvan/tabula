@@ -1,30 +1,24 @@
 import Foundation
 
-/// Splits a script into statements on top-level semicolons, ignoring semicolons inside
-/// quotes, comments and (for Postgres) dollar-quoted bodies.
+/// A statement and where it sits in its script, in UTF-16 units (NSString / NSTextView coordinates).
+public struct ScriptStatement: Equatable, Sendable {
+    public var text: String
+    public var range: NSRange
+
+    public init(text: String, range: NSRange) {
+        self.text = text
+        self.range = range
+    }
+}
+
+/// Splits a SQL script into statements on top-level semicolons, ignoring semicolons inside quotes, comments,
+/// PostgreSQL dollar-quoted bodies and the BEGIN … END bodies of MySQL and SQLite routines and triggers.
 public enum SQLSplitter {
-    /// A statement and where it sits in the script, in UTF-16 units (NSString / NSTextView coordinates).
-    public struct Statement: Equatable, Sendable {
-        public var text: String
-        public var range: NSRange
+    public static func split(_ script: String, flavor: SQLFlavor) -> [String] {
+        statements(in: script, flavor: flavor).map(\.text)
     }
 
-    public static func split(_ script: String, kind: DatabaseKind) -> [String] {
-        statements(in: script, kind: kind).map(\.text)
-    }
-
-    /// The statement under `location` (a UTF-16 offset, e.g. the caret). A caret in the blank space or
-    /// comment after a statement belongs to that statement, matching how people place the cursor.
-    public static func statement(at location: Int, in script: String, kind: DatabaseKind) -> Statement? {
-        let all = statements(in: script, kind: kind)
-        if let containing = all.first(where: { location >= $0.range.location && location <= NSMaxRange($0.range) }) {
-            return containing
-        }
-        return all.last(where: { $0.range.location <= location }) ?? all.first
-    }
-
-    public static func statements(in script: String, kind: DatabaseKind) -> [Statement] {
-        if kind == .mongodb { return MongoSplitter.statements(in: script) }
+    public static func statements(in script: String, flavor: SQLFlavor) -> [ScriptStatement] {
         // One element per Unicode scalar, not per grapheme: a combining mark after a quote would otherwise merge
         // with it into one "character" that isn't a quote, and a crafted name could end the string early.
         let chars = script.unicodeScalars.map(Character.init)
@@ -38,7 +32,7 @@ public enum SQLSplitter {
         }
         utf16Offsets.append(running)
 
-        var statements: [Statement] = []
+        var statements: [ScriptStatement] = []
         var current = ""
         var segmentStart = 0
         var i = 0
@@ -53,7 +47,7 @@ public enum SQLSplitter {
         func note(_ word: String) {
             let word = word.uppercased()
             words.append(word)
-            guard kind != .postgres, words.first == "CREATE",
+            guard flavor != .postgres, words.first == "CREATE",
                   words.contains(where: { ["TRIGGER", "PROCEDURE", "FUNCTION", "EVENT"].contains($0) }) else { return }
             let afterEnd = words.dropLast().last == "END"
             switch word {
@@ -73,19 +67,19 @@ public enum SQLSplitter {
         func flush() {
             defer { current = ""; segmentStart = i + 1; words = []; blockDepth = 0 }
             let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty && !isOnlyComments(trimmed, kind: kind) else { return }
+            guard !trimmed.isEmpty && !isOnlyComments(trimmed, flavor: flavor) else { return }
             let leading = current.prefix(while: { $0.isWhitespace || $0.isNewline }).count
             let trailing = current.reversed().prefix(while: { $0.isWhitespace || $0.isNewline }).count
             let start = segmentStart + leading
             let end = segmentStart + current.count - trailing
-            statements.append(Statement(text: trimmed, range: NSRange(location: utf16Offsets[start], length: utf16Offsets[end] - utf16Offsets[start])))
+            statements.append(ScriptStatement(text: trimmed, range: NSRange(location: utf16Offsets[start], length: utf16Offsets[end] - utf16Offsets[start])))
         }
 
         while i < chars.count {
             let c = chars[i]
             let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
 
-            if c == "-" && next == "-" || (c == "#" && kind == .mysql) {
+            if c == "-" && next == "-" || (c == "#" && flavor.lexicalRules.hashComments) {
                 while i < chars.count && chars[i] != "\n" { current.append(chars[i]); i += 1 }
                 continue
             }
@@ -102,7 +96,7 @@ public enum SQLSplitter {
                 while i < chars.count {
                     let q = chars[i]
                     current.append(q); i += 1
-                    if q == "\\" && kind == .mysql && i < chars.count {
+                    if q == "\\" && flavor.lexicalRules.backslashEscapes && i < chars.count {
                         current.append(chars[i]); i += 1
                         continue
                     }
@@ -114,7 +108,7 @@ public enum SQLSplitter {
                 }
                 continue
             }
-            if c == "$" && kind == .postgres, let tag = dollarTag(chars, at: i) {
+            if c == "$" && flavor.lexicalRules.dollarQuotes, let tag = dollarTag(chars, at: i) {
                 current.append(contentsOf: tag); i += tag.count
                 while i < chars.count {
                     if chars[i] == "$", matches(chars, at: i, tag: tag) {
@@ -157,14 +151,14 @@ public enum SQLSplitter {
         return Array(chars[start..<start + tag.count]) == tag
     }
 
-    private static func isOnlyComments(_ text: String, kind: DatabaseKind) -> Bool {
+    private static func isOnlyComments(_ text: String, flavor: SQLFlavor) -> Bool {
         var stripped = text
         // An unterminated block comment runs to the end, as in the scanner above.
         while let range = stripped.range(of: "/\\*(?:[\\s\\S]*?\\*/|[\\s\\S]*)", options: .regularExpression) {
             stripped.removeSubrange(range)
         }
         let lines = stripped.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-        return lines.allSatisfy { $0.isEmpty || $0.hasPrefix("--") || (kind == .mysql && $0.hasPrefix("#")) }
+        return lines.allSatisfy { $0.isEmpty || $0.hasPrefix("--") || (flavor.lexicalRules.hashComments && $0.hasPrefix("#")) }
     }
 
     /// Whether a statement produces a result set, judged by its leading keyword.

@@ -121,7 +121,13 @@ public enum AgentProtocol {
 public enum AgentReadOnly {
     /// Why the statement can't run, or nil when it only reads.
     public static func violation(_ statement: String, kind: DatabaseKind) -> String? {
-        kind.isDocument ? mongoViolation(statement) : sqlViolation(statement, kind: kind)
+        switch kind {
+        case .postgres: sqlViolation(statement, flavor: .postgres)
+        case .mysql: sqlViolation(statement, flavor: .mysql)
+        case .sqlite: sqlViolation(statement, flavor: .sqlite)
+        case .mongodb: mongoViolation(statement)
+        case .redis: "The assistant doesn't run Redis commands."
+        }
     }
 
     private static let firstWords: Set<String> = ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC", "VALUES", "TABLE"]
@@ -140,10 +146,10 @@ public enum AgentReadOnly {
         "GET_LOCK", "RELEASE_LOCK", "LOAD_EXTENSION", "READFILE", "WRITEFILE",
     ]
 
-    private static func sqlViolation(_ statement: String, kind: DatabaseKind) -> String? {
-        let statements = SQLSplitter.split(statement, kind: kind)
+    private static func sqlViolation(_ statement: String, flavor: SQLFlavor) -> String? {
+        let statements = SQLSplitter.split(statement, flavor: flavor)
         guard statements.count == 1 else { return "Run one statement at a time." }
-        let tokens = SQLLexer.tokens(statement, kind: kind)
+        let tokens = SQLLexer.tokens(statement, flavor: flavor)
         // Where Tabula's lexer and the server could read the text differently, it isn't run: comments (MySQL
         // runs /*! … */ and doesn't take --x as one) and backslashes (escape rules differ by server and setting).
         if tokens.contains(where: { $0.kind == .comment }) { return "Write the statement without comments." }
@@ -158,7 +164,7 @@ public enum AgentReadOnly {
         // SELECT … INTO makes a table or a file and FOR UPDATE / FOR SHARE locks rows; inside parentheses the
         // words mean something else (`substring(x FROM 1 FOR 3)`).
         var depth = 0
-        for token in SQLLexer.tokens(statement, kind: kind) {
+        for token in SQLLexer.tokens(statement, flavor: flavor) {
             if token.text == "(" { depth += 1 } else if token.text == ")" { depth -= 1 }
             if depth == 0, token.keyword == "INTO" || token.keyword == "FOR" {
                 return "\(token.keyword) at the top level writes or locks rows, so the statement can't run."

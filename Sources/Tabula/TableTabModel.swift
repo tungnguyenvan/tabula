@@ -361,47 +361,11 @@ final class TableTabModel {
         insertedRows = []
     }
 
-    private func key(for row: Int) -> [(column: String, value: String?)] {
-        primaryKeyIndices.map { (resultColumns[$0], rows[row][$0]) }
-    }
-
     /// Statements that apply the pending changes, in the order they will run.
     func pendingStatements() throws -> [String] {
-        if driver.kind.isDocument { return try pendingDocumentStatements() }
-        let d = driver.dialect
-        var statements: [String] = []
-        for row in deletedRows.sorted() {
-            statements.append(d.delete(table, key: key(for: row)))
-        }
-        for row in edits.keys.sorted() where !deletedRows.contains(row) {
-            let values = (edits[row] ?? [:]).sorted { $0.key < $1.key }.map { (resultColumns[$0.key], $0.value) }
-            statements.append(d.update(table, set: values, key: key(for: row)))
-        }
-        for inserted in insertedRows {
-            let values = inserted.sorted { $0.key < $1.key }.map { (resultColumns[$0.key], $0.value) }
-            statements.append(d.insert(table, values: values))
-        }
-        return statements
-    }
-
-    /// MongoDB: updates and deletes match each document's `_id`; edited text is read back in the field's type.
-    private func pendingDocumentStatements() throws -> [String] {
-        func document(_ row: Int) throws -> String {
-            guard let documents, documents.indices.contains(row) else { throw DatabaseError("Reload the collection and try again.") }
-            return documents[row]
-        }
-        var statements: [String] = []
-        for row in deletedRows.sorted() {
-            statements.append(try MongoChanges.delete(table, document: document(row)))
-        }
-        for row in edits.keys.sorted() where !deletedRows.contains(row) {
-            let changes = Dictionary(uniqueKeysWithValues: (edits[row] ?? [:]).map { (resultColumns[$0.key], $0.value) })
-            statements.append(try MongoChanges.update(table, row: .init(document: document(row), changes: changes)))
-        }
-        for inserted in insertedRows {
-            statements.append(MongoChanges.insert(table, values: inserted.sorted { $0.key < $1.key }.map { (resultColumns[$0.key], $0.value) }))
-        }
-        return statements
+        try driver.dialect.statements(for: TableChanges(table: table, columns: resultColumns, rows: rows, documents: documents,
+                                                        keyColumns: primaryKeyIndices, deleted: deletedRows, edited: edits,
+                                                        inserted: insertedRows))
     }
 
     /// MongoDB: the row's whole document over indented lines, for the document editor.
@@ -458,8 +422,8 @@ final class TableTabModel {
 
     // MARK: Export
 
-    func exportText(_ format: ExportFormat) -> String {
-        ResultExporter.export(columns: resultColumns, rows: rows, format: format, table: table, dialect: driver.dialect)
+    func exportText(_ format: ExportFormat) throws -> String {
+        try ResultExporter.export(columns: resultColumns, rows: rows, format: format, table: table, dialect: driver.dialect)
     }
 
     func copyText(rows indices: IndexSet) -> String {

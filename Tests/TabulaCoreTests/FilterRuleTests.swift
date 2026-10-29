@@ -3,17 +3,17 @@ import XCTest
 
 final class FilterRuleTests: XCTestCase {
     func testConditions() {
-        let pg = SQLDialect(kind: .postgres)
+        let pg = SQLDialect(flavor: .postgres)
         XCTAssertEqual(pg.condition(FilterRule(column: "price", op: .contains, value: "5_0%")),
                        "CAST(\"price\" AS TEXT) ILIKE '%5\\_0\\%%' ESCAPE '\\'")
         XCTAssertEqual(pg.condition([FilterRule(column: "a", op: .isNull), FilterRule(column: "b", op: .equals, value: ""),
                                      FilterRule(column: "c", op: .inList, value: "1, 2")]),
                        "\"a\" IS NULL AND \"c\" IN ('1', '2')")
-        XCTAssertEqual(SQLDialect(kind: .mysql).condition(FilterRule(column: "n", op: .startsWith, value: "x")), "`n` LIKE 'x%'")
+        XCTAssertEqual(SQLDialect(flavor: .mysql).condition(FilterRule(column: "n", op: .startsWith, value: "x")), "`n` LIKE 'x%'")
     }
 
     func testConjunctions() {
-        let d = SQLDialect(kind: .sqlite)
+        let d = SQLDialect(flavor: .sqlite)
         let a = FilterRule(column: "a", value: "1")
         let b = FilterRule(column: "b", value: "2", conjunction: .and)
         let c = FilterRule(column: "c", value: "3", conjunction: .or)

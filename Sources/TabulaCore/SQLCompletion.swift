@@ -42,10 +42,10 @@ public enum SQLCompletion {
     private static let notAliases: Set<String> = SQLKeywords.set
 
     /// `schemas` are the database's schema names, so `sales.` is read as a schema rather than an alias.
-    public static func context(in text: String, caret: Int, kind: DatabaseKind, schemas: [String] = []) -> Context {
-        let statement = SQLSplitter.statement(at: caret, in: text, kind: kind)
+    public static func context(in text: String, caret: Int, flavor: SQLFlavor, schemas: [String] = []) -> Context {
+        let statement = SQLDialect(flavor: flavor).statement(at: caret, in: text)
         let base = statement?.range.location ?? 0
-        let tokens = SQLLexer.tokens(text, kind: kind)
+        let tokens = SQLLexer.tokens(text, flavor: flavor)
         let before = tokens.filter { $0.range.location < caret }
 
         var partialRange = NSRange(location: caret, length: 0)
@@ -81,8 +81,8 @@ public enum SQLCompletion {
     }
 
     /// Every table a statement names after FROM / JOIN / UPDATE / INTO.
-    public static func tables(in sql: String, kind: DatabaseKind) -> [TableName] {
-        Array(Set(referencedTables(SQLLexer.tokens(sql, kind: kind)).values)).sorted()
+    public static func tables(in sql: String, flavor: SQLFlavor) -> [TableName] {
+        Array(Set(referencedTables(SQLLexer.tokens(sql, flavor: flavor)).values)).sorted()
     }
 
     /// Tables named after FROM / JOIN / UPDATE / INTO, keyed by alias and by name.

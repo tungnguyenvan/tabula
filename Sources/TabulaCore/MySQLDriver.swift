@@ -5,6 +5,7 @@ import NIOPosix
 
 public actor MySQLDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind = .mysql
+    public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .mysql)
     private let connection: MySQLConnection
     private let initialDatabase: String
 

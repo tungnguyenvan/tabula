@@ -118,13 +118,13 @@ func benchmarkTables(_ config: ConnectionConfig, password: String?, schema: Stri
 }
 
 /// Updates of the `status` column of every row in `page`, the way the grid builds them.
-func editStatements(_ page: QueryResult, table: TableRef, dialect: SQLDialect) throws -> [String] {
+func editStatements(_ page: QueryResult, table: TableRef, dialect: any QueryDialect) throws -> [String] {
     let value = "edited-\(Int.random(in: 0..<1_000_000))"
-    if dialect.kind.isDocument {
-        return try (page.documents.map(Array.init) ?? []).map { try MongoChanges.update(table, row: .init(document: $0, changes: ["status": value])) }
-    }
-    guard let id = page.columns.firstIndex(of: "id") else { throw DatabaseError("No id column") }
-    return page.rows.map { dialect.update(table, set: [("status", value)], key: [("id", $0[id])]) }
+    guard let status = page.columns.firstIndex(of: "status") else { throw DatabaseError("No status column") }
+    let keyColumns = page.columns.firstIndex(of: "id").map { [$0] } ?? []
+    let edits = Dictionary(uniqueKeysWithValues: page.rows.indices.map { ($0, [status: String?.some(value)]) })
+    return try dialect.statements(for: TableChanges(table: table, columns: page.columns, rows: page.rows, documents: page.documents,
+                                                    keyColumns: keyColumns, deleted: [], edited: edits, inserted: []))
 }
 
 // MARK: Seeding

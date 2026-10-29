@@ -291,6 +291,7 @@ public actor SSHTunnel {
 /// A database driver that owns the SSH tunnel it connects through, and closes it after the database.
 public actor TunneledDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind
+    public nonisolated var dialect: any QueryDialect { inner.dialect }
     /// PostgreSQL's Stop opens its control connection through the same tunnel.
     public nonisolated var queryCancellation: QueryCancellationSupport { inner.queryCancellation }
     private let inner: any DatabaseDriver

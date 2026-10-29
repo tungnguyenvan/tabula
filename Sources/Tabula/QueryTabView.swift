@@ -18,7 +18,7 @@ struct QueryTabView: View {
                     promptBar
                     Divider()
                 }
-                SQLEditorView(text: $model.sql, handle: handle, kind: model.driver.kind, suggest: suggest, aiSuggest: aiSuggest,
+                SQLEditorView(text: $model.sql, handle: handle, dialect: model.driver.dialect, suggest: suggest, aiSuggest: aiSuggest,
                               aiSuggestDelay: AIService.shared.settings.provider(for: .inline).runsLocally ? Defaults.AI.localInlineDelay : Defaults.AI.inlineDelay,
                               completionVersion: workspace.completionVersion, undoManager: model.undoManager,
                               onRun: { all in run(all: all) }, onStop: {
@@ -32,7 +32,7 @@ struct QueryTabView: View {
         }
         .onAppear { DispatchQueue.main.async { handle.focus() } }
         .onChange(of: model.runRequest.id) { _, _ in run(all: model.runRequest.all) }
-        .onChange(of: model.beautifyRequest) { _, _ in handle.beautify(kind: model.driver.kind) }
+        .onChange(of: model.beautifyRequest) { _, _ in handle.beautify(dialect: model.driver.dialect) }
         .onChange(of: model.askAIRequest) { _, _ in model.assistant.error = nil; model.assistant.showPrompt = true }
         .onChange(of: model.assistant.submitRequest) { _, _ in askAI() }
         .onChange(of: model.insertRequest?.id) { _, _ in
@@ -42,7 +42,7 @@ struct QueryTabView: View {
         .onChange(of: model.selectedResult) { _, _ in selection = [] }
         .sheet(isPresented: $model.showResultPreview) {
             if let editor = model.resultEditor {
-                SQLPreviewSheet(kind: editor.target.kind, pending: Result { try editor.pendingStatements() },
+                SQLPreviewSheet(kind: editor.target.kind, dialect: model.driver.dialect, pending: Result { try editor.pendingStatements() },
                                 onCommit: { model.showResultPreview = false; Task { await model.commitResult() } },
                                 onCancel: { model.showResultPreview = false })
             }
@@ -88,7 +88,7 @@ struct QueryTabView: View {
             .fixedSize()
             .help(model.driver.kind.isDocument ? "Adds .limit() to find and aggregate commands that don't have one"
                   : "Adds LIMIT to SELECT statements that don't have one")
-            Button { handle.beautify(kind: model.driver.kind) } label: {
+            Button { handle.beautify(dialect: model.driver.dialect) } label: {
                 Label("Beautify", systemImage: "text.alignleft")
             }
             .help("Format the selection, or the whole editor (⇧⌘I)")
@@ -228,7 +228,7 @@ struct QueryTabView: View {
                 .disabled(model.committingResults)
             }
             if let result = model.currentResult, result.hasResultSet {
-                ExportMenu(suggestedName: "query") { model.exportText($0) }
+                ExportMenu(suggestedName: "query") { try model.exportText($0) }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
             }
@@ -274,7 +274,7 @@ struct QueryTabView: View {
     }
 
     private func run(all: Bool) {
-        let text = all ? nil : handle.textToRun(kind: model.driver.kind)
+        let text = all ? nil : handle.textToRun(dialect: model.driver.dialect)
         if !all && text == nil { return }
         Task { await model.run(text) }
     }
@@ -307,11 +307,11 @@ struct QueryTabView: View {
     /// Asks the model to continue the SQL at the caret when the user pauses; nil when AI suggestions are off.
     private var aiSuggest: SQLEditorView.AISuggest? {
         guard AIService.shared.suggestsInline(for: workspace.config) else { return nil }
-        let kind = model.driver.kind
+        let kind = model.driver.kind, dialect = model.driver.dialect
         return { [workspace] before, after in
             // Columns only for the tables this statement uses (the rest by name, to keep typing fast); before
             // it names any, every table's columns, so the model doesn't invent some.
-            let used = Set(SQLCompletion.tables(in: before + after, kind: kind).map { $0.name.lowercased() })
+            let used = Set(dialect.referencedTables(in: before + after).map { $0.name.lowercased() })
             let request = SQLPrompts.inline(before: before, after: after, schema: workspace.aiSchema(focus: used.isEmpty ? nil : used), kind: kind,
                 instructions: AIService.shared.settings.instructions(.inline))
             guard let reply = try? await AIService.shared.complete(request) else { return nil }
@@ -321,14 +321,6 @@ struct QueryTabView: View {
     }
 
     private func suggest(_ text: String, caret: Int) -> (range: NSRange, items: [String]) {
-        if model.driver.kind.isDocument {
-            return MongoCompletion.suggestions(in: text, caret: caret, collections: workspace.tables.map(\.name),
-                                               fields: { workspace.columnNames(of: SQLCompletion.TableName(name: $0)) })
-        }
-        let context = SQLCompletion.context(in: text, caret: caret, kind: model.driver.kind, schemas: workspace.schemas)
-        let items = SQLCompletion.suggestions(for: context, tables: workspace.tables.map(\.name),
-                                              columns: { workspace.columnNames(of: $0) }, allColumns: workspace.knownColumnNames,
-                                              tablesInSchema: { workspace.tableNames(inSchema: $0) })
-        return (context.partialRange, items)
+        model.driver.dialect.completions(in: text, caret: caret, catalog: workspace)
     }
 }

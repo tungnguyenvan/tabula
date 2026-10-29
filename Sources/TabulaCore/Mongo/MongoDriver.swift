@@ -7,6 +7,7 @@ import MongoKitten
 /// console work unchanged.
 public actor MongoDriver: DatabaseDriver {
     public nonisolated let kind = DatabaseKind.mongodb
+    public nonisolated let dialect: any QueryDialect = MongoQueryDialect()
     private let cluster: MongoCluster
     /// The database `db` refers to; `use` changes it.
     private var currentDatabase: String

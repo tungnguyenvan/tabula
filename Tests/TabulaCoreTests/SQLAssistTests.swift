@@ -4,7 +4,7 @@ import XCTest
 final class SQLFormatterTests: XCTestCase {
     func testClausesAndConditions() {
         let sql = "select id, name from users u left join orders o on o.user_id = u.id where u.active = true and o.total > 10 order by name limit 5"
-        XCTAssertEqual(SQLFormatter.format(sql, kind: .postgres), """
+        XCTAssertEqual(SQLFormatter.format(sql, flavor: .postgres), """
             SELECT
               id,
               name
@@ -22,7 +22,7 @@ final class SQLFormatterTests: XCTestCase {
 
     func testKeepsLiteralsCommentsAndCalls() {
         let sql = "select count(*), 'from where' as \"select\" -- note\nfrom t where x between 1 and 2 and y in (1, 2)"
-        XCTAssertEqual(SQLFormatter.format(sql, kind: .postgres), """
+        XCTAssertEqual(SQLFormatter.format(sql, flavor: .postgres), """
             SELECT
               COUNT(*),
               'from where' AS "select" -- note
@@ -36,7 +36,7 @@ final class SQLFormatterTests: XCTestCase {
 
     func testSubqueryAndStatements() {
         let sql = "select * from (select id from a) s; delete from a where id = 1"
-        XCTAssertEqual(SQLFormatter.format(sql, kind: .mysql), """
+        XCTAssertEqual(SQLFormatter.format(sql, flavor: .mysql), """
             SELECT
               *
             FROM
@@ -55,7 +55,7 @@ final class SQLFormatterTests: XCTestCase {
 }
 
 final class RowLimitTests: XCTestCase {
-    let d = SQLDialect(kind: .postgres)
+    let d = SQLDialect(flavor: .postgres)
 
     func testAddsLimitToPlainSelect() {
         XCTAssertEqual(d.applyingRowLimit("SELECT * FROM t", limit: 300), "SELECT * FROM t LIMIT 300")
@@ -79,7 +79,7 @@ final class SQLCompletionTests: XCTestCase {
     private func suggest(_ sql: String) -> [String] {
         let caret = (sql as NSString).range(of: "|").location
         let text = sql.replacingOccurrences(of: "|", with: "")
-        let context = SQLCompletion.context(in: text, caret: caret, kind: .postgres)
+        let context = SQLCompletion.context(in: text, caret: caret, flavor: .postgres)
         return SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0.name] })
     }
 
@@ -106,7 +106,7 @@ final class SQLCompletionTests: XCTestCase {
         func suggest(_ sql: String, schemas: [String] = []) -> [String] {
             let caret = (sql as NSString).range(of: "|").location
             let text = sql.replacingOccurrences(of: "|", with: "")
-            let context = SQLCompletion.context(in: text, caret: caret, kind: .postgres, schemas: schemas)
+            let context = SQLCompletion.context(in: text, caret: caret, flavor: .postgres, schemas: schemas)
             return SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0.name] },
                                              tablesInSchema: { schemaTables[$0] })
         }
@@ -124,7 +124,7 @@ final class SQLCompletionTests: XCTestCase {
         func suggest(_ sql: String) -> [String] {
             let caret = (sql as NSString).range(of: "|").location
             let text = sql.replacingOccurrences(of: "|", with: "")
-            let context = SQLCompletion.context(in: text, caret: caret, kind: .postgres, schemas: ["dev", "public"])
+            let context = SQLCompletion.context(in: text, caret: caret, flavor: .postgres, schemas: ["dev", "public"])
             return SQLCompletion.suggestions(for: context, tables: tables) { table in
                 table.schema == "dev" ? devColumns[table.name] : self.columns[table.name]
             }
@@ -137,7 +137,7 @@ final class SQLCompletionTests: XCTestCase {
     }
 
     func testAllColumnsBeforeATableIsNamed() {
-        let context = SQLCompletion.context(in: "SELECT tot", caret: 10, kind: .postgres)
+        let context = SQLCompletion.context(in: "SELECT tot", caret: 10, flavor: .postgres)
         XCTAssertEqual(SQLCompletion.suggestions(for: context, tables: tables, columns: { self.columns[$0.name] },
                                                  allColumns: ["id", "name", "total"]).first, "total")
     }

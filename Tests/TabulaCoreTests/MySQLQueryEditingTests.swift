@@ -18,10 +18,10 @@ final class MySQLQueryEditingTests: XCTestCase {
             "SELECT id,label FROM items WHERE label='it''s fine' AND id IN (1,2) LIMIT 10 OFFSET 1;",
             "SELECT i.* FROM `a``b`.`t``x` i # safe comment\nWHERE i.id >= 1",
             "SELECT * FROM items -- safe comment\nWHERE id = 1",
-        ] { XCTAssertTrue(EditableSelect.accepts(sql, kind: .mysql), sql) }
-        XCTAssertEqual(EditableSelect.source("SELECT * FROM Items", kind: .mysql), ["Items"])
-        XCTAssertEqual(EditableSelect.source("SELECT a.* FROM `a``b`.`t``x` a", kind: .mysql), ["a`b", "t`x"])
-        XCTAssertEqual(EditableSelect.relation("SELECT x.id FROM items x", kind: .mysql)?.reference, "x")
+        ] { XCTAssertTrue(EditableSelect.accepts(sql, flavor: .mysql), sql) }
+        XCTAssertEqual(EditableSelect.source("SELECT * FROM Items", flavor: .mysql), ["Items"])
+        XCTAssertEqual(EditableSelect.source("SELECT a.* FROM `a``b`.`t``x` a", flavor: .mysql), ["a`b", "t`x"])
+        XCTAssertEqual(EditableSelect.relation("SELECT x.id FROM items x", flavor: .mysql)?.reference, "x")
         for sql in [
             "SELECT a.id,a.label FROM items a JOIN items b ON a.id=b.id", "SELECT * FROM items a, items b",
             "SELECT * FROM (SELECT * FROM items) a", "WITH a AS (SELECT * FROM items) SELECT * FROM a",
@@ -36,7 +36,7 @@ final class MySQLQueryEditingTests: XCTestCase {
             "SELECT * FROM items WHERE id=fn()", "SELECT * FROM items WHERE label ILIKE 'a'",
             "SELECT * FROM items ORDER BY id NULLS FIRST", "SELECT * FROM items LIMIT 1,2",
             "SELECT SQL_CALC_FOUND_ROWS id FROM items", "SELECT UTC_TIMESTAMP FROM items",
-        ] { XCTAssertFalse(EditableSelect.accepts(sql, kind: .mysql), sql) }
+        ] { XCTAssertFalse(EditableSelect.accepts(sql, flavor: .mysql), sql) }
         XCTAssertFalse(EditableSelect.accepts("SELECT * FROM `items`"), "PostgreSQL still refuses backticks")
         XCTAssertEqual(EditableSelect.source("SELECT * FROM Items"), ["items"])
     }
@@ -90,7 +90,7 @@ final class MySQLQueryEditingTests: XCTestCase {
         let driver = try await DriverFactory.connect(config, password: "tabula")
         let writer = try await DriverFactory.connect(config, password: "tabula")
         let name = "qe_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
-        let d = SQLDialect(kind: .mysql)
+        let d = SQLDialect(flavor: .mysql)
         let table = "`tabula`." + d.quoteIdentifier(name)
         let view = "`tabula`." + d.quoteIdentifier(name + "_v")
         do {

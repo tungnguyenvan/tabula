@@ -155,7 +155,7 @@ final class DriverIntegrationTests: XCTestCase {
 
     /// Insert / update / delete through the generated SQL, then verify via paging and counting.
     private func exerciseEditing(_ driver: any DatabaseDriver, table: TableRef, file: StaticString = #filePath, line: UInt = #line) async throws {
-        let d = driver.dialect
+        let d = try XCTUnwrap(driver.dialect.sql)
         try await driver.applyInTransaction([
             d.insert(table, values: [("name", "O'Brien \\ slash")]),
             d.insert(table, values: [("name", "Zed")]),

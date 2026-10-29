@@ -4,6 +4,7 @@ import PostgresNIO
 
 public actor PostgresDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind = .postgres
+    public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .postgres)
     private let connection: PostgresConnection
     private let logger: Logger
     public nonisolated let queryCancellation: QueryCancellationSupport

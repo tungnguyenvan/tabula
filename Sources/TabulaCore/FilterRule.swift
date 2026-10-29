@@ -36,12 +36,12 @@ extension SQLDialect {
     /// SQL for one rule. Text matching casts to text on Postgres so it also works on numeric columns.
     public func condition(_ rule: FilterRule) -> String {
         let column = quoteIdentifier(rule.column)
-        let asText = kind == .postgres ? "CAST(\(column) AS TEXT)" : column
-        let like = kind == .postgres ? "ILIKE" : "LIKE"
+        let asText = flavor == .postgres ? "CAST(\(column) AS TEXT)" : column
+        let like = flavor == .postgres ? "ILIKE" : "LIKE"
         func pattern(_ prefix: String, _ suffix: String) -> String {
             let escaped = rule.value.replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
-            return literal(prefix + escaped + suffix) + (kind == .mysql ? "" : " ESCAPE '\\'")
+            return literal(prefix + escaped + suffix) + (flavor == .mysql ? "" : " ESCAPE '\\'")
         }
         switch rule.op {
         case .equals: return "\(column) = \(literal(rule.value))"
@@ -68,7 +68,6 @@ extension SQLDialect {
     /// Combines rules by their conjunctions; rules missing a required value are skipped.
     /// `a AND b OR c` becomes `(a AND b) OR c`, spelling out SQL's precedence.
     public func condition(_ rules: [FilterRule]) -> String {
-        if kind == .mongodb { return MongoDialect.condition(rules) }
         var groups: [[String]] = []
         for rule in rules where !rule.op.needsValue || !rule.value.isEmpty {
             if groups.isEmpty || rule.conjunction == .or { groups.append([]) }

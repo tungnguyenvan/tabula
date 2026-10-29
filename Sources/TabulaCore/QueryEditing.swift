@@ -56,7 +56,7 @@ public struct QueryEditTarget: Sendable {
         guard !keyIndices.isEmpty, keyIndices.allSatisfy({ edit.original[$0] != nil }) else {
             throw DatabaseError("A complete primary key is required to edit a result row.")
         }
-        let d = SQLDialect(kind: .postgres)
+        let d = SQLDialect(flavor: .postgres)
         // E strings are independent of standard_conforming_strings, including backslashes in pasted values.
         func literal(_ value: String?, column: Column) throws -> String {
             guard let value else { return "NULL" }

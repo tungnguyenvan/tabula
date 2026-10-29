@@ -109,7 +109,7 @@ struct RoutineTabView: View {
             if let error = model.error {
                 ErrorBanner(message: error) { model.error = nil }
             }
-            SQLEditorView(text: $model.text, handle: handle, kind: model.driver.kind,
+            SQLEditorView(text: $model.text, handle: handle, dialect: model.driver.dialect,
                           suggest: { _, caret in (NSRange(location: caret, length: 0), []) },
                           undoManager: model.undoManager) { _ in Task { await model.save() } }
                 .overlay { if model.loading { ProgressView().controlSize(.small) } }

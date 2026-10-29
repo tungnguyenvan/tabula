@@ -4,6 +4,7 @@ import SQLite3
 
 public actor SQLiteDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind = .sqlite
+    public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .sqlite)
     private var db: OpaquePointer?
 
     /// Opens (or creates) the database file at `path`.
@@ -90,7 +91,7 @@ public actor SQLiteDriver: DatabaseDriver {
     public func defaultSchema() -> String { "main" }
 
     public func tables(in schema: String) throws -> [TableRef] {
-        let master = schema == "temp" ? "sqlite_temp_master" : "\(SQLDialect(kind: .sqlite).quoteIdentifier(schema)).sqlite_master"
+        let master = schema == "temp" ? "sqlite_temp_master" : "\(SQLDialect(flavor: .sqlite).quoteIdentifier(schema)).sqlite_master"
         return try records("SELECT name, type FROM \(master) WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name")
             .compactMap { row in
                 guard let name = row["name"] else { return nil }
@@ -99,7 +100,7 @@ public actor SQLiteDriver: DatabaseDriver {
     }
 
     public func columns(of table: TableRef) throws -> [ColumnInfo] {
-        let d = SQLDialect(kind: .sqlite)
+        let d = SQLDialect(flavor: .sqlite)
         return try records("PRAGMA \(d.quoteIdentifier(table.schema)).table_info(\(d.literal(table.name)))").map { row in
             ColumnInfo(
                 name: row["name"] ?? "",
@@ -113,7 +114,7 @@ public actor SQLiteDriver: DatabaseDriver {
     }
 
     public func indexes(of table: TableRef) throws -> [IndexInfo] {
-        let d = SQLDialect(kind: .sqlite)
+        let d = SQLDialect(flavor: .sqlite)
         let schema = d.quoteIdentifier(table.schema)
         return try records("PRAGMA \(schema).index_list(\(d.literal(table.name)))").compactMap { row in
             guard let name = row["name"] else { return nil }

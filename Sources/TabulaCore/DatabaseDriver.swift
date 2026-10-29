@@ -4,6 +4,8 @@ import Foundation
 /// isolation alone does not serialize entire executions.
 public protocol DatabaseDriver: AnyObject, Sendable {
     var kind: DatabaseKind { get }
+    /// The database's query language: quoting, generated statements and script handling.
+    var dialect: any QueryDialect { get }
     /// Whether Stop can interrupt the current server statement, or only skip subsequent statements.
     var queryCancellation: QueryCancellationSupport { get }
 
@@ -71,12 +73,10 @@ extension DriverFactory {
 }
 
 extension DatabaseDriver {
-    public var dialect: SQLDialect { SQLDialect(kind: kind) }
-
     /// Runs several statements in order, returning every result. Stops at the first error.
     public func executeScript(_ script: String) async throws -> [QueryResult] {
         var results: [QueryResult] = []
-        for statement in SQLSplitter.split(script, kind: kind) {
+        for statement in dialect.split(script) {
             try QueryCancelScope.current?.checkCancellation()
             results.append(try await execute(statement))
         }
@@ -140,11 +140,11 @@ extension DatabaseDriver {
         return Int(text)
     }
 
-    /// Applies statements atomically, rolling back if any statement fails.
+    /// Applies statements in one transaction, rolling back if one fails. Where the dialect has no transactions
+    /// (MongoDB without a replica set), they run in order and the error says which were already applied.
     public func applyInTransaction(_ statements: [String]) async throws {
         guard !statements.isEmpty else { return }
-        if kind == .mongodb {
-            // Multi-document transactions need a replica set; run the changes in order and say where it stopped.
+        guard let begin = dialect.beginTransaction else {
             for (index, statement) in statements.enumerated() {
                 do {
                     _ = try await execute(statement)
@@ -155,13 +155,14 @@ extension DatabaseDriver {
             }
             return
         }
-        _ = try await execute(dialect.beginTransaction)
+        _ = try await execute(begin)
         do {
             for statement in statements {
                 _ = try await execute(statement)
             }
             _ = try await execute("COMMIT")
         } catch {
+            // The statement's error is the one to report; a failed ROLLBACK ends with the connection anyway.
             _ = try? await execute("ROLLBACK")
             throw error
         }

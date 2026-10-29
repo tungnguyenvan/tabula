@@ -45,9 +45,8 @@ public enum SQLFormatter {
         var clause = ""
     }
 
-    public static func format(_ sql: String, kind: DatabaseKind) -> String {
-        if kind == .mongodb { return MongoStatement.beautify(sql) }
-        let tokens = SQLLexer.tokens(sql, kind: kind).filter { $0.kind != .whitespace }
+    public static func format(_ sql: String, flavor: SQLFlavor) -> String {
+        let tokens = SQLLexer.tokens(sql, flavor: flavor).filter { $0.kind != .whitespace }
         var out = ""
         var frames = [Frame(level: 0, isSubquery: false)]
         var lineHasContent = false
@@ -178,26 +177,5 @@ public enum SQLFormatter {
         }
         while out.last == " " || out.last == "\n" { out.removeLast() }
         return out
-    }
-}
-
-extension SQLDialect {
-    /// Adds `LIMIT n` to a plain SELECT that has no LIMIT of its own, so an accidental full-table query stays small.
-    /// Anything else (writes, existing LIMIT/FETCH, locking clauses) is returned unchanged.
-    public func applyingRowLimit(_ statement: String, limit: Int) -> String {
-        if kind == .mongodb { return MongoStatement.applyingRowLimit(statement, limit: limit) }
-        let tokens = SQLLexer.tokens(statement, kind: kind)
-        let significant = tokens.filter { $0.kind != .whitespace && $0.kind != .comment }
-        guard let first = significant.first, first.keyword == "SELECT" || first.keyword == "WITH" else { return statement }
-        var depth = 0
-        for token in significant {
-            if token.text == "(" { depth += 1 } else if token.text == ")" { depth -= 1 }
-            guard depth == 0 else { continue }
-            if ["LIMIT", "FETCH", "FOR", "INTO", "INSERT", "UPDATE", "DELETE", "TOP", "OFFSET"].contains(token.keyword) { return statement }
-        }
-        guard let last = significant.last(where: { $0.text != ";" }) else { return statement }
-        let text = statement as NSString
-        let end = NSMaxRange(last.range)
-        return text.substring(to: end) + " LIMIT \(limit)" + text.substring(from: end)
     }
 }

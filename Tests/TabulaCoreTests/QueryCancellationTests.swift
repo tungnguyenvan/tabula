@@ -102,6 +102,7 @@ private actor CancellationCounter {
 /// An unsupported driver can finish its current statement but still must not start the next one.
 private actor ScriptStopDriver: DatabaseDriver {
     nonisolated let kind: DatabaseKind = .mysql
+    nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .mysql)
     private(set) var statements: [String] = []
     func execute(_ sql: String) async throws -> QueryResult {
         statements.append(sql)

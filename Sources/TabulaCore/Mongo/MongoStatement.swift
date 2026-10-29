@@ -156,7 +156,7 @@ public struct MongoStatement: Sendable {
 /// Splits shell text into statements: at `;`, and at line ends where the statement is complete (the next
 /// line doesn't continue it with `.method(…)`).
 public enum MongoSplitter {
-    public static func statements(in script: String) -> [SQLSplitter.Statement] {
+    public static func statements(in script: String) -> [ScriptStatement] {
         // One element per Unicode scalar, not per grapheme: a combining mark after a quote would otherwise merge
         // with it into one "character" that isn't a quote, and a crafted name could end the string early.
         let chars = script.unicodeScalars.map(Character.init)
@@ -169,7 +169,7 @@ public enum MongoSplitter {
         }
         utf16Offsets.append(running)
 
-        var statements: [SQLSplitter.Statement] = []
+        var statements: [ScriptStatement] = []
         var start = 0
         var depth = 0
         /// The last character that wasn't space or comment, to tell a regex `/` from division and spot continuations.
@@ -184,7 +184,7 @@ public enum MongoSplitter {
             let trailing = piece.reversed().prefix(while: { $0.isWhitespace }).count
             let from = start + leading, to = end - trailing
             guard from < to else { return }
-            statements.append(SQLSplitter.Statement(text: String(chars[from..<to]),
+            statements.append(ScriptStatement(text: String(chars[from..<to]),
                                                     range: NSRange(location: utf16Offsets[from], length: utf16Offsets[to] - utf16Offsets[from])))
         }
 
