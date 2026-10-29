@@ -20,31 +20,43 @@ public struct SavedQuery: Identifiable, Hashable, Sendable {
 }
 
 extension SavedQuery {
-    /// The queries that match `text`, best first: keyword starting with it, then keyword or group containing it,
-    /// then SQL containing it. Case and accents are ignored, "đ" matching "d" as well; empty text matches
+    /// The queries that contain every word of `text`, best first: by the weakest place any word was found, keyword
+    /// start, then inside the keyword or folder, then the SQL. "monthly revenue" finds `revenue_by_month`'s SQL
+    /// mentioning both words. Case and accents are ignored, "đ" matching "d" as well; empty text matches
     /// everything, in library order.
     public static func search(_ queries: [SavedQuery], for text: String) -> [SavedQuery] {
-        let needle = searchable(text.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard !needle.isEmpty else {
+        let words = searchable(text).split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else {
             return queries
         }
-        func rank(_ query: SavedQuery) -> Int? {
-            let keyword = searchable(query.keyword)
-            if keyword.hasPrefix(needle) {
+        func rank(of word: String, in query: SavedQuery, keyword: String, group: String, sql: String) -> Int? {
+            if keyword.hasPrefix(word) {
                 return 0
             }
-            if keyword.contains(needle) || searchable(query.group).contains(needle) {
+            if keyword.contains(word) || group.contains(word) {
                 return 1
             }
-            if searchable(query.sql).contains(needle) {
+            if sql.contains(word) {
                 return 2
             }
             return nil
         }
         var ranked: [(rank: Int, index: Int, query: SavedQuery)] = []
         for (index, query) in queries.enumerated() {
-            if let rank = rank(query) {
-                ranked.append((rank, index, query))
+            let keyword = searchable(query.keyword)
+            let group = searchable(query.group)
+            let sql = searchable(query.sql)
+            var worst = 0
+            var matchesAll = true
+            for word in words {
+                guard let found = rank(of: word, in: query, keyword: keyword, group: group, sql: sql) else {
+                    matchesAll = false
+                    break
+                }
+                worst = max(worst, found)
+            }
+            if matchesAll {
+                ranked.append((worst, index, query))
             }
         }
         ranked.sort { ($0.rank, $0.index) < ($1.rank, $1.index) }

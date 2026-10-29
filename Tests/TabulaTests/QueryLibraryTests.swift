@@ -32,6 +32,11 @@ final class QueryLibraryTests: XCTestCase {
         try Data([0xFF, 0xFE, 0x00, 0xD8, 0x00]).write(to: binary)
         let contents = try library.contents()
         XCTAssertEqual(contents.unreadable.map(\.lastPathComponent), ["broken.sql"])
+        // Its keyword is still taken: saving must not overwrite the file the user couldn't see.
+        XCTAssertThrowsError(try library.save("SELECT 2", keyword: "broken")) { error in
+            XCTAssertEqual(error as? QueryLibrary.LibraryError, .keywordTaken("broken"))
+        }
+        XCTAssertEqual(try Data(contentsOf: binary), Data([0xFF, 0xFE, 0x00, 0xD8, 0x00]))
         try FileManager.default.removeItem(at: binary)
 
         let loaded = try library.load()
@@ -61,6 +66,37 @@ final class QueryLibraryTests: XCTestCase {
         }
     }
 
+    /// Links: one to a file inside the library is listed; one leading outside is reported; a save can't follow a
+    /// linked folder out of the library.
+    func testLinks() throws {
+        let library = QueryLibrary(base: base)
+        let saved = try library.save("SELECT 1", keyword: "inside")
+        let outside = base.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try "SELECT 2".write(to: outside.appendingPathComponent("elsewhere.sql"), atomically: true, encoding: .utf8)
+        let links = FileManager.default
+        try links.createSymbolicLink(
+            at: library.directory.appendingPathComponent("alias.sql"),
+            withDestinationURL: saved.file
+        )
+        try links.createSymbolicLink(
+            at: library.directory.appendingPathComponent("away.sql"),
+            withDestinationURL: outside.appendingPathComponent("elsewhere.sql")
+        )
+        try links.createSymbolicLink(
+            at: library.directory.appendingPathComponent("shared"),
+            withDestinationURL: outside
+        )
+
+        let contents = try library.contents()
+        XCTAssertEqual(contents.queries.map(\.keyword), ["alias", "inside"])
+        XCTAssertEqual(contents.unreadable.map(\.lastPathComponent), ["away.sql"])
+        XCTAssertThrowsError(try library.save("SELECT 3", keyword: "escaped", group: "shared")) { error in
+            XCTAssertEqual(error as? QueryLibrary.LibraryError, .invalidFolder("shared"))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outside.appendingPathComponent("escaped.sql").path))
+    }
+
     func testRemoveMovesToTrash() throws {
         let library = QueryLibrary(base: base)
         let saved = try library.save("SELECT 1", keyword: "scratch")
@@ -86,5 +122,9 @@ final class QueryLibraryTests: XCTestCase {
         XCTAssertEqual(SavedQuery.search(queries, for: "DON").map(\.keyword), ["đơn_hàng"], "case and accents ignored")
         XCTAssertEqual(SavedQuery.search(queries, for: "  ").count, queries.count)
         XCTAssertEqual(SavedQuery.search(queries, for: "nothing"), [])
+        // Every word must be found, anywhere: "city users" finds users_by_city, "orders paid" the query whose
+        // SQL has both words.
+        XCTAssertEqual(SavedQuery.search(queries, for: "city users").map(\.keyword), ["users_by_city"])
+        XCTAssertEqual(SavedQuery.search(queries, for: "orders paid").map(\.keyword), ["đơn_hàng"])
     }
 }

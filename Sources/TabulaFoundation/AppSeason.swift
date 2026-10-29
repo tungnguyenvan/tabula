@@ -19,8 +19,15 @@ public enum AppSeason: Equatable, Sendable {
     public static let halloweenStart = Day(month: 10, day: 25)
     public static let halloweenEnd = Day(month: 11, day: 1)
 
-    /// The season of `date`, in the calendar's time zone (the user's own by default).
-    public static func on(_ date: Date, calendar: Calendar = .current) -> AppSeason {
+    /// Halloween is a Gregorian date, whichever calendar the user reads dates in; the day is the user's own.
+    public static var userCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return calendar
+    }
+
+    /// The season of `date`, by `calendar`'s days (the user's time zone, Gregorian, by default).
+    public static func on(_ date: Date, calendar: Calendar = userCalendar) -> AppSeason {
         let today = Day(month: calendar.component(.month, from: date), day: calendar.component(.day, from: date))
         if halloweenStart <= today && today <= halloweenEnd {
             return .halloween

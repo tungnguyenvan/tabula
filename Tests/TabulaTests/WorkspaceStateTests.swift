@@ -48,13 +48,15 @@ final class WorkspaceStateTests: XCTestCase {
             rules: [rule],
             rawCondition: "",
             usesRawCondition: false,
-            appliedCondition: "\"status\" = 'paid'"
+            appliedCondition: "\"status\" = 'paid'",
+            engine: "postgres"
         )
         let draft = WorkspaceState.TableFilter(
             rules: [],
             rawCondition: "total > 100",
             usesRawCondition: true,
-            appliedCondition: ""
+            appliedCondition: "",
+            engine: nil
         )
         let state = WorkspaceState(
             tabs: [.table(schema: "public", name: "orders", kind: "table", mode: "Data")],
@@ -81,6 +83,16 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(state.tabs, [.query(title: "Query 1", sql: "SELECT 1", file: nil)])
         XCTAssertEqual(state.history, ["SELECT 1"])
         XCTAssertEqual(state.tableFilters, [])
+    }
+
+    /// Filters saved before 0.10.1 don't say which engine they were written for.
+    func testFiltersWithoutEngineLoad() throws {
+        let saved = """
+            {"rules":[],"rawCondition":"id > 1","usesRawCondition":true,"appliedCondition":"id > 1"}
+            """
+        let filter = try JSONDecoder().decode(WorkspaceState.TableFilter.self, from: Data(saved.utf8))
+        XCTAssertNil(filter.engine)
+        XCTAssertEqual(filter.appliedCondition, "id > 1")
     }
 
     /// Rules saved by 0.7.1 have no checkbox and load ticked.

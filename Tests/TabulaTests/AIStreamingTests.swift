@@ -1,6 +1,7 @@
 import XCTest
 
 @testable import TabulaAI
+@testable import TabulaFoundation
 
 final class ThinkTagSplitterTests: XCTestCase {
     /// Feeds `chunks` one by one and joins the events of each kind.
@@ -302,6 +303,23 @@ final class CLIEventsTests: XCTestCase {
         let settings = given.firstIndex(of: "--settings").map { given[$0 + 1] }
         XCTAssertEqual(settings, #"{"disableAllHooks": true}"#)
         XCTAssertEqual(try String(contentsOf: input, encoding: .utf8), "Count the rows of t.")
+    }
+
+    /// The prompt file reaches the tool even when the shell's profile changes directory first (`cd` in .zshrc).
+    func testPromptFileSurvivesAChangeOfDirectory() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Prompt-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let prompt = directory.appendingPathComponent("prompt.txt")
+        try "the prompt".write(to: prompt, atomically: true, encoding: .utf8)
+        let output = try await ShellCommand.run(
+            script: "cd / && " + CLIProvider.fromPromptFile,
+            arguments: ["/bin/cat", prompt.path],
+            directory: directory,
+            timeout: 10
+        )
+        XCTAssertEqual(output.stdout, "the prompt")
+        XCTAssertEqual(output.status, 0)
     }
 
     /// Codex, with a stand-in `codex`: the user's MCP servers are turned off for the run, and the instructions and

@@ -5,6 +5,16 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Fixed
+- Table filters ([#122](https://github.com/tungnguyenvan/tabula/issues/122)):
+  - Unticking a condition that starts an OR group keeps the OR: `a OR b AND c` without b is now `a OR c`, not `a AND c`.
+  - A remembered filter isn't applied after the connection was switched to another database engine, a dropped table's filter isn't applied to a new table of the same name, and a filter saved by a newer version is kept instead of erased.
+  - The WHERE label stays on the first ticked condition.
+- Saved query library ([#122](https://github.com/tungnguyenvan/tabula/issues/122)):
+  - Saving under the keyword of a file that couldn't be read no longer overwrites that file.
+  - Search matches every word anywhere instead of the whole phrase; the AI chat's search no longer needs the database connection.
+  - Linked `.sql` files are listed when they lead inside the library and reported otherwise, and a save can't follow a linked folder out of it.
+  - Coming back to Tabula no longer refreshes every query tab when the library hasn't changed.
+- The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 - Failures that used to look like empty data are now reported ([#98](https://github.com/tungnguyenvan/tabula/issues/98)):
   - A table's indexes that can't be read show a note under Indexes, instead of looking like a table without indexes; a row count that fails shows "of ?" with the reason.
   - The relationship diagram names tables whose columns couldn't be read.

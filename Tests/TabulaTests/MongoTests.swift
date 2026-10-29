@@ -242,6 +242,12 @@ final class MongoDialectTests: XCTestCase {
             FilterRule(column: "c", op: .isNotNull, conjunction: .or, isEnabled: false),
         ])
         XCTAssertEqual(unticked, "{ b: \"x\" }")
+        let untickedOr = dialect.condition([
+            FilterRule(column: "a", op: .isNull),
+            FilterRule(column: "b", op: .isNull, conjunction: .or, isEnabled: false),
+            FilterRule(column: "c", op: .equals, value: "x"),
+        ])
+        XCTAssertEqual(untickedOr, "{ $or: [{ a: null }, { c: \"x\" }] }")
     }
 
     func testEditsKeepFieldTypes() throws {

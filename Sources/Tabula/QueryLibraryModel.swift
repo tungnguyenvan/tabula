@@ -32,15 +32,26 @@ final class QueryLibraryModel {
     func reload() {
         do {
             let contents = try library.contents()
-            queries = contents.queries
-            if contents.unreadable.isEmpty {
-                loadError = nil
-            } else {
+            // Assigned only when something changed: every query tab reads the list, and Tabula reloads it each
+            // time it comes to the front.
+            if contents.queries != queries {
+                queries = contents.queries
+            }
+            var problem: String?
+            if !contents.unreadable.isEmpty {
                 let names = contents.unreadable.map(\.lastPathComponent).joined(separator: ", ")
-                loadError = "Couldn't read \(names) as text, so they aren't listed. Save them as UTF-8 to use them."
+                problem =
+                    "Couldn't read \(names), so they aren't listed. Check that each is text (UTF-8 is safest), "
+                    + "that you may read it, and that a link leads to a file inside the Queries folder."
+            }
+            if problem != loadError {
+                loadError = problem
             }
         } catch {
-            loadError = "Couldn't read \(library.directory.path): \(error.localizedDescription)"
+            let problem = "Couldn't read \(library.directory.path): \(error.localizedDescription)"
+            if problem != loadError {
+                loadError = problem
+            }
         }
     }
 

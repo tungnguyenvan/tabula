@@ -242,6 +242,11 @@ final class AIChatModel {
             }
             update(step.id) { $0.tool?.status = .running }
         }
+        // Searching the saved queries reads files only; it doesn't need (or wait for) a database connection.
+        if call.tool == .searchSavedQueries {
+            let result = AgentToolbox.searchSavedQueries(QueryLibraryModel.shared.queries, for: call.search)
+            return done(.done, result)
+        }
         let toolbox = try await workspace.agentToolbox()
         try Task.checkCancellation()
         guard self.run == run else {

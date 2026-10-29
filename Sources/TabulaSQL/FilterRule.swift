@@ -52,6 +52,27 @@ public struct FilterRule: Identifiable, Hashable, Sendable {
         self.isEnabled = isEnabled
     }
 
+    /// The used rules in AND groups, the groups joined by OR (AND binds tighter, as in SQL). A rule left out still
+    /// separates groups: in `a OR b AND c`, leaving out b gives `a OR c`, not `a AND c`.
+    public static func groups(_ rules: [FilterRule]) -> [[FilterRule]] {
+        var groups: [[FilterRule]] = []
+        var startsGroup = false
+        for rule in rules {
+            if rule.conjunction == .or {
+                startsGroup = true
+            }
+            guard rule.isUsed else {
+                continue
+            }
+            if groups.isEmpty || startsGroup {
+                groups.append([])
+            }
+            startsGroup = false
+            groups[groups.count - 1].append(rule)
+        }
+        return groups
+    }
+
     /// Whether the rule takes part in the condition: ticked, with a value when its operator needs one.
     public var isUsed: Bool {
         guard isEnabled else {
@@ -94,16 +115,10 @@ extension SQLDialect {
         }
     }
 
-    /// Combines the used rules by their conjunctions; unticked rules and rules missing a required value are
-    /// skipped. `a AND b OR c` becomes `(a AND b) OR c`, spelling out SQL's precedence.
+    /// Combines the used rules by their conjunctions (`FilterRule.groups`); unticked rules and rules missing a
+    /// required value are skipped. `a AND b OR c` becomes `(a AND b) OR c`, spelling out SQL's precedence.
     public func condition(_ rules: [FilterRule]) -> String {
-        var groups: [[String]] = []
-        for rule in rules where rule.isUsed {
-            if groups.isEmpty || rule.conjunction == .or {
-                groups.append([])
-            }
-            groups[groups.count - 1].append(condition(rule))
-        }
+        let groups = FilterRule.groups(rules).map { group in group.map(condition) }
         guard groups.count > 1 else {
             return groups.first?.joined(separator: " AND ") ?? ""
         }
