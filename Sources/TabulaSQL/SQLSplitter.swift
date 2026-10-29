@@ -42,6 +42,9 @@ public enum SQLSplitter {
         var blockDepth = 0
         var words: [String] = []
         let rules = flavor.lexicalRules
+        /// What ends a statement. MySQL scripts change it with the mysql client's `DELIMITER $$` line, so a procedure
+        /// body keeps its own semicolons; the DELIMITER lines themselves aren't SQL and belong to no statement.
+        var delimiter: [Character] = [";"]
         /// Where the last word read ended, when that word was E: a quote right there opens an E'…' string.
         var escapePrefixEnd: Int?
 
@@ -95,6 +98,17 @@ public enum SQLSplitter {
         }
 
         while i < chars.count {
+            if flavor == .mysql, let line = delimiterCommand(chars, at: i),
+                current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                if !line.delimiter.isEmpty {
+                    delimiter = line.delimiter
+                }
+                current = ""
+                i = line.end
+                segmentStart = i
+                continue
+            }
             let c = chars[i]
             let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
 
@@ -160,7 +174,15 @@ public enum SQLSplitter {
                 }
                 continue
             }
-            if c == ";" && blockDepth == 0 {
+            if delimiter != [";"] {
+                if c == delimiter[0], matches(chars, at: i, tag: delimiter) {
+                    // flush() takes the statement to end before `i` and the next to start after it.
+                    i += delimiter.count - 1
+                    flush()
+                    i += 1
+                    continue
+                }
+            } else if c == ";" && blockDepth == 0 {
                 flush()
                 i += 1
                 continue
@@ -181,6 +203,28 @@ public enum SQLSplitter {
         }
         flush()
         return statements
+    }
+
+    /// A `DELIMITER x` line starting at `start` (at the start of a line): the new delimiter, and where the line
+    /// ends. The mysql client reads the word case-insensitively and the delimiter up to the end of the line.
+    private static func delimiterCommand(_ chars: [Character], at start: Int) -> (delimiter: [Character], end: Int)? {
+        guard start == 0 || chars[start - 1] == "\n" else { return nil }
+        var i = start
+        while i < chars.count, chars[i] == " " || chars[i] == "\t" {
+            i += 1
+        }
+        let word = Array("delimiter")
+        guard i + word.count < chars.count,
+            String(chars[i..<i + word.count]).lowercased() == "delimiter",
+            chars[i + word.count] == " " || chars[i + word.count] == "\t"
+        else { return nil }
+        var end = i + word.count
+        while end < chars.count, chars[end] != "\n" {
+            end += 1
+        }
+        let value = String(chars[(i + word.count)..<end]).trimmingCharacters(in: .whitespaces)
+        let delimiter = value.split(separator: " ").first.map { Array(String($0)) } ?? []
+        return (delimiter, end)
     }
 
     private static func dollarTag(_ chars: [Character], at start: Int) -> [Character]? {
