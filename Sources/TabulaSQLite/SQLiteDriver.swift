@@ -7,8 +7,13 @@ import TabulaSQL
 public actor SQLiteDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind = .sqlite
     public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .sqlite)
-    public nonisolated let catalog: any DatabaseCatalog = SQLiteCatalog()
+    public nonisolated let catalog: any DatabaseCatalog
+    /// Stop interrupts the running statement on the connection.
+    public nonisolated let queryCancellation = QueryCancellationSupport.server
     private var db: OpaquePointer?
+    /// Reaches the running statement while the actor is busy stepping it. A statement only runs inside
+    /// `execute`, which never suspends, so the connection can't close while one is in progress.
+    private nonisolated let interrupter: SQLiteInterrupter
 
     /// Opens (or creates) the database file at `path`.
     public init(path: String) throws {
@@ -16,15 +21,17 @@ public actor SQLiteDriver: DatabaseDriver {
         guard !expanded.isEmpty else {
             throw DatabaseError("Choose a SQLite database file.")
         }
-        var handle: OpaquePointer?
+        var opened: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
-        if sqlite3_open_v2(expanded, &handle, flags, nil) != SQLITE_OK {
-            let message = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "Unable to open database"
-            sqlite3_close(handle)
+        guard sqlite3_open_v2(expanded, &opened, flags, nil) == SQLITE_OK, let handle = opened else {
+            let message = opened.map { String(cString: sqlite3_errmsg($0)) } ?? "Unable to open database"
+            sqlite3_close(opened)
             throw DatabaseError(message)
         }
         sqlite3_busy_timeout(handle, Defaults.sqliteBusyTimeoutMilliseconds)
         db = handle
+        interrupter = SQLiteInterrupter(handle: handle)
+        catalog = SQLiteCatalog(interrupter: interrupter)
     }
 
     public func close() {
@@ -41,10 +48,58 @@ public actor SQLiteDriver: DatabaseDriver {
 
     public func execute(_ sql: String) throws -> QueryResult {
         let db = try requireHandle()
+        let scope = QueryCancelScope.current
+        try scope?.checkCancellation()
+        let run = interrupter.begin()
+        let interrupter = self.interrupter
+        var attachment: UUID?
+        if let scope {
+            let token = scope.attach {
+                interrupter.interrupt(run, because: .stop) ? .requested : .notRunning
+            }
+            guard let token else {
+                interrupter.end(run)
+                throw QueryCancelledError()
+            }
+            attachment = token
+        }
+
+        let result = Result { () throws(Failure) -> QueryResult in try perform(sql, on: db) }
+        if let attachment {
+            scope?.detach(attachment)
+        }
+        let interruption = interrupter.end(run)
+        guard case .failure(let failure) = result else {
+            return try result.get()
+        }
+        guard let interruption, failure.code == SQLITE_INTERRUPT else {
+            throw DatabaseError(failure.message)
+        }
+        switch interruption {
+        case .stop:
+            throw QueryCancelledError(serverInterrupted: true)
+        case .timeLimit(let seconds):
+            throw DatabaseError("The statement ran past the \(seconds)-second time limit and was stopped.")
+        }
+    }
+
+    /// A statement that failed in SQLite, with its result code.
+    private struct Failure: Error {
+        let code: Int32
+        let message: String
+
+        init(_ code: Int32, on db: OpaquePointer) {
+            self.code = code
+            self.message = String(cString: sqlite3_errmsg(db))
+        }
+    }
+
+    private func perform(_ sql: String, on db: OpaquePointer) throws(Failure) -> QueryResult {
         let started = Date()
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-            throw DatabaseError(String(cString: sqlite3_errmsg(db)))
+        let prepared = sqlite3_prepare_v2(db, sql, -1, &statement, nil)
+        guard prepared == SQLITE_OK else {
+            throw Failure(prepared, on: db)
         }
         defer { sqlite3_finalize(statement) }
 
@@ -58,7 +113,7 @@ public actor SQLiteDriver: DatabaseDriver {
                 break
             }
             guard step == SQLITE_ROW else {
-                throw DatabaseError(String(cString: sqlite3_errmsg(db)))
+                throw Failure(step, on: db)
             }
             var row: [String?] = []
             row.reserveCapacity(columnCount)

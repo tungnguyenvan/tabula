@@ -6,6 +6,8 @@ import TabulaSQL
 /// SQLite's catalog: sqlite_master and pragmas. An attached database is a schema; there are no other databases.
 struct SQLiteCatalog: DatabaseCatalog, RoutineCatalog {
     private let d = SQLDialect(flavor: .sqlite)
+    /// The connection's, for the assistant's time limit.
+    let interrupter: SQLiteInterrupter
 
     var routines: (any RoutineCatalog)? { self }
 
@@ -111,6 +113,7 @@ struct SQLiteCatalog: DatabaseCatalog, RoutineCatalog {
     /// SQLite has no statement timeout; query_only refuses every write on the connection.
     func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {
         _ = try await driver.execute("PRAGMA query_only = ON")
+        interrupter.timeLimitSeconds = timeoutSeconds
     }
 
     func readOnlyTransaction(timeoutSeconds: Int) -> [String]? { nil }

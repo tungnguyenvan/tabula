@@ -32,9 +32,17 @@ final class QueryTabModel {
 
     var canStop: Bool { running && !stopping && driver.queryCancellation == .server }
     var stopHelp: String {
-        driver.queryCancellation == .server
-            ? "Cancel the current PostgreSQL statement and skip the remaining statements (⌘.). The transaction is not committed or rolled back."
-            : "Stopping a running statement is not supported for \(driver.kind.displayName). Wait for it to finish."
+        guard driver.queryCancellation == .server else {
+            return
+                "Stopping a running statement is not supported for \(driver.kind.displayName). Wait for it to finish."
+        }
+        let cancel = "Cancel the current \(driver.kind.displayName) statement and skip the remaining statements (⌘.)."
+        switch driver.kind {
+        case .sqlite:
+            return cancel + " SQLite rolls back an open transaction when the stopped statement changes rows."
+        default:
+            return cancel + " The transaction is not committed or rolled back."
+        }
     }
     private(set) var version = 0
     let undoManager = UndoManager()
@@ -167,7 +175,7 @@ final class QueryTabModel {
             runStatus = Self.stoppedMessage(
                 completed: results.count,
                 total: statements.count,
-                interrupted: interrupted,
+                interrupted: interrupted ? driver.kind : nil,
                 detail: stopNote
             )
         }
@@ -179,14 +187,25 @@ final class QueryTabModel {
         }
     }
 
-    private static func stoppedMessage(completed: Int, total: Int, interrupted: Bool, detail: String?) -> String {
-        var text = interrupted ? "Query cancelled." : "Stopped."
+    /// `interrupted`: the database whose server cancelled the running statement, nil when none was cancelled.
+    private static func stoppedMessage(
+        completed: Int,
+        total: Int,
+        interrupted: DatabaseKind?,
+        detail: String?
+    ) -> String {
+        var text = interrupted != nil ? "Query cancelled." : "Stopped."
         if total > 1 {
             text += " \(completed) of \(total) statements completed; the rest were not run."
         }
-        if interrupted {
+        switch interrupted {
+        case .postgres:
             text +=
                 " If a transaction was open, PostgreSQL has marked it failed: run ROLLBACK (or ROLLBACK TO SAVEPOINT) before continuing."
+        case .sqlite:
+            text += " If a transaction was open and the statement changed rows, SQLite has rolled the transaction back."
+        default:
+            break
         }
         if let detail {
             text += "\n" + detail
