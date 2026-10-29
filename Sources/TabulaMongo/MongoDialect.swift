@@ -17,6 +17,7 @@ public struct MongoQueryDialect: QueryDialect {
             hashComments: false,
             slashSlashComments: true,
             backslashEscapes: true,
+            escapeStrings: false,
             doubledQuotes: false,
             dollarQuotes: false,
             quotedIdentifiers: false
