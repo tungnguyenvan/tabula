@@ -10,8 +10,11 @@ public struct LexicalRules: Sendable, Equatable {
     public var hashComments: Bool
     /// `// comment` to the end of the line (the MongoDB shell).
     public var slashSlashComments: Bool
-    /// A backslash escapes the next character inside quotes (MySQL, the shell).
+    /// A backslash escapes the next character inside strings (MySQL, the shell). Never inside a backtick
+    /// quoted name of SQL, which ends at the next backtick.
     public var backslashEscapes: Bool
+    /// `E'…'` strings, where a backslash escapes the next character although other strings don't (PostgreSQL).
+    public var escapeStrings: Bool
     /// A doubled quote stands for one quote inside quotes (SQL).
     public var doubledQuotes: Bool
     /// `$tag$ … $tag$` bodies (PostgreSQL).
@@ -24,6 +27,7 @@ public struct LexicalRules: Sendable, Equatable {
         hashComments: Bool,
         slashSlashComments: Bool,
         backslashEscapes: Bool,
+        escapeStrings: Bool,
         doubledQuotes: Bool,
         dollarQuotes: Bool,
         quotedIdentifiers: Bool
@@ -32,6 +36,7 @@ public struct LexicalRules: Sendable, Equatable {
         self.hashComments = hashComments
         self.slashSlashComments = slashSlashComments
         self.backslashEscapes = backslashEscapes
+        self.escapeStrings = escapeStrings
         self.doubledQuotes = doubledQuotes
         self.dollarQuotes = dollarQuotes
         self.quotedIdentifiers = quotedIdentifiers
@@ -49,6 +54,7 @@ public enum SQLFlavor: Sendable, Equatable, CaseIterable {
             hashComments: self == .mysql,
             slashSlashComments: false,
             backslashEscapes: self == .mysql,
+            escapeStrings: self == .postgres,
             doubledQuotes: true,
             dollarQuotes: self == .postgres,
             quotedIdentifiers: true

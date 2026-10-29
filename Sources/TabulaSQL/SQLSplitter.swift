@@ -41,6 +41,9 @@ public enum SQLSplitter {
         // semicolons; inside one, a ';' doesn't end the statement.
         var blockDepth = 0
         var words: [String] = []
+        let rules = flavor.lexicalRules
+        /// Where the last word read ended, when that word was E: a quote right there opens an E'…' string.
+        var escapePrefixEnd: Int?
 
         func isWordCharacter(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "_" }
 
@@ -116,13 +119,17 @@ public enum SQLSplitter {
                 continue
             }
             if c == "'" || c == "\"" || c == "`" {
+                // As in `SQLLexer`: no escapes in a backtick name; E'…' has them where other strings don't.
+                let escapes =
+                    (rules.backslashEscapes && !(c == "`" && rules.quotedIdentifiers))
+                    || (c == "'" && rules.escapeStrings && escapePrefixEnd == i)
                 current.append(c)
                 i += 1
                 while i < chars.count {
                     let q = chars[i]
                     current.append(q)
                     i += 1
-                    if q == "\\" && flavor.lexicalRules.backslashEscapes && i < chars.count {
+                    if q == "\\" && escapes && i < chars.count {
                         current.append(chars[i])
                         i += 1
                         continue
@@ -166,6 +173,7 @@ public enum SQLSplitter {
                     i += 1
                 }
                 note(word)
+                escapePrefixEnd = word == "E" || word == "e" ? i : nil
                 continue
             }
             current.append(c)

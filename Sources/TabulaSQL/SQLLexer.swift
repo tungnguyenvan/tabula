@@ -54,9 +54,19 @@ public enum SQLLexer {
                 i = min(chars.count, i + 2)
                 emit(.comment, from: start)
             } else if c == unit("'") || c == unit("\"") || c == unit("`") {
+                var start = start
+                var escapes = rules.backslashEscapes && !(c == unit("`") && rules.quotedIdentifiers)
+                // E'…' (or e'…'): the E just read as a word belongs to the string.
+                if c == unit("'"), rules.escapeStrings, let last = tokens.last, last.kind == .word,
+                    last.text == "E" || last.text == "e", NSMaxRange(last.range) == i
+                {
+                    tokens.removeLast()
+                    start = last.range.location
+                    escapes = true
+                }
                 i += 1
                 while i < chars.count {
-                    if chars[i] == unit("\\") && rules.backslashEscapes {
+                    if chars[i] == unit("\\") && escapes {
                         i += 2
                         continue
                     }
