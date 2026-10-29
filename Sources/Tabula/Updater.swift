@@ -181,16 +181,33 @@ final class Updater {
         }
     }
 
-    /// Downloads and verifies the release; returns the extracted Tabula.app.
+    /// The folder each update is downloaded and checked in, inside the temporary directory.
+    nonisolated static let workPrefix = "TabulaUpdate-"
+
+    /// Downloads and verifies the release; returns the extracted Tabula.app. A release that fails a check (or a
+    /// cancelled download) leaves nothing behind; the folder of one that passes goes with the relaunch.
     nonisolated static func prepare(
         _ update: AvailableUpdate,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> URL {
         let work = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "TabulaUpdate-\(UUID().uuidString)",
+            workPrefix + UUID().uuidString,
             isDirectory: true
         )
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        do {
+            return try await prepare(update, in: work, progress: progress)
+        } catch {
+            try? FileManager.default.removeItem(at: work)
+            throw error
+        }
+    }
+
+    nonisolated private static func prepare(
+        _ update: AvailableUpdate,
+        in work: URL,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
 
         let (sumsData, sumsResponse) = try await URLSession.shared.data(from: update.checksumsURL)
         guard (sumsResponse as? HTTPURLResponse)?.statusCode == 200, let sums = String(data: sumsData, encoding: .utf8),
