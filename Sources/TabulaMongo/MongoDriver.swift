@@ -11,7 +11,8 @@ import TabulaSQL
 public actor MongoDriver: DatabaseDriver {
     public nonisolated let kind = DatabaseKind.mongodb
     public nonisolated let dialect: any QueryDialect = MongoQueryDialect()
-    public nonisolated let catalog: any DatabaseCatalog = MongoCatalog()
+    public nonisolated var catalog: any DatabaseCatalog { mongoCatalog }
+    private nonisolated let mongoCatalog = MongoCatalog()
     private let cluster: MongoCluster
     /// The database `db` refers to; `use` changes it.
     private var currentDatabase: String
@@ -650,7 +651,7 @@ public actor MongoDriver: DatabaseDriver {
     private func run(_ command: Document, in database: String, on connection: MongoConnection) async throws -> Document
     {
         let reply = try await connection.execute(
-            command,
+            try await limitingTime(command),
             namespace: MongoNamespace(to: "$cmd", inDatabase: database),
             sessionId: connection.implicitSessionId
         )
@@ -665,6 +666,31 @@ public actor MongoDriver: DatabaseDriver {
             throw Self.error(from: concern, prefix: "Write concern: ")
         }
         return document
+    }
+
+    /// Commands that read and accept `maxTimeMS`; for a find or aggregate it covers the getMores that follow.
+    private static let timeLimitedCommands: Set<String> = ["find", "aggregate", "count", "distinct", "explain"]
+
+    /// `command` with the catalog's read time limit, or the command's own `maxTimeMS` when that is shorter.
+    /// A `maxTimeMS` of 0 means no limit to the server, so it can't lift this one.
+    private func limitingTime(_ command: Document) async throws -> Document {
+        guard let limit = await mongoCatalog.readTimeLimitMilliseconds,
+            let name = command.keys.first, Self.timeLimitedCommands.contains(name)
+        else {
+            return command
+        }
+        var milliseconds = limit
+        if let own = command["maxTimeMS"] {
+            guard let requested = MongoShellParser.double(own) else {
+                throw DatabaseError("maxTimeMS needs a number of milliseconds.")
+            }
+            if requested >= 1 {
+                milliseconds = min(limit, Int(requested))
+            }
+        }
+        var limited = command
+        limited["maxTimeMS"] = Int(milliseconds)
+        return limited
     }
 
     private static func error(from reply: Document, prefix: String = "") -> DatabaseError {

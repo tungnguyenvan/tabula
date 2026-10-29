@@ -8,6 +8,8 @@ import TabulaSQL
 /// list (databases are the schemas). Collection sizes take a round trip each, so they are cached for a while.
 actor MongoCatalog: DatabaseCatalog {
     private var collectionStats: (database: String, time: Date, stats: [MetricsSample.TableStat])?
+    /// The server-side limit on each read (`maxTimeMS`), set on the assistant's connection only.
+    private(set) var readTimeLimitMilliseconds: Int?
 
     nonisolated var routines: (any RoutineCatalog)? { nil }
 
@@ -26,8 +28,11 @@ actor MongoCatalog: DatabaseCatalog {
     func currentDatabase(on driver: any DatabaseDriver) async throws -> String? { nil }
     func foreignKeys(in schema: String, on driver: any DatabaseDriver) async throws -> [ForeignKeyInfo] { [] }
 
-    /// The shell has no read-only session; `MongoReadOnlyCheck` lets only reads through.
-    func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {}
+    /// The shell has no read-only session; `MongoReadOnlyCheck` lets only reads through. There is no session time
+    /// limit either, so the driver sends this one with every read (`MongoDriver.limitingTime`).
+    func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {
+        readTimeLimitMilliseconds = timeoutSeconds * 1000
+    }
     nonisolated func readOnlyTransaction(timeoutSeconds: Int) -> [String]? { nil }
 
     /// serverStatus and dbStats as a metrics sample: connections, operations, memory, cache, storage, collections.

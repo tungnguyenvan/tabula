@@ -29,6 +29,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - Linked `.sql` files are listed when they lead inside the library and reported otherwise, and a save can't follow a linked folder out of it.
   - Coming back to Tabula no longer refreshes every query tab when the library hasn't changed.
 - **The AI assistant can no longer act on the PostgreSQL server through a read-only query** ([#137](https://github.com/tungnguyenvan/tabula/issues/137)): functions that run SQL given as text (`query_to_xml`, `ts_stat`, `crosstab`) are refused, as are ones that a read-only transaction doesn't stop: advisory locks, statistics resets, WAL switches and replication slots.
+- **The AI assistant's MongoDB queries stop after 15 seconds** like its PostgreSQL and MySQL ones, instead of running on the server with no limit ([#139](https://github.com/tungnguyenvan/tabula/issues/139)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 
