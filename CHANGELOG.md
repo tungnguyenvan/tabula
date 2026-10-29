@@ -35,6 +35,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **The AI assistant's MongoDB queries stop after 15 seconds** like its PostgreSQL and MySQL ones, instead of running on the server with no limit ([#139](https://github.com/tungnguyenvan/tabula/issues/139)).
 - **The AI assistant's SQLite queries stop after 15 seconds** too ([#141](https://github.com/tungnguyenvan/tabula/issues/141)).
 - Running a script no longer splits it inside a PostgreSQL `E'…'` string that contains `\'`, or after a MySQL name that ends in a backslash; highlighting reads them as the server does too ([#144](https://github.com/tungnguyenvan/tabula/issues/144)).
+- **PostgreSQL values read as psql shows them** ([#147](https://github.com/tungnguyenvan/tabula/issues/147)):
+  - Floats (`NaN`, `Infinity`, `2` rather than `2.0`), BC dates, intervals such as `-1 days +02:00:00`, and arrays whose index doesn't start at 1 now match, so copying, exporting and editing them keeps the value.
+  - Ranges, multiranges, geometric types, bit strings, `macaddr8`, `tid`, `pg_lsn`, `xid8`, `tsvector` and `tsquery` show as values instead of hex.
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 
