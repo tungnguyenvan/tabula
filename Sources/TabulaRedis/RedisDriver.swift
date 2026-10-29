@@ -85,11 +85,14 @@ public actor RedisDriver {
     private var connection: RedisConnection
     public private(set) var database: Int
     public nonisolated let serverDescription: String
+    /// CLIENT ID of the connection, for CLIENT UNBLOCK; nil when the server refused it.
+    nonisolated let clientID: Int?
 
-    private init(connection: RedisConnection, database: Int, serverDescription: String) {
+    private init(connection: RedisConnection, database: Int, serverDescription: String, clientID: Int?) {
         self.connection = connection
         self.database = database
         self.serverDescription = serverDescription
+        self.clientID = clientID
     }
 
     public static func connect(_ config: ConnectionConfig, password: String?) async throws -> RedisDriver {
@@ -149,7 +152,9 @@ public actor RedisDriver {
             let version =
                 (info?.string ?? "").split(separator: "\r\n").first { $0.hasPrefix("redis_version:") }
                 .map { "Redis " + $0.dropFirst("redis_version:".count) } ?? "Redis"
-            return RedisDriver(connection: connection, database: database, serverDescription: version)
+            // ACLs may refuse CLIENT ID; then blocking commands can't be unblocked, and everything else works.
+            let id = try? await connection.send(command: "CLIENT", with: [RedisArgument.text("ID").resp]).get().int
+            return RedisDriver(connection: connection, database: database, serverDescription: version, clientID: id)
         } catch {
             throw DatabaseError(describe(error))
         }

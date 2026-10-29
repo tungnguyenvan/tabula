@@ -59,6 +59,17 @@ struct RedisConsoleView: View {
                 if model.running {
                     ProgressView().controlSize(.mini)
                 }
+                if model.canStop {
+                    BarButton(
+                        symbol: "stop.fill",
+                        help:
+                            "Stop the running script or blocking command (⌘.). Redis stops a script once it has run for 5 seconds."
+                    ) {
+                        Task { await model.stop() }
+                    }
+                    .keyboardShortcut(".", modifiers: .command)
+                    .accessibilityLabel("Stop")
+                }
                 BarButton(symbol: "trash", help: "Clear output") { model.clear() }
             }
             .padding(.horizontal, 10)
