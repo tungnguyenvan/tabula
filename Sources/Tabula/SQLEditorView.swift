@@ -392,6 +392,22 @@ final class SQLTextView: NSTextView {
         coordinator?.parent.suggest(string, selectedRange().location).range ?? super.rangeForUserCompletion
     }
 
+    #if DEBUG
+    /// What choosing the first saved query in the completion list does (for scripted checks).
+    func completeFirstSavedQuery() {
+        guard let coordinator else { return }
+        let range = rangeForUserCompletion
+        var index = 0
+        let items = coordinator.textView(self, completions: [], forPartialWordRange: range, indexOfSelectedItem: &index)
+        guard let label = items.first(where: { coordinator.savedQuery(labelled: $0) != nil }) else {
+            print("COMPLETE no saved query offered")
+            return
+        }
+        insertCompletion(label, forPartialWordRange: range, movement: NSReturnTextMovement, isFinal: true)
+        print("COMPLETE", label)
+    }
+    #endif
+
     /// A saved query shows as its keyword while the list is browsed, and becomes its SQL once chosen.
     override func insertCompletion(
         _ word: String,
