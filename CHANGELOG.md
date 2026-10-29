@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-29
+
 ### Added
 - **A library of saved queries** ([#94](https://github.com/tungnguyenvan/tabula/issues/94)).
   - **Query › Save to Library…** (⌥⌘S) saves the selection, or the whole editor, under a keyword and an optional folder. Each query is a `.sql` file in `~/Library/Application Support/Tabula/Queries`, so you can also add and arrange them in Finder; subfolders are groups.
