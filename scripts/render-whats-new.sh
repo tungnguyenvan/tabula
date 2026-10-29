@@ -1,40 +1,40 @@
 #!/usr/bin/env bash
-# Renders "What's new in 0.5.0–0.5.4" with Remotion (demo/src/WhatsNew.tsx): dist/demo/tabula-whats-new.mp4 (1080p,
+# Renders "What's new in 0.6.0–0.7.0" with Remotion (demo/src/WhatsNew.tsx): dist/demo/tabula-whats-new.mp4 (1080p,
 # 60 fps) and dist/demo/tabula-whats-new-web.mp4 (1440×810, under GitHub's 10 MB, for the README to play), both encoded
 # from the same checked frames.
 #
 # Recordings of a debug build driven by real input, as for scripts/render-demo.sh, in $RECORDINGS (default
-# /tmp/tabula-rec3). The pointer is drawn only around clicks. Each was made with scripts' TABULA_DEBUG_KEYS against
-# the test connections (TABULA_DATA_DIR) at 30 frames a second, in a 1300×760 window unless noted:
-#   tools       Current development build, PostgreSQL, TABULA_DEBUG_AI_PROVIDER=claudeCode,
-#               TABULA_DEBUG_INSPECTOR_WIDTH=520, with actual saved conversations copied into the isolated test store.
-#               "wait:3000;click:0.947,0.034;wait:1500;click:0.610,0.266;wait:2500;click:0.610,0.266;wait:2500"
-#               The video explicitly identifies this as a real saved conversation, reopened (not simulated live AI).
-#   history     Same build, store and inspector width:
-#               "wait:3000;click:0.947,0.034;wait:1500;click:0.68,0.144;wait:2200;esc;wait:1000;
-#                click:0.986,0.144;wait:1300;click:0.75,0.925;wait:300;slow:Compare paid and shipped orders;wait:1500"
-#               The unsent draft shows the new composer, labelled as the current development build.
-#   state       PostgreSQL with a real saved workspace: Query 3 (scratch SQL), orders (Data), monthly_revenue.sql,
-#               customers (Structure). After closing and reopening the connection:
-#               "wait:5000;call:closeconn;wait:1500;click:0.43,0.425;wait:2500;click:0.433,0.087;wait:1800;
-#                click:0.61,0.087;wait:1800". The video starts at recorded frame 286 (the connection picker).
-#   sidebar     PostgreSQL (with a view, functions and a trigger), no collapsed groups: "wait:3000;click:0.06,0.722;
-#               wait:900;click:0.06,0.595;wait:900;click:0.06,0.469;wait:900;click:0.06,0.174;wait:1500;
-#               click:0.06,0.174;wait:2000"
-#   sqlfile     PostgreSQL: "wait:5000;open:<dir>/revenue_report.sql;wait:1500;cmd+up;down;down;cmd+right;wait:300;
-#               slow: WHERE status <> 'refunded';wait:1200;click:0.513,0.126;wait:1500;cmd+return;wait:2500"
-#   connstring  TABULA_DEBUG_TARGET=connections TABULA_DEBUG_VERSION=0.5.4, 1000×640: "wait:2500;click:0.1,0.94;
-#               wait:1200;click:0.5,0.42;wait:800;paste:host=db.example.com dbname=shop user=app password=s3cret
-#               sslmode=require;wait:2200;click:0.708,0.673;wait:3500"
-# The model's answers differ between runs, so the `timeline` pairs in demo/src/WhatsNew.tsx are checked against
-# each new recording.
+# /tmp/tabula-rec4). The pointer is drawn only around clicks. Each was made with TABULA_DEBUG_KEYS against the store
+# from scripts/seed-dev.sh (TABULA_DATA_DIR; the MySQL connection tagged Development) at 30 frames a second, in a
+# 1300×760 window unless noted, with TABULA_DEBUG_OPEN=<Test Postgres> unless noted:
+#   ssh       TABULA_DEBUG_TARGET=connections TABULA_DEBUG_EDIT=<Test Postgres> TABULA_DEBUG_VERSION=0.7.0, 1000×640:
+#             "wait:3000;move:0.7,0.8;wait:300;click:0.712,0.830;wait:1200;click:0.71,0.615;wait:500;tab;wait:800;
+#              slow:bastion.example.com;wait:400;tab;wait:500;tab;wait:500;slow:deploy;wait:2500"
+#   stop      "wait:3000;slow:SELECT pg_sleep(30);wait:600;cmd+return;wait:2500;move:0.25,0.2;wait:400;
+#              click:0.229,0.125;wait:3000"
+#   mysql     TABULA_DEBUG_OPEN=<Test MySQL>, employees reset to salary 2100 (id 2) and dept NULL (id 4):
+#             "wait:3000;paste:SELECT id, name, dept, salary, hired FROM employees ORDER BY id;wait:500;cmd+return;
+#              wait:1500;move:0.29,0.3;wait:300;click:0.29,0.342;wait:600;move:0.39,0.342;wait:300;dclick:0.3915,0.342;
+#              wait:700;slow:2350;return;wait:800;move:0.3,0.398;wait:300;click:0.29,0.398;wait:600;move:0.334,0.398;
+#              wait:300;dclick:0.334,0.398;wait:700;slow:Sales;return;wait:1200;move:0.45,0.95;wait:400;
+#              click:0.4545,0.980;wait:3000"
+#   tabs      "wait:3000;paste:SELECT id, customer_id, status, total FROM orders ORDER BY total DESC;wait:600;
+#              cmd+return;wait:1500;move:0.45,0.38;wait:300;click:0.45,0.398;wait:1200;move:0.07,0.3;wait:300;
+#              dclick:0.064,0.292;wait:1800;move:0.07,0.42;wait:300;dclick:0.06,0.42;wait:1800;move:0.28,0.09;
+#              wait:300;click:0.283,0.086;wait:2500"
+#   dump      TABULA_DEBUG_DUMP_TO=<dir>/shop.sql: "wait:3000;call:dump;wait:2500;move:0.62,0.70;wait:500;
+#              click:0.660,0.737;wait:4500"
+#   restore   That shop.sql into an empty database: TABULA_DEBUG_DATABASE=shop_copy TABULA_DEBUG_RESTORE_FROM=<dir>/shop.sql
+#             "wait:3500;call:restore;wait:2500;move:0.62,0.70;wait:500;click:0.660,0.729;wait:6000"
+# Each take starts with no saved workspace and an active window (the close button is red in the frames). The
+# `timeline` pairs in demo/src/WhatsNew.tsx (which recorded frames show what) are checked against each new recording.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-RECORDINGS="${RECORDINGS:-/tmp/tabula-rec3}"
+RECORDINGS="${RECORDINGS:-/tmp/tabula-rec4}"
 PUBLIC="demo/public"
 OUT="dist/demo/tabula-whats-new.mp4"
-NAMES=(tools history state sidebar sqlfile connstring)
+NAMES=(ssh stop mysql tabs dump restore)
 
 for name in "${NAMES[@]}"; do
   [ -f "$RECORDINGS/$name/frame-00001.jpg" ] || {

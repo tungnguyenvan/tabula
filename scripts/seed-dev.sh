@@ -44,7 +44,8 @@ SQL
 fi
 
 if with_timeout 5 docker exec tabula-test-mysql true 2>/dev/null; then
-docker exec -i tabula-test-mysql mysql -utabula -ptabula tabula 2>/dev/null <<'SQL'
+# utf8mb4: the client's default would store the Vietnamese names double-encoded.
+docker exec -i tabula-test-mysql mysql --default-character-set=utf8mb4 -utabula -ptabula tabula 2>/dev/null <<'SQL'
 DROP TABLE IF EXISTS employees;
 CREATE TABLE employees (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(80), dept VARCHAR(40), salary DECIMAL(10,2), hired DATE, active TINYINT(1) DEFAULT 1);
 INSERT INTO employees (name, dept, salary, hired) VALUES ('An', 'Eng', 3200.50, '2021-03-01'), ('Bình', 'Sales', 2100, '2022-07-15'),
