@@ -243,8 +243,8 @@ public actor MySQLDriver: DatabaseDriver {
         do {
             let rows = try await connection.query(wireSQL, onMetadata: { affected.value = Int($0.affectedRows) })
                 .get()
-            if !rows.isEmpty {
-                return Self.result(rows, started: started, sql: sql)
+            if let first = rows.first {
+                return Self.result(columns: first.columnDefinitions, rows: rows, started: started, sql: sql)
             }
             return QueryResult(
                 affectedRows: affected.value,
@@ -257,13 +257,19 @@ public actor MySQLDriver: DatabaseDriver {
         }
     }
 
+    /// Keeps the result's columns when it has no rows, so an empty SELECT still shows its header.
     private func textQuery(_ wireSQL: String, sql: String, started: Date) async throws -> QueryResult {
-        let rows = try await connection.simpleQuery(wireSQL).get()
-        return Self.result(rows, started: started, sql: sql)
+        let query = MySQLTextQuery(sql: wireSQL)
+        try await connection.send(query, logger: connection.logger).get()
+        return Self.result(columns: query.columns, rows: query.rows, started: started, sql: sql)
     }
 
-    private static func result(_ rows: [MySQLRow], started: Date, sql: String) -> QueryResult {
-        let definitions = rows.first?.columnDefinitions ?? []
+    private static func result(
+        columns definitions: [MySQLProtocol.ColumnDefinition41],
+        rows: [MySQLRow],
+        started: Date,
+        sql: String
+    ) -> QueryResult {
         var result = QueryResult(
             columns: definitions.map(\.name),
             rows: rows.map(Self.values),
