@@ -3,7 +3,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// A model file Tabula can run itself (GGUF, the format llama.cpp reads).
 public struct LocalModel: Identifiable, Hashable, Sendable {
@@ -233,7 +232,7 @@ private final class DownloadProgress: NSObject, URLSessionDownloadDelegate, @unc
         let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : expected
         guard total > 0 else { return }
         let fraction = min(1, Double(totalBytesWritten) / Double(total))
-        if fraction - reported >= Defaults.Updates.progressStep {
+        if fraction - reported >= Defaults.AI.downloadProgressStep {
             reported = fraction
             report(fraction)
         }

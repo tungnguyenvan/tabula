@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 #if canImport(FoundationModels)
 import FoundationModels

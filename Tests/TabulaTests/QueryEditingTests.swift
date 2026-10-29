@@ -14,7 +14,6 @@ final class QueryEditingTests: XCTestCase {
                 .init(name: "id", attribute: 1, typeOID: 23, typeName: "integer", isKey: true, editable: false),
                 .init(name: "label", attribute: 2, typeOID: 25, typeName: "text", isKey: false, editable: true),
             ],
-            kind: .postgres,
             writer: PostgresResultEditWriter()
         )
     }

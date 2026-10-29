@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// Tools the chat assistant can use while it answers.
 ///
@@ -266,17 +265,20 @@ public struct AgentToolbox: Sendable {
         guard let transaction = driver.catalog.readOnlyTransaction(timeoutSeconds: timeout) else {
             return try await driver.execute(statement)
         }
-        for opening in transaction {
-            _ = try await driver.execute(opening)
-        }
         let result: QueryResult
         do {
+            // Inside the do: once BEGIN has run, any failure must still end the transaction, or the agent's
+            // connection stays in an aborted one and every later query fails.
+            for opening in transaction {
+                _ = try await driver.execute(opening)
+            }
             result = try await driver.execute(statement)
         } catch {
-            // The statement's error is the one to report; a failed ROLLBACK ends with the agent's connection anyway.
+            // The original error is the one to report; a failed ROLLBACK ends with the agent's connection anyway.
             _ = try? await driver.execute("ROLLBACK")
             throw error
         }
+        // A failed ROLLBACK leaves the connection inside the transaction, so it is reported rather than ignored.
         _ = try await driver.execute("ROLLBACK")
         return result
     }

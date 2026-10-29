@@ -58,7 +58,6 @@ final class MySQLQueryEditingTests: XCTestCase {
                     mysqlType: "date"
                 ),
             ],
-            kind: .mysql,
             writer: MySQLResultEditWriter(),
             mysqlTableIdentity: "123"
         )

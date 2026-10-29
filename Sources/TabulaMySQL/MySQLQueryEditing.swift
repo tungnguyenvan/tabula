@@ -93,6 +93,8 @@ extension QueryEditTarget {
 
 /// MySQL's result edits: hex literals that mean the same in every sql_mode, and byte-exact matching of the old values.
 struct MySQLResultEditWriter: ResultEditWriter {
+    var kind: DatabaseKind { .mysql }
+
     func statement(for edit: QueryRowEdit, in target: QueryEditTarget) throws -> String {
         try target.mysqlStatement(for: edit)
     }
@@ -184,7 +186,6 @@ extension MySQLDriver {
             table: table,
             tableOID: 0,
             columns: mapped,
-            kind: .mysql,
             writer: MySQLResultEditWriter(),
             mysqlTableIdentity: identity
         )

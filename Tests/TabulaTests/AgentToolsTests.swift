@@ -2,8 +2,10 @@ import XCTest
 
 @testable import TabulaAI
 @testable import TabulaConnections
+@testable import TabulaDrivers
 @testable import TabulaFoundation
 @testable import TabulaMongo
+@testable import TabulaPostgres
 @testable import TabulaSQL
 @testable import TabulaSQLite
 
@@ -363,4 +365,58 @@ final class ChatStoreTests: XCTestCase {
         )
     }
 
+}
+
+/// The transaction a read-only agent query opens is always ended, even when a statement after BEGIN fails.
+final class AgentReadOnlyTransactionTests: XCTestCase {
+    func testFailedOpeningStatementStillRollsBack() async throws {
+        let driver = RecordingDriver(failing: "SET LOCAL")
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "public")
+        do {
+            _ = try await toolbox.runReadOnly("SELECT 1")
+            XCTFail("The failing opening statement was not reported")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "rejected")
+        }
+        let executed = await driver.executed
+        XCTAssertEqual(executed.first, "BEGIN READ ONLY")
+        XCTAssertEqual(executed.last, "ROLLBACK")
+        XCTAssertFalse(executed.contains("SELECT 1"))
+    }
+
+    func testSuccessfulQueryRollsBack() async throws {
+        let driver = RecordingDriver(failing: nil)
+        let toolbox = AgentToolbox(driver: driver, currentSchema: "public")
+        _ = try await toolbox.runReadOnly("SELECT 1")
+        let executed = await driver.executed
+        XCTAssertEqual(executed.suffix(2), ["SELECT 1", "ROLLBACK"])
+    }
+}
+
+/// A PostgreSQL-shaped driver that records each statement and rejects the first one starting with `failing`.
+private actor RecordingDriver: DatabaseDriver {
+    nonisolated let kind: DatabaseKind = .postgres
+    nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .postgres)
+    nonisolated let catalog: any DatabaseCatalog = PostgresCatalog()
+    private let failing: String?
+    private(set) var executed: [String] = []
+
+    init(failing: String?) {
+        self.failing = failing
+    }
+
+    func execute(_ sql: String) async throws -> QueryResult {
+        executed.append(sql)
+        if let failing, sql.hasPrefix(failing) {
+            throw DatabaseError("rejected")
+        }
+        return QueryResult(statement: sql)
+    }
+
+    func schemas() async throws -> [String] { [] }
+    func defaultSchema() async throws -> String { "" }
+    func tables(in schema: String) async throws -> [TableRef] { [] }
+    func columns(of table: TableRef) async throws -> [ColumnInfo] { [] }
+    func indexes(of table: TableRef) async throws -> [IndexInfo] { [] }
+    func close() async {}
 }

@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// The blocks of an answer: text, fenced code (which gets Insert / Run / Copy) and Markdown tables, which the
 /// inline Markdown that renders the text would otherwise show as rows of pipes.

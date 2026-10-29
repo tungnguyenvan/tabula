@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// A piece of a model's answer as it is generated: its reasoning ("thinking") or the answer itself.
 public enum AIStreamEvent: Sendable, Equatable {

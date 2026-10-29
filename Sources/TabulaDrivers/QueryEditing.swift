@@ -7,7 +7,6 @@ import TabulaSQL
 public struct QueryEditTarget: Sendable {
     public var table: TableRef
     public var tableOID: UInt32
-    public var kind: DatabaseKind
     /// Persistent InnoDB dictionary ID; unlike names or CREATE_TIME this changes after DROP/CREATE.
     public var mysqlTableIdentity: String?
     public var columns: [Column]
@@ -42,19 +41,19 @@ public struct QueryEditTarget: Sendable {
     }
     /// Writes the statements for edits of this result.
     public let writer: any ResultEditWriter
+    /// The database the result came from, as its writer knows it.
+    public var kind: DatabaseKind { writer.kind }
 
     public init(
         table: TableRef,
         tableOID: UInt32,
         columns: [Column],
-        kind: DatabaseKind,
         writer: any ResultEditWriter,
         mysqlTableIdentity: String? = nil
     ) {
         self.table = table
         self.tableOID = tableOID
         self.columns = columns
-        self.kind = kind
         self.writer = writer
         self.mysqlTableIdentity = mysqlTableIdentity
     }
@@ -78,6 +77,8 @@ public struct QueryEditTarget: Sendable {
 /// columns, so a concurrent change is reported rather than overwritten. Each engine that can edit results
 /// supplies one.
 public protocol ResultEditWriter: Sendable {
+    /// The database the statements are written for.
+    var kind: DatabaseKind { get }
     func statement(for edit: QueryRowEdit, in target: QueryEditTarget) throws -> String
 }
 

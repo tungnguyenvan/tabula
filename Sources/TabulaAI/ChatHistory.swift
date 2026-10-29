@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// One message of an AI chat: the user's, the assistant's, or a tool the assistant used.
 public struct ChatMessage: Identifiable, Equatable, Codable, Sendable {

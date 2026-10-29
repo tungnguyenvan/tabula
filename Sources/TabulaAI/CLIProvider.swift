@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// A coding agent already installed on the Mac (Claude Code or Codex), run non-interactively.
 /// Apps opened from the Finder don't get the user's shell PATH (nvm, Homebrew, ~/.local/bin), so
@@ -148,7 +147,7 @@ public struct CLIProvider: AIProvider {
             return "\(name) isn't installed, or isn't on your shell's PATH."
         }
         return detail.isEmpty
-            ? "\(name) exited with status \(output.status)." : "\(name): \(detail.suffix(Defaults.AI.errorLength))"
+            ? "\(name) exited with status \(output.status)." : "\(name): \(detail.suffix(Defaults.toolErrorLength))"
     }
 }
 

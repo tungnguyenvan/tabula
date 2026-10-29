@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// Local models served by Ollama: generation goes through its OpenAI-compatible endpoint, and the
 /// native API lists, downloads and removes models so Settings can manage them.

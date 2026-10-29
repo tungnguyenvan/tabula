@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// Claude through the Messages API (`POST /v1/messages`).
 public struct AnthropicProvider: AIProvider {

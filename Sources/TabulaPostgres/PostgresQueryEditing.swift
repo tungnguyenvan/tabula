@@ -6,6 +6,8 @@ import TabulaSQL
 /// PostgreSQL's result edits: typed E'…' literals and `IS NOT DISTINCT FROM` for the old values, returning the row
 /// as it is after the update.
 struct PostgresResultEditWriter: ResultEditWriter {
+    var kind: DatabaseKind { .postgres }
+
     /// Types whose text form round-trips without a time zone, locale or binary codec, with the cast that reads them.
     static let castTypes: [UInt32: String] = [
         16: "bool", 20: "int8", 21: "int2", 23: "int4", 25: "text", 1042: "bpchar",
@@ -119,7 +121,6 @@ extension PostgresDriver {
             table: TableRef(schema: schema, name: name),
             tableOID: oid,
             columns: mapped,
-            kind: .postgres,
             writer: PostgresResultEditWriter()
         )
     }

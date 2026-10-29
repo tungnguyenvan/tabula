@@ -462,7 +462,7 @@ Sources/TabulaMySQL        MySQLDriver (MySQLNIO), likewise
 Sources/TabulaSQLite       SQLiteDriver (system SQLite), likewise
 Sources/TabulaMongo        MongoDriver (MongoKitten): shell parser and printer, statements, MongoQueryDialect, completion
 Sources/TabulaRedis        RedisDriver (RediStack) and RedisCommandLine
-Sources/TabulaConnections  DriverFactory: the only module that knows every engine
+Sources/TabulaConnections  DriverFactory: opens the driver for every engine except Redis
 Sources/TabulaTransfer     Dump, restore and export
 Sources/TabulaAI           Providers, chat history and the assistant's tools
 Sources/TabulaUpdates      The release feed
@@ -470,7 +470,7 @@ Sources/Tabula             SwiftUI app. ConnectionSession holds a window's conne
                            and SQLEditorView (NSTextView) wrap AppKit for speed and keyboard control; Layout holds
                            the design tokens.
 Sources/TabulaBench        Benchmarks against the test containers (swift run -c release TabulaBench)
-Tests/TabulaCoreTests      Tests of every module
+Tests/TabulaTests          Tests of every module
 scripts/                   build-app.sh, release.sh, seed-dev.sh, benchmark.sh, make-icon.swift, third-party-notices.sh
 ```
 

@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 import llama
 
 /// Runs GGUF models inside the app with llama.cpp: no server or other app to install.

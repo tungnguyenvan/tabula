@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 /// What the app asks a model to do.
 public struct AIRequest: Sendable, Equatable {

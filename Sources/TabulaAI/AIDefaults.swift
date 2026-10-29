@@ -2,7 +2,6 @@ import Foundation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
-import TabulaUpdates
 
 extension Defaults {
     public enum AI {
@@ -57,8 +56,6 @@ extension Defaults {
         /// Tables described to the model; larger schemas are cut off.
         public static let schemaTableLimit = 150
         public static let anthropicVersion = "2026-10-21"
-        /// Characters of a failing tool's output shown in an error.
-        public static let errorLength = 400
 
         public struct LocalModel: Sendable, Identifiable {
             public let name: String
@@ -68,6 +65,8 @@ extension Defaults {
             public var id: String { name }
         }
 
+        /// A model download reports its progress in steps of this fraction.
+        public static let downloadProgressStep = 0.01
         /// Light models that run well on a Mac, offered for download in Settings, smallest first.
         public static let recommendedLocalModels = [
             LocalModel(

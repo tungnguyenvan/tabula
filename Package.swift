@@ -1,14 +1,15 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-/// Each module owns one concern and depends only on the modules listed for it:
+/// Each module owns one concern and lists every module and product it imports:
 ///
 ///     TabulaFoundation   connection settings, results, shared values; no database code
 ///     TabulaStorage      saved connections (Keychain) and workspace state
 ///     TabulaSQL          query languages: lexing, splitting, formatting, completion, dialects
 ///     TabulaDrivers      the driver protocol and what every driver shares: catalogs, logging, cancellation, SSH
 ///     Tabula<Engine>     one module per database: Postgres, MySQL, SQLite, Mongo, Redis
-///     TabulaConnections  opens the driver for a connection's database (the only module that knows every engine)
+///     TabulaConnections  opens the DatabaseDriver for a connection (every engine except Redis, which has its own
+///                        workspace and driver API)
 ///     TabulaTransfer     dump, restore and export
 ///     TabulaAI           providers, chat history and the assistant's tools
 ///     TabulaUpdates      the release feed
@@ -24,7 +25,9 @@ let package = Package(
         .package(url: "https://github.com/swift-server/RediStack.git", from: "1.6.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.27.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/orlandos-nl/MongoKitten.git", from: "7.16.3"),
+        .package(url: "https://github.com/orlandos-nl/BSON.git", from: "8.0.0"),
     ],
     targets: [
         .target(name: "TabulaFoundation"),
@@ -42,50 +45,115 @@ let package = Package(
         ),
         .target(
             name: "TabulaPostgres",
-            dependencies: ["TabulaDrivers", .product(name: "PostgresNIO", package: "postgres-nio")]
+            dependencies: [
+                "TabulaFoundation",
+                "TabulaSQL",
+                "TabulaDrivers",
+                .product(name: "PostgresNIO", package: "postgres-nio"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "Logging", package: "swift-log"),
+            ]
         ),
         .target(
             name: "TabulaMySQL",
-            dependencies: ["TabulaDrivers", .product(name: "MySQLNIO", package: "mysql-nio")]
+            dependencies: [
+                "TabulaFoundation",
+                "TabulaSQL",
+                "TabulaDrivers",
+                .product(name: "MySQLNIO", package: "mysql-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "Logging", package: "swift-log"),
+            ]
         ),
         .target(
             name: "TabulaSQLite",
-            dependencies: ["TabulaDrivers"],
+            dependencies: ["TabulaFoundation", "TabulaSQL", "TabulaDrivers"],
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         .target(
             name: "TabulaMongo",
-            dependencies: ["TabulaDrivers", .product(name: "MongoKitten", package: "MongoKitten")]
+            dependencies: [
+                "TabulaFoundation",
+                "TabulaSQL",
+                "TabulaDrivers",
+                .product(name: "MongoKitten", package: "MongoKitten"),
+                .product(name: "MongoClient", package: "MongoKitten"),
+                .product(name: "BSON", package: "BSON"),
+                .product(name: "NIOCore", package: "swift-nio"),
+            ]
         ),
         .target(
             name: "TabulaRedis",
-            dependencies: ["TabulaDrivers", .product(name: "RediStack", package: "RediStack")]
+            dependencies: [
+                "TabulaFoundation",
+                "TabulaDrivers",
+                .product(name: "RediStack", package: "RediStack"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "Logging", package: "swift-log"),
+            ]
         ),
         .target(
             name: "TabulaConnections",
-            dependencies: ["TabulaDrivers", "TabulaPostgres", "TabulaMySQL", "TabulaSQLite", "TabulaMongo"]
+            dependencies: [
+                "TabulaFoundation",
+                "TabulaDrivers",
+                "TabulaPostgres",
+                "TabulaMySQL",
+                "TabulaSQLite",
+                "TabulaMongo",
+            ]
         ),
-        .target(name: "TabulaTransfer", dependencies: ["TabulaDrivers"]),
+        .target(name: "TabulaTransfer", dependencies: ["TabulaFoundation", "TabulaSQL", "TabulaDrivers"]),
         .target(name: "TabulaUpdates", dependencies: ["TabulaFoundation"]),
-        .target(name: "TabulaAI", dependencies: ["TabulaDrivers", "TabulaUpdates", "llama"]),
+        .target(name: "TabulaAI", dependencies: ["TabulaFoundation", "TabulaSQL", "TabulaDrivers", "llama"]),
         // llama.cpp, which runs local models inside the app. Fetched by scripts/fetch-llama.sh.
         .binaryTarget(name: "llama", path: "Vendor/llama.xcframework"),
         .executableTarget(
             name: "Tabula",
             dependencies: [
-                "TabulaFoundation", "TabulaStorage", "TabulaSQL", "TabulaDrivers", "TabulaPostgres", "TabulaMySQL",
-                "TabulaSQLite", "TabulaMongo", "TabulaRedis", "TabulaConnections", "TabulaTransfer", "TabulaAI",
+                "TabulaFoundation",
+                "TabulaStorage",
+                "TabulaSQL",
+                "TabulaDrivers",
+                "TabulaMongo",
+                "TabulaRedis",
+                "TabulaConnections",
+                "TabulaTransfer",
+                "TabulaAI",
                 "TabulaUpdates",
             ]
         ),
         // Times the drivers against the test containers: swift run -c release TabulaBench
-        .executableTarget(name: "TabulaBench", dependencies: ["TabulaConnections", "TabulaMongo", "TabulaRedis"]),
-        .testTarget(
-            name: "TabulaCoreTests",
+        .executableTarget(
+            name: "TabulaBench",
             dependencies: [
-                "TabulaFoundation", "TabulaStorage", "TabulaSQL", "TabulaDrivers", "TabulaPostgres", "TabulaMySQL",
-                "TabulaSQLite", "TabulaMongo", "TabulaRedis", "TabulaConnections", "TabulaTransfer", "TabulaAI",
+                "TabulaFoundation",
+                "TabulaSQL",
+                "TabulaDrivers",
+                "TabulaConnections",
+                "TabulaMongo",
+                "TabulaRedis",
+            ]
+        ),
+        .testTarget(
+            name: "TabulaTests",
+            dependencies: [
+                "TabulaFoundation",
+                "TabulaStorage",
+                "TabulaSQL",
+                "TabulaDrivers",
+                "TabulaPostgres",
+                "TabulaMySQL",
+                "TabulaSQLite",
+                "TabulaMongo",
+                "TabulaRedis",
+                "TabulaConnections",
+                "TabulaTransfer",
+                "TabulaAI",
                 "TabulaUpdates",
+                .product(name: "BSON", package: "BSON"),
             ]
         ),
     ],
