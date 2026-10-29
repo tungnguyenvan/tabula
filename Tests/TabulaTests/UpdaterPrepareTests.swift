@@ -53,7 +53,8 @@ final class UpdaterPrepareTests: XCTestCase {
     }
 
     /// A Tabula.app with `identifier` and `version`, ad-hoc signed unless `signed` is false, zipped as Tabula.zip,
-    /// and a SHA256SUMS listing `checksum` (the archive's own when nil).
+    /// and a SHA256SUMS listing `checksum` (the archive's own when nil). Each release has a folder of its own:
+    /// URLSession caches responses, so a second release at the same addresses could be read from the cache.
     private func release(
         identifier: String,
         version: String,
@@ -77,22 +78,24 @@ final class UpdaterPrepareTests: XCTestCase {
         if signed {
             try shell("/usr/bin/codesign", ["--force", "--sign", "-", app.path])
         }
-        let archive = folder.appendingPathComponent("Tabula.zip")
-        try? FileManager.default.removeItem(at: archive)
+        let name = "release-\(UUID().uuidString)"
+        let published = folder.appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: published, withIntermediateDirectories: true)
+        let archive = published.appendingPathComponent("Tabula.zip")
         try shell("/usr/bin/ditto", ["-c", "-k", "--keepParent", app.path, archive.path])
         let digest = try checksum ?? Updater.sha256(of: archive)
         let sums = listed ? "\(digest)  Tabula.zip\n" : "\(digest)  Other.zip\n"
-        try sums.write(to: folder.appendingPathComponent("SHA256SUMS"), atomically: true, encoding: .utf8)
+        try sums.write(to: published.appendingPathComponent("SHA256SUMS"), atomically: true, encoding: .utf8)
         let size = (try FileManager.default.attributesOfItem(atPath: archive.path)[.size] as? Int) ?? 0
         return AvailableUpdate(
             version: try XCTUnwrap(SemanticVersion("9.9.9")),
             title: "Tabula 9.9.9",
             notes: "",
             pageURL: url("page"),
-            archiveURL: url("Tabula.zip"),
+            archiveURL: url("\(name)/Tabula.zip"),
             archiveName: "Tabula.zip",
             archiveSize: size,
-            checksumsURL: url("SHA256SUMS")
+            checksumsURL: url("\(name)/SHA256SUMS")
         )
     }
 
