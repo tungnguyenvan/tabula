@@ -156,9 +156,12 @@ final class GridCellView: NSTableCellView {
         field.isBordered = false
         switch cell {
         case .value(let text):
-            let singleLine = text.count > 2000 ? String(text.prefix(2000)) + "…" : text
-            field.stringValue = singleLine.replacingOccurrences(of: "\r\n", with: " ⏎ ")
-                .replacingOccurrences(of: "\n", with: " ⏎ ")
+            let shown = text.count > 2000 ? String(text.prefix(2000)) + "…" : text
+            // Every kind of line break (\n, \r\n, a lone \r, Unicode line separators) shows as one ⏎; a single-line
+            // field would otherwise drop a \r and run the lines together.
+            field.stringValue = shown.replacingOccurrences(of: "\r\n", with: "\n")
+                .components(separatedBy: .newlines)
+                .joined(separator: " ⏎ ")
             field.font = Self.font
             field.textColor = .labelColor
             field.toolTip = text.count > 40 ? String(text.prefix(1000)) : nil
