@@ -146,7 +146,7 @@ enum MongoDialect {
     /// The visual filter's rules as a query document; AND binds tighter than OR, as in the SQL version.
     static func condition(_ rules: [FilterRule]) -> String {
         var groups: [[Document]] = []
-        for rule in rules where !rule.op.needsValue || !rule.value.isEmpty {
+        for rule in rules where rule.isUsed {
             if groups.isEmpty || rule.conjunction == .or {
                 groups.append([])
             }

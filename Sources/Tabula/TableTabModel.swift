@@ -233,7 +233,8 @@ final class TableTabModel {
                 column: rule.column,
                 op: rule.op.rawValue,
                 value: rule.value,
-                conjunction: rule.conjunction.rawValue
+                conjunction: rule.conjunction.rawValue,
+                enabled: rule.isEnabled
             )
         }
         return WorkspaceState.TableFilter(
@@ -255,7 +256,14 @@ final class TableTabModel {
             else {
                 return
             }
-            rules.append(FilterRule(column: saved.column, op: op, value: saved.value, conjunction: conjunction))
+            let rule = FilterRule(
+                column: saved.column,
+                op: op,
+                value: saved.value,
+                conjunction: conjunction,
+                isEnabled: saved.enabled
+            )
+            rules.append(rule)
         }
         restoredFilter = remembered
         filterRules = rules

@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Turn filter conditions on and off** ([#106](https://github.com/tungnguyenvan/tabula/issues/106)). Each condition in a table's filter bar has a checkbox. Unticked conditions stay in the bar but are left out when you apply the filter, and the ticks are remembered with it.
+
 ## [0.7.1] - 2026-10-29
 
 ### Fixed
