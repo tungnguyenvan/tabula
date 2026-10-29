@@ -14,16 +14,36 @@ public struct CLIProvider: AIProvider {
     let tool: Tool
     let model: String
     let effort: String?
+    /// The tool's path when it is known in advance (tests); otherwise it is located (`locate`).
+    let executable: String?
 
     public init(tool: Tool, model: String = "", effort: String? = nil) {
+        self.init(tool: tool, model: model, effort: effort, executable: nil)
+    }
+
+    init(tool: Tool, model: String, effort: String?, executable: String?) {
         self.tool = tool
         self.model = model
         self.effort = effort
+        self.executable = executable
     }
 
+    /// Paths already found, so each request doesn't start a login shell to look again (about half a second).
+    private static let located = LocatedTools()
+
     /// The tool's path: as the login shell resolves it, else from the usual install locations (an npm
-    /// install under another nvm Node version isn't on the PATH). Nil when it isn't installed.
+    /// install under another nvm Node version isn't on the PATH). Nil when it isn't installed. A path found
+    /// before is used again while the file is still there.
     public static func locate(_ tool: Tool) async -> String? {
+        if let known = located.path(for: tool), FileManager.default.isExecutableFile(atPath: known) {
+            return known
+        }
+        let found = await search(tool)
+        located.set(found, for: tool)
+        return found
+    }
+
+    private static func search(_ tool: Tool) async -> String? {
         if let output = try? await ShellCommand.run(
             script: #"command -v "$0""#,
             arguments: [tool.rawValue],
@@ -59,8 +79,15 @@ public struct CLIProvider: AIProvider {
         let tool = tool
         let model = model
         let effort = effort
+        let known = executable
         return AIStream.run { continuation in
-            guard let executable = await Self.locate(tool) else {
+            let located: String?
+            if let known {
+                located = known
+            } else {
+                located = await Self.locate(tool)
+            }
+            guard let executable = located else {
                 throw AIError.unavailable(
                     "\(tool == .claude ? "Claude Code" : "Codex") isn't installed, or isn't on your shell's PATH."
                 )
@@ -72,23 +99,16 @@ public struct CLIProvider: AIProvider {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: directory) }
             let events = CLIEvents(continuation)
+            // The prompt goes to the tool from a file: on the shell's own standard input, a profile script that
+            // reads input (an update prompt, for one) would take it before the tool starts.
+            let prompt = directory.appendingPathComponent("prompt.txt")
 
             switch tool {
             case .claude:
-                var arguments = [
-                    "-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "stream-json",
-                    "--verbose", "--include-partial-messages",
-                ]
-                if !model.isEmpty {
-                    arguments += ["--model", model]
-                }
-                if let effort {
-                    arguments += ["--effort", effort]
-                }
+                try request.prompt.write(to: prompt, atomically: true, encoding: .utf8)
                 let output = try await ShellCommand.run(
-                    script: #"exec "$0" "$@""#,
-                    arguments: [executable] + arguments,
-                    input: request.prompt,
+                    script: Self.fromPromptFile,
+                    arguments: [executable] + Self.claudeArguments(request, model: model, effort: effort),
                     directory: directory,
                     timeout: Defaults.AI.generateTimeout,
                     onLine: { events.claude($0) }
@@ -119,10 +139,11 @@ public struct CLIProvider: AIProvider {
                     arguments += ["-c", "model_reasoning_effort=\"\(effort)\""]
                 }
                 arguments.append("-")
+                try (request.instructions + "\n\n" + request.prompt)
+                    .write(to: prompt, atomically: true, encoding: .utf8)
                 let output = try await ShellCommand.run(
-                    script: #"exec "$0" "$@""#,
+                    script: Self.fromPromptFile,
                     arguments: [executable] + arguments,
-                    input: request.instructions + "\n\n" + request.prompt,
                     directory: directory,
                     timeout: Defaults.AI.generateTimeout,
                     onLine: { events.codex($0) }
@@ -141,6 +162,29 @@ public struct CLIProvider: AIProvider {
         }
     }
 
+    /// Runs the tool (the first argument) with prompt.txt, in the working directory, as its standard input.
+    static let fromPromptFile = #"exec "$0" "$@" < prompt.txt"#
+
+    /// `claude -p` for one answer, with the user's own Claude Code setup kept out (#80): hooks (a SessionStart
+    /// hook can add its own instructions or take long), MCP servers (each is started before the answer, and one
+    /// that hangs kept the chat on Thinking), skills and slash commands, and saving the session. The account,
+    /// model defaults and other settings still apply.
+    static func claudeArguments(_ request: AIRequest, model: String, effort: String?) -> [String] {
+        var arguments = [
+            "-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "stream-json",
+            "--verbose", "--include-partial-messages",
+            "--strict-mcp-config", "--settings", #"{"disableAllHooks": true}"#, "--disable-slash-commands",
+            "--no-session-persistence",
+        ]
+        if !model.isEmpty {
+            arguments += ["--model", model]
+        }
+        if let effort {
+            arguments += ["--effort", effort]
+        }
+        return arguments
+    }
+
     private static func failure(_ name: String, _ output: ShellCommand.Output) -> String {
         let detail = output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         if output.status == ShellCommand.notFoundStatus {
@@ -148,6 +192,21 @@ public struct CLIProvider: AIProvider {
         }
         return detail.isEmpty
             ? "\(name) exited with status \(output.status)." : "\(name): \(detail.suffix(Defaults.toolErrorLength))"
+    }
+}
+
+/// The tools' paths found so far, shared by every request.
+private final class LocatedTools: @unchecked Sendable {
+    private let lock = NSLock()
+    private var paths: [CLIProvider.Tool: String] = [:]
+
+    func path(for tool: CLIProvider.Tool) -> String? {
+        lock.withLock { paths[tool] }
+    }
+
+    /// Records a found path; a tool not found is looked for again next time, in case it was just installed.
+    func set(_ path: String?, for tool: CLIProvider.Tool) {
+        lock.withLock { paths[tool] = path }
     }
 }
 

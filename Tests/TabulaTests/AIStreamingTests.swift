@@ -270,6 +270,40 @@ final class CLIEventsTests: XCTestCase {
         XCTAssertEqual(failed.events.failure, "quota")
     }
 
+    /// The Claude Code command line, with a stand-in `claude` that records what it was given (#80): the user's
+    /// hooks, MCP servers, slash commands and session saving are off, and the prompt arrives on standard input
+    /// even when the shell's profile reads input of its own.
+    func testClaudeCodeRunsWithoutTheUsersSetup() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("FakeClaude-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let arguments = directory.appendingPathComponent("arguments.txt")
+        let input = directory.appendingPathComponent("input.txt")
+        let fake = directory.appendingPathComponent("claude")
+        let script = """
+            #!/bin/sh
+            printf '%s\\n' "$@" > "\(arguments.path)"
+            cat > "\(input.path)"
+            echo '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"SELECT 1"}}}'
+            echo '{"type":"result","result":"SELECT 1"}'
+            """
+        try script.write(to: fake, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fake.path)
+
+        let provider = CLIProvider(tool: .claude, model: "", effort: nil, executable: fake.path)
+        let reply = try await provider.complete(
+            AIRequest(purpose: .generate, instructions: "Reply with SQL only.", prompt: "Count the rows of t.")
+        )
+        XCTAssertEqual(reply, "SELECT 1")
+        let given = try String(contentsOf: arguments, encoding: .utf8).split(separator: "\n").map(String.init)
+        for flag in ["--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence", "--tools"] {
+            XCTAssertTrue(given.contains(flag), "missing \(flag) in \(given)")
+        }
+        let settings = given.firstIndex(of: "--settings").map { given[$0 + 1] }
+        XCTAssertEqual(settings, #"{"disableAllHooks": true}"#)
+        XCTAssertEqual(try String(contentsOf: input, encoding: .utf8), "Count the rows of t.")
+    }
+
     /// Runs the installed Codex (TABULA_TEST_CODEX=1), which costs a small request.
     func testCodexStreamsLive() async throws {
         guard ProcessInfo.processInfo.environment["TABULA_TEST_CODEX"] != nil else {

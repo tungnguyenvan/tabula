@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+- The AI chat with Claude Code answers sooner and no longer hangs on Thinking when your own Claude Code setup is slow to start ([#80](https://github.com/tungnguyenvan/tabula/issues/80)). Tabula now runs it without your hooks, MCP servers, skills and slash commands, and doesn't save its requests in Claude Code's session history; your account and model settings still apply. The prompt no longer goes through your shell's input, where a profile asking a question (such as an update prompt) could take it.
+
 ## [0.10.0] - 2026-10-29
 
 ### Added
