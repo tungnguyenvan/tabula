@@ -27,6 +27,13 @@ final class QueryLibraryTests: XCTestCase {
         try "SELECT 1".write(to: reports.appendingPathComponent("Top customers.sql"), atomically: true, encoding: .utf8)
         try "not sql".write(to: reports.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
 
+        // Bytes that aren't text in any encoding Foundation can detect are reported, not listed.
+        let binary = library.directory.appendingPathComponent("broken.sql")
+        try Data([0xFF, 0xFE, 0x00, 0xD8, 0x00]).write(to: binary)
+        let contents = try library.contents()
+        XCTAssertEqual(contents.unreadable.map(\.lastPathComponent), ["broken.sql"])
+        try FileManager.default.removeItem(at: binary)
+
         let loaded = try library.load()
         XCTAssertEqual(loaded.map(\.keyword), ["active_users", "Top customers", "revenue"])
         XCTAssertEqual(loaded.map(\.group), ["", "reports", "reports/monthly"])

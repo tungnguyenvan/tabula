@@ -103,7 +103,12 @@ final class RedisWorkspaceModel {
 
     func reloadDatabases() async {
         guard let driver else { return }
-        databases = (try? await driver.databases()) ?? [(database, 0)]
+        do {
+            databases = try await driver.databases()
+        } catch {
+            // The list stays as it was rather than showing the current database alone, as if it were the only one.
+            keysError = "Couldn't list the databases: \(error.localizedDescription)"
+        }
     }
 
     func selectDatabase(_ index: Int) async {
@@ -240,7 +245,16 @@ final class RedisWorkspaceModel {
     /// Re-reads one row after the key was edited elsewhere (detail pane, inline edit).
     func refreshSummary(_ key: RedisBytes) async {
         guard let driver, let index = keys.firstIndex(where: { $0.key == key }) else { return }
-        if let summary = try? await driver.summaries(of: [key]).first {
+        let summaries: [RedisKeySummary]
+        do {
+            summaries = try await driver.summaries(of: [key])
+        } catch {
+            // The key may well still exist: keep its row and say why it wasn't updated.
+            keysError = "Couldn't re-read \(key.display): \(error.localizedDescription)"
+            return
+        }
+        // `summaries` leaves out keys that no longer exist.
+        if let summary = summaries.first {
             keys[index] = summary
         } else {
             keys.remove(at: index)

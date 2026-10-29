@@ -32,7 +32,9 @@ final class AIChatModel {
     init(connectionID: UUID) {
         self.connectionID = connectionID
         store = AppState.chatStore
-        conversations = store.load(connectionID)
+        let loaded = store.load(connectionID)
+        conversations = loaded.conversations
+        reportSetAside(loaded)
         // Opening the panel again shows where the user left off.
         if let latest = conversations.first {
             currentID = latest.id
@@ -85,10 +87,20 @@ final class AIChatModel {
         persist()
     }
 
+    /// Tells the user when saved chats couldn't be read, instead of showing an empty history as if there were none.
+    private func reportSetAside(_ loaded: ChatStore.Loaded) {
+        guard let setAside = loaded.setAside else {
+            return
+        }
+        error = "Saved chats for this connection couldn't be read. They were moved to \(setAside.path)."
+    }
+
     private func persist() {
         // Another window with this connection may have saved conversations of its own meanwhile.
         let known = Set(conversations.map(\.id)).union(deleted)
-        conversations += store.load(connectionID).filter { !known.contains($0.id) }
+        let loaded = store.load(connectionID)
+        reportSetAside(loaded)
+        conversations += loaded.conversations.filter { !known.contains($0.id) }
         conversations.sort { $0.updated > $1.updated }
         do {
             try store.save(conversations, for: connectionID)

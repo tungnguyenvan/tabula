@@ -173,8 +173,10 @@ final class WorkspaceModel {
 
     func loadRoutines() async {
         guard let driver else { return }
-        // Not every account may read the catalog for routines; the list is simply empty then.
-        routines = (try? await driver.routines(in: selectedSchema)) ?? []
+        // A failure (a lost connection, an account that may not read the routines) shows in the sidebar.
+        routines = await catalogRead([]) {
+            try await driver.routines(in: selectedSchema)
+        }
     }
 
     func openRoutine(_ routine: RoutineInfo) {

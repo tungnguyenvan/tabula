@@ -453,6 +453,7 @@ public enum DatabaseDump {
             case .mysql:
                 let tool = try await required(.mysqldump, preferMariaDB: options.serverIsMariaDB)
                 try await withOptionFile(mysqlOptionFile(config, password: password, tool: tool)) { optionFile in
+                    // Unknown --help output: --column-statistics is left off, which works on every server.
                     let help = (try? await run(tool.path, ["--help"], environment: [:], timeout: 10).output) ?? ""
                     let arguments = mysqldumpArguments(
                         options,
@@ -558,7 +559,9 @@ public enum DatabaseDump {
                 try MySQLScriptCheck.check(file)
                 let tool = try await required(.mysql, preferMariaDB: options.serverIsMariaDB)
                 try await withOptionFile(mysqlOptionFile(config, password: password, tool: tool)) { optionFile in
-                    let help = (try? await run(tool.path, ["--help"], environment: [:], timeout: 10).output) ?? ""
+                    // Whether the client can turn off shell commands is read from its help; a client whose help
+                    // can't be read is reported, not taken for one that can't.
+                    let help = try await run(tool.path, ["--help"], environment: [:], timeout: 10).output
                     let arguments = try mysqlArguments(
                         optionFile: optionFile,
                         connection: mysqlConnectionArguments(config, endpoint: endpoint),

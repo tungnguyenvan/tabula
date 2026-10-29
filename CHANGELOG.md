@@ -5,6 +5,16 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Fixed
+- Failures that used to look like empty data are now reported ([#98](https://github.com/tungnguyenvan/tabula/issues/98)):
+  - A table's indexes that can't be read show a note under Indexes, instead of looking like a table without indexes; a row count that fails shows "of ?" with the reason.
+  - The relationship diagram names tables whose columns couldn't be read.
+  - Redis: a failed refresh of one key no longer drops it from the list, and a failed database list keeps the old one and says why.
+  - Functions and triggers that can't be listed show the reason in the sidebar.
+  - Saved AI chats that can't be read say where they were moved, instead of the history looking empty.
+  - `.sql` files in the query library that can't be read as text are named in the Queries panel.
+  - Ollama models that are installed no longer show as not installed when the list can't be read.
+  - Restoring with a `mysql` client whose help can't be read reports that, instead of asking you to update the client.
+  - Column names that fail to load for completion are tried again rather than remembered as empty.
 - The AI chat with Claude Code answers sooner and no longer hangs on Thinking when your own Claude Code setup is slow to start ([#80](https://github.com/tungnguyenvan/tabula/issues/80)). Tabula now runs it without your hooks, MCP servers, skills and slash commands, and doesn't save its requests in Claude Code's session history; your account and model settings still apply. The prompt no longer goes through your shell's input, where a profile asking a question (such as an update prompt) could take it.
 
 ## [0.10.0] - 2026-10-29
