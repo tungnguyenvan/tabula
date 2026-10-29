@@ -110,7 +110,8 @@ struct SQLiteCatalog: DatabaseCatalog, RoutineCatalog {
 
     // MARK: Read-only sessions
 
-    /// SQLite has no statement timeout; query_only refuses every write on the connection.
+    /// query_only refuses every write on the connection; SQLite has no statement timeout of its own, so the
+    /// connection's interrupter ends a statement that runs past it.
     func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {
         _ = try await driver.execute("PRAGMA query_only = ON")
         interrupter.timeLimitSeconds = timeoutSeconds
