@@ -475,6 +475,11 @@ Tests/TabulaTests          Tests of every module
 scripts/                   build-app.sh, release.sh, seed-dev.sh, benchmark.sh, make-icon.swift, third-party-notices.sh
 ```
 
+**Code conventions.**
+- Format with `swift format --in-place --recursive --configuration .swift-format Sources Tests`; `swift format lint` should report nothing.
+- Prefer explicit steps to dense one-liners: one statement per line, no nested ternaries, guard and if bodies on their own lines.
+- Errors reach the user. A failed load says so (the sidebar's error, a table tab's banner, a sheet's message) rather than showing empty data. `try?` is for cleanup, cancellable sleeps, trying to parse outside text, and optional extra detail; anywhere else it carries a comment saying why the failure doesn't matter.
+
 **Tests.** Unit tests and SQLite tests always run. The Postgres, MySQL, Redis and MongoDB tests run against real servers when ports are set:
 
 ```bash
