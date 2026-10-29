@@ -84,7 +84,7 @@ extension DebugHooks {
                             point = NSPoint(x: onScreen.x - sheet.frame.minX, y: onScreen.y - sheet.frame.minY)
                         }
                     }
-                    func post(_ type: NSEvent.EventType, clicks: Int) {
+                    @MainActor func post(_ type: NSEvent.EventType, clicks: Int) {
                         guard
                             let event = NSEvent.mouseEvent(
                                 with: type,
@@ -146,7 +146,7 @@ extension DebugHooks {
                         guard let alert = NSApp.modalWindow, let content = alert.contentView else {
                             return print("ALERT none")
                         }
-                        func buttons(_ view: NSView) -> [NSButton] {
+                        @MainActor func buttons(_ view: NSView) -> [NSButton] {
                             ((view as? NSButton).map { [$0] } ?? []) + view.subviews.flatMap(buttons)
                         }
                         let found = buttons(content)

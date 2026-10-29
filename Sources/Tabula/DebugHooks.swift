@@ -110,12 +110,15 @@ enum DebugHooks {
             // so a snapshot can show the question.
             if let allow = environment["TABULA_DEBUG_APPROVE"] {
                 Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
-                    MainActor.assumeIsolated {
+                    let answered = MainActor.assumeIsolated { () -> Bool in
                         guard let step = model.chat.messages.last(where: { $0.tool?.status == .awaitingApproval })
-                        else { return }
+                        else { return false }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                             model.chat.answer(step.id, allow: allow == "1")
                         }
+                        return true
+                    }
+                    if answered {
                         timer.invalidate()
                     }
                 }
