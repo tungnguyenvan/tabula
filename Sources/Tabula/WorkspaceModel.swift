@@ -178,8 +178,8 @@ final class WorkspaceModel {
     }
 
     func newRoutine(_ kind: RoutineInfo.Kind, table: String? = nil) {
-        guard let driver else { return }
-        let model = RoutineTabModel(newKind: kind, template: driver.template(for: kind, schema: selectedSchema, table: table),
+        guard let driver, let routines = driver.routineCatalog else { return }
+        let model = RoutineTabModel(newKind: kind, template: routines.template(for: kind, schema: selectedSchema, table: table),
                                     driver: driver, workspace: self)
         tabs.append(.routine(model))
         selectedTabID = model.id
@@ -223,17 +223,29 @@ final class WorkspaceModel {
         }
     }
 
+    /// A catalog read for the sidebar. A failure leaves `empty` in place and shows in the sidebar, so a login
+    /// that may not list schemas still gets a window to work in.
+    private func catalogRead<Value>(_ empty: Value, _ read: () async throws -> Value) async -> Value {
+        do {
+            return try await read()
+        } catch {
+            tablesError = error.localizedDescription
+            return empty
+        }
+    }
+
     /// Makes `driver` the window's connection and loads what the sidebar shows.
     private func setUp(_ driver: LoggingDriver) async {
         self.driver = driver
         status = .connected
         connectedAt = Date()
-        serverVersion = await driver.serverVersion()
-        currentDatabase = await driver.currentDatabase()
+        // Shown in the toolbar when the server reports them; a failed query is in the console log.
+        serverVersion = try? await driver.serverVersion()
+        currentDatabase = (try? await driver.currentDatabase()) ?? nil
         if savedDatabase == nil { savedDatabase = currentDatabase }
-        databases = (try? await driver.serverDatabases()) ?? []
-        schemas = (try? await driver.schemas()) ?? []
-        let preferred = (try? await driver.defaultSchema()) ?? ""
+        databases = await catalogRead([]) { try await driver.serverDatabases() }
+        schemas = await catalogRead([]) { try await driver.schemas() }
+        let preferred = await catalogRead("") { try await driver.defaultSchema() }
         selectedSchema = schemas.contains(preferred) ? preferred : (schemas.first ?? preferred)
         await applySchema()
         await loadTables()
@@ -611,7 +623,7 @@ final class WorkspaceModel {
         // Tables the text names come first and are always loaded; the others only while time allows.
         var named: [TableRef] = []
         var extra: [TableRef] = []
-        for reference in SQLCompletion.tables(in: sql, kind: driver.kind) {
+        for reference in driver.dialect.referencedTables(in: sql) {
             if let schemaName = reference.schema, schemaName.caseInsensitiveCompare(selectedSchema) != .orderedSame {
                 guard let schema = schemas.first(where: { $0.caseInsensitiveCompare(schemaName) == .orderedSame }) else { continue }
                 let table = TableRef(schema: schema, name: reference.name)
@@ -662,13 +674,15 @@ final class WorkspaceModel {
 
     /// `schema.table`, quoting names that need it; SQLite's main database needs no prefix.
     private func aiName(_ table: TableRef, kind: DatabaseKind) -> String {
-        let d = SQLDialect(kind: kind)
-        func part(_ name: String) -> String {
-            name.range(of: "^[a-z_][a-z0-9_]*$", options: .regularExpression) != nil ? name : d.quoteIdentifier(name)
+        guard let flavor = SQLFlavor(kind) else {
+            // MongoDB: collections are named as the shell reaches them from the current database.
+            return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name)"
         }
-        if kind == .sqlite && table.schema == "main" { return part(table.name) }
-        // Collections are named as the shell reaches them from the current database.
-        if kind.isDocument { return table.schema == selectedSchema ? table.name : "\(table.schema).\(table.name)" }
+        let dialect = SQLDialect(flavor: flavor)
+        func part(_ name: String) -> String {
+            name.range(of: "^[a-z_][a-z0-9_]*$", options: .regularExpression) != nil ? name : dialect.quoteIdentifier(name)
+        }
+        if flavor == .sqlite && table.schema == "main" { return part(table.name) }
         return "\(part(table.schema)).\(part(table.name))"
     }
 
@@ -789,4 +803,11 @@ final class WorkspaceModel {
         }
         await refresh()
     }
+}
+
+/// What completion offers in this workspace's editors.
+extension WorkspaceModel: CompletionCatalog {
+    var tableNames: [String] { tables.map(\.name) }
+    var schemaNames: [String] { schemas }
+    var allColumnNames: [String] { knownColumnNames }
 }

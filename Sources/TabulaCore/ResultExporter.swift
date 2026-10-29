@@ -35,8 +35,9 @@ public enum ResultExporter {
         }
     }
 
+    /// `dialect` writes the INSERT statements of `.sqlInsert`; the other formats don't depend on the database.
     public static func export(columns: [String], rows: [[String?]], format: ExportFormat,
-                              table: TableRef? = nil, dialect: SQLDialect = SQLDialect(kind: .postgres)) -> String {
+                              table: TableRef? = nil, dialect: any QueryDialect) throws -> String {
         switch format {
         case .csv:
             return delimited(columns: columns, rows: rows, separator: ",")
@@ -49,8 +50,8 @@ public enum ResultExporter {
                 for (column, value) in zip(keys, row) { object[column] = value ?? NSNull() }
                 return object
             }
-            let data = (try? JSONSerialization.data(withJSONObject: objects, options: [.prettyPrinted, .sortedKeys])) ?? Data()
-            return String(data: data, encoding: .utf8) ?? "[]"
+            let data = try JSONSerialization.data(withJSONObject: objects, options: [.prettyPrinted, .sortedKeys])
+            return String(decoding: data, as: UTF8.self)
         case .sqlInsert:
             let target = table ?? TableRef(schema: "main", name: "results")
             return rows.map { row in

@@ -86,8 +86,9 @@ final class RoutineTabModel {
         guard Confirmation.ask("Delete \(routine.kind.displayName.lowercased()) “\(routine.displayName)”?", detail: detail, action: "Delete") else {
             return false
         }
+        guard let routines = driver.routineCatalog else { return false }
         do {
-            _ = try await driver.execute(driver.dropStatement(for: routine))
+            _ = try await driver.execute(routines.dropStatement(for: routine))
             await workspace.loadRoutines()
             return true
         } catch {
@@ -109,7 +110,7 @@ struct RoutineTabView: View {
             if let error = model.error {
                 ErrorBanner(message: error) { model.error = nil }
             }
-            SQLEditorView(text: $model.text, handle: handle, kind: model.driver.kind,
+            SQLEditorView(text: $model.text, handle: handle, dialect: model.driver.dialect,
                           suggest: { _, caret in (NSRange(location: caret, length: 0), []) },
                           undoManager: model.undoManager) { _ in Task { await model.save() } }
                 .overlay { if model.loading { ProgressView().controlSize(.small) } }

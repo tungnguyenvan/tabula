@@ -1,8 +1,71 @@
 import BSON
 import Foundation
 
-/// The shell statements Tabula writes for MongoDB where it writes SQL for the other databases:
-/// paging, counting, filtering and editing a collection in the grid.
+/// The MongoDB shell as a query language: the statements Tabula writes where it writes SQL for the other
+/// databases (paging, counting, filtering and editing a collection in the grid), and how shell scripts are split,
+/// formatted and highlighted.
+public struct MongoQueryDialect: QueryDialect {
+    public init() {}
+
+    /// `//` comments; every quote is a string with backslash escapes.
+    public var lexicalRules: LexicalRules {
+        LexicalRules(dashDashComments: false, hashComments: false, slashSlashComments: true, backslashEscapes: true,
+                     doubledQuotes: false, dollarQuotes: false, quotedIdentifiers: false)
+    }
+
+    public var sql: SQLDialect? { nil }
+    /// Multi-document transactions need a replica set, which Tabula can't assume.
+    public var beginTransaction: String? { nil }
+
+    public func quoteIdentifier(_ name: String) -> String { MongoShell.quoted(name) }
+    public func qualified(_ table: TableRef) -> String { MongoDialect.collection(table) }
+    public func literal(_ value: String?) -> String { value.map(MongoShell.quoted) ?? "null" }
+    public func selectPage(_ request: TablePageRequest) -> String { MongoDialect.selectPage(request) }
+    public func countRows(_ table: TableRef, filter: String?) -> String { MongoDialect.countRows(table, filter: filter) }
+    public func insert(_ table: TableRef, values: [(column: String, value: String?)]) -> String {
+        MongoDialect.insert(table, values: values)
+    }
+    public func selectSample(_ table: TableRef, limit: Int) -> String { MongoDialect.sample(table, limit: limit) }
+    public func truncate(_ table: TableRef) -> String { MongoDialect.truncate(table) }
+    public func drop(_ table: TableRef) -> String { MongoDialect.drop(table) }
+    public func condition(_ rules: [FilterRule]) -> String { MongoDialect.condition(rules) }
+
+    /// Updates and deletes match each document's `_id`; edited text is read back in the field's type.
+    public func statements(for changes: TableChanges) throws -> [String] {
+        func document(_ row: Int) throws -> String {
+            guard let documents = changes.documents, documents.indices.contains(row) else {
+                throw DatabaseError("Reload the collection and try again.")
+            }
+            return documents[row]
+        }
+        return try changes.deleted.sorted().map { try MongoChanges.delete(changes.table, document: document($0)) }
+            + changes.updates.map { update in
+                try MongoChanges.update(changes.table, row: .init(document: document(update.row),
+                                                                  changes: Dictionary(uniqueKeysWithValues: update.values)))
+            }
+            + changes.insertions.map { MongoChanges.insert(changes.table, values: $0) }
+    }
+    public func statements(in script: String) -> [ScriptStatement] { MongoSplitter.statements(in: script) }
+    public func beautify(_ script: String) -> String { MongoStatement.beautify(script) }
+    public func applyingRowLimit(_ statement: String, limit: Int) -> String {
+        MongoStatement.applyingRowLimit(statement, limit: limit)
+    }
+
+    public func role(ofWord word: SQLToken) -> WordRole? {
+        if word.text.hasPrefix("$") { return .operator }
+        return MongoVocabulary.highlighted.contains(word.text) ? .keyword : nil
+    }
+
+    public func completions(in text: String, caret: Int, catalog: any CompletionCatalog) -> (range: NSRange, items: [String]) {
+        MongoCompletion.suggestions(in: text, caret: caret, collections: catalog.tableNames,
+                                    fields: { catalog.columnNames(of: SQLCompletion.TableName(name: $0)) })
+    }
+
+    /// Shell statements name their collection after `db.`, which the assistant's schema already lists in full.
+    public func referencedTables(in text: String) -> [SQLCompletion.TableName] { [] }
+}
+
+/// The statements behind `MongoQueryDialect`.
 enum MongoDialect {
     /// `db.getSiblingDB("shop").users`: generated statements name the database, since a tab can outlive
     /// the sidebar's current one.

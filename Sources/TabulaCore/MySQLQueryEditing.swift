@@ -60,7 +60,7 @@ extension QueryEditTarget {
     func mysqlPredicate(for edit: QueryRowEdit, includeOriginals: Bool) throws -> String {
         let keys = try mysqlValidatedIndices(for: edit)
         let indices = includeOriginals ? Set(keys).union(edit.values.keys).sorted() : keys
-        let d = SQLDialect(kind: .mysql)
+        let d = SQLDialect(flavor: .mysql)
         return try indices.map { index in
             let name = d.quoteIdentifier(columns[index].name)
             let value = Self.mysqlLiteral(edit.original[index])
@@ -79,7 +79,7 @@ extension QueryEditTarget {
 
     func mysqlStatement(for edit: QueryRowEdit) throws -> String {
         let predicate = try mysqlPredicate(for: edit, includeOriginals: true)
-        let d = SQLDialect(kind: .mysql)
+        let d = SQLDialect(flavor: .mysql)
         let assignments = edit.values.sorted { $0.key < $1.key }.map { index, value in
             "\(d.quoteIdentifier(columns[index].name)) = \(Self.mysqlLiteral(value))"
         }.joined(separator: ", ")
@@ -89,7 +89,7 @@ extension QueryEditTarget {
 
 extension MySQLDriver {
     public func queryEditTarget(for result: QueryResult) async throws -> QueryEditTarget? {
-        guard let source = EditableSelect.relation(result.statement, kind: .mysql),
+        guard let source = EditableSelect.relation(result.statement, flavor: .mysql),
               let origins = result.mysqlOrigins, !origins.isEmpty, origins.count == result.columns.count,
               let first = origins.first, !first.schema.isEmpty, !first.originalTable.isEmpty, !first.table.isEmpty,
               origins.allSatisfy({ $0.schema == first.schema && $0.originalTable == first.originalTable &&

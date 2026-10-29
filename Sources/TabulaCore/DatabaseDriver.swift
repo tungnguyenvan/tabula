@@ -4,6 +4,10 @@ import Foundation
 /// isolation alone does not serialize entire executions.
 public protocol DatabaseDriver: AnyObject, Sendable {
     var kind: DatabaseKind { get }
+    /// The database's query language: quoting, generated statements and script handling.
+    var dialect: any QueryDialect { get }
+    /// The database's catalog queries: version, schemas, foreign keys, metrics, routines.
+    var catalog: any DatabaseCatalog { get }
     /// Whether Stop can interrupt the current server statement, or only skip subsequent statements.
     var queryCancellation: QueryCancellationSupport { get }
 
@@ -71,63 +75,14 @@ extension DriverFactory {
 }
 
 extension DatabaseDriver {
-    public var dialect: SQLDialect { SQLDialect(kind: kind) }
-
     /// Runs several statements in order, returning every result. Stops at the first error.
     public func executeScript(_ script: String) async throws -> [QueryResult] {
         var results: [QueryResult] = []
-        for statement in SQLSplitter.split(script, kind: kind) {
+        for statement in dialect.split(script) {
             try QueryCancelScope.current?.checkCancellation()
             results.append(try await execute(statement))
         }
         return results
-    }
-
-    /// Makes `schema` the one unqualified names refer to, as the sidebar's schema picker promises:
-    /// `SET search_path` on PostgreSQL (keeping public for extensions and shared tables), `USE` on MySQL.
-    public func useSchema(_ schema: String) async throws {
-        guard !schema.isEmpty else { return }
-        let d = dialect
-        switch kind {
-        case .postgres:
-            let path = schema == "public" ? [schema] : [schema, "public"]
-            _ = try await execute("SET search_path TO " + path.map(d.quoteIdentifier).joined(separator: ", "))
-        case .mysql:
-            _ = try await execute("USE \(d.quoteIdentifier(schema))")
-        case .mongodb:
-            _ = try await execute("use \(schema)")
-        case .sqlite, .redis:
-            break
-        }
-    }
-
-    /// The other databases on the server this login may open (PostgreSQL, where a connection reaches one
-    /// database). Empty for the rest: MySQL and MongoDB list their databases as schemas.
-    public func serverDatabases() async throws -> [String] {
-        guard kind == .postgres else { return [] }
-        let result = try await execute("""
-            SELECT datname FROM pg_database
-            WHERE datallowconn AND NOT datistemplate AND has_database_privilege(datname, 'CONNECT')
-            ORDER BY datname
-            """)
-        return result.rows.compactMap { $0.first ?? nil }
-    }
-
-    /// The database this connection is in (PostgreSQL); nil for the others.
-    public func currentDatabase() async -> String? {
-        guard kind == .postgres else { return nil }
-        return (try? await execute("SELECT current_database()")).flatMap { $0.rows.first?.first ?? nil }
-    }
-
-    /// Server version as reported by the database, e.g. "PostgreSQL 16.11 on aarch64…".
-    public func serverVersion() async -> String? {
-        if kind == .mongodb {
-            return (try? await execute("db.version()")).flatMap { $0.rows.first?.first ?? nil }.map { "MongoDB " + $0 }
-        }
-        let sql = kind == .sqlite ? "SELECT 'SQLite ' || sqlite_version()" : "SELECT version()"
-        guard let result = try? await execute(sql), let value = result.rows.first?.first ?? nil else { return nil }
-        if kind == .mysql { return "MySQL " + value }
-        return value
     }
 
     public func fetchPage(_ request: TablePageRequest) async throws -> QueryResult {
@@ -140,11 +95,11 @@ extension DatabaseDriver {
         return Int(text)
     }
 
-    /// Applies statements atomically, rolling back if any statement fails.
+    /// Applies statements in one transaction, rolling back if one fails. Where the dialect has no transactions
+    /// (MongoDB without a replica set), they run in order and the error says which were already applied.
     public func applyInTransaction(_ statements: [String]) async throws {
         guard !statements.isEmpty else { return }
-        if kind == .mongodb {
-            // Multi-document transactions need a replica set; run the changes in order and say where it stopped.
+        guard let begin = dialect.beginTransaction else {
             for (index, statement) in statements.enumerated() {
                 do {
                     _ = try await execute(statement)
@@ -155,13 +110,14 @@ extension DatabaseDriver {
             }
             return
         }
-        _ = try await execute(dialect.beginTransaction)
+        _ = try await execute(begin)
         do {
             for statement in statements {
                 _ = try await execute(statement)
             }
             _ = try await execute("COMMIT")
         } catch {
+            // The statement's error is the one to report; a failed ROLLBACK ends with the connection anyway.
             _ = try? await execute("ROLLBACK")
             throw error
         }

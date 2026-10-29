@@ -284,10 +284,15 @@ struct ConnectionFormView: View {
                 return
             }
             let driver = try await DriverFactory.connect(config, password: password)
-            let version = await driver.serverVersion()
+            let version: String
+            do {
+                version = try await driver.serverVersion()
+            } catch {
+                await driver.close()
+                throw error
+            }
             await driver.close()
-            let text = version.map { String($0.prefix(Layout.versionLength)) } ?? "Connected"
-            testState = .success(text)
+            testState = .success(String(version.prefix(Layout.versionLength)))
         } catch {
             testState = .failure(PasswordEscapes.message(for: error, password: password))
         }

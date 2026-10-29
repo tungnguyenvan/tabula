@@ -21,11 +21,11 @@ final class EditorHandle {
     }
 
     /// The selection if there is one, otherwise the statement under the caret (briefly highlighted).
-    func textToRun(kind: DatabaseKind) -> String? {
+    func textToRun(dialect: any QueryDialect) -> String? {
         if let selectedText { return selectedText }
         guard let textView else { return nil }
         let caret = textView.selectedRange().location
-        guard let statement = SQLSplitter.statement(at: caret, in: textView.string, kind: kind) else { return nil }
+        guard let statement = dialect.statement(at: caret, in: textView.string) else { return nil }
         flash(statement.range)
         return statement.text
     }
@@ -88,16 +88,16 @@ final class EditorHandle {
         guard let textView, textView.shouldChangeText(in: range, replacementString: text) else { return }
         textView.replaceCharacters(in: range, with: text)
         textView.didChangeText()
-        SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
+        SQLHighlighter.highlight(textView)
     }
 
     /// Beautifies the selection, or the whole editor when nothing is selected. Undoable.
-    func beautify(kind: DatabaseKind) {
+    func beautify(dialect: any QueryDialect) {
         guard let textView else { return }
         let selection = textView.selectedRange()
         let range = selection.length > 0 ? selection : NSRange(location: 0, length: (textView.string as NSString).length)
         let original = (textView.string as NSString).substring(with: range)
-        let formatted = SQLFormatter.format(original, kind: kind)
+        let formatted = dialect.beautify(original)
         guard formatted != original, textView.shouldChangeText(in: range, replacementString: formatted) else { return }
         textView.replaceCharacters(in: range, with: formatted)
         textView.didChangeText()
@@ -108,8 +108,8 @@ final class EditorHandle {
 struct SQLEditorView: NSViewRepresentable {
     @Binding var text: String
     var handle: EditorHandle
-    /// Decides comment and quoting rules for highlighting (`#` comments on MySQL, `$$` strings on Postgres).
-    var kind: DatabaseKind
+    /// The language's comments, quoting and keywords, for highlighting (`#` comments on MySQL, `$$` strings on Postgres).
+    var dialect: any QueryDialect
     /// Completions for the word at a caret (UTF-16 offset): the range they replace and the candidates, best first.
     var suggest: (_ text: String, _ caret: Int) -> (range: NSRange, items: [String])
     typealias AISuggest = @MainActor (_ before: String, _ after: String) async -> String?
@@ -132,7 +132,7 @@ struct SQLEditorView: NSViewRepresentable {
         let scrollView = SQLTextView.scrollableTextView()
         let textView = SQLTextView(frame: .zero)
         textView.coordinator = context.coordinator
-        textView.kind = kind
+        textView.dialect = dialect
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -156,7 +156,7 @@ struct SQLEditorView: NSViewRepresentable {
         textView.isIncrementalSearchingEnabled = true
         textView.delegate = context.coordinator
         textView.string = text
-        SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
+        SQLHighlighter.highlight(textView)
 
         // Since macOS 14 views don't clip by default; the line-number gutter would draw over the bar above.
         scrollView.clipsToBounds = true
@@ -176,10 +176,11 @@ struct SQLEditorView: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let textView = nsView.documentView as? NSTextView else { return }
+        (textView as? SQLTextView)?.dialect = dialect
         handle.textView = textView
         if textView.string != text {
             textView.string = text
-            SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
+            SQLHighlighter.highlight(textView)
         }
         if context.coordinator.completionVersion != completionVersion {
             context.coordinator.completionVersion = completionVersion
@@ -195,7 +196,7 @@ struct SQLEditorView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? SQLTextView else { return }
-            SQLHighlighter.highlight(textView, kind: (textView as? SQLTextView)?.kind ?? .postgres)
+            SQLHighlighter.highlight(textView)
             textView.enclosingScrollView?.verticalRulerView?.needsDisplay = true
             parent.text = textView.string
             textView.updateInlineSuggestion()
@@ -215,7 +216,8 @@ struct SQLEditorView: NSViewRepresentable {
 
 final class SQLTextView: NSTextView {
     weak var coordinator: SQLEditorView.Coordinator?
-    var kind: DatabaseKind = .postgres
+    /// Set by the editor view before the text view shows any text.
+    var dialect: (any QueryDialect)?
 
     /// Grey text after the caret completing the current word; Tab accepts it.
     private var inlineSuggestion: (location: Int, text: String)? {
@@ -489,12 +491,14 @@ enum SQLHighlighter {
 
     /// Colors by token kind, from the same lexer the formatter and completion use, so an apostrophe
     /// in a comment can't start a "string" that runs on through the next lines.
-    private static func color(for token: SQLToken, kind: DatabaseKind) -> NSColor? {
+    private static func color(for token: SQLToken, dialect: any QueryDialect) -> NSColor? {
         switch token.kind {
-        case .word where kind.isDocument:
-            if token.text.hasPrefix("$") { return .systemPurple }
-            return MongoVocabulary.highlighted.contains(token.text) ? .systemPink : nil
-        case .word: return SQLKeywords.set.contains(token.keyword) ? .systemPink : nil
+        case .word:
+            switch dialect.role(ofWord: token) {
+            case .keyword: return .systemPink
+            case .operator: return .systemPurple
+            case nil: return nil
+            }
         case .number: return .systemBlue
         case .string: return .systemOrange
         case .quotedIdentifier: return .systemTeal
@@ -503,9 +507,9 @@ enum SQLHighlighter {
         }
     }
 
-    /// Recolors the whole document.
-    static func highlight(_ textView: NSTextView, kind: DatabaseKind) {
-        guard let storage = textView.textStorage else { return }
+    /// Recolors the whole document, in the language of the editor it belongs to.
+    static func highlight(_ textView: NSTextView) {
+        guard let storage = textView.textStorage, let dialect = (textView as? SQLTextView)?.dialect else { return }
         let text = storage.string
         let full = NSRange(location: 0, length: (text as NSString).length)
         // Past this size recoloring on every keystroke gets slow; large scripts stay plain.
@@ -515,8 +519,8 @@ enum SQLHighlighter {
         }
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
-        for token in SQLLexer.tokens(text, kind: kind) {
-            if let color = color(for: token, kind: kind) { storage.addAttribute(.foregroundColor, value: color, range: token.range) }
+        for token in dialect.tokens(text) {
+            if let color = color(for: token, dialect: dialect) { storage.addAttribute(.foregroundColor, value: color, range: token.range) }
         }
         storage.endEditing()
         textView.typingAttributes = [.font: font, .foregroundColor: NSColor.textColor]

@@ -125,7 +125,7 @@ final class QueryTabModel {
             version += 1
         }
         workspace?.recordHistory(script)
-        let statements = SQLSplitter.split(script, kind: driver.kind)
+        let statements = driver.dialect.split(script)
         var interrupted = false
         for (index, statement) in statements.enumerated() {
             // Stop (or closing the tab) ends the run here: no further statement is sent.
@@ -240,8 +240,8 @@ final class QueryTabModel {
         } catch { editor.error = error.localizedDescription }
     }
 
-    func exportText(_ format: ExportFormat) -> String {
-        guard let result = currentResult else { return "" }
-        return ResultExporter.export(columns: result.columns, rows: result.rows, format: format, dialect: driver.dialect)
+    func exportText(_ format: ExportFormat) throws -> String {
+        guard let result = currentResult else { throw DatabaseError("Run a query that returns rows first.") }
+        return try ResultExporter.export(columns: result.columns, rows: result.rows, format: format, dialect: driver.dialect)
     }
 }
