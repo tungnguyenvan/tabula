@@ -87,6 +87,13 @@ extension QueryEditTarget {
     }
 }
 
+/// MySQL's result edits: hex literals that mean the same in every sql_mode, and byte-exact matching of the old values.
+struct MySQLResultEditWriter: ResultEditWriter {
+    func statement(for edit: QueryRowEdit, in target: QueryEditTarget) throws -> String {
+        try target.mysqlStatement(for: edit)
+    }
+}
+
 extension MySQLDriver {
     public func queryEditTarget(for result: QueryResult) async throws -> QueryEditTarget? {
         guard let source = EditableSelect.relation(result.statement, flavor: .mysql),
@@ -143,7 +150,8 @@ extension MySQLDriver {
         }
         guard mapped.contains(where: \.editable) else { return nil }
         let identity = try await mysqlTableIdentity(table)
-        return QueryEditTarget(table: table, tableOID: 0, columns: mapped, kind: .mysql, mysqlTableIdentity: identity)
+        return QueryEditTarget(table: table, tableOID: 0, columns: mapped, kind: .mysql, writer: MySQLResultEditWriter(),
+                               mysqlTableIdentity: identity)
     }
 
     /// Dictionary IDs are intentionally required: CREATE_TIME and a matching column shape cannot distinguish

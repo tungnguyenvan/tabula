@@ -93,6 +93,23 @@ struct MySQLCatalog: DatabaseCatalog, RoutineCatalog {
             tables: tables)
     }
 
+    // MARK: Read-only sessions
+
+    /// MySQL limits statements in milliseconds (max_execution_time), MariaDB in seconds (max_statement_time); each
+    /// server knows only its own variable. A server with neither keeps no limit; the read-only transaction still holds.
+    func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {
+        _ = try await driver.execute("SET SESSION TRANSACTION READ ONLY")
+        do {
+            _ = try await driver.execute("SET SESSION max_execution_time = \(timeoutSeconds * 1000)")
+        } catch {
+            _ = try? await driver.execute("SET SESSION max_statement_time = \(timeoutSeconds)")
+        }
+    }
+
+    func readOnlyTransaction(timeoutSeconds: Int) -> [String]? {
+        ["START TRANSACTION READ ONLY"]
+    }
+
     // MARK: Routines
 
     var kinds: [RoutineInfo.Kind] { [.function, .procedure, .trigger] }

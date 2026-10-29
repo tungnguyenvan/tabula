@@ -21,6 +21,10 @@ actor MongoCatalog: DatabaseCatalog {
     func currentDatabase(on driver: any DatabaseDriver) async throws -> String? { nil }
     func foreignKeys(in schema: String, on driver: any DatabaseDriver) async throws -> [ForeignKeyInfo] { [] }
 
+    /// The shell has no read-only session; `MongoReadOnlyCheck` lets only reads through.
+    func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {}
+    nonisolated func readOnlyTransaction(timeoutSeconds: Int) -> [String]? { nil }
+
     /// serverStatus and dbStats as a metrics sample: connections, operations, memory, cache, storage, collections.
     func metrics(schema database: String, on driver: any DatabaseDriver) async throws -> MetricsSample {
         func document(_ statement: String) async throws -> Document {

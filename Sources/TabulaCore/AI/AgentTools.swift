@@ -1,4 +1,3 @@
-import BSON
 import Foundation
 
 /// Tools the chat assistant can use while it answers.
@@ -116,117 +115,6 @@ public enum AgentProtocol {
     }
 }
 
-/// Decides whether a statement the assistant wants to run only reads. This is the first check; the agent's
-/// own connection is also read-only where the server supports it (see `AgentToolbox.prepare`).
-public enum AgentReadOnly {
-    /// Why the statement can't run, or nil when it only reads.
-    public static func violation(_ statement: String, kind: DatabaseKind) -> String? {
-        switch kind {
-        case .postgres: sqlViolation(statement, flavor: .postgres)
-        case .mysql: sqlViolation(statement, flavor: .mysql)
-        case .sqlite: sqlViolation(statement, flavor: .sqlite)
-        case .mongodb: mongoViolation(statement)
-        case .redis: "The assistant doesn't run Redis commands."
-        }
-    }
-
-    private static let firstWords: Set<String> = ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC", "VALUES", "TABLE"]
-    private static let writingWords: Set<String> = [
-        "INSERT", "UPDATE", "DELETE", "MERGE", "UPSERT", "CREATE", "DROP", "ALTER", "TRUNCATE", "RENAME",
-        "GRANT", "REVOKE", "COPY", "CALL", "DO", "LOCK", "UNLOCK", "VACUUM", "ANALYZE", "REINDEX", "CLUSTER", "ATTACH",
-        "DETACH", "SET", "RESET", "PRAGMA", "LOAD", "HANDLER", "PREPARE", "EXECUTE", "DEALLOCATE",
-        "LISTEN", "NOTIFY", "REFRESH", "IMPORT", "OUTFILE", "DUMPFILE", "KILL", "SHUTDOWN", "BEGIN", "COMMIT", "ROLLBACK",
-        "SAVEPOINT", "RELEASE", "START",
-    ]
-    /// Functions that act on the server or read its files, even in a read-only transaction.
-    private static let blockedFunctions: Set<String> = [
-        "PG_TERMINATE_BACKEND", "PG_CANCEL_BACKEND", "PG_RELOAD_CONF", "PG_ROTATE_LOGFILE", "SET_CONFIG", "PG_SLEEP",
-        "PG_READ_FILE", "PG_READ_BINARY_FILE", "PG_LS_DIR", "PG_STAT_FILE", "LO_IMPORT", "LO_EXPORT", "LO_UNLINK",
-        "DBLINK", "DBLINK_EXEC", "PG_ADVISORY_LOCK", "PG_TRY_ADVISORY_LOCK", "SLEEP", "BENCHMARK", "LOAD_FILE",
-        "GET_LOCK", "RELEASE_LOCK", "LOAD_EXTENSION", "READFILE", "WRITEFILE",
-    ]
-
-    private static func sqlViolation(_ statement: String, flavor: SQLFlavor) -> String? {
-        let statements = SQLSplitter.split(statement, flavor: flavor)
-        guard statements.count == 1 else { return "Run one statement at a time." }
-        let tokens = SQLLexer.tokens(statement, flavor: flavor)
-        // Where Tabula's lexer and the server could read the text differently, it isn't run: comments (MySQL
-        // runs /*! … */ and doesn't take --x as one) and backslashes (escape rules differ by server and setting).
-        if tokens.contains(where: { $0.kind == .comment }) { return "Write the statement without comments." }
-        if statement.contains("\\") { return "Write the statement without backslashes." }
-        let words = tokens.filter { $0.kind == .word }
-        guard let first = words.first?.keyword, firstWords.contains(first) else {
-            return "Only SELECT, WITH, EXPLAIN, SHOW and DESCRIBE statements can run; this one may change data."
-        }
-        if let word = words.first(where: { writingWords.contains($0.keyword) }) {
-            return "\(word.keyword) can change data or the session, so the statement can't run."
-        }
-        // SELECT … INTO makes a table or a file and FOR UPDATE / FOR SHARE locks rows; inside parentheses the
-        // words mean something else (`substring(x FROM 1 FOR 3)`).
-        var depth = 0
-        for token in SQLLexer.tokens(statement, flavor: flavor) {
-            if token.text == "(" { depth += 1 } else if token.text == ")" { depth -= 1 }
-            if depth == 0, token.keyword == "INTO" || token.keyword == "FOR" {
-                return "\(token.keyword) at the top level writes or locks rows, so the statement can't run."
-            }
-        }
-        // A quoted name ("set_config", `GET_LOCK`) calls the same function.
-        let names = tokens.compactMap { token -> String? in
-            switch token.kind {
-            case .word: return token.keyword
-            case .quotedIdentifier: return String(token.text.dropFirst().dropLast()).uppercased()
-            default: return nil
-            }
-        }
-        if let name = names.first(where: { blockedFunctions.contains($0) }) {
-            return "\(name.lowercased()) acts on the server, so the statement can't run."
-        }
-        return nil
-    }
-
-    private static let readMethods: Set<String> = ["find", "findOne", "aggregate", "countDocuments", "estimatedDocumentCount",
-                                                   "distinct", "getIndexes", "count"]
-    private static let databaseReadMethods: Set<String> = ["getCollectionNames", "getCollectionInfos", "stats", "version", "getName"]
-
-    private static func mongoViolation(_ text: String) -> String? {
-        let statements = MongoSplitter.statements(in: text)
-        guard statements.count == 1 else { return "Run one command at a time." }
-        guard let statement = try? MongoStatement.parse(text) else { return "The command couldn't be read." }
-        switch statement.target {
-        case .show(let what):
-            return ["dbs", "databases", "collections", "tables"].contains(what) ? nil : "Only show dbs and show collections can run."
-        case .use:
-            return "use changes the database; name the collection instead."
-        case .database:
-            guard let method = statement.method, databaseReadMethods.contains(method) else {
-                return "Only collection reads (find, aggregate, countDocuments, distinct) can run."
-            }
-            return nil
-        case .collection:
-            guard let method = statement.method, readMethods.contains(method) else {
-                return "Only find, findOne, aggregate, countDocuments, estimatedDocumentCount, distinct and getIndexes can run."
-            }
-            // The parsed keys, so escapes ("\u0024out") can't hide a stage.
-            if let key = statement.calls.flatMap(\.arguments).lazy.compactMap(blockedKey).first {
-                return "\(key) \(key == "$out" || key == "$merge" ? "writes to a collection" : "runs code on the server"), so the command can't run."
-            }
-            return nil
-        }
-    }
-
-    /// Stages that write, and operators that run JavaScript on the server.
-    private static let blockedKeys: Set<String> = ["$out", "$merge", "$where", "$function", "$accumulator"]
-
-    private static func blockedKey(in value: Primitive) -> String? {
-        guard let document = value as? Document else { return nil }
-        for pair in document.pairs {
-            if blockedKeys.contains(pair.key) { return pair.key }
-            if let found = blockedKey(in: pair.value) { return found }
-        }
-        return nil
-    }
-}
-
 /// Runs the assistant's tool calls against a connection opened for it.
 public struct AgentToolbox: Sendable {
     public let driver: any DatabaseDriver
@@ -240,21 +128,7 @@ public struct AgentToolbox: Sendable {
 
     /// Makes the agent's own connection read-only where the server can enforce it, and bounds query time.
     public static func prepare(_ driver: any DatabaseDriver) async throws {
-        switch driver.kind {
-        case .postgres:
-            _ = try await driver.execute("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
-            _ = try await driver.execute("SET statement_timeout = \(Defaults.AI.agentQueryTimeout * 1000)")
-        case .mysql:
-            _ = try await driver.execute("SET SESSION TRANSACTION READ ONLY")
-            // MySQL counts milliseconds, MariaDB seconds; each server knows only its own variable.
-            if (try? await driver.execute("SET SESSION max_execution_time = \(Defaults.AI.agentQueryTimeout * 1000)")) == nil {
-                _ = try? await driver.execute("SET SESSION max_statement_time = \(Defaults.AI.agentQueryTimeout)")
-            }
-        case .sqlite:
-            _ = try await driver.execute("PRAGMA query_only = ON")
-        case .mongodb, .redis:
-            break
-        }
+        try await driver.catalog.prepareReadOnlySession(timeoutSeconds: Defaults.AI.agentQueryTimeout, on: driver)
     }
 
     /// The result as text for the model. Errors are returned as text too, so the model can correct itself.
@@ -327,33 +201,34 @@ public struct AgentToolbox: Sendable {
     }
 
     private func runQuery(_ query: String) async throws -> String {
-        if let violation = AgentReadOnly.violation(query, kind: driver.kind) { return "Refused: \(violation)" }
+        if let violation = driver.dialect.readOnlyViolation(query) {
+            return "Refused: \(violation)"
+        }
         let limited = driver.dialect.applyingRowLimit(query, limit: Defaults.AI.agentRowLimit + 1)
         return Self.text(of: try await runReadOnly(limited))
     }
 
     /// Runs in a read-only transaction of its own on PostgreSQL and MySQL, which a statement can't switch back
-    /// to read-write, whatever got past `AgentReadOnly`. The connection's session defaults (`prepare`) could be
+    /// to read-write, whatever got past the dialect's `readOnlyViolation`. The connection's session defaults (`prepare`) could be
     /// changed by a statement; a transaction started for each query can't.
     func runReadOnly(_ statement: String) async throws -> QueryResult {
-        let begin: String
-        switch driver.kind {
-        case .postgres: begin = "BEGIN READ ONLY"
-        case .mysql: begin = "START TRANSACTION READ ONLY"
-        case .sqlite, .mongodb, .redis: return try await driver.execute(statement)
+        let timeout = Defaults.AI.agentQueryTimeout
+        guard let transaction = driver.catalog.readOnlyTransaction(timeoutSeconds: timeout) else {
+            return try await driver.execute(statement)
         }
-        _ = try await driver.execute(begin)
+        for opening in transaction {
+            _ = try await driver.execute(opening)
+        }
+        let result: QueryResult
         do {
-            if driver.kind == .postgres {
-                _ = try await driver.execute("SET LOCAL statement_timeout = \(Defaults.AI.agentQueryTimeout * 1000)")
-            }
-            let result = try await driver.execute(statement)
-            _ = try? await driver.execute("ROLLBACK")
-            return result
+            result = try await driver.execute(statement)
         } catch {
+            // The statement's error is the one to report; a failed ROLLBACK ends with the agent's connection anyway.
             _ = try? await driver.execute("ROLLBACK")
             throw error
         }
+        _ = try await driver.execute("ROLLBACK")
+        return result
     }
 
     /// Rows as tab-separated text, cut to the row, cell and total limits.

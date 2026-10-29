@@ -56,7 +56,7 @@ final class AgentReadOnlyTests: XCTestCase {
                     "EXPLAIN SELECT * FROM orders",
                     "SHOW TABLES",
                     "select 'delete from x; update y' as text"] {
-            XCTAssertNil(AgentReadOnly.violation(sql, kind: .postgres), sql)
+            XCTAssertNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
         }
     }
 
@@ -71,27 +71,27 @@ final class AgentReadOnlyTests: XCTestCase {
                     "SELECT pg_terminate_backend(123)",
                     "SELECT * FROM t INTO OUTFILE '/tmp/x'",
                     "BEGIN", "VACUUM", "COPY orders TO '/tmp/x'"] {
-            XCTAssertNotNil(AgentReadOnly.violation(sql, kind: .postgres), sql)
+            XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
         }
     }
 
     /// Ways around the check found in review: quoted function names, comments MySQL runs, backslash escapes.
     func testSQLCheckBypassesAreRefused() {
-        XCTAssertNotNil(AgentReadOnly.violation("SELECT \"set_config\"('default_transaction_read_only', 'off', false)", kind: .postgres))
-        XCTAssertNotNil(AgentReadOnly.violation("SELECT pg_catalog.\"pg_terminate_backend\"(1)", kind: .postgres))
-        XCTAssertNotNil(AgentReadOnly.violation("SELECT `GET_LOCK`('x', 0)", kind: .mysql))
-        XCTAssertNotNil(AgentReadOnly.violation("SELECT 1 /*! , SLEEP(5) */", kind: .mysql))
-        XCTAssertNotNil(AgentReadOnly.violation("SELECT 1 --x\n, SLEEP(5)", kind: .mysql))
-        XCTAssertNotNil(AgentReadOnly.violation("SELECT E'\\'', set_config('a', 'b', false), ''", kind: .postgres))
-        XCTAssertNotNil(AgentReadOnly.violation("SELECT 'a\\'' , SLEEP(5) -- '", kind: .mysql))
+        XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation("SELECT \"set_config\"('default_transaction_read_only', 'off', false)"))
+        XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation("SELECT pg_catalog.\"pg_terminate_backend\"(1)"))
+        XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT `GET_LOCK`('x', 0)"))
+        XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 1 /*! , SLEEP(5) */"))
+        XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 1 --x\n, SLEEP(5)"))
+        XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation("SELECT E'\\'', set_config('a', 'b', false), ''"))
+        XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 'a\\'' , SLEEP(5) -- '"))
     }
 
     func testMongoEscapesAreReadBeforeTheCheck() {
-        let out = AgentReadOnly.violation("db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])", kind: .mongodb)
+        let out = MongoQueryDialect().readOnlyViolation("db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])")
         XCTAssertEqual(out, "$out writes to a collection, so the command can't run.")
-        let merge = AgentReadOnly.violation("db.orders.aggregate([{ \"\\x24merge\": { into: \"copy\" } }])", kind: .mongodb)
+        let merge = MongoQueryDialect().readOnlyViolation("db.orders.aggregate([{ \"\\x24merge\": { into: \"copy\" } }])")
         XCTAssertEqual(merge, "$merge writes to a collection, so the command can't run.")
-        let where_ = AgentReadOnly.violation("db.orders.find({ $where: \"true\" })", kind: .mongodb)
+        let where_ = MongoQueryDialect().readOnlyViolation("db.orders.find({ $where: \"true\" })")
         XCTAssertEqual(where_, "$where runs code on the server, so the command can't run.")
     }
 
@@ -100,7 +100,7 @@ final class AgentReadOnlyTests: XCTestCase {
                         "db.orders.aggregate([{ $group: { _id: \"$status\", n: { $sum: 1 } } }])",
                         "db.orders.countDocuments({})", "db.orders.distinct(\"status\")", "show collections",
                         "db.getCollectionNames()"] {
-            XCTAssertNil(AgentReadOnly.violation(command, kind: .mongodb), command)
+            XCTAssertNil(MongoQueryDialect().readOnlyViolation(command), command)
         }
         for command in ["db.orders.deleteMany({})", "db.orders.updateOne({}, { $set: { a: 1 } })", "db.orders.drop()",
                         "db.orders.aggregate([{ $match: {} }, { $out: \"copy\" }])", "db.dropDatabase()",
@@ -110,7 +110,7 @@ final class AgentReadOnlyTests: XCTestCase {
                         "db.orders.aggregate([{ $match: {} }, { \"\\x24merge\": { into: \"copy\" } }])",
                         "db.orders.find({ $where: \"sleep(100) || true\" })",
                         "db.orders.aggregate([{ $addFields: { x: { $function: { body: \"function() {}\", args: [], lang: \"js\" } } } }])"] {
-            XCTAssertNotNil(AgentReadOnly.violation(command, kind: .mongodb), command)
+            XCTAssertNotNil(MongoQueryDialect().readOnlyViolation(command), command)
         }
     }
 }

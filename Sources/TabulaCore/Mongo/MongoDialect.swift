@@ -51,6 +51,10 @@ public struct MongoQueryDialect: QueryDialect {
         MongoStatement.applyingRowLimit(statement, limit: limit)
     }
 
+    public func readOnlyViolation(_ statement: String) -> String? {
+        MongoReadOnlyCheck.violation(statement)
+    }
+
     public func role(ofWord word: SQLToken) -> WordRole? {
         if word.text.hasPrefix("$") { return .operator }
         return MongoVocabulary.highlighted.contains(word.text) ? .keyword : nil

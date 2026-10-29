@@ -132,6 +132,10 @@ public struct SQLDialect: QueryDialect, Equatable {
         return text.substring(to: end) + " LIMIT \(limit)" + text.substring(from: end)
     }
 
+    public func readOnlyViolation(_ statement: String) -> String? {
+        SQLReadOnlyCheck.violation(statement, flavor: flavor)
+    }
+
     public func role(ofWord word: SQLToken) -> WordRole? {
         SQLKeywords.set.contains(word.keyword) ? .keyword : nil
     }

@@ -1,5 +1,46 @@
 import Foundation
 
+/// PostgreSQL's result edits: typed E'…' literals and `IS NOT DISTINCT FROM` for the old values, returning the row
+/// as it is after the update.
+struct PostgresResultEditWriter: ResultEditWriter {
+    /// Types whose text form round-trips without a time zone, locale or binary codec, with the cast that reads them.
+    static let castTypes: [UInt32: String] = [16: "bool", 20: "int8", 21: "int2", 23: "int4", 25: "text", 1042: "bpchar",
+                                             1043: "varchar", 1700: "numeric", 2950: "uuid"]
+    static var scalarTypes: Set<UInt32> { Set(castTypes.keys) }
+
+    func statement(for edit: QueryRowEdit, in target: QueryEditTarget) throws -> String {
+        let columns = target.columns
+        guard edit.original.count == columns.count, !edit.values.isEmpty else { throw DatabaseError("Invalid result edit.") }
+        let keyIndices = columns.indices.filter { columns[$0].isKey }
+        guard !keyIndices.isEmpty, keyIndices.allSatisfy({ edit.original[$0] != nil }) else {
+            throw DatabaseError("A complete primary key is required to edit a result row.")
+        }
+        let d = SQLDialect(flavor: .postgres)
+        // E strings are independent of standard_conforming_strings, including backslashes in pasted values.
+        func literal(_ value: String?, column: QueryEditTarget.Column) throws -> String {
+            guard let value else { return "NULL" }
+            guard !value.contains("\0") else { throw DatabaseError("PostgreSQL text values cannot contain a NUL character.") }
+            let escaped = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "''")
+            guard let type = Self.castTypes[column.typeOID] else { throw DatabaseError("This column type cannot safely be used in a result update.") }
+            return "E'\(escaped)'::pg_catalog.\(type)"
+        }
+        var assignments: [String] = []
+        for (index, value) in edit.values.sorted(by: { $0.key < $1.key }) {
+            guard columns.indices.contains(index), columns[index].editable, !columns[index].isKey else {
+                throw DatabaseError("This result column is read-only.")
+            }
+            assignments.append("\(d.quoteIdentifier(columns[index].name)) = \(try literal(value, column: columns[index]))")
+        }
+        // Match the old edited values too: don't silently overwrite a concurrent change.
+        let matched = Set(keyIndices).union(edit.values.keys).sorted()
+        let predicate = try matched.map { index in
+            "\(d.quoteIdentifier(columns[index].name)) IS NOT DISTINCT FROM \(try literal(edit.original[index], column: columns[index]))"
+        }.joined(separator: " AND ")
+        return "UPDATE ONLY \(d.qualified(target.table)) SET \(assignments.joined(separator: ", ")) WHERE \(predicate) RETURNING "
+            + columns.map { d.quoteIdentifier($0.name) }.joined(separator: ", ")
+    }
+}
+
 extension PostgresDriver {
     public func queryEditTarget(for result: QueryResult) async throws -> QueryEditTarget? {
         guard let source = EditableSelect.source(result.statement), !result.origins.isEmpty,
@@ -31,15 +72,16 @@ extension PostgresDriver {
             guard let attribute = row[0].flatMap(Int16.init), let name = row[1], let type = row[2].flatMap(UInt32.init), let typeName = row[3] else { continue }
             let key = row[4] == "true"
             columns[attribute] = .init(name: name, attribute: attribute, typeOID: type, typeName: typeName,
-                                       isKey: key, editable: !key && row[5] == "false" && QueryEditTarget.scalarTypes.contains(type))
+                                       isKey: key, editable: !key && row[5] == "false" && PostgresResultEditWriter.scalarTypes.contains(type))
         }
         let keys = columns.values.filter(\.isKey)
-        guard !keys.isEmpty, keys.allSatisfy({ QueryEditTarget.scalarTypes.contains($0.typeOID) }) else { return nil }
+        guard !keys.isEmpty, keys.allSatisfy({ PostgresResultEditWriter.scalarTypes.contains($0.typeOID) }) else { return nil }
         let present = Set(result.origins.map(\.attribute))
         guard keys.allSatisfy({ present.contains($0.attribute) }) else { return nil }
         let mapped = result.origins.compactMap { columns[$0.attribute] }
         guard mapped.count == result.columns.count, mapped.contains(where: \.editable) else { return nil }
-        return QueryEditTarget(table: TableRef(schema: schema, name: name), tableOID: oid, columns: mapped)
+        return QueryEditTarget(table: TableRef(schema: schema, name: name), tableOID: oid, columns: mapped, kind: .postgres,
+                               writer: PostgresResultEditWriter())
     }
 
     /// A separate session is supplied by the UI for commits, so no active user transaction is committed implicitly.

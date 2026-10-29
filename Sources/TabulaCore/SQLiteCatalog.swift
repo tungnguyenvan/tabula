@@ -76,6 +76,15 @@ struct SQLiteCatalog: DatabaseCatalog, RoutineCatalog {
             tables: tables)
     }
 
+    // MARK: Read-only sessions
+
+    /// SQLite has no statement timeout; query_only refuses every write on the connection.
+    func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {
+        _ = try await driver.execute("PRAGMA query_only = ON")
+    }
+
+    func readOnlyTransaction(timeoutSeconds: Int) -> [String]? { nil }
+
     // MARK: Routines
 
     var kinds: [RoutineInfo.Kind] { [.trigger] }

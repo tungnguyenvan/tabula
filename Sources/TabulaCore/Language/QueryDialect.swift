@@ -86,6 +86,8 @@ public protocol QueryDialect: Sendable {
     /// Limits a reading statement that sets no limit of its own, so an accidental full read stays small.
     /// Anything else is returned unchanged.
     func applyingRowLimit(_ statement: String, limit: Int) -> String
+    /// Why the assistant may not run `statement`, or nil when it only reads.
+    func readOnlyViolation(_ statement: String) -> String?
     /// How a word token is highlighted, or nil for a plain name.
     func role(ofWord word: SQLToken) -> WordRole?
 

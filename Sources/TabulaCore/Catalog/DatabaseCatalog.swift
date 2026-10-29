@@ -22,6 +22,12 @@ public protocol DatabaseCatalog: Sendable {
     func metrics(schema: String, on driver: any DatabaseDriver) async throws -> MetricsSample
     /// Functions, procedures and triggers; nil where the database stores none (MongoDB).
     var routines: (any RoutineCatalog)? { get }
+
+    /// Makes a session read-only where the server can enforce it, and bounds each statement's time.
+    func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws
+    /// The statements that open a read-only transaction for one statement (ended with ROLLBACK), or nil where the
+    /// database has no such transaction.
+    func readOnlyTransaction(timeoutSeconds: Int) -> [String]?
 }
 
 /// A database's functions, procedures and triggers: listing, reading and replacing their definitions.

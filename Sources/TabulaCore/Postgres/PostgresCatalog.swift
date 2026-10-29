@@ -112,6 +112,18 @@ struct PostgresCatalog: DatabaseCatalog, RoutineCatalog {
             tables: tables)
     }
 
+    // MARK: Read-only sessions
+
+    func prepareReadOnlySession(timeoutSeconds: Int, on driver: any DatabaseDriver) async throws {
+        _ = try await driver.execute("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
+        _ = try await driver.execute("SET statement_timeout = \(timeoutSeconds * 1000)")
+    }
+
+    /// A statement can't switch the transaction back to read-write, whatever it changes in the session.
+    func readOnlyTransaction(timeoutSeconds: Int) -> [String]? {
+        ["BEGIN READ ONLY", "SET LOCAL statement_timeout = \(timeoutSeconds * 1000)"]
+    }
+
     // MARK: Routines
 
     var kinds: [RoutineInfo.Kind] { [.function, .procedure, .trigger] }

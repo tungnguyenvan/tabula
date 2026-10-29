@@ -9,7 +9,7 @@ final class MySQLQueryEditingTests: XCTestCase {
             .init(name: "physical`label", attribute: 3, typeOID: 0, typeName: "text", isKey: false, editable: true, mysqlType: "text"),
             .init(name: "amount", attribute: 4, typeOID: 0, typeName: "decimal(12,2)", isKey: false, editable: true, mysqlType: "decimal"),
             .init(name: "born", attribute: 5, typeOID: 0, typeName: "date", isKey: false, editable: false, mysqlType: "date"),
-        ], kind: .mysql, mysqlTableIdentity: "123")
+        ], kind: .mysql, writer: MySQLResultEditWriter(), mysqlTableIdentity: "123")
     }
 
     func testMySQLSelectGrammarAndSourceNames() {
