@@ -59,11 +59,8 @@ final class TableTabModel {
     var documentEditRequest: Int?
     private(set) var appliedFilter = ""
 
-    /// row index → column index → new value (inner nil = SQL NULL).
-    private(set) var edits: [Int: [Int: String?]] = [:]
-    private(set) var deletedRows: Set<Int> = []
-    /// Inserted rows hold only the cells the user set; unset cells use the column default.
-    private(set) var insertedRows: [[Int: String?]] = []
+    /// Cell edits, deletions and new rows not committed yet.
+    private(set) var changes = PendingRowChanges()
     /// Bumped on every change so the grid knows to redraw.
     private(set) var version = 0
 
@@ -358,83 +355,66 @@ final class TableTabModel {
     var canEditExisting: Bool { table.kind == .table && !primaryKeyIndices.isEmpty }
     var canInsert: Bool { table.kind == .table }
 
-    var displayRowCount: Int { rows.count + insertedRows.count }
+    var displayRowCount: Int { rows.count + changes.insertedRows.count }
 
-    var hasChanges: Bool { !edits.isEmpty || !deletedRows.isEmpty || !insertedRows.isEmpty }
+    var hasChanges: Bool { !changes.isEmpty }
 
-    var changeCount: Int { edits.values.reduce(0) { $0 + $1.count } + deletedRows.count + insertedRows.count }
+    var changeCount: Int { changes.count }
 
     func cell(row: Int, column: Int) -> Cell {
-        if row >= rows.count {
-            let inserted = insertedRows[row - rows.count]
-            guard let set = inserted[column] else {
-                return .defaultValue
-            }
-            return set.map(Cell.value) ?? .null
+        switch changes.cell(row: row, column: column, existing: rows) {
+        case .value(let text):
+            return .value(text)
+        case .null:
+            return .null
+        case .columnDefault:
+            return .defaultValue
         }
-        if let edit = edits[row]?[column] {
-            return edit.map(Cell.value) ?? .null
-        }
-        return rows[row][column].map(Cell.value) ?? .null
     }
 
     func state(row: Int, column: Int) -> CellState {
         if row >= rows.count {
             return .inserted
         }
-        if deletedRows.contains(row) {
+        if changes.isDeleted(row) {
             return .deleted
         }
-        return edits[row]?[column] != nil ? .edited : .normal
+        if changes.isEdited(row: row, column: column) {
+            return .edited
+        }
+        return .normal
     }
 
     func isEditable(row: Int) -> Bool {
-        row >= rows.count ? canInsert : (canEditExisting && !deletedRows.contains(row))
-    }
-
-    private struct Pending {
-        var edits: [Int: [Int: String?]]
-        var deletedRows: Set<Int>
-        var insertedRows: [[Int: String?]]
-    }
-
-    private var pending: Pending {
-        get { Pending(edits: edits, deletedRows: deletedRows, insertedRows: insertedRows) }
-        set {
-            edits = newValue.edits
-            deletedRows = newValue.deletedRows
-            insertedRows = newValue.insertedRows
-            version += 1
+        // A row the grid doesn't show (stale after a reload) is never written to.
+        guard row >= 0, row < displayRowCount else {
+            return false
         }
+        if row >= rows.count {
+            return canInsert
+        }
+        return canEditExisting && !changes.isDeleted(row)
     }
 
-    /// Records the current pending state so the next change can be undone with ⌘Z.
+    /// Records the current changes so the next change can be undone with ⌘Z.
     private func registerUndo(_ name: String) {
-        let snapshot = pending
+        let snapshot = changes
         undoManager.registerUndo(withTarget: self) { model in
             MainActor.assumeIsolated { model.restore(snapshot, name: name) }
         }
         undoManager.setActionName(name)
     }
 
-    private func restore(_ snapshot: Pending, name: String) {
+    private func restore(_ snapshot: PendingRowChanges, name: String) {
         registerUndo(name)  // makes the restore itself redoable
-        pending = snapshot
+        changes = snapshot
+        version += 1
     }
 
     func setValue(_ value: String?, row: Int, column: Int) {
         guard isEditable(row: row) else { return }
         registerUndo("Edit Cell")
-        if row >= rows.count {
-            insertedRows[row - rows.count][column] = .some(value)
-        } else if rows[row][column] == value {
-            edits[row]?[column] = nil
-            if edits[row]?.isEmpty == true {
-                edits[row] = nil
-            }
-        } else {
-            edits[row, default: [:]][column] = .some(value)
-        }
+        changes.set(value, row: row, column: column, existing: rows)
         version += 1
     }
 
@@ -442,7 +422,7 @@ final class TableTabModel {
     func addRow() {
         guard canInsert else { return }
         registerUndo("Add Row")
-        insertedRows.append([:])
+        changes.appendRow()
         version += 1
         focusRequest = FocusRequest(row: displayRowCount - 1, column: firstColumnToFill, edit: true)
     }
@@ -471,7 +451,7 @@ final class TableTabModel {
                 case .defaultValue: break
                 }
             }
-            insertedRows.append(copy)
+            changes.appendRow(copy)
         }
         version += 1
         focusRequest = FocusRequest(row: displayRowCount - 1, column: 0, edit: false)
@@ -480,26 +460,13 @@ final class TableTabModel {
     func deleteRows(_ indices: IndexSet) {
         guard !indices.isEmpty else { return }
         registerUndo(indices.count > 1 ? "Delete Rows" : "Delete Row")
-        var removedInserted: [Int] = []
-        for row in indices {
-            if row >= rows.count {
-                removedInserted.append(row - rows.count)
-            } else if canEditExisting {
-                deletedRows.insert(row)
-                edits[row] = nil
-            }
-        }
-        for index in removedInserted.sorted(by: >) where index < insertedRows.count {
-            insertedRows.remove(at: index)
-        }
+        changes.delete(indices, existingCount: rows.count, existingCanBeDeleted: canEditExisting)
         version += 1
     }
 
     func restoreRows(_ indices: IndexSet) {
         registerUndo("Restore Rows")
-        for row in indices {
-            deletedRows.remove(row)
-        }
+        changes.restore(indices)
         version += 1
     }
 
@@ -511,9 +478,7 @@ final class TableTabModel {
     }
 
     private func clearPending() {
-        edits = [:]
-        deletedRows = []
-        insertedRows = []
+        changes.removeAll()
     }
 
     /// Statements that apply the pending changes, in the order they will run.
@@ -525,9 +490,9 @@ final class TableTabModel {
                 rows: rows,
                 documents: documents,
                 keyColumns: primaryKeyIndices,
-                deleted: deletedRows,
-                edited: edits,
-                inserted: insertedRows
+                deleted: changes.deletedRows,
+                edited: changes.edits,
+                inserted: changes.insertedRows
             )
         )
     }

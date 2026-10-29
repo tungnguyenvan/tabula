@@ -5,6 +5,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Fixed
+- **Tabula no longer quits when a new row disappears from Row Details**: committing a new row, or undoing it, while Row Details showed it closed the app ([#131](https://github.com/tungnguyenvan/tabula/issues/131)).
 - **AI chat with Claude Code or Codex no longer hangs on Thinking** ([#80](https://github.com/tungnguyenvan/tabula/issues/80)).
   - Tabula now runs them without your own coding setup: Claude Code's hooks, MCP servers, skills and slash commands, and Codex's MCP servers. On a Mac with several MCP servers, an answer that sometimes took over a minute now takes the model's usual few seconds. Your account and model settings still apply, and Tabula's requests are no longer saved in Claude Code's session history.
   - The prompt no longer goes through your shell's input, where a profile asking a question (such as an update prompt) could take it.

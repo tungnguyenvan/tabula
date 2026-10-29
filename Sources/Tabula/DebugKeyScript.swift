@@ -207,6 +207,31 @@ extension DebugHooks {
                         workspace.selectedTab.flatMap { if case .query(let q) = $0 { q.resultEditor } else { nil } }?
                             .undoManager.redo()
                     case "resultpreview": if case .query(let q) = workspace.selectedTab { q.showResultPreview = true }
+                    // Table tab edits without the grid: tableset-<row>-<column>-<value>, tabledelete-<row>,
+                    // tableaddrow, tableundo, tablecommit, and tableprint to log the pending changes.
+                    case let call where call.hasPrefix("table"):
+                        guard case .table(let table) = workspace.selectedTab else {
+                            return print("CALL no table tab")
+                        }
+                        let parts = call.split(separator: "-", maxSplits: 3).map(String.init)
+                        switch parts[0] {
+                        case "tableset" where parts.count == 4:
+                            if let row = Int(parts[1]), let column = Int(parts[2]) {
+                                table.setValue(parts[3], row: row, column: column)
+                            }
+                        case "tabledelete" where parts.count == 2:
+                            if let row = Int(parts[1]) {
+                                table.deleteRows([row])
+                            }
+                        case "tableaddrow": table.addRow()
+                        case "tableundo": table.undoManager.undo()
+                        case "tablecommit": Task { await table.commit() }
+                        case "tableprint":
+                            print(
+                                "TABLE changes=\(table.changeCount) rows=\(table.displayRowCount) error=\(table.error ?? "-")"
+                            )
+                        default: print("CALL unknown \(call)")
+                        }
                     case "dump": workspace.startDump()
                     case "restore": Task { await workspace.startRestore() }
                     case "dumpstart": workspace.transfer?.start()
