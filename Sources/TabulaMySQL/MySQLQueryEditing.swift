@@ -196,6 +196,7 @@ extension MySQLDriver {
     private func mysqlTableIdentity(_ table: TableRef) async throws -> String {
         let name = QueryEditTarget.mysqlLiteral(table.schema + "/" + table.name)
         for dictionary in ["INNODB_TABLES", "INNODB_SYS_TABLES"] {
+            // Older servers lack INNODB_TABLES; when neither dictionary can be read, the error below explains it.
             if let rows = try? await execute(
                 "SELECT TABLE_ID FROM information_schema.\(dictionary) WHERE NAME = \(name)"
             )
@@ -265,6 +266,7 @@ extension MySQLDriver {
             _ = try await execute("COMMIT")
             return returned
         } catch {
+            // The commit's own error is reported; a failed ROLLBACK ends with this connection.
             _ = try? await execute("ROLLBACK")
             throw error
         }

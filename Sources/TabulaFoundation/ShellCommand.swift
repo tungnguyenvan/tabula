@@ -132,6 +132,7 @@ public enum ShellCommand {
         let output = Pipe()
         pgrep.standardOutput = output
         pgrep.standardError = FileHandle.nullDevice
+        // Without pgrep, only the shell itself is stopped.
         guard (try? pgrep.run()) != nil else { return [] }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         pgrep.waitUntilExit()

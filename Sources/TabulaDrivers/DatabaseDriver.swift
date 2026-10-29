@@ -112,6 +112,7 @@ public func withTimeout<T: Sendable>(
                 }
             }
         }
+        // The watchdog ends with CancellationError when the work finished first.
         Task { if (try? await watchdog.value) == true { work.cancel() } }
     }
 }

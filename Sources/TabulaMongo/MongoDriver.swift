@@ -706,6 +706,7 @@ public actor MongoDriver: DatabaseDriver {
             id = next["id"].flatMap(Self.cursorID) ?? 0
         }
         if id != 0 {
+            // Frees the server's cursor early; the server drops it on its own after a while anyway.
             _ = try? await run(["killCursors": collection, "cursors": [id] as Document], in: database, on: connection)
         }
         return Array(documents.prefix(cap))

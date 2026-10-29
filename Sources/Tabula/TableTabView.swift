@@ -535,6 +535,7 @@ struct SQLPreviewSheet: View {
     let onCommit: () -> Void
     let onCancel: () -> Void
 
+    // When the statements can't be written, `pending` holds the error, which the sheet shows instead.
     private var statements: [String] { (try? pending.get()) ?? [] }
     private var script: String { statements.map { $0 + ";" }.joined(separator: "\n") }
 

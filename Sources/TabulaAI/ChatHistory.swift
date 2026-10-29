@@ -53,6 +53,7 @@ public struct ChatMessage: Identifiable, Equatable, Codable, Sendable {
         text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
         thinking = try c.decodeIfPresent(String.self, forKey: .thinking) ?? ""
         thoughtFor = try c.decodeIfPresent(TimeInterval.self, forKey: .thoughtFor)
+        // A tool step in a format this version doesn't know is dropped; the message itself is kept.
         tool = try? c.decodeIfPresent(ToolStep.self, forKey: .tool)
         // Nothing is still running in a saved conversation.
         if var step = tool, step.status == .running || step.status == .awaitingApproval {

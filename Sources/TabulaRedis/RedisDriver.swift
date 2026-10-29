@@ -144,6 +144,7 @@ public actor RedisDriver {
                 return ConnectionBox(connection: connection)
             }
             let connection = box.connection
+            // A server that refuses INFO still works; it is shown as plain “Redis”.
             let info = try? await connection.send(command: "INFO", with: [RedisArgument.text("server").resp]).get()
             let version =
                 (info?.string ?? "").split(separator: "\r\n").first { $0.hasPrefix("redis_version:") }
@@ -444,6 +445,7 @@ public actor RedisDriver {
         if let lengthCommand {
             length = try await run([.text(lengthCommand), k]).int ?? 0
         }
+        // MEMORY and OBJECT can be disabled on managed servers; the detail bar leaves them out then.
         let memory = try? await run([.text("MEMORY"), .text("USAGE"), k]).int
         let encoding = try? await run([.text("OBJECT"), .text("ENCODING"), k]).string
         return RedisKeyInfo(
@@ -713,6 +715,7 @@ public actor RedisDriver {
                 }
             }
         } catch {
+            // The command's own error is reported; DISCARD only clears the transaction it left.
             _ = try? await send(["DISCARD"].map { Array($0.utf8) })
             throw error
         }

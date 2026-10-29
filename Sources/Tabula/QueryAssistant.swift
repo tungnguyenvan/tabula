@@ -94,6 +94,7 @@ final class QueryAssistant {
                     continuation.finish()
                 }
             }
+            // A made-up demo stream (debug builds) that can't fail.
             if let reply = try? await receive(stream, id: id) {
                 apply(SQLPrompts.cleanSQL(reply))
             }

@@ -159,6 +159,7 @@ struct MySQLCatalog: DatabaseCatalog, RoutineCatalog {
         do {
             _ = try await driver.execute("SET SESSION max_execution_time = \(timeoutSeconds * 1000)")
         } catch {
+            // MariaDB's name for the limit; a server with neither runs the assistant's queries without one.
             _ = try? await driver.execute("SET SESSION max_statement_time = \(timeoutSeconds)")
         }
     }
