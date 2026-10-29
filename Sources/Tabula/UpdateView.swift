@@ -148,7 +148,7 @@ private struct GeneralSettingsView: View {
                     // Off forgets what was kept, not only stops keeping it.
                     .onChange(of: restoresState) { _, on in if !on { WorkspaceModel.stateStore.removeAll() } }
                 Text(
-                    "Opening a connection brings back its query tabs (with their SQL), open tables, schema and query history. They are kept on this Mac only. Tabula never reconnects by itself at launch."
+                    "Opening a connection brings back its query tabs (with their SQL), open tables and their filters, schema and query history. They are kept on this Mac only. Tabula never reconnects by itself at launch."
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }

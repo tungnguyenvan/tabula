@@ -33,6 +33,50 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertNil(store.load(UUID()), "another connection has its own state")
     }
 
+    func testTableFiltersRoundTrip() throws {
+        let store = WorkspaceStateStore(base: base)
+        let connection = UUID()
+        let orders = WorkspaceState.TableKey(database: "shop", schema: "public", name: "orders")
+        let rule = WorkspaceState.TableFilter.Rule(column: "status", op: "=", value: "paid", conjunction: "AND")
+        let applied = WorkspaceState.TableFilter(
+            rules: [rule],
+            rawCondition: "",
+            usesRawCondition: false,
+            appliedCondition: "\"status\" = 'paid'"
+        )
+        let draft = WorkspaceState.TableFilter(
+            rules: [],
+            rawCondition: "total > 100",
+            usesRawCondition: true,
+            appliedCondition: ""
+        )
+        let state = WorkspaceState(
+            tabs: [.table(schema: "public", name: "orders", kind: "table", mode: "Data")],
+            tableFilters: [
+                .init(table: orders, filter: applied),
+                .init(table: .init(database: nil, schema: "main", name: "customers"), filter: draft),
+            ]
+        )
+        try store.save(state, for: connection)
+        XCTAssertEqual(store.load(connection), state)
+    }
+
+    /// A state saved before filters were remembered still loads, with no filters.
+    func testStateWithoutFiltersLoads() throws {
+        let store = WorkspaceStateStore(base: base)
+        let connection = UUID()
+        try FileManager.default.createDirectory(at: store.directory, withIntermediateDirectories: true)
+        let saved = """
+            {"schema":"public","tabs":[{"query":{"title":"Query 1","sql":"SELECT 1"}}],"selected":0,"history":["SELECT 1"]}
+            """
+        try Data(saved.utf8).write(to: store.directory.appendingPathComponent("\(connection.uuidString).json"))
+        let state = try XCTUnwrap(store.load(connection))
+        XCTAssertEqual(state.schema, "public")
+        XCTAssertEqual(state.tabs, [.query(title: "Query 1", sql: "SELECT 1", file: nil)])
+        XCTAssertEqual(state.history, ["SELECT 1"])
+        XCTAssertEqual(state.tableFilters, [])
+    }
+
     func testDamagedFileIsIgnoredThenReplaced() throws {
         let store = WorkspaceStateStore(base: base)
         let connection = UUID()

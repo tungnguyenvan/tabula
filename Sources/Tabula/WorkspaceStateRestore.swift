@@ -2,7 +2,7 @@ import Foundation
 import TabulaFoundation
 import TabulaStorage
 
-/// Each connection's tabs, schema, database and query history are saved, and come back when it is opened again
+/// Each connection's tabs, schema, database, table filters and query history are saved, and come back when it is opened again
 /// (Settings › General turns this off). Saved when the connection, its window or Tabula closes, on Reconnect, and
 /// every `Defaults.workspaceStateSaveInterval` seconds while it changes.
 extension WorkspaceModel {
@@ -45,13 +45,26 @@ extension WorkspaceModel {
                 selected = saved.count - 1
             }
         }
+        // Open tables' filters as they are now, over what closed tabs left.
+        var filters = tableFilters
+        for case .table(let model) in tabs {
+            filters[filterKey(model.table)] = model.rememberedFilter
+        }
+        let filterEntries =
+            filters
+            .map { WorkspaceState.TableFilterEntry(table: $0.key, filter: $0.value) }
+            .sorted { first, second in
+                (first.table.database ?? "", first.table.schema, first.table.name)
+                    < (second.table.database ?? "", second.table.schema, second.table.name)
+            }
         let database = currentDatabase.flatMap { $0 == savedDatabase ? nil : $0 }
         return WorkspaceState(
             database: database,
             schema: selectedSchema.isEmpty ? nil : selectedSchema,
             tabs: saved,
             selected: selected,
-            history: history
+            history: history,
+            tableFilters: filterEntries
         )
     }
 
@@ -76,6 +89,9 @@ extension WorkspaceModel {
             startSavingState()
         }
         guard Self.restoresState, let state = Self.stateStore.load(connectionID) else { return }
+        for entry in state.tableFilters {
+            tableFilters[entry.table] = entry.filter
+        }
         if let database = state.database, database != currentDatabase, databases.contains(database) {
             // The last conversation stays: it was about this database.
             await openDatabase(database, startingNewChat: false)
@@ -106,6 +122,9 @@ extension WorkspaceModel {
                     connectionTag: config.tag
                 )
                 model.mode = TableTabModel.Mode(rawValue: mode) ?? .data
+                if let filter = tableFilters[filterKey(model.table)] {
+                    model.restoreFilter(filter)
+                }
                 unloadedTabs.insert(model.id)
                 tab = .table(model)
             }
