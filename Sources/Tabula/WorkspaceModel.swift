@@ -336,11 +336,12 @@ final class WorkspaceModel {
         }
     }
 
-    /// Dumps the database, or only `tables`, to a file.
+    /// MySQL: the server is MariaDB, so MariaDB's client tools are preferred.
     private var serverIsMariaDB: Bool { serverVersion?.contains("MariaDB") == true }
     /// Set while the restore's file is being chosen, so the menu can't start a second one meanwhile.
     private var choosingRestore = false
 
+    /// Dumps the database, or only `tables`, to a file.
     func startDump(tables: [TableRef] = []) {
         guard supportsDumps, transfer == nil, !choosingRestore else {
             return NSSound.beep()
