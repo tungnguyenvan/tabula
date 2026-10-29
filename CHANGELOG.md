@@ -38,6 +38,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **PostgreSQL values read as psql shows them** ([#147](https://github.com/tungnguyenvan/tabula/issues/147)):
   - Floats (`NaN`, `Infinity`, `2` rather than `2.0`), BC dates, intervals such as `-1 days +02:00:00`, and arrays whose index doesn't start at 1 now match, so copying, exporting and editing them keeps the value.
   - Ranges, multiranges, geometric types, bit strings, `macaddr8`, `tid`, `pg_lsn`, `xid8`, `tsvector` and `tsquery` show as values instead of hex.
+- **MySQL: a query that returns no rows still shows its columns**, instead of an empty grid without headers ([#152](https://github.com/tungnguyenvan/tabula/issues/152)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 
