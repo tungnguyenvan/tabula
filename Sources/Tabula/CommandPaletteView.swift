@@ -108,21 +108,46 @@ struct CommandPaletteView: View {
             .map(\.0)
     }
 
-    /// Subsequence match; consecutive and word-start hits score higher.
+    /// The query's letters in order; consecutive and word-start hits score higher, and shorter names win a tie.
+    /// Each letter is first matched where it first appears, which can miss a better place ("ord" in
+    /// work_order_lines would use the "or" of "work"), so the query as one run at its best place counts too.
     static func score(_ text: String, _ query: String) -> Int? {
         let haystack = Array(text.lowercased())
         let needle = Array(query.lowercased())
+        guard let inOrder = scoreInOrder(haystack, needle) else { return nil }
+        return max(inOrder, scoreAsRun(haystack, needle) ?? 0) * 100 - haystack.count
+    }
+
+    private static func isWordStart(_ haystack: [Character], _ index: Int) -> Bool {
+        index == 0 || "_ .-".contains(haystack[index - 1])
+    }
+
+    private static func scoreInOrder(_ haystack: [Character], _ needle: [Character]) -> Int? {
         var score = 0
         var position = 0
         var previous = -2
         for character in needle {
             guard let found = haystack[position...].firstIndex(of: character) else { return nil }
             score += found == previous + 1 ? 5 : 1
-            if found == 0 || "_ .-".contains(haystack[found - 1]) { score += 3 }
+            if isWordStart(haystack, found) { score += 3 }
             previous = found
             position = found + 1
         }
-        return score * 100 - haystack.count
+        return score
+    }
+
+    /// The best place the whole query appears as it is, scored like the in-order match of the same letters.
+    private static func scoreAsRun(_ haystack: [Character], _ needle: [Character]) -> Int? {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return nil }
+        var best: Int?
+        for start in 0...(haystack.count - needle.count) where Array(haystack[start..<start + needle.count]) == needle {
+            var score = 1 + (needle.count - 1) * 5
+            for offset in 0..<needle.count where isWordStart(haystack, start + offset) {
+                score += 3
+            }
+            best = max(best ?? score, score)
+        }
+        return best
     }
 
     var body: some View {

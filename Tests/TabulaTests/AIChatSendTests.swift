@@ -10,36 +10,8 @@ import XCTest
 /// put back after; the key comes from TABULA_AI_KEY, so the Keychain isn't touched.
 @MainActor
 final class AIChatSendTests: XCTestCase {
-    private static let serverScript = #"""
-        # A scripted OpenAI-compatible chat server for Tabula's tests: the first answer asks for a query, the next one
-        # says what the query returned. Streams server-sent events like the real API.
-        import json, sys
-        from http.server import BaseHTTPRequestHandler, HTTPServer
 
-        class Handler(BaseHTTPRequestHandler):
-            def log_message(self, *args):
-                pass
-
-            def do_POST(self):
-                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-                prompt = body["messages"][-1]["content"]
-                if "Result:" not in prompt:
-                    text = "Let me count.\n```tool\n{\"tool\": \"run_query\", \"query\": \"SELECT count(*) AS n FROM orders\"}\n```"
-                else:
-                    result = prompt.split("Result:", 1)[1]
-                    text = "There are 42 orders." if "42" in result else "I couldn't see the count."
-                self.send_response(200)
-                self.send_header("Content-Type", "text/event-stream")
-                self.end_headers()
-                for piece in [text[i:i + 12] for i in range(0, len(text), 12)]:
-                    chunk = {"choices": [{"delta": {"content": piece}}]}
-                    self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
-                self.wfile.write(b"data: [DONE]\n\n")
-
-        HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
-        """#
-
-    private var server: Process?
+    private var server: FakeModelServer?
     private var port = 0
     private var folder: URL!
     private var savedSettings: AISettings?
@@ -54,17 +26,9 @@ final class AIChatSendTests: XCTestCase {
         try TestDataDirectory.check()
         folder = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-chat-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let script = folder.appendingPathComponent("server.py")
-        try Self.serverScript.write(to: script, atomically: true, encoding: .utf8)
-        port = Int.random(in: 40_000..<60_000)
-        let server = Process()
-        server.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        server.arguments = ["-I", script.path, String(port)]
-        server.standardOutput = FileHandle.nullDevice
-        server.standardError = FileHandle.nullDevice
-        try server.run()
+        let server = try await FakeModelServer.start(in: folder)
         self.server = server
-        try await Task.sleep(for: .milliseconds(400))
+        port = server.port
 
         savedSettings = AIService.shared.settings
         var settings = AIService.shared.settings
@@ -97,8 +61,7 @@ final class AIChatSendTests: XCTestCase {
             AIService.shared.settings = savedSettings
         }
         unsetenv("TABULA_AI_KEY")
-        server?.terminate()
-        server?.waitUntilExit()
+        server?.stop()
         try? FileManager.default.removeItem(at: folder)
     }
 
