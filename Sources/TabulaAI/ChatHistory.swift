@@ -113,19 +113,31 @@ public struct ChatStore: Sendable {
         directory.appendingPathComponent("\(connection.uuidString).json")
     }
 
-    /// Newest first. Conversations that can't be read are skipped. A file that can't be read at all is moved
-    /// aside (`….unreadable-<time>.json`) rather than overwritten by the next save.
-    public func load(_ connection: UUID) -> [ChatConversation] {
+    public struct Loaded: Equatable, Sendable {
+        /// Newest first.
+        public var conversations: [ChatConversation]
+        /// Where a file that couldn't be read at all was moved, so the chat can say so; nil when nothing was.
+        public var setAside: URL?
+    }
+
+    /// The saved conversations; ones that can't be read are skipped. A file that can't be read at all is moved
+    /// aside (`….unreadable-<time>.json`) rather than overwritten by the next save, and `setAside` says where.
+    public func load(_ connection: UUID) -> Loaded {
         let url = fileURL(connection)
-        guard let data = try? Data(contentsOf: url) else { return [] }
+        // No file yet: no chats.
+        guard let data = try? Data(contentsOf: url) else {
+            return Loaded(conversations: [], setAside: nil)
+        }
         guard let entries = try? Self.decoder.decode([Lossy<ChatConversation>].self, from: data) else {
             let aside = directory.appendingPathComponent(
                 "\(connection.uuidString).unreadable-\(Int(Date().timeIntervalSince1970)).json"
             )
+            // If it can't be moved either, the next save replaces it; the chat still reports it.
             try? FileManager.default.moveItem(at: url, to: aside)
-            return []
+            return Loaded(conversations: [], setAside: aside)
         }
-        return entries.compactMap(\.value).sorted { $0.updated > $1.updated }
+        let conversations = entries.compactMap(\.value).sorted { $0.updated > $1.updated }
+        return Loaded(conversations: conversations, setAside: nil)
     }
 
     /// Keeps the newest `Defaults.AI.savedConversations`; an empty list removes the file.

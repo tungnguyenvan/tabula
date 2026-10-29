@@ -10,7 +10,8 @@ import TabulaSQL
 /// results away.
 ///
 /// Loading is best effort: a table whose columns can't be read (no privilege, dropped meanwhile) offers none,
-/// and completion and the AI go on with the rest; the sidebar reports connection problems.
+/// and completion and the AI go on with the rest; the sidebar reports connection problems. A failed load isn't
+/// remembered, so it is tried again the next time the names are needed.
 @MainActor @Observable
 public final class SchemaNames {
     /// Where the names come from: the workspace's connection and what its sidebar shows.
@@ -94,13 +95,15 @@ public final class SchemaNames {
                     continue
                 }
                 loadingColumns.insert(key)
-                let loaded = (try? await driver.columns(of: table)) ?? []
+                let loaded = try? await driver.columns(of: table)
                 guard generation == tablesGeneration else {
                     return
                 }
                 loadingColumns.remove(key)
-                columns[key] = loaded
-                version += 1
+                if let loaded {
+                    columns[key] = loaded
+                    version += 1
+                }
             }
         }
     }
@@ -122,13 +125,15 @@ public final class SchemaNames {
         loadingSchemaTables.insert(key)
         let generation = databaseGeneration
         Task {
-            let names = (try? await driver.tables(in: name).map(\.name)) ?? []
+            let names = try? await driver.tables(in: name).map(\.name)
             guard generation == databaseGeneration else {
                 return
             }
-            schemaTables[key] = names
             loadingSchemaTables.remove(key)
-            version += 1
+            if let names {
+                schemaTables[key] = names
+                version += 1
+            }
         }
         return nil
     }
@@ -163,13 +168,15 @@ public final class SchemaNames {
         loadingColumns.insert(key)
         let generation = tablesGeneration
         Task {
-            let loaded = (try? await driver.columns(of: ref)) ?? []
+            let loaded = try? await driver.columns(of: ref)
             guard generation == tablesGeneration else {
                 return
             }
             loadingColumns.remove(key)
-            columns[key] = loaded
-            version += 1
+            if let loaded {
+                columns[key] = loaded
+                version += 1
+            }
         }
         return nil
     }
@@ -218,11 +225,13 @@ public final class SchemaNames {
             if Task.isCancelled || (index >= named.count && ContinuousClock.now >= deadline) {
                 break
             }
-            let loaded = (try? await driver.columns(of: table)) ?? []
+            let loaded = try? await driver.columns(of: table)
             guard generation == tablesGeneration else {
                 return aiSchema(from: source)
             }
-            columns[Self.key(table)] = loaded
+            if let loaded {
+                columns[Self.key(table)] = loaded
+            }
         }
         if foreignKeys == nil, !Task.isCancelled, ContinuousClock.now < deadline {
             let keys = (try? await driver.foreignKeys(in: source.selectedSchema)) ?? []

@@ -77,14 +77,26 @@ final class DiagramModel {
                 .prefix(Defaults.Diagram.tableLimit)
             foreignKeys = try await driver.foreignKeys(in: schema)
             var loaded: [Node] = []
+            // A table whose columns can't be read is still drawn (its keys connect it); the banner names it.
+            var unreadable: [String] = []
             for table in tables {
-                loaded.append(
-                    Node(table: table, columns: (try? await driver.columns(of: table)) ?? [], position: .zero)
-                )
+                var columns: [ColumnInfo] = []
+                do {
+                    columns = try await driver.columns(of: table)
+                } catch {
+                    unreadable.append(table.name)
+                }
+                loaded.append(Node(table: table, columns: columns, position: .zero))
             }
             nodes = loaded
             layout()
-            error = tables.isEmpty ? "No tables in \(schema)." : nil
+            if tables.isEmpty {
+                error = "No tables in \(schema)."
+            } else if !unreadable.isEmpty {
+                error = "Couldn't read the columns of \(unreadable.joined(separator: ", ")); they are drawn empty."
+            } else {
+                error = nil
+            }
         } catch {
             self.error = error.localizedDescription
         }

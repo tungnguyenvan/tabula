@@ -31,8 +31,14 @@ final class QueryLibraryModel {
 
     func reload() {
         do {
-            queries = try library.load()
-            loadError = nil
+            let contents = try library.contents()
+            queries = contents.queries
+            if contents.unreadable.isEmpty {
+                loadError = nil
+            } else {
+                let names = contents.unreadable.map(\.lastPathComponent).joined(separator: ", ")
+                loadError = "Couldn't read \(names) as text, so they aren't listed. Save them as UTF-8 to use them."
+            }
         } catch {
             loadError = "Couldn't read \(library.directory.path): \(error.localizedDescription)"
         }

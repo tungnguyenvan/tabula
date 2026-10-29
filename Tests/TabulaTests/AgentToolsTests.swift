@@ -304,7 +304,7 @@ final class ChatStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: base) }
         let store = ChatStore(base: base)
         let connection = UUID()
-        XCTAssertEqual(store.load(connection), [])
+        XCTAssertEqual(store.load(connection).conversations, [])
 
         var running = ChatMessage(
             role: .tool,
@@ -320,7 +320,7 @@ final class ChatStoreTests: XCTestCase {
         let new = ChatConversation(title: ChatConversation.title(for: messages), messages: messages)
         try store.save([old, new], for: connection)
 
-        let loaded = store.load(connection)
+        let loaded = store.load(connection).conversations
         XCTAssertEqual(loaded.map(\.id), [new.id, old.id])
         XCTAssertEqual(loaded.first?.title, "How many orders?")
         XCTAssertEqual(loaded.first?.messages.count, 3)
@@ -333,8 +333,8 @@ final class ChatStoreTests: XCTestCase {
                 ChatConversation(title: "\($0)", updated: Date(timeIntervalSince1970: Double($0)), messages: messages)
             }
         try store.save(many, for: connection)
-        XCTAssertEqual(store.load(connection).count, Defaults.AI.savedConversations)
-        XCTAssertEqual(store.load(connection).first?.title, "\(Defaults.AI.savedConversations + 4)")
+        XCTAssertEqual(store.load(connection).conversations.count, Defaults.AI.savedConversations)
+        XCTAssertEqual(store.load(connection).conversations.first?.title, "\(Defaults.AI.savedConversations + 4)")
 
         // One unreadable message or conversation is skipped; the rest load.
         let file = base.appendingPathComponent("Chats/\(connection.uuidString).json")
@@ -346,18 +346,20 @@ final class ChatStoreTests: XCTestCase {
         json[0] = first
         json.append(["title": "no id"])
         try JSONSerialization.data(withJSONObject: json).write(to: file)
-        let lossy = store.load(connection)
+        let lossy = store.load(connection).conversations
         XCTAssertEqual(lossy.count, Defaults.AI.savedConversations)
         XCTAssertEqual(lossy.first?.messages.count, 2)
 
         // A file that can't be read at all is kept aside, not overwritten by the next save.
         try Data("not json".utf8).write(to: file)
-        XCTAssertEqual(store.load(connection), [])
+        let unreadable = store.load(connection)
+        XCTAssertEqual(unreadable.conversations, [])
+        XCTAssertEqual(unreadable.setAside?.lastPathComponent.hasPrefix("\(connection.uuidString).unreadable-"), true)
         let kept = try FileManager.default.contentsOfDirectory(atPath: base.appendingPathComponent("Chats").path)
         XCTAssertTrue(kept.contains { $0.hasPrefix("\(connection.uuidString).unreadable-") }, "\(kept)")
 
         try store.save([], for: connection)
-        XCTAssertEqual(store.load(connection), [])
+        XCTAssertEqual(store.load(connection).conversations, [])
         XCTAssertEqual(ChatConversation.title(for: []), "New Chat")
         XCTAssertEqual(
             ChatConversation.title(for: [ChatMessage(role: .user, text: String(repeating: "a", count: 100))]).count,

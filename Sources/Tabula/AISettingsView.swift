@@ -18,8 +18,20 @@ final class OllamaModels {
 
     func refresh() async {
         version = await library.version()
-        installed = (try? await library.installed()) ?? []
-        checked = true
+        defer {
+            checked = true
+        }
+        // Not running: the settings say so through `version`; there is nothing to list.
+        guard version != nil else {
+            installed = []
+            return
+        }
+        do {
+            installed = try await library.installed()
+        } catch {
+            // Running but its list can't be read: say so rather than showing every model as not installed.
+            self.error = "Couldn't list the installed models: \(error.localizedDescription)"
+        }
     }
 
     func isInstalled(_ name: String) -> Bool {

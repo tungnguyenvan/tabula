@@ -183,6 +183,7 @@ struct TableTabView: View {
                 Text(model.pageDescription)
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .help(model.countError.map { "Couldn't count the rows: \($0)" } ?? "")
                 Menu {
                     ForEach(Defaults.pageSizeChoices, id: \.self) { size in
                         Button("\(size) rows per page") {
@@ -391,6 +392,13 @@ struct StructureView: View {
         } bottom: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Indexes").font(.headline).padding([.horizontal, .top], 10)
+                if let indexesError = model.indexesError {
+                    Label("Couldn't read the indexes: \(indexesError)", systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 10)
+                }
                 Table(model.indexes) {
                     TableColumn("Name") { Text($0.name).font(.body.monospaced()) }
                     TableColumn(model.driver.kind.isDocument ? "Fields" : "Columns") {

@@ -42,11 +42,17 @@ public struct QueryLibrary: Sendable {
         return keyword.unicodeScalars.allSatisfy { allowed.contains($0) }
     }
 
-    /// Every .sql file in the library, its subfolders included, sorted by group and keyword. A missing library is
-    /// empty; a file that can't be read as text is left out.
-    public func load() throws -> [SavedQuery] {
+    public struct Contents: Equatable, Sendable {
+        /// Sorted by group and keyword.
+        public var queries: [SavedQuery]
+        /// .sql files that couldn't be read as text (an unknown encoding, no permission), to tell the user.
+        public var unreadable: [URL]
+    }
+
+    /// Every .sql file in the library, its subfolders included. A missing library is empty.
+    public func contents() throws -> Contents {
         guard FileManager.default.fileExists(atPath: directory.path) else {
-            return []
+            return Contents(queries: [], unreadable: [])
         }
         let keys: [URLResourceKey] = [.isRegularFileKey]
         guard
@@ -56,9 +62,10 @@ public struct QueryLibrary: Sendable {
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             )
         else {
-            return []
+            throw CocoaError(.fileReadUnknown, userInfo: [NSFilePathErrorKey: directory.path])
         }
         var queries: [SavedQuery] = []
+        var unreadable: [URL] = []
         let rootComponents = directory.standardizedFileURL.pathComponents
         for case let file as URL in enumerator where file.pathExtension.lowercased() == "sql" {
             let values = try file.resourceValues(forKeys: Set(keys))
@@ -66,7 +73,11 @@ public struct QueryLibrary: Sendable {
                 continue
             }
             var encoding = String.Encoding.utf8
-            guard let sql = try? String(contentsOf: file, usedEncoding: &encoding) else {
+            let sql: String
+            do {
+                sql = try String(contentsOf: file, usedEncoding: &encoding)
+            } catch {
+                unreadable.append(file)
                 continue
             }
             let folder = file.deletingLastPathComponent().standardizedFileURL.pathComponents
@@ -74,11 +85,17 @@ public struct QueryLibrary: Sendable {
             let keyword = file.deletingPathExtension().lastPathComponent
             queries.append(SavedQuery(file: file, keyword: keyword, group: group, sql: sql))
         }
-        return queries.sorted { first, second in
-            (first.group.lowercased(), first.keyword.lowercased()) < (
-                second.group.lowercased(), second.keyword.lowercased()
-            )
+        queries.sort { first, second in
+            let firstKey = (first.group.lowercased(), first.keyword.lowercased())
+            let secondKey = (second.group.lowercased(), second.keyword.lowercased())
+            return firstKey < secondKey
         }
+        return Contents(queries: queries, unreadable: unreadable)
+    }
+
+    /// The queries alone, for callers that report unreadable files elsewhere.
+    public func load() throws -> [SavedQuery] {
+        try contents().queries
     }
 
     /// Saves `sql` as `<keyword>.sql`, in `group` when one is given. A keyword already used anywhere in the

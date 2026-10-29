@@ -32,6 +32,10 @@ final class TableTabModel {
     /// MongoDB: each row's whole document, so edits keep field types.
     private(set) var documents: DocumentTexts?
     private(set) var totalRows: Int?
+    /// Why the total couldn't be counted; the rows still show.
+    private(set) var countError: String?
+    /// Why the indexes couldn't be read; the columns and rows still show.
+    private(set) var indexesError: String?
     private(set) var loading = false
     private(set) var committing = false
     /// Only the newest reload may write its rows; an older one finishing late is dropped.
@@ -108,10 +112,17 @@ final class TableTabModel {
         do {
             if columns.isEmpty {
                 let fetched = try await driver.columns(of: table)
-                let fetchedIndexes = (try? await driver.indexes(of: table)) ?? []
+                var fetchedIndexes: [IndexInfo] = []
+                var indexFailure: String?
+                do {
+                    fetchedIndexes = try await driver.indexes(of: table)
+                } catch {
+                    indexFailure = error.localizedDescription
+                }
                 guard generation == reloadGeneration else { return }
                 columns = fetched
                 indexes = fetchedIndexes
+                indexesError = indexFailure
             }
             let request = TablePageRequest(
                 table: table,
@@ -133,9 +144,17 @@ final class TableTabModel {
                 focusRequest = FocusRequest(row: 0, column: 0, edit: false)
             }
             error = nil
-            let count = try? await driver.countRows(table, filter: appliedFilter)
-            if generation == reloadGeneration {
-                totalRows = count
+            do {
+                let count = try await driver.countRows(table, filter: appliedFilter)
+                if generation == reloadGeneration {
+                    totalRows = count
+                    countError = nil
+                }
+            } catch {
+                if generation == reloadGeneration {
+                    totalRows = nil
+                    countError = error.localizedDescription
+                }
             }
         } catch {
             if generation == reloadGeneration {
@@ -305,7 +324,13 @@ final class TableTabModel {
             return totalRows.map { "\($0) rows" } ?? "No rows"
         }
         let range = "\(offset + 1)–\(offset + rows.count)"
-        return totalRows.map { "\(range) of \($0)" } ?? range
+        if let totalRows {
+            return "\(range) of \(totalRows)"
+        }
+        if countError != nil {
+            return "\(range) of ?"
+        }
+        return range
     }
 
     // MARK: Editing
