@@ -51,6 +51,29 @@ final class BinaryValuesTests: XCTestCase {
         await check.close()
     }
 
+    func testFilteringByABinaryValueFindsIt() async throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-binf-\(UUID()).sqlite").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let setup = try SQLiteDriver(path: path)
+        _ = try await setup.executeScript(
+            "CREATE TABLE files (id INTEGER PRIMARY KEY, data BLOB); INSERT INTO files (data) VALUES (x'00FF10'), (x'AA');"
+        )
+        await setup.close()
+        let model = TableTabModel(
+            table: TableRef(schema: "main", name: "files"),
+            driver: try SQLiteDriver(path: path),
+            connectionTag: .local
+        )
+        await model.reload()
+        await model.filter(equalTo: "\\x00ff10", column: 1)
+        XCTAssertNil(model.error)
+        XCTAssertEqual(model.rows.map { $0[0] }, ["1"])
+        XCTAssertEqual(model.filterText, "\"data\" = X'00FF10'")
+        await model.filter(equalTo: "1", column: 0)
+        XCTAssertEqual(model.rows.map { $0[0] }, ["1"], "other columns still use a filter rule")
+        XCTAssertFalse(model.useRawFilter)
+    }
+
     func testMySQLShowsBytesAsHex() async throws {
         guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else {
             throw XCTSkip("TABULA_TEST_MYSQL_PORT not set")

@@ -221,10 +221,16 @@ final class TableTabModel {
     func filter(equalTo value: String?, column: Int) async {
         guard resultColumns.indices.contains(column), confirmDiscard() else { return }
         clearPending()
-        useRawFilter = false
-        filterRules = [
-            FilterRule(column: resultColumns[column], op: value == nil ? .isNull : .equals, value: value ?? "")
-        ]
+        if let value, binaryColumns.contains(column), BinaryText.hexDigits(value) != nil, let sql = driver.dialect.sql {
+            // Bytes compare with a hex literal; a filter rule compares them with text and would match nothing.
+            useRawFilter = true
+            filterText = "\(sql.quoteIdentifier(resultColumns[column])) = \(sql.literal(value, binary: true))"
+        } else {
+            useRawFilter = false
+            filterRules = [
+                FilterRule(column: resultColumns[column], op: value == nil ? .isNull : .equals, value: value ?? "")
+            ]
+        }
         showFilterBar = true
         await applyFilter()
     }
