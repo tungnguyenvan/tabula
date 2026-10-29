@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import TabulaDrivers
 import TabulaFoundation
+import TabulaSQL
 
 /// The statements a workspace sent to the server, newest last.
 @MainActor @Observable
@@ -21,10 +22,42 @@ final class QueryLogModel {
 
     func clear() { entries = [] }
 
-    /// The log as a SQL script with outcomes as comments.
+    /// The log as a script with outcomes as comments, which runs as it ran: every line of a (multi-line) error
+    /// message stays in the comment, and a statement's terminator never ends up inside its own line comment.
     var text: String {
-        visible.map { "-- \(Self.time($0.date)) \(Self.describe($0))\n\($0.statement)\($0.isMeta ? "" : ";")" }
-            .joined(separator: "\n\n")
+        visible.map { entry in
+            let heading = "\(Self.time(entry.date)) \(Self.describe(entry))"
+                .components(separatedBy: .newlines)
+                .map { "-- " + $0 }
+                .joined(separator: "\n")
+            return heading + "\n" + (entry.isMeta ? entry.statement : Self.terminated(entry.statement))
+        }
+        .joined(separator: "\n\n")
+    }
+
+    /// Lexical rules broad enough for every language the log holds: SQL's -- and # comments and the shell's //.
+    private static let commentRules = LexicalRules(
+        dashDashComments: true,
+        hashComments: true,
+        slashSlashComments: true,
+        backslashEscapes: false,
+        escapeStrings: false,
+        doubledQuotes: true,
+        dollarQuotes: true,
+        quotedIdentifiers: true
+    )
+
+    /// `statement` ending with one `;`, on a line of its own when the statement ends in a line comment.
+    static func terminated(_ statement: String) -> String {
+        let trimmed = statement.trimmingCharacters(in: .whitespacesAndNewlines)
+        let last = SQLLexer.tokens(trimmed, rules: commentRules).last { $0.kind != .whitespace }
+        if last?.kind == .punctuation && last?.text == ";" {
+            return trimmed
+        }
+        if let last, last.kind == .comment, !last.text.hasPrefix("/*") {
+            return trimmed + "\n;"
+        }
+        return trimmed + ";"
     }
 
     static func time(_ date: Date) -> String {
