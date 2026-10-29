@@ -37,7 +37,13 @@ final class WorkspaceStateTests: XCTestCase {
         let store = WorkspaceStateStore(base: base)
         let connection = UUID()
         let orders = WorkspaceState.TableKey(database: "shop", schema: "public", name: "orders")
-        let rule = WorkspaceState.TableFilter.Rule(column: "status", op: "=", value: "paid", conjunction: "AND")
+        let rule = WorkspaceState.TableFilter.Rule(
+            column: "status",
+            op: "=",
+            value: "paid",
+            conjunction: "AND",
+            enabled: false
+        )
         let applied = WorkspaceState.TableFilter(
             rules: [rule],
             rawCondition: "",
@@ -75,6 +81,16 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(state.tabs, [.query(title: "Query 1", sql: "SELECT 1", file: nil)])
         XCTAssertEqual(state.history, ["SELECT 1"])
         XCTAssertEqual(state.tableFilters, [])
+    }
+
+    /// Rules saved by 0.7.1 have no checkbox and load ticked.
+    func testRulesWithoutCheckboxLoadTicked() throws {
+        let saved = """
+            {"column":"status","op":"=","value":"paid","conjunction":"AND"}
+            """
+        let rule = try JSONDecoder().decode(WorkspaceState.TableFilter.Rule.self, from: Data(saved.utf8))
+        XCTAssertTrue(rule.enabled)
+        XCTAssertEqual(rule.column, "status")
     }
 
     func testDamagedFileIsIgnoredThenReplaced() throws {

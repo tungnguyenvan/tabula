@@ -33,14 +33,31 @@ public struct FilterRule: Identifiable, Hashable, Sendable {
     public var column: String
     public var op: Operator
     public var value: String
-    /// Ignored on the first rule.
+    /// Ignored on the first rule that is used.
     public var conjunction: Conjunction
+    /// Unticked rules stay in the filter bar but are left out of the condition.
+    public var isEnabled: Bool
 
-    public init(column: String, op: Operator = .equals, value: String = "", conjunction: Conjunction = .and) {
+    public init(
+        column: String,
+        op: Operator = .equals,
+        value: String = "",
+        conjunction: Conjunction = .and,
+        isEnabled: Bool = true
+    ) {
         self.column = column
         self.op = op
         self.value = value
         self.conjunction = conjunction
+        self.isEnabled = isEnabled
+    }
+
+    /// Whether the rule takes part in the condition: ticked, with a value when its operator needs one.
+    public var isUsed: Bool {
+        guard isEnabled else {
+            return false
+        }
+        return !op.needsValue || !value.isEmpty
     }
 }
 
@@ -77,11 +94,11 @@ extension SQLDialect {
         }
     }
 
-    /// Combines rules by their conjunctions; rules missing a required value are skipped.
-    /// `a AND b OR c` becomes `(a AND b) OR c`, spelling out SQL's precedence.
+    /// Combines the used rules by their conjunctions; unticked rules and rules missing a required value are
+    /// skipped. `a AND b OR c` becomes `(a AND b) OR c`, spelling out SQL's precedence.
     public func condition(_ rules: [FilterRule]) -> String {
         var groups: [[String]] = []
-        for rule in rules where !rule.op.needsValue || !rule.value.isEmpty {
+        for rule in rules where rule.isUsed {
             if groups.isEmpty || rule.conjunction == .or {
                 groups.append([])
             }

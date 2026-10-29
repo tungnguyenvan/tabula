@@ -33,12 +33,25 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
             public var value: String
             /// A `FilterRule.Conjunction` raw value.
             public var conjunction: String
+            /// Whether the rule's checkbox is ticked.
+            public var enabled: Bool
 
-            public init(column: String, op: String, value: String, conjunction: String) {
+            public init(column: String, op: String, value: String, conjunction: String, enabled: Bool) {
                 self.column = column
                 self.op = op
                 self.value = value
                 self.conjunction = conjunction
+                self.enabled = enabled
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                column = try container.decode(String.self, forKey: .column)
+                op = try container.decode(String.self, forKey: .op)
+                value = try container.decode(String.self, forKey: .value)
+                conjunction = try container.decode(String.self, forKey: .conjunction)
+                // Rules saved by 0.7.1 had no checkbox: every one was used.
+                enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
             }
         }
 

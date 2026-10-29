@@ -237,6 +237,11 @@ final class MongoDialectTests: XCTestCase {
         ])
         XCTAssertEqual(combined, "{ $or: [{ $and: [{ a: null }, { b: \"x\" }] }, { c: { $ne: null } }] }")
         XCTAssertNoThrow(try MongoShell.parseDocument(combined))
+        let unticked = dialect.condition([
+            FilterRule(column: "a", op: .isNull, isEnabled: false), FilterRule(column: "b", op: .equals, value: "x"),
+            FilterRule(column: "c", op: .isNotNull, conjunction: .or, isEnabled: false),
+        ])
+        XCTAssertEqual(unticked, "{ b: \"x\" }")
     }
 
     func testEditsKeepFieldTypes() throws {

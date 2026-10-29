@@ -36,6 +36,21 @@ final class FilterRuleTests: XCTestCase {
         XCTAssertEqual(d.condition([FilterRule(column: "x", op: .inList, value: "a, ,b")]), "\"x\" IN ('a', 'b')")
     }
 
+    func testUntickedRulesAreLeftOut() {
+        let d = SQLDialect(flavor: .sqlite)
+        let a = FilterRule(column: "a", value: "1")
+        let b = FilterRule(column: "b", value: "2", conjunction: .and, isEnabled: false)
+        let c = FilterRule(column: "c", value: "3", conjunction: .or)
+        XCTAssertEqual(d.condition([a, b, c]), "\"a\" = '1' OR \"c\" = '3'")
+        // With the first rule unticked, the next used one leads and its OR has nothing to join.
+        let untickedFirst = FilterRule(column: "a", value: "1", isEnabled: false)
+        XCTAssertEqual(d.condition([untickedFirst, c]), "\"c\" = '3'")
+        let isNullUnticked = FilterRule(column: "x", op: .isNull, isEnabled: false)
+        XCTAssertEqual(d.condition([isNullUnticked]), "", "an unticked rule without a value is left out too")
+        XCTAssertFalse(isNullUnticked.isUsed)
+        XCTAssertTrue(FilterRule(column: "x", op: .isNull).isUsed)
+    }
+
     func testConnectionURLs() {
         let pg = ConnectionConfig(
             kind: .postgres,

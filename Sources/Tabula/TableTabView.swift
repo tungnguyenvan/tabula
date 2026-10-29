@@ -272,6 +272,10 @@ struct FilterBarView: View {
             } else {
                 ForEach($model.filterRules) { $rule in
                     HStack(spacing: 6) {
+                        Toggle("Use condition", isOn: $rule.isEnabled)
+                            .toggleStyle(.checkbox)
+                            .labelsHidden()
+                            .help("Use this condition. Unticked ones stay here but are left out when you apply.")
                         if rule.id == model.filterRules.first?.id {
                             Text(filterKeyword).font(Layout.Font.smallBold.monospaced()).foregroundStyle(.secondary)
                                 .frame(width: Layout.Filter.conjunctionWidth, alignment: .leading)
