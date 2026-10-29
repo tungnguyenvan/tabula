@@ -17,7 +17,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let handled = MainActor.assumeIsolated { WorkspaceRegistry.handle(event) }
             return handled ? nil : event
         }
+        MainActor.assumeIsolated {
+            SeasonalIcon.startUpdatingDockIcon()
+        }
         #if DEBUG
+        DebugHooks.exportSeasonalIcon()
         DebugHooks.startSnapshots()
         DebugHooks.startRecording()
         DebugHooks.startKeyScript()

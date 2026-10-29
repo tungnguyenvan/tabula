@@ -654,6 +654,40 @@ enum DebugHooks {
         recorder.start()
     }
 
+    /// TABULA_DEBUG_SEASON_ICON: a PNG path; writes the Halloween icon there at 1024×1024 and quits (for the Halloween
+    /// video, scripts/render-halloween.sh, and for checking the artwork).
+    static func exportSeasonalIcon() {
+        guard let path = environment["TABULA_DEBUG_SEASON_ICON"] else { return }
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 1024,
+            pixelsHigh: 1024,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+        guard let rep, let image = SeasonalIcon.image(for: .halloween) else {
+            print("SEASON ICON failed")
+            exit(1)
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(x: 0, y: 0, width: 1024, height: 1024))
+        NSGraphicsContext.restoreGraphicsState()
+        do {
+            try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            print("SEASON ICON", path)
+            exit(0)
+        } catch {
+            print("SEASON ICON failed:", error.localizedDescription)
+            exit(1)
+        }
+    }
+
     static func startSnapshots() {
         guard let directory = environment["TABULA_DEBUG_SNAPSHOT"] else { return }
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)

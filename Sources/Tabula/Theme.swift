@@ -58,11 +58,24 @@ struct KindBadge: View {
     }
 }
 
-/// Tabula's own mark: a stylized grid on a gradient tile.
+/// Tabula's own mark: a stylized grid on a gradient tile, or the season's icon when there is one (SeasonalIcon).
 struct AppMark: View {
     var size: CGFloat = 64
 
     var body: some View {
+        if let seasonal = SeasonalIcon.image(for: AppSeason.on(Date())) {
+            // The image keeps the margin macOS icons have around their tile; that margin overflows the frame.
+            let side = size / SeasonalIcon.tileShare
+            Image(nsImage: seasonal)
+                .resizable()
+                .frame(width: side, height: side)
+                .frame(width: size, height: size)
+        } else {
+            regular
+        }
+    }
+
+    private var regular: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
                 .fill(

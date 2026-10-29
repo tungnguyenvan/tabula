@@ -509,6 +509,8 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 
 **Hero image.** `swift scripts/make-hero.swift <window.png> docs/screenshots/hero.png` puts a window screenshot (taken with `TABULA_DEBUG_SNAPSHOT`, sized with `TABULA_DEBUG_WIDTH` / `TABULA_DEBUG_HEIGHT`) on the gradient background.
 
+**Halloween clip.** `scripts/render-halloween.sh` renders `dist/demo/tabula-halloween.mp4` (5 s, 1080×1080): the icon turns into its Halloween version (`Sources/Tabula/SeasonalIcon.swift`, exported by a debug build with `TABULA_DEBUG_SEASON_ICON`) and bats fly around it, with sound from `demo/audio/make-audio.mjs`.
+
 **Demo video.** `scripts/render-demo.sh` renders `dist/demo/tabula-demo.mp4` with [Remotion](https://www.remotion.dev) (project in `demo/`, `npm run studio` there to preview). It shows recordings of a debug build driven by real clicks and keys (`TABULA_DEBUG_KEYS` with `click:x,y` tokens, recorded with `TABULA_DEBUG_RECORD`; the script's header shows the commands) and the screenshots in `docs/screenshots`. The music and sound effects are synthesized by `demo/audio/make-audio.mjs`, so the video contains no third-party audio. The README plays a copy under 10 MB uploaded through GitHub's editor (render one with `npx remotion render src/index.ts TabulaDemo out.mp4 --scale=0.75 --crf=27` in `demo/`); the full-quality file is attached to a release as `Tabula-demo.mp4`.
 
 <!-- /source-only -->
