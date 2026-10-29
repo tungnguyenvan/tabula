@@ -352,7 +352,7 @@ struct SidebarView: View {
                 Button {
                     Task { await model.loadTables() }
                 } label: {
-                    Image(systemName: "arrow.clockwise").font(.system(size: 11))
+                    Label("Reload", systemImage: "arrow.clockwise").labelStyle(.iconOnly).font(.system(size: 11))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)

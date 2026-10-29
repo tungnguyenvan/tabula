@@ -15,6 +15,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
   - Linked `.sql` files are listed when they lead inside the library and reported otherwise, and a save can't follow a linked folder out of it.
   - Coming back to Tabula no longer refreshes every query tab when the library hasn't changed.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
+- VoiceOver names the icon-only buttons (copy, send, stop, refresh, export, new tab, history and others) instead of reading their symbol or nothing.
 - Failures that used to look like empty data are now reported ([#98](https://github.com/tungnguyenvan/tabula/issues/98)):
   - A table's indexes that can't be read show a note under Indexes, instead of looking like a table without indexes; a row count that fails shows "of ?" with the reason.
   - The relationship diagram names tables whose columns couldn't be read.

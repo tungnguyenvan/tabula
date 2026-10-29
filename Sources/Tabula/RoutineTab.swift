@@ -172,7 +172,7 @@ struct RoutineTabView: View {
                 Button(role: .destructive) {
                     Task { if await model.delete() { workspace.close(model.id) } }
                 } label: {
-                    Image(systemName: "trash")
+                    Label("Delete", systemImage: "trash").labelStyle(.iconOnly)
                 }
                 .help("Delete")
             }

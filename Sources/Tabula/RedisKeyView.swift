@@ -73,7 +73,7 @@ struct RedisKeyView: View {
             Button {
                 showRename = true
             } label: {
-                Image(systemName: "pencil")
+                Label("Rename", systemImage: "pencil").labelStyle(.iconOnly)
             }
             .buttonStyle(.borderless).help("Rename")
             Spacer()

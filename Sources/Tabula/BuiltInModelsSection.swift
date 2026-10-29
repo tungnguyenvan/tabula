@@ -127,7 +127,7 @@ struct BuiltInModelsSection: View {
                 Button {
                     models.cancel(id)
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    Label("Stop Downloading", systemImage: "xmark.circle.fill").labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless).help("Stop downloading")
             } else if models.installed.contains(where: { $0.id == id }) {

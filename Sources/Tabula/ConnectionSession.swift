@@ -192,7 +192,7 @@ struct ConnectionRail: View {
                 Divider()
                 Button("Manage Connections…") { openWindow(id: WindowID.connections) }
             } label: {
-                Image(systemName: "plus").font(Layout.Rail.addFont)
+                Label("Open Connection", systemImage: "plus").labelStyle(.iconOnly).font(Layout.Rail.addFont)
                     .frame(width: Layout.Rail.itemSize, height: Layout.Rail.itemSize)
             }
             .menuStyle(.borderlessButton)

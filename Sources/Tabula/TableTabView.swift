@@ -583,7 +583,10 @@ struct ErrorBanner: View {
         HStack(alignment: .top) {
             Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(.red)
             Text(message).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-            Button(action: dismiss) { Image(systemName: "xmark") }.buttonStyle(.borderless)
+            Button(action: dismiss) {
+                Label("Dismiss", systemImage: "xmark").labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
         }
         .padding(8)
         .background(Color.red.opacity(0.1))
@@ -613,7 +616,7 @@ struct ExportMenu: View {
                 }
             }
         } label: {
-            Image(systemName: "square.and.arrow.up").font(.system(size: 12))
+            Label("Export", systemImage: "square.and.arrow.up").labelStyle(.iconOnly).font(.system(size: 12))
         }
         .fixedSize()
         .help("Export the rows shown")
