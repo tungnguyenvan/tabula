@@ -1,5 +1,7 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaFoundation
+@testable import TabulaSQL
+@testable import TabulaSQLite
 
 final class FilterRuleTests: XCTestCase {
     func testConditions() {

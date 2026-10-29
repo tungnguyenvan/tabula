@@ -1,6 +1,8 @@
 import Darwin
 import XCTest
-@testable import TabulaCore
+@testable import TabulaConnections
+@testable import TabulaFoundation
+@testable import TabulaRedis
 
 final class ConnectTimeoutTests: XCTestCase {
     /// A server that accepts TCP but never speaks the protocol must not hang the app.

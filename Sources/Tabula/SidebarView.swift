@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
 
 struct SidebarView: View {
     @Bindable var model: WorkspaceModel

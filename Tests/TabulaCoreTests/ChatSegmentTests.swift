@@ -1,5 +1,5 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaAI
 
 final class ChatSegmentTests: XCTestCase {
     func testTextCodeAndTable() {

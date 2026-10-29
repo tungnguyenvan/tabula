@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import TabulaCore
 
 /// Right-hand panel listing every field of the selected row; editable for table tabs.
 struct RowInspectorView: View {

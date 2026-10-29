@@ -1,7 +1,12 @@
 import AppKit
 import Foundation
 import Observation
-import TabulaCore
+import TabulaAI
+import TabulaConnections
+import TabulaDrivers
+import TabulaFoundation
+import TabulaSQL
+import TabulaStorage
 
 @MainActor @Observable
 final class WorkspaceModel {

@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaAI
+import TabulaDrivers
+import TabulaTransfer
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyMonitor: Any?

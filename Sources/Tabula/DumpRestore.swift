@@ -1,7 +1,8 @@
 import AppKit
 import Observation
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
+import TabulaTransfer
 
 /// A dump or restore in a workspace: its options, then its progress, in one sheet. The work runs in a task the
 /// sheet's Cancel stops; the tool is stopped with it.

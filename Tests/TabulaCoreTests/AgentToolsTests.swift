@@ -1,5 +1,10 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaAI
+@testable import TabulaConnections
+@testable import TabulaFoundation
+@testable import TabulaMongo
+@testable import TabulaSQL
+@testable import TabulaSQLite
 
 final class AgentProtocolTests: XCTestCase {
     func testParsesToolCalls() {

@@ -2,7 +2,8 @@ import AppKit
 import CryptoKit
 import Foundation
 import Observation
-import TabulaCore
+import TabulaFoundation
+import TabulaUpdates
 
 /// Checks GitHub releases, downloads the ZIP, verifies it and replaces the running app.
 @MainActor @Observable

@@ -1,5 +1,5 @@
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 /// Reads a connection string the user pastes in and hands the connection it describes to the New Connection form.
 /// Tabula never reads the clipboard by itself; the user pastes, here or into the connection list.

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
+import TabulaSQL
 
 /// Gives toolbar buttons access to the editor's current selection.
 @MainActor

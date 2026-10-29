@@ -1,6 +1,10 @@
 import Foundation
 import Observation
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
+import TabulaMongo
+import TabulaSQL
+import TabulaTransfer
 
 /// One table opened in a tab: paged data, pending edits, and structure.
 @MainActor @Observable

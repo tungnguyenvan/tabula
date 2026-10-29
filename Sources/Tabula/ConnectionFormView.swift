@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaConnections
+import TabulaFoundation
+import TabulaRedis
 
 struct ConnectionFormView: View {
     @State var config: ConnectionConfig

@@ -1,5 +1,6 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaAI
+@testable import TabulaFoundation
 
 final class SQLPromptsTests: XCTestCase {
     func testCleanSQLRemovesFences() {
@@ -231,10 +232,17 @@ final class ShellCommandTests: XCTestCase {
     }
 
     func testExitedCommandDoesNotWaitForBackgroundChildsPipes() async throws {
+        // The shell exits, but the disowned child inherits both pipes and keeps them open for 30 seconds. The timeout
+        // leaves room for the login shell to start on a busy machine; waiting for the child would take 30.
+        let childSeconds = 30.0
         let start = Date()
-        // The shell exits, but the disowned child inherits both pipes and keeps them open.
-        let output = try await ShellCommand.run(script: "sleep 8 & disown; printf done; printf error >&2", arguments: [], timeout: 2)
-        XCTAssertLessThan(Date().timeIntervalSince(start), 6, "waited for the background child's EOF after the shell exited")
+        let output = try await ShellCommand.run(
+            script: "sleep \(Int(childSeconds)) & disown; printf done; printf error >&2",
+            arguments: [],
+            timeout: 15
+        )
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, childSeconds - 5, "waited for the background child's EOF after the shell exited")
         XCTAssertEqual(output.status, 0)
         XCTAssertTrue(output.stdout.hasSuffix("done"), output.stdout)
         XCTAssertTrue(output.stderr.contains("error"), output.stderr)

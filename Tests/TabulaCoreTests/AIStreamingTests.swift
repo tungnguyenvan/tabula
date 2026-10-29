@@ -1,5 +1,5 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaAI
 
 final class ThinkTagSplitterTests: XCTestCase {
     /// Feeds `chunks` one by one and joins the events of each kind.

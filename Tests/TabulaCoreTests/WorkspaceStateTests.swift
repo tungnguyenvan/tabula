@@ -1,5 +1,5 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaStorage
 
 final class WorkspaceStateTests: XCTestCase {
     private var base: URL!

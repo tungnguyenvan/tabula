@@ -1,5 +1,5 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaUpdates
 
 final class UpdateFeedTests: XCTestCase {
     func testVersionOrdering() throws {

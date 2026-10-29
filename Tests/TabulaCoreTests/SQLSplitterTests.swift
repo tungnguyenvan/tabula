@@ -1,5 +1,6 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaFoundation
+@testable import TabulaSQL
 
 final class SQLSplitterTests: XCTestCase {
     func testSplitsOnTopLevelSemicolons() {

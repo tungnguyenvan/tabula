@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaAI
+import TabulaFoundation
 
 struct QueryTabView: View {
     @Bindable var model: QueryTabModel

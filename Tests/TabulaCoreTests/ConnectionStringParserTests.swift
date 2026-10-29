@@ -1,5 +1,5 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaFoundation
 
 final class ConnectionStringParserTests: XCTestCase {
     private func parse(_ text: String) throws -> (config: ConnectionConfig, password: String?) {

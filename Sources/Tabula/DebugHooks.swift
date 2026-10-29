@@ -1,7 +1,7 @@
 #if DEBUG
 import AppKit
 import Foundation
-import TabulaCore
+import TabulaSQL
 
 /// Debug-only automation for visual checks, driven by environment variables:
 /// - TABULA_DEBUG_OPEN: connection UUID to open at launch

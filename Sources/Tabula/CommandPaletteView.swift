@@ -1,5 +1,5 @@
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 /// ⌘P: type to jump to a table, an open tab, or an action. ↑↓ choose, ↩ open, ⌥↩ structure, ⎋ close.
 struct CommandPaletteView: View {

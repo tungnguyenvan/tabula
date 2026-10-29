@@ -1,6 +1,8 @@
 import Foundation
 import Observation
-import TabulaCore
+import TabulaAI
+import TabulaFoundation
+import TabulaStorage
 
 /// The AI settings and the one place the app asks a model for something.
 @MainActor @Observable

@@ -1,5 +1,5 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaSQL
 
 final class EditableSelectTests: XCTestCase {
     func testDirectColumnsFromOneTable() {

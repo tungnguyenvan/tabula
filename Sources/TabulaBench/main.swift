@@ -1,5 +1,10 @@
 import Foundation
-import TabulaCore
+import TabulaConnections
+import TabulaDrivers
+import TabulaFoundation
+import TabulaMongo
+import TabulaRedis
+import TabulaSQL
 
 // Times what Tabula does against real servers: connecting, reading the catalog, loading grid pages, sorting,
 // filtering, counting, large results and committing edits. Every step goes through the same drivers and

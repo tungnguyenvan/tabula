@@ -1,5 +1,4 @@
 import AppKit
-import TabulaCore
 import UniformTypeIdentifiers
 
 /// Query tabs saved to and opened from .sql files.

@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 struct WorkspaceWindow: View {
     /// The connection the window was opened for; nil for an empty window, which offers one to open.

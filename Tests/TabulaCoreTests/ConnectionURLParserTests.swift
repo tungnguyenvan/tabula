@@ -1,5 +1,5 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaFoundation
 
 final class ConnectionURLParserTests: XCTestCase {
     func testPostgresWithEscapedPassword() throws {

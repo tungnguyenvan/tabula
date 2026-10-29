@@ -1,5 +1,8 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaFoundation
+@testable import TabulaMySQL
+@testable import TabulaPostgres
+@testable import TabulaTransfer
 
 final class DatabaseDumpTests: XCTestCase {
     private let postgres18 = DatabaseDump.Located(path: "/x/pg_dump", version: "pg_dump (PostgreSQL) 18.6", major: 18, isMariaDB: false)

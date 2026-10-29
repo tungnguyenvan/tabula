@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 struct ConnectionListView: View {
     @Environment(AppState.self) private var appState

@@ -1,6 +1,8 @@
 import AppKit
 import Observation
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
+import TabulaTransfer
 
 @MainActor @Observable
 final class QueryTabModel {

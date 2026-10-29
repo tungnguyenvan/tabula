@@ -1,5 +1,9 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaDrivers
+@testable import TabulaFoundation
+@testable import TabulaMySQL
+@testable import TabulaPostgres
+@testable import TabulaSQL
 
 final class QueryCancellationTests: XCTestCase {
     func testStopBeforeStartRejectsAttachment() async throws {

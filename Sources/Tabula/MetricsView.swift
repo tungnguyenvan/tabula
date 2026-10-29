@@ -1,6 +1,6 @@
 import Charts
 import SwiftUI
-import TabulaCore
+import TabulaDrivers
 
 /// Polls a metrics source and keeps a short history for charts.
 @MainActor @Observable

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
 
 /// The statements a workspace sent to the server, newest last.
 @MainActor @Observable

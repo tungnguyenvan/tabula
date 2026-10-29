@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaDrivers
+import TabulaFoundation
 
 /// Entity-relationship diagram of one schema, built from foreign keys.
 @MainActor @Observable

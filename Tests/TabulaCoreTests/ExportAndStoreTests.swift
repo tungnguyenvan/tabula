@@ -1,5 +1,8 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaFoundation
+@testable import TabulaSQL
+@testable import TabulaStorage
+@testable import TabulaTransfer
 
 final class ExportAndStoreTests: XCTestCase {
     func testCSVEscaping() throws {

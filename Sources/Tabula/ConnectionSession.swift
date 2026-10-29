@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 /// A connection open in a window: the SQL workspace or the Redis key browser.
 @MainActor

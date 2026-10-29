@@ -1,5 +1,4 @@
 import AppKit
-import TabulaCore
 
 /// The standard About panel, with credits written in code so they use system colors (an HTML credits
 /// file keeps its fixed colors and turns unreadable in Dark Mode).

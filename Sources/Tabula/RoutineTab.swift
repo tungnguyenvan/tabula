@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaDrivers
 
 /// A function, procedure or trigger opened for viewing and editing (or a new one being written).
 @MainActor @Observable

@@ -1,5 +1,9 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaConnections
+@testable import TabulaDrivers
+@testable import TabulaFoundation
+@testable import TabulaRedis
+@testable import TabulaSQLite
 
 /// Foreign keys and metrics against real databases (Postgres/MySQL/Redis need the TABULA_TEST_* ports).
 final class SchemaInsightsTests: XCTestCase {

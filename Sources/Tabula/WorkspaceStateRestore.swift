@@ -1,5 +1,6 @@
 import Foundation
-import TabulaCore
+import TabulaFoundation
+import TabulaStorage
 
 /// Each connection's tabs, schema, database and query history are saved, and come back when it is opened again
 /// (Settings › General turns this off). Saved when the connection, its window or Tabula closes, on Reconnect, and

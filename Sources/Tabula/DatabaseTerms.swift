@@ -1,4 +1,5 @@
-import TabulaCore
+import TabulaFoundation
+
 
 /// The words each database uses, so labels say "collection" and "document" for MongoDB.
 extension DatabaseKind {

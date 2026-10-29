@@ -1,5 +1,5 @@
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
 
 extension ConnectionTag {
     var color: Color? {

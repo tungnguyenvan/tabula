@@ -1,6 +1,6 @@
 import Security
 import XCTest
-@testable import TabulaCore
+@testable import TabulaStorage
 
 /// Opt-in integration tests. Each test owns a uniquely named, disposable item, never a connection's credentials.
 final class KeychainItemTests: XCTestCase {

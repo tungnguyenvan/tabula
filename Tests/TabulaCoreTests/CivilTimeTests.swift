@@ -1,5 +1,6 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaConnections
+@testable import TabulaFoundation
 
 final class CivilTimeTests: XCTestCase {
     private let reference: DateFormatter = {

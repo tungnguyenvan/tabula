@@ -1,5 +1,9 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaConnections
+@testable import TabulaDrivers
+@testable import TabulaFoundation
+@testable import TabulaMySQL
+@testable import TabulaSQL
 
 final class MySQLQueryEditingTests: XCTestCase {
     private var target: QueryEditTarget {

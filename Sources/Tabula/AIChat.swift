@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaAI
+import TabulaFoundation
 
 /// The AI conversations about one connection, shown in the panel on the right. They are saved on this Mac,
 /// so earlier ones can be opened again. While answering, the assistant may use tools (`AgentTool`).

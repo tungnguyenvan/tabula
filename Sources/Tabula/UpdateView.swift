@@ -1,5 +1,5 @@
 import SwiftUI
-import TabulaCore
+import TabulaUpdates
 
 struct UpdateView: View {
     @Bindable var updater: Updater

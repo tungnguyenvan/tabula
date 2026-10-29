@@ -1,5 +1,9 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaConnections
+@testable import TabulaDrivers
+@testable import TabulaFoundation
+@testable import TabulaSQL
+@testable import TabulaSQLite
 
 /// Exercises each driver against a real database. Postgres and MySQL tests run only when
 /// TABULA_TEST_PG_PORT / TABULA_TEST_MYSQL_PORT are set (user/password/database "tabula").

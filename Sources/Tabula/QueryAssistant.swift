@@ -1,7 +1,8 @@
 import Foundation
 import Observation
 import SwiftUI
-import TabulaCore
+import TabulaAI
+import TabulaFoundation
 
 /// Ask AI and Fix with AI for one query tab.
 @MainActor @Observable

@@ -1,6 +1,8 @@
 import Foundation
 import Observation
-import TabulaCore
+import TabulaAI
+import TabulaFoundation
+import TabulaStorage
 
 @MainActor @Observable
 final class AppState {

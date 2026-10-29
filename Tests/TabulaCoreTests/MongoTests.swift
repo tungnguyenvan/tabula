@@ -1,6 +1,10 @@
 import BSON
 import XCTest
-@testable import TabulaCore
+@testable import TabulaConnections
+@testable import TabulaDrivers
+@testable import TabulaFoundation
+@testable import TabulaMongo
+@testable import TabulaSQL
 
 final class MongoShellTests: XCTestCase {
     func testRoundTripKeepsTypes() throws {

@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import TabulaCore
+import TabulaDrivers
 
 /// Pending cell updates for one query result. Original rows and keys remain unchanged until a successful commit;
 /// switching between script results keeps each one's edits and undo history.

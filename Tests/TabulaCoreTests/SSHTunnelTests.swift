@@ -1,5 +1,8 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaConnections
+@testable import TabulaDrivers
+@testable import TabulaFoundation
+@testable import TabulaPostgres
 
 final class SSHTunnelTests: XCTestCase {
     func testValidation() {

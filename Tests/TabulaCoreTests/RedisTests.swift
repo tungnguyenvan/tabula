@@ -1,5 +1,6 @@
 import XCTest
-@testable import TabulaCore
+@testable import TabulaFoundation
+@testable import TabulaRedis
 
 final class RedisCommandLineTests: XCTestCase {
     private func parse(_ line: String) throws -> [String] {

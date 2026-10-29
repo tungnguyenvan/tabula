@@ -1,6 +1,9 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaFoundation
+import TabulaMongo
+import TabulaSQL
+import TabulaTransfer
 
 struct TableTabView: View {
     @Bindable var model: TableTabModel

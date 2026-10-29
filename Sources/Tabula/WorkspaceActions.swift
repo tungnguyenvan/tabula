@@ -1,5 +1,4 @@
 import AppKit
-import TabulaCore
 
 extension WorkspaceModel {
     /// Closes a tab, asking first if it holds uncommitted rows or unsaved edits to its file.

@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaRedis
 
 extension RedisKeyType {
     var badge: String {

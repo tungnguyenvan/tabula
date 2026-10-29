@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
 import Observation
-import TabulaCore
+import TabulaFoundation
+import TabulaRedis
 
 @MainActor @Observable
 final class RedisWorkspaceModel {

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
-import TabulaCore
+import TabulaAI
+import TabulaFoundation
 
 /// Local models served by Ollama, for the AI settings.
 @MainActor @Observable
