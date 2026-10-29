@@ -10,6 +10,63 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case table(schema: String, name: String, kind: String, mode: String)
     }
 
+    /// A table of the connection: `database` is the database it was in (PostgreSQL; nil where the connection
+    /// reaches one database or lists databases as schemas).
+    public struct TableKey: Codable, Hashable, Sendable {
+        public var database: String?
+        public var schema: String
+        public var name: String
+
+        public init(database: String?, schema: String, name: String) {
+            self.database = database
+            self.schema = schema
+            self.name = name
+        }
+    }
+
+    /// A table's filter bar: its visual rules or raw SQL condition, and the condition the rows were filtered by.
+    public struct TableFilter: Codable, Equatable, Sendable {
+        public struct Rule: Codable, Equatable, Sendable {
+            public var column: String
+            /// A `FilterRule.Operator` raw value.
+            public var op: String
+            public var value: String
+            /// A `FilterRule.Conjunction` raw value.
+            public var conjunction: String
+
+            public init(column: String, op: String, value: String, conjunction: String) {
+                self.column = column
+                self.op = op
+                self.value = value
+                self.conjunction = conjunction
+            }
+        }
+
+        public var rules: [Rule]
+        public var rawCondition: String
+        public var usesRawCondition: Bool
+        /// The SQL condition applied to the rows, exactly as it ran; empty when the filter wasn't applied. The bar
+        /// may hold edits made after applying it.
+        public var appliedCondition: String
+
+        public init(rules: [Rule], rawCondition: String, usesRawCondition: Bool, appliedCondition: String) {
+            self.rules = rules
+            self.rawCondition = rawCondition
+            self.usesRawCondition = usesRawCondition
+            self.appliedCondition = appliedCondition
+        }
+    }
+
+    public struct TableFilterEntry: Codable, Equatable, Sendable {
+        public var table: TableKey
+        public var filter: TableFilter
+
+        public init(table: TableKey, filter: TableFilter) {
+            self.table = table
+            self.filter = filter
+        }
+    }
+
     /// PostgreSQL: the database the window had moved to; nil for the saved connection's own.
     public var database: String?
     public var schema: String?
@@ -18,19 +75,34 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var selected: Int?
     /// Query history, newest first.
     public var history: [String]
+    /// The last filter of each table that had one, open in a tab or not.
+    public var tableFilters: [TableFilterEntry]
 
     public init(
         database: String? = nil,
         schema: String? = nil,
         tabs: [Tab] = [],
         selected: Int? = nil,
-        history: [String] = []
+        history: [String] = [],
+        tableFilters: [TableFilterEntry] = []
     ) {
         self.database = database
         self.schema = schema
         self.tabs = tabs
         self.selected = selected
         self.history = history
+        self.tableFilters = tableFilters
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        database = try container.decodeIfPresent(String.self, forKey: .database)
+        schema = try container.decodeIfPresent(String.self, forKey: .schema)
+        tabs = try container.decode([Tab].self, forKey: .tabs)
+        selected = try container.decodeIfPresent(Int.self, forKey: .selected)
+        history = try container.decode([String].self, forKey: .history)
+        // States saved before 0.7.1 have no filters.
+        tableFilters = try container.decodeIfPresent([TableFilterEntry].self, forKey: .tableFilters) ?? []
     }
 }
 

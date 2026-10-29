@@ -97,6 +97,9 @@ final class WorkspaceModel {
         }
     }
     var history: [String] = []
+    /// Each table's last filter, kept when its tab closes so reopening the table brings the filter back. A table
+    /// open in a tab has its current filter in the tab; this holds what it had when the tab was last closed.
+    var tableFilters: [WorkspaceState.TableKey: WorkspaceState.TableFilter] = [:]
     /// The state last saved for this connection or restored from it, so an unchanged one isn't written again.
     var savedState: WorkspaceState?
     /// Set once the saved state has been applied, or found missing. Until then the workspace's empty tabs (still
@@ -301,6 +304,7 @@ final class WorkspaceModel {
     func reconnect() async {
         guard confirmDiscardQueryResults() else { return }
         // What was open comes back once connected again; until then the emptied tabs aren't saved.
+        rememberOpenTableFilters()
         saveState()
         stateRestored = false
         for case .query(let query) in tabs {
@@ -502,6 +506,7 @@ final class WorkspaceModel {
             model.suspendResultEditing()
             queries.append(model)
         }
+        rememberOpenTableFilters()
         await disconnect()
         config = target
         tabs.removeAll()
@@ -580,7 +585,8 @@ final class WorkspaceModel {
     }
 
     /// The tab opened by browsing the sidebar; the next browse replaces it instead of adding a tab
-    /// (so arrowing through tables doesn't pile up tabs). Editing, filtering or opening it explicitly keeps it.
+    /// (so arrowing through tables doesn't pile up tabs). Editing, filtering or opening it explicitly keeps it; a
+    /// filter it only brought back from last time does not.
     private(set) var previewTabID: UUID?
 
     /// Opens a table. `preview` (sidebar browsing) reuses the preview tab when it has nothing worth keeping.
@@ -604,9 +610,13 @@ final class WorkspaceModel {
         let model = TableTabModel(table: table, driver: driver, connectionTag: config.tag)
         model.mode = mode
         model.focusGridOnLoad = !preview
+        if let filter = tableFilters[filterKey(table)] {
+            model.restoreFilter(filter)
+        }
         if preview, let previewID = previewTabID, let index = tabs.firstIndex(where: { $0.id == previewID }),
-            case .table(let old) = tabs[index], !old.hasChanges, !old.isFiltered
+            case .table(let old) = tabs[index], !old.hasChanges, !old.isFiltered || !old.filterChangedInTab
         {
+            rememberFilter(of: old)
             tabs[index] = .table(model)
         } else {
             tabs.append(.table(model))
@@ -821,6 +831,23 @@ final class WorkspaceModel {
         return Array(Set(columnCache.filter { $0.key.hasPrefix(prefix) }.values.joined().map(\.name))).sorted()
     }
 
+    /// Where a table's filter is remembered: the table in the database the window is in.
+    func filterKey(_ table: TableRef) -> WorkspaceState.TableKey {
+        WorkspaceState.TableKey(database: currentDatabase, schema: table.schema, name: table.name)
+    }
+
+    /// Remembers the tab's filter for its table, or forgets the table's filter when the bar holds none.
+    func rememberFilter(of model: TableTabModel) {
+        tableFilters[filterKey(model.table)] = model.rememberedFilter
+    }
+
+    /// Before the tabs go away (another database, reconnecting): what each open table is filtered by.
+    func rememberOpenTableFilters() {
+        for case .table(let model) in tabs {
+            rememberFilter(of: model)
+        }
+    }
+
     private static func columnKey(_ table: TableRef) -> String {
         "\(table.schema.lowercased()).\(table.name.lowercased())"
     }
@@ -828,7 +855,9 @@ final class WorkspaceModel {
     func close(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         switch tabs[index] {
-        case .table(let model): closedTabs.append(.table(model.table, model.mode))
+        case .table(let model):
+            rememberFilter(of: model)
+            closedTabs.append(.table(model.table, model.mode))
         case .query(let model):
             model.assistant.cancel()
             model.cancelRun()

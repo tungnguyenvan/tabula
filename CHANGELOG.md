@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+- A table's filter is no longer lost when its tab, its connection or Tabula is closed. Opening the table again brings back the filter bar's rules (or SQL condition), and a filter that was applied is applied again ([#103](https://github.com/tungnguyenvan/tabula/issues/103)).
+
 ## [0.7.0] - 2026-10-29
 
 ### Added

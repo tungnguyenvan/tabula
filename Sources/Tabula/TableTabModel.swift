@@ -4,6 +4,7 @@ import TabulaDrivers
 import TabulaFoundation
 import TabulaMongo
 import TabulaSQL
+import TabulaStorage
 import TabulaTransfer
 
 /// One table opened in a tab: paged data, pending edits, and structure.
@@ -210,6 +211,61 @@ final class TableTabModel {
     }
 
     var isFiltered: Bool { !appliedFilter.isEmpty }
+
+    /// The remembered filter the tab opened with, to tell a filter set in this tab from one it only brought back.
+    private(set) var restoredFilter: WorkspaceState.TableFilter?
+
+    /// Whether the filter bar differs from what the tab opened with.
+    var filterChangedInTab: Bool { rememberedFilter != restoredFilter }
+
+    /// The filter bar as the workspace remembers it for this table, or nil when it holds nothing worth keeping
+    /// (not applied, no raw condition, and only rules still waiting for a value).
+    var rememberedFilter: WorkspaceState.TableFilter? {
+        let hasRuleContent = filterRules.contains { rule in
+            !rule.op.needsValue || !rule.value.isEmpty
+        }
+        let hasRawCondition = !filterText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard isFiltered || hasRuleContent || hasRawCondition else {
+            return nil
+        }
+        let rules = filterRules.map { rule in
+            WorkspaceState.TableFilter.Rule(
+                column: rule.column,
+                op: rule.op.rawValue,
+                value: rule.value,
+                conjunction: rule.conjunction.rawValue
+            )
+        }
+        return WorkspaceState.TableFilter(
+            rules: rules,
+            rawCondition: filterText,
+            usesRawCondition: useRawFilter,
+            appliedCondition: appliedFilter
+        )
+    }
+
+    /// Puts a remembered filter back in the bar, before the first load. The condition that was applied is applied
+    /// again, as it ran, and the bar shown, so the rows it hides are not a surprise. Nothing is restored when a rule names an operator
+    /// this version doesn't know (a state written by another version).
+    func restoreFilter(_ remembered: WorkspaceState.TableFilter) {
+        var rules: [FilterRule] = []
+        for saved in remembered.rules {
+            guard let op = FilterRule.Operator(rawValue: saved.op),
+                let conjunction = FilterRule.Conjunction(rawValue: saved.conjunction)
+            else {
+                return
+            }
+            rules.append(FilterRule(column: saved.column, op: op, value: saved.value, conjunction: conjunction))
+        }
+        restoredFilter = remembered
+        filterRules = rules
+        filterText = remembered.rawCondition
+        useRawFilter = remembered.usesRawCondition
+        appliedFilter = remembered.appliedCondition
+        if isFiltered {
+            showFilterBar = true
+        }
+    }
 
     func columnInfo(_ name: String) -> ColumnInfo? { columns.first { $0.name == name } }
 
