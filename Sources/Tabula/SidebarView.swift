@@ -16,21 +16,15 @@ struct SidebarView: View {
     /// The sidebar's groups; clicking a group's title row collapses or expands it.
     enum Group: String { case tables, views, functions, triggers }
 
-    private func isCollapsed(_ group: Group) -> Bool {
-        collapsedGroups.split(separator: ",").contains(Substring(group.rawValue))
-    }
+    private func isCollapsed(_ group: Group) -> Bool { SidebarGroups(collapsedGroups).isCollapsed(group) }
 
     /// While filtering, every group shows its matches.
-    private func isExpanded(_ group: Group) -> Bool { !model.tableSearch.isEmpty || !isCollapsed(group) }
+    private func isExpanded(_ group: Group) -> Bool {
+        SidebarGroups(collapsedGroups).isExpanded(group, filtering: !model.tableSearch.isEmpty)
+    }
 
     private func toggle(_ group: Group) {
-        var collapsed = Set(collapsedGroups.split(separator: ",").map(String.init))
-        if isCollapsed(group) {
-            collapsed.remove(group.rawValue)
-        } else {
-            collapsed.insert(group.rawValue)
-        }
-        withAnimation(.easeInOut(duration: 0.2)) { collapsedGroups = collapsed.sorted().joined(separator: ",") }
+        withAnimation(.easeInOut(duration: 0.2)) { collapsedGroups = SidebarGroups(collapsedGroups).toggling(group) }
     }
 
     struct PendingAction: Identifiable {
@@ -382,4 +376,29 @@ struct SidebarView: View {
 enum SidebarItem: Hashable {
     case table(TableRef)
     case routine(RoutineInfo)
+}
+
+/// The sidebar groups the user collapsed, stored as comma-separated group names (SidebarCollapsedGroups).
+struct SidebarGroups {
+    let collapsed: Set<String>
+
+    init(_ stored: String) {
+        collapsed = Set(stored.split(separator: ",").map(String.init))
+    }
+
+    func isCollapsed(_ group: SidebarView.Group) -> Bool { collapsed.contains(group.rawValue) }
+
+    /// While the sidebar is filtered, every group shows its matches.
+    func isExpanded(_ group: SidebarView.Group, filtering: Bool) -> Bool { filtering || !isCollapsed(group) }
+
+    /// The stored value with `group` collapsed if it was open, or opened if it was collapsed.
+    func toggling(_ group: SidebarView.Group) -> String {
+        var names = collapsed
+        if isCollapsed(group) {
+            names.remove(group.rawValue)
+        } else {
+            names.insert(group.rawValue)
+        }
+        return names.sorted().joined(separator: ",")
+    }
 }
