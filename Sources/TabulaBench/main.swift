@@ -16,11 +16,33 @@ import TabulaSQL
 // The benchmark tables are left in place (bench_items, and the tabula_bench database on MongoDB) for
 // scripts/benchmark.sh, which also measures the app's memory with them open.
 
+/// `--rows N`, `--runs N` and `--only a,b` from the command line, read once before anything runs.
+struct Options {
+    var rows = 100_000
+    var runs = 7
+    var only: Set<String>?
+
+    static func parse(_ arguments: [String]) -> Options {
+        var options = Options()
+        var remaining = arguments.makeIterator()
+        while let argument = remaining.next() {
+            switch argument {
+            case "--rows": options.rows = remaining.next().flatMap(Int.init) ?? options.rows
+            case "--runs": options.runs = remaining.next().flatMap(Int.init) ?? options.runs
+            case "--only": options.only = Set((remaining.next() ?? "").split(separator: ",").map(String.init))
+            default: break
+            }
+        }
+        return options
+    }
+}
+
 enum Bench {
+    static let options = Options.parse(Array(CommandLine.arguments.dropFirst()))
     /// Rows (documents, keys) in each benchmark table.
-    static var rows = 100_000
+    static let rows = options.rows
     /// Timed repetitions of each step after one warm-up; the report gives the median and the slowest.
-    static var runs = 7
+    static let runs = options.runs
     static let pageSizes = [300, 1000, 5000]
     /// Offset of the "deep page" step: half-way through the table.
     static var deepOffset: Int { rows / 2 }
@@ -335,17 +357,7 @@ func benchmarkShellText() async throws -> [Step] {
 
 // MARK: Report
 
-var arguments = CommandLine.arguments.dropFirst().makeIterator()
-var only: Set<String>?
-while let argument = arguments.next() {
-    switch argument {
-    case "--rows": Bench.rows = arguments.next().flatMap(Int.init) ?? Bench.rows
-    case "--runs": Bench.runs = arguments.next().flatMap(Int.init) ?? Bench.runs
-    case "--only": only = Set((arguments.next() ?? "").split(separator: ",").map(String.init))
-    default: break
-    }
-}
-func wanted(_ name: String) -> Bool { only?.contains(name) ?? true }
+func wanted(_ name: String) -> Bool { Bench.options.only?.contains(name) ?? true }
 
 var sections: [(title: String, steps: [Step])] = []
 @MainActor

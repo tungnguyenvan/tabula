@@ -68,6 +68,8 @@ final class LineNumberRuler: NSRulerView {
     }
 }
 
+/// Colors an editor's text; runs with the editor, on the main actor.
+@MainActor
 enum SQLHighlighter {
     static let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
     static let maxHighlightedLength = 300_000

@@ -198,8 +198,10 @@ enum WorkspaceRegistry {
                 object: nil,
                 queue: .main
             ) { note in
-                let number = (note.object as? NSWindow)?.windowNumber
+                // Delivered on the main queue, where the notification stays.
+                nonisolated(unsafe) let note = note
                 MainActor.assumeIsolated {
+                    let number = (note.object as? NSWindow)?.windowNumber
                     // Non-workspace windows (Connections, Shortcuts) clear it, so workspace commands disable.
                     ActiveWorkspace.shared.update(number.flatMap { sessions[$0]?.session })
                 }
