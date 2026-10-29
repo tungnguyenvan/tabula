@@ -221,6 +221,19 @@ extension DebugHooks {
                     case "restoredrop": workspace.transfer?.restoreOptions.dropExisting = true
                     case "dumpdone": workspace.transfer = nil
                     case "save": workspace.saveSelectedTab(choosingLocation: false)
+                    // Query › Save to Library…, without the menu (which needs the app in front).
+                    case "savelibrary":
+                        if case .query(let query) = workspace.selectedTab {
+                            query.saveToLibraryRequest += 1
+                        }
+                    // Chooses the first saved query the completion list (⌃Space) offers for the word at the caret,
+                    // as a click on it would; the list itself runs modally, out of reach of scripted keys.
+                    case "completesaved":
+                        if let window = targetWindow,
+                            let editor = firstView(of: SQLTextView.self, in: window.contentView)
+                        {
+                            editor.completeFirstSavedQuery()
+                        }
                     case "saveas": workspace.saveSelectedTab(choosingLocation: true)
                     case "close": if let id = workspace.selectedTabID { workspace.requestClose(id) }
                     case "reopen": workspace.reopenClosedTab()
