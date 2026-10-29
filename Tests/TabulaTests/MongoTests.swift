@@ -324,6 +324,34 @@ final class MongoIntegrationTests: XCTestCase {
         }
     }
 
+    /// The assistant's connection has no read-only session to carry a time limit, so each read sends one.
+    func testReadTimeLimitOfTheAssistantsConnection() async throws {
+        let driver = try await connect()
+        defer { Task { await driver.close() } }
+        _ = try await driver.execute("db.slow.drop()")
+        _ = try await driver.execute("db.slow.insertOne({ n: 1 })")
+        try await driver.catalog.prepareReadOnlySession(timeoutSeconds: 1, on: driver)
+
+        let quick = try await driver.execute("db.slow.find({})")
+        XCTAssertEqual(quick.rows.count, 1)
+        let started = Date()
+        for statement in [
+            "db.slow.find({ $where: \"sleep(3000) || true\" })",
+            // maxTimeMS(0) means no limit to the server; it doesn't lift this one.
+            "db.slow.find({ $where: \"sleep(3000) || true\" }).maxTimeMS(0)",
+            "db.slow.aggregate([{ $match: { $expr: { $function: { body: \"function() { sleep(3000); return true }\", args: [], lang: \"js\" } } } }])",
+        ] {
+            do {
+                _ = try await driver.execute(statement)
+                XCTFail("expected the time limit to stop \(statement)")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("time limit"), error.localizedDescription)
+            }
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 6)
+        _ = try await driver.execute("db.slow.drop()")
+    }
+
     func testBrowseQueryAndEdit() async throws {
         let driver = try await connect()
         defer { Task { await driver.close() } }
