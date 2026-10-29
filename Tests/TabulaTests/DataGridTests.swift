@@ -115,6 +115,49 @@ final class DataGridTests: XCTestCase {
         XCTAssertEqual(edits.count, 1)
     }
 
+    private func press(_ keyCode: UInt16, _ characters: String = "", flags: NSEvent.ModifierFlags = []) throws {
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: flags,
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                characters: characters,
+                charactersIgnoringModifiers: characters,
+                isARepeat: false,
+                keyCode: keyCode
+            )
+        )
+        tableView.keyDown(with: event)
+    }
+
+    func testKeysMoveFocusDeleteAndClearCells() throws {
+        coordinator.focus(row: 1, tableColumn: 2, edit: false)
+        try press(124)  // →
+        XCTAssertEqual(coordinator.focusedColumn, 3)
+        try press(124)
+        XCTAssertEqual(coordinator.focusedColumn, 3, "→ stops at the last column")
+        try press(123, flags: .command)  // ⌘←
+        XCTAssertEqual(coordinator.focusedColumn, 1)
+        try press(125, flags: .command)  // ⌘↓
+        XCTAssertEqual(tableView.selectedRow, 2)
+        try press(126, flags: .command)  // ⌘↑
+        XCTAssertEqual(tableView.selectedRow, 0)
+        try press(48)  // Tab
+        XCTAssertEqual(coordinator.focusedColumn, 2)
+
+        try press(51, flags: .option)  // ⌥⌫: NULL in the focused cell
+        XCTAssertEqual(edits.count, 1)
+        XCTAssertEqual(edits.first?.row, 0)
+        XCTAssertEqual(edits.first?.column, 1)
+        try press(51)  // ⌫: the selected rows
+        XCTAssertEqual(deleted, [IndexSet(integer: 0)])
+        try press(53)  // Escape
+        XCTAssertEqual(tableView.selectedRowIndexes, [])
+    }
+
     func testQuickLookPrettyPrintsJSONOnly() {
         XCTAssertEqual(
             DataGridView.Coordinator.prettyJSON("{\"b\":1,\"a\":[2]}"),
