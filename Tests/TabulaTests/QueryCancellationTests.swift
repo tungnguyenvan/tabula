@@ -383,3 +383,88 @@ final class SQLiteCancellationTests: XCTestCase {
         await driver.close()
     }
 }
+
+final class MySQLCancellationTests: XCTestCase {
+    private func connect() async throws -> MySQLDriver {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MYSQL_PORT not set")
+        }
+        return try await MySQLDriver.connect(
+            ConnectionConfig(kind: .mysql, port: port, user: "tabula", database: "tabula"),
+            password: "tabula"
+        )
+    }
+
+    /// A query that sleeps per row: unlike a bare SELECT SLEEP(n), which KILL QUERY makes return 1, it fails
+    /// with ER_QUERY_INTERRUPTED.
+    private let slow = "SELECT SLEEP(1) FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS t"
+
+    func testStopInterruptsTheStatementAndKeepsTheConnection() async throws {
+        let driver = try await connect()
+        XCTAssertEqual(driver.queryCancellation, .server)
+        let scope = QueryCancelScope()
+        let run = Task { [slow] in
+            try await QueryCancelScope.$current.withValue(scope) { try await driver.execute(slow) }
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        let started = Date()
+        let outcome = await scope.cancel()
+        XCTAssertEqual(outcome, .requested)
+        // Queued before the stopped statement finishes; Stop can't reach it.
+        let next = Task { try await driver.execute("SELECT 42") }
+        do {
+            _ = try await run.value
+            XCTFail("expected the statement to be interrupted")
+        } catch {
+            XCTAssertEqual((error as? QueryCancelledError)?.serverInterrupted, true, "\(error)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 3)
+        let answer = try await next.value
+        XCTAssertEqual(answer.rows, [["42"]])
+        let late = await scope.cancel()
+        XCTAssertEqual(late, .notRunning)
+        await driver.close()
+    }
+
+    /// InnoDB undoes only the stopped statement; the transaction and its earlier changes stay.
+    func testStoppedStatementLeavesTheTransactionOpen() async throws {
+        let driver = try await connect()
+        let table = "stop_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(12).lowercased()
+        _ = try await driver.execute("CREATE TABLE \(table) (n INT) ENGINE = InnoDB")
+        _ = try await driver.execute("BEGIN")
+        _ = try await driver.execute("INSERT INTO \(table) VALUES (1)")
+        let scope = QueryCancelScope()
+        let run = Task {
+            try await QueryCancelScope.$current.withValue(scope) {
+                try await driver.execute(
+                    "INSERT INTO \(table) SELECT SLEEP(1) FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) AS t"
+                )
+            }
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        _ = await scope.cancel()
+        _ = try? await run.value
+        let inside = try await driver.execute("SELECT count(*) FROM \(table)")
+        XCTAssertEqual(inside.rows, [["1"]])
+        _ = try await driver.execute("ROLLBACK")
+        let after = try await driver.execute("SELECT count(*) FROM \(table)")
+        XCTAssertEqual(after.rows, [["0"]], "the earlier INSERT was still in the open transaction")
+        _ = try await driver.execute("DROP TABLE \(table)")
+        await driver.close()
+    }
+
+    func testErrorsStillNameTheUsersLine() async throws {
+        let driver = try await connect()
+        let scope = QueryCancelScope()
+        do {
+            _ = try await QueryCancelScope.$current.withValue(scope) {
+                try await driver.execute("SELECT 1,\nFROM nowhere")
+            }
+            XCTFail("expected a syntax error")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("at line 2"), error.localizedDescription)
+            XCTAssertFalse(error.localizedDescription.contains("tabula-run"), error.localizedDescription)
+        }
+        await driver.close()
+    }
+}

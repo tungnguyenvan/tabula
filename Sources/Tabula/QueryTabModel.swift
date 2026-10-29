@@ -204,6 +204,8 @@ final class QueryTabModel {
                 " If a transaction was open, PostgreSQL has marked it failed: run ROLLBACK (or ROLLBACK TO SAVEPOINT) before continuing."
         case .sqlite:
             text += " If a transaction was open and the statement changed rows, SQLite has rolled the transaction back."
+        case .mysql:
+            text += " An open transaction stays open, with the changes made before the stopped statement."
         default:
             break
         }
