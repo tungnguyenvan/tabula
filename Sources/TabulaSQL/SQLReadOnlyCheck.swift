@@ -16,12 +16,53 @@ public enum SQLReadOnlyCheck {
         "ROLLBACK",
         "SAVEPOINT", "RELEASE", "START",
     ]
-    /// Functions that act on the server or read its files, even in a read-only transaction.
-    private static let blockedFunctions: Set<String> = [
+    /// Functions that act on the server or read its files, even in a read-only transaction. Names only, never
+    /// prefixes, so catalog views such as `pg_file_settings` and `pg_replication_slots` stay readable.
+    private static let blockedFunctions: Set<String> = sqlRunners.union(serverActions).union(serverFiles).union(locks)
+
+    /// Run SQL given as text, where the words of that SQL are a string this check doesn't look into.
+    private static let sqlRunners: Set<String> = [
+        "QUERY_TO_XML", "QUERY_TO_XMLSCHEMA", "QUERY_TO_XML_AND_XMLSCHEMA", "TS_STAT", "TS_REWRITE",
+        // tablefunc
+        "CROSSTAB", "CROSSTAB2", "CROSSTAB3", "CROSSTAB4", "CONNECTBY",
+        // dblink
+        "DBLINK", "DBLINK_EXEC", "DBLINK_CONNECT", "DBLINK_CONNECT_U", "DBLINK_OPEN", "DBLINK_FETCH",
+        "DBLINK_SEND_QUERY", "DBLINK_GET_RESULT",
+    ]
+
+    /// Change the server, its sessions or its statistics; none of it is undone by rolling back.
+    private static let serverActions: Set<String> = [
         "PG_TERMINATE_BACKEND", "PG_CANCEL_BACKEND", "PG_RELOAD_CONF", "PG_ROTATE_LOGFILE", "SET_CONFIG", "PG_SLEEP",
-        "PG_READ_FILE", "PG_READ_BINARY_FILE", "PG_LS_DIR", "PG_STAT_FILE", "LO_IMPORT", "LO_EXPORT", "LO_UNLINK",
-        "DBLINK", "DBLINK_EXEC", "PG_ADVISORY_LOCK", "PG_TRY_ADVISORY_LOCK", "SLEEP", "BENCHMARK", "LOAD_FILE",
-        "GET_LOCK", "RELEASE_LOCK", "LOAD_EXTENSION", "READFILE", "WRITEFILE",
+        "PG_SLEEP_FOR", "PG_SLEEP_UNTIL", "PG_SWITCH_WAL", "PG_CREATE_RESTORE_POINT", "PG_LOGICAL_EMIT_MESSAGE",
+        "PG_PROMOTE", "PG_WAL_REPLAY_PAUSE", "PG_WAL_REPLAY_RESUME", "PG_BACKUP_START", "PG_BACKUP_STOP",
+        "PG_LOG_BACKEND_MEMORY_CONTEXTS", "PG_IMPORT_SYSTEM_COLLATIONS",
+        "PG_STAT_RESET", "PG_STAT_RESET_SHARED", "PG_STAT_RESET_SINGLE_TABLE_COUNTERS",
+        "PG_STAT_RESET_SINGLE_FUNCTION_COUNTERS", "PG_STAT_RESET_SLRU", "PG_STAT_RESET_REPLICATION_SLOT",
+        "PG_STAT_RESET_SUBSCRIPTION_STATS", "PG_STAT_STATEMENTS_RESET",
+        "PG_CREATE_PHYSICAL_REPLICATION_SLOT", "PG_CREATE_LOGICAL_REPLICATION_SLOT", "PG_DROP_REPLICATION_SLOT",
+        "PG_COPY_PHYSICAL_REPLICATION_SLOT", "PG_COPY_LOGICAL_REPLICATION_SLOT", "PG_REPLICATION_SLOT_ADVANCE",
+        "PG_REPLICATION_ORIGIN_CREATE", "PG_REPLICATION_ORIGIN_DROP", "PG_REPLICATION_ORIGIN_ADVANCE",
+        "PG_REPLICATION_ORIGIN_SESSION_SETUP",
+        "SLEEP", "BENCHMARK", "SOURCE_POS_WAIT", "MASTER_POS_WAIT", "WAIT_FOR_EXECUTED_GTID_SET",
+        "LOAD_EXTENSION", "FTS3_TOKENIZER",
+    ]
+
+    /// Read or write files on the database server's machine.
+    private static let serverFiles: Set<String> = [
+        "PG_READ_FILE", "PG_READ_BINARY_FILE", "PG_STAT_FILE", "PG_LS_DIR", "PG_LS_LOGDIR", "PG_LS_WALDIR",
+        "PG_LS_TMPDIR", "PG_LS_ARCHIVE_STATUSDIR", "PG_LS_LOGICALMAPDIR", "PG_LS_LOGICALSNAPDIR", "PG_LS_REPLSLOTDIR",
+        "LO_IMPORT", "LO_EXPORT", "LO_UNLINK",
+        // adminpack
+        "PG_FILE_WRITE", "PG_FILE_RENAME", "PG_FILE_UNLINK", "PG_FILE_SYNC", "PG_LOGDIR_LS",
+        "LOAD_FILE", "READFILE", "WRITEFILE",
+    ]
+
+    /// Advisory locks; session locks outlive the rolled-back transaction the assistant's statement runs in.
+    private static let locks: Set<String> = [
+        "PG_ADVISORY_LOCK", "PG_ADVISORY_LOCK_SHARED", "PG_ADVISORY_XACT_LOCK", "PG_ADVISORY_XACT_LOCK_SHARED",
+        "PG_TRY_ADVISORY_LOCK", "PG_TRY_ADVISORY_LOCK_SHARED", "PG_TRY_ADVISORY_XACT_LOCK",
+        "PG_TRY_ADVISORY_XACT_LOCK_SHARED", "PG_ADVISORY_UNLOCK", "PG_ADVISORY_UNLOCK_SHARED", "PG_ADVISORY_UNLOCK_ALL",
+        "GET_LOCK", "RELEASE_LOCK", "RELEASE_ALL_LOCKS",
     ]
 
     /// Why the statement can't run, or nil when it only reads.
