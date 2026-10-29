@@ -71,6 +71,19 @@ private struct TableRowInspector: View {
     let count: Int
 
     var body: some View {
+        // The parent checks the row too, but after a commit or reload this view can be updated once more with the
+        // row it showed before, which may no longer exist (a new row that was saved).
+        if row < table.displayRowCount {
+            fields
+        } else {
+            Text("Select a row to see its fields")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var fields: some View {
         VStack(spacing: 0) {
             HStack {
                 Text(row >= table.rows.count ? "New row" : "Row \(row + 1 + table.offset)")
@@ -85,16 +98,19 @@ private struct TableRowInspector: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(Array(table.resultColumns.enumerated()), id: \.offset) { index, name in
-                        let info = table.columnInfo(name)
-                        FieldView(
-                            name: name,
-                            type: info?.dataType,
-                            isKey: info?.isPrimaryKey ?? false,
-                            cell: table.cell(row: row, column: index),
-                            edited: table.state(row: row, column: index) == .edited,
-                            editable: table.isEditable(row: row)
-                        ) { value in
-                            table.setValue(value, row: row, column: index)
+                        // SwiftUI can update these fields before the check above, with a row that just went away.
+                        if row < table.displayRowCount {
+                            let info = table.columnInfo(name)
+                            FieldView(
+                                name: name,
+                                type: info?.dataType,
+                                isKey: info?.isPrimaryKey ?? false,
+                                cell: table.cell(row: row, column: index),
+                                edited: table.state(row: row, column: index) == .edited,
+                                editable: table.isEditable(row: row)
+                            ) { value in
+                                table.setValue(value, row: row, column: index)
+                            }
                         }
                     }
                 }
