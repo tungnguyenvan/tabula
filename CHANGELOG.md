@@ -5,29 +5,30 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Fixed
-- Table filters ([#122](https://github.com/tungnguyenvan/tabula/issues/122)):
-  - Unticking a condition that starts an OR group keeps the OR: `a OR b AND c` without b is now `a OR c`, not `a AND c`.
-  - A remembered filter isn't applied after the connection was switched to another database engine, a dropped table's filter isn't applied to a new table of the same name, and a filter saved by a newer version is kept instead of erased.
-  - The WHERE label stays on the first ticked condition.
-- Saved query library ([#122](https://github.com/tungnguyenvan/tabula/issues/122)):
-  - Saving under the keyword of a file that couldn't be read no longer overwrites that file.
-  - Search matches every word anywhere instead of the whole phrase; the AI chat's search no longer needs the database connection.
-  - Linked `.sql` files are listed when they lead inside the library and reported otherwise, and a save can't follow a linked folder out of it.
-  - Coming back to Tabula no longer refreshes every query tab when the library hasn't changed.
-- The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
-- VoiceOver names the icon-only buttons (copy, send, stop, refresh, export, new tab, history and others) instead of reading their symbol or nothing.
-- Failures that used to look like empty data are now reported ([#98](https://github.com/tungnguyenvan/tabula/issues/98)):
+- **AI chat with Claude Code or Codex no longer hangs on Thinking** ([#80](https://github.com/tungnguyenvan/tabula/issues/80)).
+  - Tabula now runs them without your own coding setup: Claude Code's hooks, MCP servers, skills and slash commands, and Codex's MCP servers. On a Mac with several MCP servers, an answer that sometimes took over a minute now takes the model's usual few seconds. Your account and model settings still apply, and Tabula's requests are no longer saved in Claude Code's session history.
+  - The prompt no longer goes through your shell's input, where a profile asking a question (such as an update prompt) could take it.
+- **Failures that used to look like empty data are now reported** ([#98](https://github.com/tungnguyenvan/tabula/issues/98)):
   - A table's indexes that can't be read show a note under Indexes, instead of looking like a table without indexes; a row count that fails shows "of ?" with the reason.
   - The relationship diagram names tables whose columns couldn't be read.
   - Redis: a failed refresh of one key no longer drops it from the list, and a failed database list keeps the old one and says why.
   - Functions and triggers that can't be listed show the reason in the sidebar.
   - Saved AI chats that can't be read say where they were moved, instead of the history looking empty.
-  - `.sql` files in the query library that can't be read as text are named in the Queries panel.
+  - `.sql` files in the query library that can't be read are named in the Queries panel.
   - Ollama models that are installed no longer show as not installed when the list can't be read.
   - Restoring with a `mysql` client whose help can't be read reports that, instead of asking you to update the client.
   - Column names that fail to load for completion are tried again rather than remembered as empty.
-- The AI chat with Claude Code answers sooner and no longer hangs on Thinking when your own Claude Code setup is slow to start ([#80](https://github.com/tungnguyenvan/tabula/issues/80)). Tabula now runs it without your hooks, MCP servers, skills and slash commands, and doesn't save its requests in Claude Code's session history; your account and model settings still apply. The prompt no longer goes through your shell's input, where a profile asking a question (such as an update prompt) could take it.
-- The AI chat with Codex no longer starts your Codex MCP servers for every answer; one that was slow to start could hold an answer for over a minute.
+- **Table filters** ([#122](https://github.com/tungnguyenvan/tabula/issues/122)):
+  - Unticking a condition that starts an OR group keeps the OR: `a OR b AND c` without b is now `a OR c`, not `a AND c`.
+  - A remembered filter isn't applied after the connection was switched to another database engine, a dropped table's filter isn't applied to a new table of the same name, and a filter saved by a newer version is kept instead of erased.
+  - The WHERE label stays on the first ticked condition.
+- **Saved query library** ([#122](https://github.com/tungnguyenvan/tabula/issues/122)):
+  - Saving under the keyword of a file that couldn't be read no longer overwrites that file.
+  - Search matches every word anywhere instead of the whole phrase; the AI chat's search no longer needs the database connection.
+  - Linked `.sql` files are listed when they lead inside the library and reported otherwise, and a save can't follow a linked folder out of it.
+  - Coming back to Tabula no longer refreshes every query tab when the library hasn't changed.
+- VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
+- The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 
 ## [0.10.0] - 2026-10-29
 
