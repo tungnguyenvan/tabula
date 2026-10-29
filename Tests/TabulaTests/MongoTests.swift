@@ -223,9 +223,10 @@ final class MongoDialectTests: XCTestCase {
             dialect.condition([FilterRule(column: "_id", op: .equals, value: "65f1a2b3c4d5e6f708091a2b")]),
             "{ _id: { $in: [ObjectId(\"65f1a2b3c4d5e6f708091a2b\"), \"65f1a2b3c4d5e6f708091a2b\"] } }"
         )
+        // Strings by the regex; numbers, dates and ids by their text (the regex alone matches only strings).
         XCTAssertEqual(
             dialect.condition([FilterRule(column: "name", op: .contains, value: "a.b")]),
-            "{ name: /a\\.b/i }"
+            #"{ $or: [{ name: /a\.b/i }, { $expr: { $regexMatch: { input: { $ifNull: [{ $convert: { input: "$name", to: "string", onError: null, onNull: null } }, ""] }, regex: "a\\.b", options: "i" } } }] }"#
         )
         XCTAssertEqual(
             dialect.condition([FilterRule(column: "name", op: .equals, value: "\"30\"")]),
