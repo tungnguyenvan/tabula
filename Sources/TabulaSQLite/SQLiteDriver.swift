@@ -4,7 +4,6 @@ import TabulaDrivers
 import TabulaFoundation
 import TabulaSQL
 
-
 public actor SQLiteDriver: DatabaseDriver {
     public nonisolated let kind: DatabaseKind = .sqlite
     public nonisolated let dialect: any QueryDialect = SQLDialect(flavor: .sqlite)
@@ -62,7 +61,13 @@ public actor SQLiteDriver: DatabaseDriver {
         }
 
         let affected: Int? = columnCount == 0 ? Int(sqlite3_changes(db)) : nil
-        return QueryResult(columns: columns, rows: rows, affectedRows: affected, duration: Date().timeIntervalSince(started), statement: sql)
+        return QueryResult(
+            columns: columns,
+            rows: rows,
+            affectedRows: affected,
+            duration: Date().timeIntervalSince(started),
+            statement: sql
+        )
     }
 
     private static func text(_ statement: OpaquePointer?, _ index: Int32) -> String? {
@@ -95,37 +100,52 @@ public actor SQLiteDriver: DatabaseDriver {
     public func defaultSchema() -> String { "main" }
 
     public func tables(in schema: String) throws -> [TableRef] {
-        let master = schema == "temp" ? "sqlite_temp_master" : "\(SQLDialect(flavor: .sqlite).quoteIdentifier(schema)).sqlite_master"
-        return try records("SELECT name, type FROM \(master) WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name")
-            .compactMap { row in
-                guard let name = row["name"] else { return nil }
-                return TableRef(schema: schema, name: name, kind: row["type"] == "view" ? .view : .table)
-            }
+        let master =
+            schema == "temp"
+            ? "sqlite_temp_master" : "\(SQLDialect(flavor: .sqlite).quoteIdentifier(schema)).sqlite_master"
+        return try records(
+            "SELECT name, type FROM \(master) WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        )
+        .compactMap { row in
+            guard let name = row["name"] else { return nil }
+            return TableRef(schema: schema, name: name, kind: row["type"] == "view" ? .view : .table)
+        }
     }
 
     public func columns(of table: TableRef) throws -> [ColumnInfo] {
         let d = SQLDialect(flavor: .sqlite)
-        return try records("PRAGMA \(d.quoteIdentifier(table.schema)).table_info(\(d.literal(table.name)))").map { row in
-            ColumnInfo(
-                name: row["name"] ?? "",
-                dataType: row["type"] ?? "",
-                isNullable: row["notnull"] == "0",
-                defaultValue: row["dflt_value"],
-                // pk is the column's position in the primary key, 0 when it isn't part of it.
-                isPrimaryKey: (row.int("pk") ?? 0) > 0
-            )
-        }
+        return try records("PRAGMA \(d.quoteIdentifier(table.schema)).table_info(\(d.literal(table.name)))")
+            .map { row in
+                ColumnInfo(
+                    name: row["name"] ?? "",
+                    dataType: row["type"] ?? "",
+                    isNullable: row["notnull"] == "0",
+                    defaultValue: row["dflt_value"],
+                    // pk is the column's position in the primary key, 0 when it isn't part of it.
+                    isPrimaryKey: (row.int("pk") ?? 0) > 0
+                )
+            }
     }
 
     public func indexes(of table: TableRef) throws -> [IndexInfo] {
         let d = SQLDialect(flavor: .sqlite)
         let schema = d.quoteIdentifier(table.schema)
-        return try records("PRAGMA \(schema).index_list(\(d.literal(table.name)))").compactMap { row in
-            guard let name = row["name"] else { return nil }
-            let columns = try records("PRAGMA \(schema).index_info(\(d.literal(name)))").map { $0["name"] ?? "(expression)" }
-            let master = table.schema == "temp" ? "sqlite_temp_master" : "\(schema).sqlite_master"
-            let definition = try strings("SELECT sql FROM \(master) WHERE type = 'index' AND name = \(d.literal(name))").first?.first ?? nil
-            return IndexInfo(name: name, columns: columns, isUnique: row["unique"] == "1", isPrimary: row["origin"] == "pk", definition: definition)
-        }
+        return try records("PRAGMA \(schema).index_list(\(d.literal(table.name)))")
+            .compactMap { row in
+                guard let name = row["name"] else { return nil }
+                let columns = try records("PRAGMA \(schema).index_info(\(d.literal(name)))")
+                    .map { $0["name"] ?? "(expression)" }
+                let master = table.schema == "temp" ? "sqlite_temp_master" : "\(schema).sqlite_master"
+                let definition =
+                    try strings("SELECT sql FROM \(master) WHERE type = 'index' AND name = \(d.literal(name))").first?
+                    .first ?? nil
+                return IndexInfo(
+                    name: name,
+                    columns: columns,
+                    isUnique: row["unique"] == "1",
+                    isPrimary: row["origin"] == "pk",
+                    definition: definition
+                )
+            }
     }
 }

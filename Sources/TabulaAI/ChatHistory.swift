@@ -101,7 +101,9 @@ public struct ChatStore: Sendable {
 
     /// `base` is the folder that holds connections.json (nil: Application Support/Tabula).
     public init(base: URL? = nil) {
-        let root = base ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let root =
+            base
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Tabula", isDirectory: true)
         directory = root.appendingPathComponent("Chats", isDirectory: true)
     }
@@ -116,7 +118,9 @@ public struct ChatStore: Sendable {
         let url = fileURL(connection)
         guard let data = try? Data(contentsOf: url) else { return [] }
         guard let entries = try? Self.decoder.decode([Lossy<ChatConversation>].self, from: data) else {
-            let aside = directory.appendingPathComponent("\(connection.uuidString).unreadable-\(Int(Date().timeIntervalSince1970)).json")
+            let aside = directory.appendingPathComponent(
+                "\(connection.uuidString).unreadable-\(Int(Date().timeIntervalSince1970)).json"
+            )
             try? FileManager.default.moveItem(at: url, to: aside)
             return []
         }

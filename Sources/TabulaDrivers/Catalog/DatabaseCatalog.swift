@@ -43,7 +43,12 @@ public protocol RoutineCatalog: Sendable {
     /// The statement that removes the routine.
     func dropStatement(for routine: RoutineInfo) -> String
     /// Replaces the routine with `newDefinition` (a full CREATE statement), keeping `original` when that fails.
-    func replace(_ routine: RoutineInfo, original: String, with newDefinition: String, on driver: any DatabaseDriver) async throws
+    func replace(
+        _ routine: RoutineInfo,
+        original: String,
+        with newDefinition: String,
+        on driver: any DatabaseDriver
+    ) async throws
     /// A starting point for a new routine.
     func template(for kind: RoutineInfo.Kind, schema: String, table: String?) -> String
 }
@@ -58,8 +63,12 @@ extension DatabaseDriver {
 
     public func serverDatabases() async throws -> [String] { try await catalog.serverDatabases(on: self) }
     public func currentDatabase() async throws -> String? { try await catalog.currentDatabase(on: self) }
-    public func foreignKeys(in schema: String) async throws -> [ForeignKeyInfo] { try await catalog.foreignKeys(in: schema, on: self) }
-    public func metrics(schema: String) async throws -> MetricsSample { try await catalog.metrics(schema: schema, on: self) }
+    public func foreignKeys(in schema: String) async throws -> [ForeignKeyInfo] {
+        try await catalog.foreignKeys(in: schema, on: self)
+    }
+    public func metrics(schema: String) async throws -> MetricsSample {
+        try await catalog.metrics(schema: schema, on: self)
+    }
 
     /// The first value of the first row, for queries that return one value.
     package func value(_ statement: String) async throws -> String? {
@@ -71,7 +80,9 @@ package enum RoutineText {
     /// The server's definition, or why there is none: an account without the privilege gets nothing back.
     package static func required(_ text: String?, for routine: RoutineInfo) throws -> String {
         guard let text, !text.isEmpty else {
-            throw DatabaseError("The server didn't return the definition of \(routine.name). The account may lack the privilege to see it.")
+            throw DatabaseError(
+                "The server didn't return the definition of \(routine.name). The account may lack the privilege to see it."
+            )
         }
         return text
     }

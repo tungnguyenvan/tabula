@@ -29,7 +29,12 @@ final class TabContainerView: NSView {
 
     private struct WeakView { weak var view: NSView? }
 
-    func update(tabs: [WorkspaceModel.Tab], selectedID: UUID?, transient: Set<UUID>, content: (WorkspaceModel.Tab) -> AnyView) {
+    func update(
+        tabs: [WorkspaceModel.Tab],
+        selectedID: UUID?,
+        transient: Set<UUID>,
+        content: (WorkspaceModel.Tab) -> AnyView
+    ) {
         let open = Set(tabs.map(\.id))
         for (id, host) in hosts where !open.contains(id) {
             host.removeFromSuperview()
@@ -45,7 +50,10 @@ final class TabContainerView: NSView {
                 hosts[shown] = nil
             }
         }
-        guard let selected else { shown = nil; return }
+        guard let selected else {
+            shown = nil
+            return
+        }
 
         let host: NSHostingView<AnyView>
         if let existing = hosts[selected.id] {

@@ -37,7 +37,9 @@ public enum MongoShell {
         case .int64: return String(value as! Int)
         case .double:
             let double = value as! Double
-            if double.isFinite, double == double.rounded(), let int = Int64(exactly: double), abs(int) < 1 << 53 { return String(int) }
+            if double.isFinite, double == double.rounded(), let int = Int64(exactly: double), abs(int) < 1 << 53 {
+                return String(int)
+            }
             return number(double)
         case .objectId: return (value as! ObjectId).hexString
         case .decimal: return MongoDecimal.string(value as! Decimal128)
@@ -102,7 +104,8 @@ public enum MongoShell {
             output += "/" + regex.pattern.replacingOccurrences(of: "/", with: "\\/") + "/" + regex.options
         case .timestamp:
             let timestamp = value as! Timestamp
-            output += "Timestamp({ t: \(UInt32(bitPattern: timestamp.timestamp)), i: \(UInt32(bitPattern: timestamp.increment)) })"
+            output +=
+                "Timestamp({ t: \(UInt32(bitPattern: timestamp.timestamp)), i: \(UInt32(bitPattern: timestamp.increment)) })"
         case .decimal: output += "NumberDecimal(\"\(MongoDecimal.string(value as! Decimal128))\")"
         case .minKey: output += "MinKey()"
         case .maxKey: output += "MaxKey()"
@@ -115,9 +118,14 @@ public enum MongoShell {
     }
 
     private static func writeDocument(_ document: Document, into output: inout String, indent: Int?) {
-        let open = document.isArray ? "[" : "{", close = document.isArray ? "]" : "}"
-        guard !document.isEmpty else { output += open + close; return }
-        let items: [(key: String?, value: Primitive)] = document.isArray
+        let open = document.isArray ? "[" : "{"
+        let close = document.isArray ? "]" : "}"
+        guard !document.isEmpty else {
+            output += open + close
+            return
+        }
+        let items: [(key: String?, value: Primitive)] =
+            document.isArray
             ? document.values.map { (nil, $0) } : document.pairs.map { ($0.key, $0.value) }
         // Short nested values read best on one line, even when pretty.
         let inline = indent == nil || (indent != 0 && format(document).count <= Defaults.Mongo.inlineWidth)
@@ -151,9 +159,9 @@ public enum MongoShell {
         return text.contains(where: { $0 == "." || $0 == "e" || $0 == "E" }) ? text : text + ".0"
     }
 
-
     static func dateText(_ date: Date) -> String {
-        isoText(date).map { "ISODate(\"\($0)\")" } ?? "new Date(\(Int64((date.timeIntervalSince1970 * 1000).rounded())))"
+        isoText(date).map { "ISODate(\"\($0)\")" }
+            ?? "new Date(\(Int64((date.timeIntervalSince1970 * 1000).rounded())))"
     }
 
     /// ISO 8601 with milliseconds, for years ISO can write (1–9999).
@@ -168,7 +176,10 @@ public enum MongoShell {
         let data = binary.data
         if case .uuid = binary.subType, data.count == 16 {
             let hex = data.map { String(format: "%02x", $0) }.joined()
-            let parts = [hex.prefix(8), hex.dropFirst(8).prefix(4), hex.dropFirst(12).prefix(4), hex.dropFirst(16).prefix(4), hex.dropFirst(20)]
+            let parts = [
+                hex.prefix(8), hex.dropFirst(8).prefix(4), hex.dropFirst(12).prefix(4), hex.dropFirst(16).prefix(4),
+                hex.dropFirst(20),
+            ]
             return "UUID(\"\(parts.joined(separator: "-"))\")"
         }
         return "BinData(\(subtypeByte(binary.subType)), \"\(data.base64EncodedString())\")"
@@ -243,9 +254,11 @@ enum ValueKind {
     case minKey, maxKey, code, codeWithScope, other
 
     private static let kinds: [ObjectIdentifier: ValueKind] = [
-        ObjectIdentifier(Document.self): .document, ObjectIdentifier(String.self): .string, ObjectIdentifier(Int32.self): .int32,
+        ObjectIdentifier(Document.self): .document, ObjectIdentifier(String.self): .string,
+        ObjectIdentifier(Int32.self): .int32,
         ObjectIdentifier(Int.self): .int64, ObjectIdentifier(Double.self): .double, ObjectIdentifier(Bool.self): .bool,
-        ObjectIdentifier(Null.self): .null, ObjectIdentifier(ObjectId.self): .objectId, ObjectIdentifier(Date.self): .date,
+        ObjectIdentifier(Null.self): .null, ObjectIdentifier(ObjectId.self): .objectId,
+        ObjectIdentifier(Date.self): .date,
         ObjectIdentifier(Binary.self): .binary, ObjectIdentifier(RegularExpression.self): .regex,
         ObjectIdentifier(Timestamp.self): .timestamp, ObjectIdentifier(Decimal128.self): .decimal,
         ObjectIdentifier(MinKey.self): .minKey, ObjectIdentifier(MaxKey.self): .maxKey,
@@ -297,7 +310,10 @@ struct MongoShellParser {
 
     mutating func expectEnd() throws {
         skipSpace()
-        if peek() == UInt8(ascii: ";") { index += 1; skipSpace() }
+        if peek() == UInt8(ascii: ";") {
+            index += 1
+            skipSpace()
+        }
         guard isAtEnd else { throw error("Unexpected text") }
     }
 
@@ -324,7 +340,8 @@ struct MongoShellParser {
     }
 
     static func isIdentifierStart(_ byte: UInt8) -> Bool {
-        (byte >= 0x41 && byte <= 0x5A) || (byte >= 0x61 && byte <= 0x7A) || byte == UInt8(ascii: "_") || byte == UInt8(ascii: "$")
+        (byte >= 0x41 && byte <= 0x5A) || (byte >= 0x61 && byte <= 0x7A) || byte == UInt8(ascii: "_")
+            || byte == UInt8(ascii: "$")
     }
 
     static func isIdentifierPart(_ byte: UInt8) -> Bool {
@@ -403,7 +420,9 @@ struct MongoShellParser {
 
     mutating func string() throws -> String {
         skipSpace()
-        guard let quote = peek(), quote == UInt8(ascii: "\"") || quote == UInt8(ascii: "'") else { throw error("Expected a string") }
+        guard let quote = peek(), quote == UInt8(ascii: "\"") || quote == UInt8(ascii: "'") else {
+            throw error("Expected a string")
+        }
         index += 1
         var output: [UInt8] = []
         while true {
@@ -411,7 +430,10 @@ struct MongoShellParser {
             index += 1
             if byte == quote { break }
             if byte == 0x0A { throw error("Unterminated string") }
-            guard byte == UInt8(ascii: "\\") else { output.append(byte); continue }
+            guard byte == UInt8(ascii: "\\") else {
+                output.append(byte)
+                continue
+            }
             guard let escaped = peek() else { throw error("Unterminated string") }
             index += 1
             switch escaped {
@@ -422,7 +444,7 @@ struct MongoShellParser {
             case UInt8(ascii: "f"): output.append(0x0C)
             case UInt8(ascii: "v"): output.append(0x0B)
             case UInt8(ascii: "0"): output.append(0x00)
-            case 0x0A: break // line continuation
+            case 0x0A: break  // line continuation
             case UInt8(ascii: "x"):
                 output.append(contentsOf: Self.utf8(try hexValue(digits: 2)))
             case UInt8(ascii: "u"):
@@ -431,7 +453,8 @@ struct MongoShellParser {
                 if (0xD800...0xDBFF).contains(value), peek() == UInt8(ascii: "\\"), peek(1) == UInt8(ascii: "u") {
                     index += 2
                     let low = try hexValue(digits: 4)
-                    value = (0xDC00...0xDFFF).contains(low) ? 0x10000 + ((value - 0xD800) << 10) + (low - 0xDC00) : 0xFFFD
+                    value =
+                        (0xDC00...0xDFFF).contains(low) ? 0x10000 + ((value - 0xD800) << 10) + (low - 0xDC00) : 0xFFFD
                 }
                 output.append(contentsOf: Self.utf8(value))
             default:
@@ -442,7 +465,9 @@ struct MongoShellParser {
     }
 
     private mutating func hexValue(digits count: Int) throws -> UInt32 {
-        guard index + count <= bytes.count, let value = UInt32(String(decoding: bytes[index..<index + count], as: UTF8.self), radix: 16) else {
+        guard index + count <= bytes.count,
+            let value = UInt32(String(decoding: bytes[index..<index + count], as: UTF8.self), radix: 16)
+        else {
             throw error("Invalid escape")
         }
         index += count
@@ -473,7 +498,9 @@ struct MongoShellParser {
             } else if byte == UInt8(ascii: ".") || byte == UInt8(ascii: "e") || byte == UInt8(ascii: "E") {
                 isInteger = false
                 index += 1
-                if (byte == UInt8(ascii: "e") || byte == UInt8(ascii: "E")), peek() == UInt8(ascii: "-") || peek() == UInt8(ascii: "+") {
+                if byte == UInt8(ascii: "e") || byte == UInt8(ascii: "E"),
+                    peek() == UInt8(ascii: "-") || peek() == UInt8(ascii: "+")
+                {
                     index += 1
                 }
             } else {
@@ -509,7 +536,7 @@ struct MongoShellParser {
             pattern.append(byte)
         }
         let start = index
-        while let byte = peek(), (byte >= 0x61 && byte <= 0x7A) { index += 1 }
+        while let byte = peek(), byte >= 0x61 && byte <= 0x7A { index += 1 }
         let options = String(decoding: bytes[start..<index], as: UTF8.self)
         return RegularExpression(pattern: String(decoding: pattern, as: UTF8.self), options: String(options.sorted()))
     }
@@ -530,15 +557,21 @@ struct MongoShellParser {
         case "null", "undefined": return Null()
         case "Infinity": return Double.infinity
         case "NaN": return Double.nan
-        case "MinKey": _ = try optionalArguments(); return MinKey()
-        case "MaxKey": _ = try optionalArguments(); return MaxKey()
+        case "MinKey":
+            _ = try optionalArguments()
+            return MinKey()
+        case "MaxKey":
+            _ = try optionalArguments()
+            return MaxKey()
         default: break
         }
         guard let arguments = try optionalArguments() else {
             index = wordStart
             throw error("Unknown value “\(name)”")
         }
-        func argument(_ position: Int) -> Primitive? { arguments.indices.contains(position) ? arguments[position] : nil }
+        func argument(_ position: Int) -> Primitive? {
+            arguments.indices.contains(position) ? arguments[position] : nil
+        }
         func text(_ position: Int) throws -> String {
             if let string = argument(position) as? String { return string }
             if let number = argument(position) { return MongoShell.format(number) }
@@ -547,12 +580,17 @@ struct MongoShellParser {
 
         switch name {
         case "ObjectId", "ObjectID":
-            guard let hex = argument(0) as? String else { madeValue = true; return ObjectId() }
+            guard let hex = argument(0) as? String else {
+                madeValue = true
+                return ObjectId()
+            }
             guard let id = ObjectId(hex) else { throw error("“\(hex)” isn't a valid ObjectId (24 hex digits)") }
             return id
         case "ISODate", "Date":
             switch argument(0) {
-            case nil: madeValue = true; return Date()
+            case nil:
+                madeValue = true
+                return Date()
             case let string as String:
                 guard let date = MongoDates.parse(string) else { throw error("“\(string)” isn't a date") }
                 return date
@@ -576,27 +614,38 @@ struct MongoShellParser {
             }
             return int
         case "Double":
-            guard let double = Self.double(argument(0) ?? Null()) ?? (try? text(0)).flatMap(Double.init) else { throw error("Double needs a number") }
+            guard let double = Self.double(argument(0) ?? Null()) ?? (try? text(0)).flatMap(Double.init) else {
+                throw error("Double needs a number")
+            }
             return double
         case "NumberDecimal", "Decimal128", "Decimal128.fromString":
             let value = try text(0)
             guard let decimal = MongoDecimal.parse(value) else { throw error("“\(value)” isn't a decimal number") }
             return decimal
         case "UUID":
-            guard let string = argument(0) as? String else { madeValue = true; return MongoBinary.uuid(UUID()) }
+            guard let string = argument(0) as? String else {
+                madeValue = true
+                return MongoBinary.uuid(UUID())
+            }
             guard let binary = MongoBinary.uuid(string) else { throw error("“\(string)” isn't a UUID") }
             return binary
         case "BinData":
-            guard let sub = argument(0).flatMap(Self.double), let base64 = argument(1) as? String, let data = Data(base64Encoded: base64) else {
+            guard let sub = argument(0).flatMap(Self.double), let base64 = argument(1) as? String,
+                let data = Data(base64Encoded: base64)
+            else {
                 throw error("BinData needs a subtype and base64 text")
             }
             return MongoBinary.make(data, subtype: UInt8(clamping: Int(sub)))
         case "Binary.createFromBase64":
-            guard let base64 = argument(0) as? String, let data = Data(base64Encoded: base64) else { throw error("Expected base64 text") }
+            guard let base64 = argument(0) as? String, let data = Data(base64Encoded: base64) else {
+                throw error("Expected base64 text")
+            }
             return MongoBinary.make(data, subtype: UInt8(clamping: Int(argument(1).flatMap(Self.double) ?? 0)))
         case "HexData", "Binary.createFromHexString":
             let hexPosition = name == "HexData" ? 1 : 0
-            guard let hex = argument(hexPosition) as? String, let data = MongoBinary.data(hex: hex) else { throw error("Expected hex text") }
+            guard let hex = argument(hexPosition) as? String, let data = MongoBinary.data(hex: hex) else {
+                throw error("Expected hex text")
+            }
             let sub = argument(name == "HexData" ? 0 : 1).flatMap(Self.double) ?? 0
             return MongoBinary.make(data, subtype: UInt8(clamping: Int(sub)))
         case "Timestamp":
@@ -620,7 +669,10 @@ struct MongoShellParser {
     /// `( value, value… )` after a constructor name; nil when no parenthesis follows.
     mutating func optionalArguments() throws -> [Primitive]? {
         let saved = index
-        guard take("(") else { index = saved; return nil }
+        guard take("(") else {
+            index = saved
+            return nil
+        }
         var arguments: [Primitive] = []
         while !take(")") {
             arguments.append(try value())
@@ -655,7 +707,9 @@ enum MongoExtendedJSON {
         let keys = document.keys
         guard let first = keys.first, first.hasPrefix("$") else { return document }
         if keys.count == 2, Set(keys) == ["$binary", "$type"], let base64 = document["$binary"] as? String,
-           let type = document["$type"] as? String, let data = Data(base64Encoded: base64), let sub = UInt8(type, radix: 16) {
+            let type = document["$type"] as? String, let data = Data(base64Encoded: base64),
+            let sub = UInt8(type, radix: 16)
+        {
             return MongoBinary.make(data, subtype: sub)
         }
         guard keys.count == 1, let value = document[first] else { return document }
@@ -696,16 +750,24 @@ enum MongoExtendedJSON {
             guard let text = value as? String, let decimal = MongoDecimal.parse(text) else { throw fail() }
             return decimal
         case "$binary":
-            guard let wrapped = value as? Document, let base64 = wrapped["base64"] as? String, let data = Data(base64Encoded: base64) else {
+            guard let wrapped = value as? Document, let base64 = wrapped["base64"] as? String,
+                let data = Data(base64Encoded: base64)
+            else {
                 throw fail()
             }
-            return MongoBinary.make(data, subtype: (wrapped["subType"] as? String).flatMap { UInt8($0, radix: 16) } ?? 0)
+            return MongoBinary.make(
+                data,
+                subtype: (wrapped["subType"] as? String).flatMap { UInt8($0, radix: 16) } ?? 0
+            )
         case "$uuid":
             guard let text = value as? String, let binary = MongoBinary.uuid(text) else { throw fail() }
             return binary
         case "$regularExpression":
             guard let wrapped = value as? Document, let pattern = wrapped["pattern"] as? String else { throw fail() }
-            return RegularExpression(pattern: pattern, options: String(((wrapped["options"] as? String) ?? "").sorted()))
+            return RegularExpression(
+                pattern: pattern,
+                options: String(((wrapped["options"] as? String) ?? "").sorted())
+            )
         case "$timestamp":
             guard let wrapped = value as? Document else { throw fail() }
             return MongoShellParser.timestamp(t: wrapped["t"], i: wrapped["i"])
@@ -728,7 +790,9 @@ enum MongoDates {
     /// ISO 8601 dates as the shell accepts them: with or without time, fraction and zone (no zone means UTC).
     static func parse(_ text: String) -> Date? {
         let text = text.trimmingCharacters(in: .whitespaces)
-        if let milliseconds = CivilTime.milliseconds(iso: text) { return Date(timeIntervalSince1970: Double(milliseconds) / 1000) }
+        if let milliseconds = CivilTime.milliseconds(iso: text) {
+            return Date(timeIntervalSince1970: Double(milliseconds) / 1000)
+        }
         let formatter = ISO8601DateFormatter()
         formatter.timeZone = TimeZone(identifier: "UTC")
         let variants: [ISO8601DateFormatter.Options] = [

@@ -1,10 +1,15 @@
 import XCTest
+
 @testable import TabulaFoundation
 
 final class ConnectionURLParserTests: XCTestCase {
     func testPostgresWithEscapedPassword() throws {
         // The password "p?|<[@x" as a URL writes it.
-        let (config, password) = try XCTUnwrap(ConnectionConfig.parse(url: "postgresql://admin:p%3F%7C%3C%5B%40x@db.example.com:6543/payment?sslmode=require"))
+        let (config, password) = try XCTUnwrap(
+            ConnectionConfig.parse(
+                url: "postgresql://admin:p%3F%7C%3C%5B%40x@db.example.com:6543/payment?sslmode=require"
+            )
+        )
         XCTAssertEqual(config.kind, .postgres)
         XCTAssertEqual(config.user, "admin")
         XCTAssertEqual(password, "p?|<[@x")
@@ -31,7 +36,9 @@ final class ConnectionURLParserTests: XCTestCase {
 
     func testRawReservedCharactersInPassword() throws {
         // The characters of issue #11, unescaped: "?" must not start the query, nor "#" a fragment, nor "/" the path.
-        let (config, password) = try XCTUnwrap(ConnectionConfig.parse(url: "postgres://admin:5g?-|C#a/b@db.example.com:5432/payment?sslmode=require#top"))
+        let (config, password) = try XCTUnwrap(
+            ConnectionConfig.parse(url: "postgres://admin:5g?-|C#a/b@db.example.com:5432/payment?sslmode=require#top")
+        )
         XCTAssertEqual(password, "5g?-|C#a/b")
         XCTAssertEqual(config.host, "db.example.com")
         XCTAssertEqual(config.database, "payment")
@@ -76,7 +83,8 @@ final class ConnectionURLParserTests: XCTestCase {
     }
 
     func testTablePlusRedisURL() throws {
-        let url = "redis://:secret@10.0.0.5:7000?statusColor=007F3D&env=production&name=pay&tLSMode=0&usePrivateKey=false"
+        let url =
+            "redis://:secret@10.0.0.5:7000?statusColor=007F3D&env=production&name=pay&tLSMode=0&usePrivateKey=false"
         let (config, password) = try XCTUnwrap(ConnectionConfig.parse(url: url))
         XCTAssertEqual(config.kind, .redis)
         XCTAssertEqual(config.user, "")
@@ -96,7 +104,11 @@ final class ConnectionURLParserTests: XCTestCase {
     }
 
     func testMongoSeedListAndOptions() throws {
-        let (config, _) = try XCTUnwrap(ConnectionConfig.parse(url: "mongodb+srv://app:pw@cluster0.example.mongodb.net/shop?authSource=admin&retryWrites=true"))
+        let (config, _) = try XCTUnwrap(
+            ConnectionConfig.parse(
+                url: "mongodb+srv://app:pw@cluster0.example.mongodb.net/shop?authSource=admin&retryWrites=true"
+            )
+        )
         XCTAssertEqual(config.kind, .mongodb)
         XCTAssertEqual(config.srv, true)
         XCTAssertEqual(config.host, "cluster0.example.mongodb.net")
@@ -104,7 +116,9 @@ final class ConnectionURLParserTests: XCTestCase {
         XCTAssertEqual(config.database, "shop")
         XCTAssertEqual(config.tls, .verifyFull)
 
-        let (replicaSet, _) = try XCTUnwrap(ConnectionConfig.parse(url: "mongodb://a:27017,b:27018/?tls=true&tlsAllowInvalidCertificates=true"))
+        let (replicaSet, _) = try XCTUnwrap(
+            ConnectionConfig.parse(url: "mongodb://a:27017,b:27018/?tls=true&tlsAllowInvalidCertificates=true")
+        )
         XCTAssertEqual(replicaSet.host, "a:27017,b:27018")
         XCTAssertEqual(replicaSet.tls, .require)
     }
@@ -129,7 +143,14 @@ final class ConnectionURLParserTests: XCTestCase {
     }
 
     func testRoundTripThroughURL() throws {
-        let config = ConnectionConfig(kind: .postgres, host: "db.example.com", port: 5432, user: "admin", database: "payment", tls: .require)
+        let config = ConnectionConfig(
+            kind: .postgres,
+            host: "db.example.com",
+            port: 5432,
+            user: "admin",
+            database: "payment",
+            tls: .require
+        )
         let password = "5g?-|C(*<[8%"
         let (parsed, parsedPassword) = try XCTUnwrap(ConnectionConfig.parse(url: config.url(password: password)))
         XCTAssertEqual(parsedPassword, password)
@@ -157,6 +178,12 @@ final class ConnectionURLParserTests: XCTestCase {
         XCTAssertEqual(PasswordEscapes.message(for: failed, password: "a?"), failed.errorDescription)
         let refused = Failure(errorDescription: "Connection refused")
         XCTAssertEqual(PasswordEscapes.message(for: refused, password: "a%3F"), "Connection refused")
-        XCTAssertTrue(PasswordEscapes.message(for: Failure(errorDescription: "WRONGPASS invalid username-password pair"), password: "%40").contains("Decode"))
+        XCTAssertTrue(
+            PasswordEscapes.message(
+                for: Failure(errorDescription: "WRONGPASS invalid username-password pair"),
+                password: "%40"
+            )
+            .contains("Decode")
+        )
     }
 }

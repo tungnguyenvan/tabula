@@ -8,7 +8,9 @@ public struct ConnectionStore: Sendable {
     private let keychainService: String
 
     public init(directory: URL? = nil, keychainService: String = "app.tabula.connections") {
-        let base = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let base =
+            directory
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Tabula", isDirectory: true)
         self.fileURL = base.appendingPathComponent("connections.json")
         self.keychainService = keychainService
@@ -20,7 +22,10 @@ public struct ConnectionStore: Sendable {
     }
 
     public func save(_ connections: [ConnectionConfig]) throws {
-        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(connections).write(to: fileURL, options: .atomic)
@@ -33,7 +38,8 @@ public struct ConnectionStore: Sendable {
     }
 
     public func setPassword(_ password: String?, for id: UUID) throws {
-        try KeychainItem(service: keychainService, account: id.uuidString, label: "Tabula database connection").write(password)
+        try KeychainItem(service: keychainService, account: id.uuidString, label: "Tabula database connection")
+            .write(password)
     }
 }
 
@@ -50,7 +56,10 @@ public struct KeychainItem: Sendable {
     }
 
     private var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+        [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
     }
 
     public func read() -> String? {
@@ -58,7 +67,9 @@ public struct KeychainItem: Sendable {
         item[kSecReturnData as String] = true
         item[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
-        guard SecItemCopyMatching(item as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
+        guard SecItemCopyMatching(item as CFDictionary, &result) == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
         return String(data: data, encoding: .utf8)
     }
 
@@ -67,7 +78,9 @@ public struct KeychainItem: Sendable {
     public func write(_ value: String?) throws {
         guard let value, !value.isEmpty else {
             let removed = SecItemDelete(query as CFDictionary)
-            guard removed == errSecSuccess || removed == errSecItemNotFound else { throw KeychainError(status: removed) }
+            guard removed == errSecSuccess || removed == errSecItemNotFound else {
+                throw KeychainError(status: removed)
+            }
             return
         }
         var attributes: [String: Any] = [kSecValueData as String: Data(value.utf8)]

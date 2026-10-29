@@ -39,8 +39,13 @@ public enum ResultExporter {
     }
 
     /// `dialect` writes the INSERT statements of `.sqlInsert`; the other formats don't depend on the database.
-    public static func export(columns: [String], rows: [[String?]], format: ExportFormat,
-                              table: TableRef? = nil, dialect: any QueryDialect) throws -> String {
+    public static func export(
+        columns: [String],
+        rows: [[String?]],
+        format: ExportFormat,
+        table: TableRef? = nil,
+        dialect: any QueryDialect
+    ) throws -> String {
         switch format {
         case .csv:
             return delimited(columns: columns, rows: rows, separator: ",")
@@ -57,9 +62,11 @@ public enum ResultExporter {
             return String(decoding: data, as: UTF8.self)
         case .sqlInsert:
             let target = table ?? TableRef(schema: "main", name: "results")
-            return rows.map { row in
-                dialect.insert(target, values: Array(zip(columns, row)).map { ($0.0, $0.1) }) + ";"
-            }.joined(separator: "\n")
+            return
+                rows.map { row in
+                    dialect.insert(target, values: Array(zip(columns, row)).map { ($0.0, $0.1) }) + ";"
+                }
+                .joined(separator: "\n")
         }
     }
 

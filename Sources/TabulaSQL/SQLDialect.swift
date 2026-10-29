@@ -27,7 +27,8 @@ public struct SQLDialect: QueryDialect, Equatable {
     public func literal(_ value: String?) -> String {
         guard let value else { return "NULL" }
         // MySQL treats backslash as an escape character unless NO_BACKSLASH_ESCAPES is set.
-        let unescaped = flavor.lexicalRules.backslashEscapes ? value.replacingOccurrences(of: "\\", with: "\\\\") : value
+        let unescaped =
+            flavor.lexicalRules.backslashEscapes ? value.replacingOccurrences(of: "\\", with: "\\\\") : value
         return "'" + unescaped.replacingOccurrences(of: "'", with: "''") + "'"
     }
 
@@ -55,14 +56,20 @@ public struct SQLDialect: QueryDialect, Equatable {
     /// Without a key nothing may match: an empty predicate would touch every row.
     private func matchPrimaryKey(_ key: [(column: String, value: String?)]) -> String {
         guard !key.isEmpty else { return "1 = 0" }
-        return key.map { pair in
-            pair.value == nil
-                ? "\(quoteIdentifier(pair.column)) IS NULL"
-                : "\(quoteIdentifier(pair.column)) = \(literal(pair.value))"
-        }.joined(separator: " AND ")
+        return
+            key.map { pair in
+                pair.value == nil
+                    ? "\(quoteIdentifier(pair.column)) IS NULL"
+                    : "\(quoteIdentifier(pair.column)) = \(literal(pair.value))"
+            }
+            .joined(separator: " AND ")
     }
 
-    public func update(_ table: TableRef, set values: [(column: String, value: String?)], key: [(column: String, value: String?)]) -> String {
+    public func update(
+        _ table: TableRef,
+        set values: [(column: String, value: String?)],
+        key: [(column: String, value: String?)]
+    ) -> String {
         let assignments = values.map { "\(quoteIdentifier($0.column)) = \(literal($0.value))" }.joined(separator: ", ")
         return "UPDATE \(qualified(table)) SET \(assignments) WHERE \(matchPrimaryKey(key))"
     }
@@ -120,12 +127,17 @@ public struct SQLDialect: QueryDialect, Equatable {
     public func applyingRowLimit(_ statement: String, limit: Int) -> String {
         let tokens = SQLLexer.tokens(statement, flavor: flavor)
         let significant = tokens.filter { $0.kind != .whitespace && $0.kind != .comment }
-        guard let first = significant.first, first.keyword == "SELECT" || first.keyword == "WITH" else { return statement }
+        guard let first = significant.first, first.keyword == "SELECT" || first.keyword == "WITH" else {
+            return statement
+        }
         var depth = 0
         for token in significant {
             if token.text == "(" { depth += 1 } else if token.text == ")" { depth -= 1 }
             guard depth == 0 else { continue }
-            if ["LIMIT", "FETCH", "FOR", "INTO", "INSERT", "UPDATE", "DELETE", "TOP", "OFFSET"].contains(token.keyword) { return statement }
+            if ["LIMIT", "FETCH", "FOR", "INTO", "INSERT", "UPDATE", "DELETE", "TOP", "OFFSET"].contains(token.keyword)
+            {
+                return statement
+            }
         }
         guard let last = significant.last(where: { $0.text != ";" }) else { return statement }
         let text = statement as NSString
@@ -141,10 +153,19 @@ public struct SQLDialect: QueryDialect, Equatable {
         SQLKeywords.set.contains(word.keyword) ? .keyword : nil
     }
 
-    public func completions(in text: String, caret: Int, catalog: any CompletionCatalog) -> (range: NSRange, items: [String]) {
+    public func completions(
+        in text: String,
+        caret: Int,
+        catalog: any CompletionCatalog
+    ) -> (range: NSRange, items: [String]) {
         let context = SQLCompletion.context(in: text, caret: caret, flavor: flavor, schemas: catalog.schemaNames)
-        let items = SQLCompletion.suggestions(for: context, tables: catalog.tableNames, columns: { catalog.columnNames(of: $0) },
-                                              allColumns: catalog.allColumnNames, tablesInSchema: { catalog.tableNames(inSchema: $0) })
+        let items = SQLCompletion.suggestions(
+            for: context,
+            tables: catalog.tableNames,
+            columns: { catalog.columnNames(of: $0) },
+            allColumns: catalog.allColumnNames,
+            tablesInSchema: { catalog.tableNames(inSchema: $0) }
+        )
         return (context.partialRange, items)
     }
 

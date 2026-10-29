@@ -21,7 +21,8 @@ final class QueryLogModel {
 
     /// The log as a SQL script with outcomes as comments.
     var text: String {
-        visible.map { "-- \(Self.time($0.date)) \(Self.describe($0))\n\($0.statement)\($0.isMeta ? "" : ";")" }.joined(separator: "\n\n")
+        visible.map { "-- \(Self.time($0.date)) \(Self.describe($0))\n\($0.statement)\($0.isMeta ? "" : ";")" }
+            .joined(separator: "\n\n")
     }
 
     static func time(_ date: Date) -> String {
@@ -29,7 +30,8 @@ final class QueryLogModel {
     }
 
     static func describe(_ entry: QueryLogEntry) -> String {
-        let duration = Duration.milliseconds(Int(entry.duration * 1000)).formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow))
+        let duration = Duration.milliseconds(Int(entry.duration * 1000))
+            .formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow))
         switch entry.outcome {
         case .rows(let count): return "\(count) row\(count == 1 ? "" : "s") · \(duration)"
         case .affected(let count): return (count.map { "\($0) affected · " } ?? "") + duration
@@ -69,7 +71,8 @@ struct ConsoleLogView: View {
                 }
                 .overlay {
                     if log.visible.isEmpty {
-                        Text("Statements sent to the server appear here.").font(Layout.Font.small).foregroundStyle(.secondary)
+                        Text("Statements sent to the server appear here.").font(Layout.Font.small)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

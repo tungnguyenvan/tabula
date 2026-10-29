@@ -10,7 +10,8 @@ public enum MongoVocabulary {
 
     public static let databaseMethods = [
         "getCollection", "getSiblingDB", "getCollectionNames", "getCollectionInfos", "createCollection", "createView",
-        "runCommand", "adminCommand", "aggregate", "stats", "serverStatus", "version", "getName", "hostInfo", "currentOp",
+        "runCommand", "adminCommand", "aggregate", "stats", "serverStatus", "version", "getName", "hostInfo",
+        "currentOp",
         "getUsers", "getRoles", "dropDatabase", "hello", "listCommands", "getProfilingStatus",
     ]
 
@@ -49,9 +50,12 @@ public enum MongoVocabulary {
         "$sum", "$avg", "$first", "$last", "$push", "$cond", "$ifNull", "$concat", "$toString", "$toInt", "$toDate",
         "$dateToString", "$year", "$month", "$dayOfMonth", "$size", "$arrayElemAt", "$filter", "$map", "$reduce",
         "$switch", "$substr", "$toLower", "$toUpper", "$split", "$round", "$multiply", "$divide", "$add", "$subtract",
-    ].reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+    ]
+    .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
 
     /// Words the editor colors: shell methods, constructors and literals (operators are colored by their `$`).
-    public static let highlighted: Set<String> = Set(statementStarts + databaseMethods + collectionMethods + cursorMethods
-        + constructors + literals)
+    public static let highlighted: Set<String> = Set(
+        statementStarts + databaseMethods + collectionMethods + cursorMethods
+            + constructors + literals
+    )
 }

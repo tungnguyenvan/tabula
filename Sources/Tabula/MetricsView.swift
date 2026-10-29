@@ -91,7 +91,8 @@ struct MetricsView: View {
             HStack(spacing: 10) {
                 Text("Server metrics").font(.headline)
                 if let time = model.latest?.time {
-                    Text("updated \(time.formatted(date: .omitted, time: .standard))").font(.caption).foregroundStyle(.secondary)
+                    Text("updated \(time.formatted(date: .omitted, time: .standard))").font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Picker("Every", selection: $model.interval) {
@@ -100,10 +101,17 @@ struct MetricsView: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
                 .help("Refresh interval")
-                Button { model.paused.toggle() } label: {
+                Button {
+                    model.paused.toggle()
+                } label: {
                     Label(model.paused ? "Resume" : "Pause", systemImage: model.paused ? "play.fill" : "pause.fill")
                 }
-                Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Refresh now")
+                Button {
+                    Task { await model.refresh() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh now")
             }
             .controlSize(.small)
             .padding(.horizontal, 12)
@@ -114,7 +122,10 @@ struct MetricsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         charts
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12, alignment: .top)], spacing: 12) {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 300), spacing: 12, alignment: .top)],
+                            spacing: 12
+                        ) {
                             ForEach(sample.groups) { group in card(group) }
                         }
                         if !sample.tables.isEmpty { tables(sample.tables, collections: sample.tablesAreCollections) }
@@ -141,7 +152,8 @@ struct MetricsView: View {
                         HStack(alignment: .firstTextBaseline) {
                             Text(name).font(.caption).foregroundStyle(.secondary)
                             Spacer()
-                            Text(format(points.last?.value)).font(.system(size: 18, weight: .semibold).monospacedDigit())
+                            Text(format(points.last?.value))
+                                .font(.system(size: 18, weight: .semibold).monospacedDigit())
                         }
                         Chart(points) { point in
                             AreaMark(x: .value("Time", point.time), y: .value(name, point.value))
@@ -190,11 +202,19 @@ struct MetricsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(collections ? "Largest collections" : "Largest tables").font(.system(size: 12, weight: .semibold))
             Table(tables) {
-                TableColumn(collections ? "Collection" : "Table") { Text($0.name).font(.system(size: 12, design: .monospaced)) }
-                TableColumn(collections ? "Documents" : "Rows (est.)") { Text($0.rows.map { MetricFormat.number(Double($0)) } ?? "—").monospacedDigit() }.width(110)
-                TableColumn("Data") { Text(MetricFormat.bytes($0.dataBytes.map(Double.init))).monospacedDigit() }.width(90)
-                TableColumn("Indexes") { Text(MetricFormat.bytes($0.indexBytes.map(Double.init))).monospacedDigit() }.width(90)
-                TableColumn("Total") { Text(MetricFormat.bytes($0.totalBytes.map(Double.init))).monospacedDigit() }.width(90)
+                TableColumn(collections ? "Collection" : "Table") {
+                    Text($0.name).font(.system(size: 12, design: .monospaced))
+                }
+                TableColumn(collections ? "Documents" : "Rows (est.)") {
+                    Text($0.rows.map { MetricFormat.number(Double($0)) } ?? "—").monospacedDigit()
+                }
+                .width(110)
+                TableColumn("Data") { Text(MetricFormat.bytes($0.dataBytes.map(Double.init))).monospacedDigit() }
+                    .width(90)
+                TableColumn("Indexes") { Text(MetricFormat.bytes($0.indexBytes.map(Double.init))).monospacedDigit() }
+                    .width(90)
+                TableColumn("Total") { Text(MetricFormat.bytes($0.totalBytes.map(Double.init))).monospacedDigit() }
+                    .width(90)
             }
             .frame(height: min(CGFloat(tables.count) * 24 + 32, 420))
         }

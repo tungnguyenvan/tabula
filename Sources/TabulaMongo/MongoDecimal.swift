@@ -24,7 +24,8 @@ enum MongoDecimal {
         var document = Document()
         document.appendValue(decimal, forKey: "v")
         let buffer = document.makeByteBuffer()
-        let high = buffer.getInteger(at: buffer.readerIndex + valueOffset + 8, endianness: .little, as: UInt64.self) ?? 0
+        let high =
+            buffer.getInteger(at: buffer.readerIndex + valueOffset + 8, endianness: .little, as: UInt64.self) ?? 0
         let low = buffer.getInteger(at: buffer.readerIndex + valueOffset, endianness: .little, as: UInt64.self) ?? 0
         return (high, low)
     }
@@ -135,7 +136,8 @@ enum MongoDecimal {
         if digits == "0" { exponent = min(max(exponent, minExponent), maxExponent) }
         guard (minExponent...maxExponent).contains(exponent) else { return nil }
 
-        var high: UInt64 = 0, low: UInt64 = 0
+        var high: UInt64 = 0
+        var low: UInt64 = 0
         for character in digits {
             // (high, low) = (high, low) * 10 + digit
             let lowProduct = low.multipliedFullWidth(by: 10)

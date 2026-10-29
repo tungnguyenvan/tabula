@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
@@ -7,18 +8,66 @@ import XCTest
 
 final class MySQLQueryEditingTests: XCTestCase {
     private var target: QueryEditTarget {
-        QueryEditTarget(table: TableRef(schema: "db`name", name: "items`physical"), tableOID: 0, columns: [
-            .init(name: "tenant", attribute: 1, typeOID: 0, typeName: "bigint unsigned", isKey: true, editable: false, mysqlType: "bigint"),
-            .init(name: "id", attribute: 2, typeOID: 0, typeName: "varchar(30)", isKey: true, editable: false, mysqlType: "varchar"),
-            .init(name: "physical`label", attribute: 3, typeOID: 0, typeName: "text", isKey: false, editable: true, mysqlType: "text"),
-            .init(name: "amount", attribute: 4, typeOID: 0, typeName: "decimal(12,2)", isKey: false, editable: true, mysqlType: "decimal"),
-            .init(name: "born", attribute: 5, typeOID: 0, typeName: "date", isKey: false, editable: false, mysqlType: "date"),
-        ], kind: .mysql, writer: MySQLResultEditWriter(), mysqlTableIdentity: "123")
+        QueryEditTarget(
+            table: TableRef(schema: "db`name", name: "items`physical"),
+            tableOID: 0,
+            columns: [
+                .init(
+                    name: "tenant",
+                    attribute: 1,
+                    typeOID: 0,
+                    typeName: "bigint unsigned",
+                    isKey: true,
+                    editable: false,
+                    mysqlType: "bigint"
+                ),
+                .init(
+                    name: "id",
+                    attribute: 2,
+                    typeOID: 0,
+                    typeName: "varchar(30)",
+                    isKey: true,
+                    editable: false,
+                    mysqlType: "varchar"
+                ),
+                .init(
+                    name: "physical`label",
+                    attribute: 3,
+                    typeOID: 0,
+                    typeName: "text",
+                    isKey: false,
+                    editable: true,
+                    mysqlType: "text"
+                ),
+                .init(
+                    name: "amount",
+                    attribute: 4,
+                    typeOID: 0,
+                    typeName: "decimal(12,2)",
+                    isKey: false,
+                    editable: true,
+                    mysqlType: "decimal"
+                ),
+                .init(
+                    name: "born",
+                    attribute: 5,
+                    typeOID: 0,
+                    typeName: "date",
+                    isKey: false,
+                    editable: false,
+                    mysqlType: "date"
+                ),
+            ],
+            kind: .mysql,
+            writer: MySQLResultEditWriter(),
+            mysqlTableIdentity: "123"
+        )
     }
 
     func testMySQLSelectGrammarAndSourceNames() {
         for sql in [
-            "SELECT * FROM Items", "SELECT `a`.`id`, a.label AS renamed FROM `db`.`Items` AS a WHERE a.id = 1 ORDER BY a.id LIMIT 300",
+            "SELECT * FROM Items",
+            "SELECT `a`.`id`, a.label AS renamed FROM `db`.`Items` AS a WHERE a.id = 1 ORDER BY a.id LIMIT 300",
             "SELECT id,label FROM items WHERE label='it''s fine' AND id IN (1,2) LIMIT 10 OFFSET 1;",
             "SELECT i.* FROM `a``b`.`t``x` i # safe comment\nWHERE i.id >= 1",
             "SELECT * FROM items -- safe comment\nWHERE id = 1",
@@ -64,7 +113,9 @@ final class MySQLQueryEditingTests: XCTestCase {
         XCTAssertEqual(QueryEditTarget.mysqlLiteral(""), "_utf8mb4 X''")
         XCTAssertEqual(QueryEditTarget.mysqlLiteral(nil), "NULL")
         XCTAssertEqual(QueryEditTarget.mysqlLiteral("a'\\\0"), "_utf8mb4 X'61275c00'")
-        XCTAssertThrowsError(try target.statement(for: .init(row: 0, original: ["1e3", "one", "old", "1.00", nil], values: [2: "new"])))
+        XCTAssertThrowsError(
+            try target.statement(for: .init(row: 0, original: ["1e3", "one", "old", "1.00", nil], values: [2: "new"]))
+        )
     }
 
     func testMySQLRejectsUnsafeEdits() {
@@ -98,32 +149,49 @@ final class MySQLQueryEditingTests: XCTestCase {
         let table = "`tabula`." + d.quoteIdentifier(name)
         let view = "`tabula`." + d.quoteIdentifier(name + "_v")
         do {
-            _ = try await driver.execute("""
+            _ = try await driver.execute(
+                """
                 CREATE TABLE \(table) (tenant BIGINT UNSIGNED, id INT, label TEXT NOT NULL, amount DECIMAL(12,2),
                     calc INT GENERATED ALWAYS AS (id+1) STORED, born DATE, photo BLOB, seen TIMESTAMP NULL,
                     PRIMARY KEY(tenant,id)) ENGINE=InnoDB
-                """)
-            _ = try await driver.execute("INSERT INTO \(table) (tenant,id,label,amount) VALUES (18446744073709551615,1,'first',12.30),(18446744073709551615,2,'second',45.60)")
+                """
+            )
+            _ = try await driver.execute(
+                "INSERT INTO \(table) (tenant,id,label,amount) VALUES (18446744073709551615,1,'first',12.30),(18446744073709551615,2,'second',45.60)"
+            )
             _ = try await driver.execute("CREATE VIEW \(view) AS SELECT * FROM \(table)")
-            let result = try await driver.execute("SELECT i.tenant AS t, i.id, i.label AS renamed, i.amount, i.calc, i.born, i.photo, i.seen FROM \(table) AS i ORDER BY i.id LIMIT 300")
+            let result = try await driver.execute(
+                "SELECT i.tenant AS t, i.id, i.label AS renamed, i.amount, i.calc, i.born, i.photo, i.seen FROM \(table) AS i ORDER BY i.id LIMIT 300"
+            )
             let resolved = try await driver.queryEditTarget(for: result)
             let target = try XCTUnwrap(resolved)
             XCTAssertEqual(target.kind, .mysql)
-            XCTAssertEqual(target.columns.map(\.name), ["tenant", "id", "label", "amount", "calc", "born", "photo", "seen"])
+            XCTAssertEqual(
+                target.columns.map(\.name),
+                ["tenant", "id", "label", "amount", "calc", "born", "photo", "seen"]
+            )
             XCTAssertEqual(target.columns.map(\.editable), [false, false, true, true, false, false, false, false])
             XCTAssertEqual(result.rows[0][0], "18446744073709551615")
             XCTAssertEqual(result.mysqlOrigins?[2].originalName, "label")
             XCTAssertEqual(result.mysqlOrigins?[2].table, "i")
             XCTAssertEqual(result.mysqlOrigins?[2].originalTable, name)
             let special = "quote'\\\0🙂"
-            let returned = try await writer.commitQueryEdits([.init(row: 0, original: result.rows[0], values: [2: special, 3: "23.45"])], target: target)
+            let returned = try await writer.commitQueryEdits(
+                [.init(row: 0, original: result.rows[0], values: [2: special, 3: "23.45"])],
+                target: target
+            )
             XCTAssertEqual(returned[0]?[2], special)
             XCTAssertEqual(returned[0]?[3], "23.45")
             // User transaction remains open: committing through another connection must not commit this insert.
             _ = try await driver.execute("START TRANSACTION")
-            _ = try await driver.execute("INSERT INTO \(table) (tenant,id,label,amount) VALUES (5,5,'uncommitted',1.00)")
+            _ = try await driver.execute(
+                "INSERT INTO \(table) (tenant,id,label,amount) VALUES (5,5,'uncommitted',1.00)"
+            )
             let updatedOriginal = try XCTUnwrap(returned[0])
-            let noOp = try await writer.commitQueryEdits([.init(row: 0, original: updatedOriginal, values: [3: "23.450"])], target: target)
+            let noOp = try await writer.commitQueryEdits(
+                [.init(row: 0, original: updatedOriginal, values: [3: "23.450"])],
+                target: target
+            )
             XCTAssertEqual(noOp[0]?[3], "23.45", "Zero changed rows is valid after proving one matched row")
             _ = try await driver.execute("ROLLBACK")
             let absent = try await driver.execute("SELECT id FROM \(table) WHERE tenant=5")
@@ -141,8 +209,12 @@ final class MySQLQueryEditingTests: XCTestCase {
             }
             // Temporary tables shadow permanent names only on the reading session; the writer must not edit
             // the permanent lookalike even if keys, values and wire origins are identical.
-            _ = try await driver.execute("CREATE TEMPORARY TABLE \(table) (tenant BIGINT UNSIGNED, id INT, label TEXT, amount DECIMAL(12,2), PRIMARY KEY(tenant,id)) ENGINE=InnoDB")
-            _ = try await driver.execute("INSERT INTO \(table) (tenant,id,label,amount) VALUES (18446744073709551615,1,'first',12.30)")
+            _ = try await driver.execute(
+                "CREATE TEMPORARY TABLE \(table) (tenant BIGINT UNSIGNED, id INT, label TEXT, amount DECIMAL(12,2), PRIMARY KEY(tenant,id)) ENGINE=InnoDB"
+            )
+            _ = try await driver.execute(
+                "INSERT INTO \(table) (tenant,id,label,amount) VALUES (18446744073709551615,1,'first',12.30)"
+            )
             let temporary = try await driver.execute("SELECT * FROM \(table)")
             let temporaryTarget = try await driver.queryEditTarget(for: temporary)
             XCTAssertNil(temporaryTarget)
@@ -169,28 +241,41 @@ final class MySQLQueryEditingTests: XCTestCase {
             let freshTarget = try XCTUnwrap(freshResolved)
             _ = try await driver.execute("UPDATE \(table) SET label='concurrent' WHERE id=2")
             do {
-                _ = try await writer.commitQueryEdits([
-                    .init(row: 0, original: fresh.rows[0], values: [2: "must roll back"]),
-                    .init(row: 1, original: fresh.rows[1], values: [2: "stale"]),
-                ], target: freshTarget)
+                _ = try await writer.commitQueryEdits(
+                    [
+                        .init(row: 0, original: fresh.rows[0], values: [2: "must roll back"]),
+                        .init(row: 1, original: fresh.rows[1], values: [2: "stale"]),
+                    ],
+                    target: freshTarget
+                )
                 XCTFail("Conflict must roll back the entire batch")
-            } catch { }
+            } catch {}
             let afterConflict = try await driver.execute("SELECT label FROM \(table) ORDER BY id")
             XCTAssertEqual(afterConflict.rows, [[special], ["concurrent"]])
             // Text predicates are exact even under case-insensitive/padded collations.
             let staleCase = try await driver.execute("SELECT * FROM \(table) ORDER BY id")
             _ = try await driver.execute("UPDATE \(table) SET label='CONCURRENT ' WHERE id=2")
             do {
-                _ = try await writer.commitQueryEdits([.init(row: 1, original: staleCase.rows[1], values: [2: "must not overwrite"])], target: freshTarget)
+                _ = try await writer.commitQueryEdits(
+                    [.init(row: 1, original: staleCase.rows[1], values: [2: "must not overwrite"])],
+                    target: freshTarget
+                )
                 XCTFail("Case/trailing-space-only concurrent changes must conflict")
-            } catch { }
+            } catch {}
             do {
-                _ = try await writer.commitQueryEdits([
-                    .init(row: 0, original: fresh.rows[0], values: [2: "must roll back"]),
-                    .init(row: 1, original: ["18446744073709551615", "2", "CONCURRENT ", "45.60", "3", nil, nil, nil], values: [2: nil]),
-                ], target: freshTarget)
+                _ = try await writer.commitQueryEdits(
+                    [
+                        .init(row: 0, original: fresh.rows[0], values: [2: "must roll back"]),
+                        .init(
+                            row: 1,
+                            original: ["18446744073709551615", "2", "CONCURRENT ", "45.60", "3", nil, nil, nil],
+                            values: [2: nil]
+                        ),
+                    ],
+                    target: freshTarget
+                )
                 XCTFail("NOT NULL must reject the whole batch")
-            } catch { }
+            } catch {}
             let afterConstraint = try await driver.execute("SELECT label FROM \(table) ORDER BY id")
             XCTAssertEqual(afterConstraint.rows, [[special], ["CONCURRENT "]])
             // The dictionary ID must detect DROP/CREATE even when columns and values are identical.
@@ -199,27 +284,50 @@ final class MySQLQueryEditingTests: XCTestCase {
             let oldResolved = try await driver.queryEditTarget(for: old)
             let oldTarget = try XCTUnwrap(oldResolved)
             _ = try await driver.execute("DROP TABLE \(table)")
-            _ = try await driver.execute("""
+            _ = try await driver.execute(
+                """
                 CREATE TABLE \(table) (tenant BIGINT UNSIGNED, id INT, label TEXT NOT NULL, amount DECIMAL(12,2),
                     calc INT GENERATED ALWAYS AS (id+1) STORED, born DATE, photo BLOB, seen TIMESTAMP NULL,
                     PRIMARY KEY(tenant,id)) ENGINE=InnoDB
-                """)
-            _ = try await driver.execute("INSERT INTO \(table) (tenant,id,label,amount) VALUES (18446744073709551615,1,\(QueryEditTarget.mysqlLiteral(special)),23.45)")
+                """
+            )
+            _ = try await driver.execute(
+                "INSERT INTO \(table) (tenant,id,label,amount) VALUES (18446744073709551615,1,\(QueryEditTarget.mysqlLiteral(special)),23.45)"
+            )
             do {
-                _ = try await writer.commitQueryEdits([.init(row: 0, original: old.rows[0], values: [2: "must not write"])], target: oldTarget)
+                _ = try await writer.commitQueryEdits(
+                    [.init(row: 0, original: old.rows[0], values: [2: "must not write"])],
+                    target: oldTarget
+                )
                 XCTFail("A replaced table must reject stale edits")
-            } catch { }
+            } catch {}
             let untouched = try await driver.execute("SELECT label FROM \(table)")
             XCTAssertEqual(untouched.rows, [[special]])
             _ = try await driver.execute("DROP TABLE \(table)")
             for keyType in ["BINARY(4)", "DATE", "TIMESTAMP", "DOUBLE", "BIT(8)"] {
-                _ = try await driver.execute("CREATE TABLE \(table) (id \(keyType) PRIMARY KEY, label TEXT) ENGINE=InnoDB")
+                _ = try await driver.execute(
+                    "CREATE TABLE \(table) (id \(keyType) PRIMARY KEY, label TEXT) ENGINE=InnoDB"
+                )
                 // No input conversion is needed: one empty-table result can be furnished with plausible wire
                 // metadata to exercise the catalog safety gate for each unsupported key type.
                 var unsafe = QueryResult(columns: ["id", "label"], statement: "SELECT id,label FROM \(table)")
                 unsafe.mysqlOrigins = [
-                    .init(schema: "tabula", table: name, originalTable: name, originalName: "id", dataType: 254, characterSet: 63),
-                    .init(schema: "tabula", table: name, originalTable: name, originalName: "label", dataType: 252, characterSet: 45),
+                    .init(
+                        schema: "tabula",
+                        table: name,
+                        originalTable: name,
+                        originalName: "id",
+                        dataType: 254,
+                        characterSet: 63
+                    ),
+                    .init(
+                        schema: "tabula",
+                        table: name,
+                        originalTable: name,
+                        originalName: "label",
+                        dataType: 252,
+                        characterSet: 45
+                    ),
                 ]
                 let unsafeTarget = try await driver.queryEditTarget(for: unsafe)
                 XCTAssertNil(unsafeTarget, keyType)

@@ -20,19 +20,43 @@ public struct QueryEditTarget: Sendable {
         public var editable: Bool
         public var mysqlType: String?
         public var mysqlDefinition: [String?]?
-        public init(name: String, attribute: Int16, typeOID: UInt32, typeName: String, isKey: Bool, editable: Bool, mysqlType: String? = nil, mysqlDefinition: [String?]? = nil) {
-            self.name = name; self.attribute = attribute; self.typeOID = typeOID; self.typeName = typeName
-            self.isKey = isKey; self.editable = editable
-            self.mysqlType = mysqlType; self.mysqlDefinition = mysqlDefinition
+        public init(
+            name: String,
+            attribute: Int16,
+            typeOID: UInt32,
+            typeName: String,
+            isKey: Bool,
+            editable: Bool,
+            mysqlType: String? = nil,
+            mysqlDefinition: [String?]? = nil
+        ) {
+            self.name = name
+            self.attribute = attribute
+            self.typeOID = typeOID
+            self.typeName = typeName
+            self.isKey = isKey
+            self.editable = editable
+            self.mysqlType = mysqlType
+            self.mysqlDefinition = mysqlDefinition
         }
     }
     /// Writes the statements for edits of this result.
     public let writer: any ResultEditWriter
 
-    public init(table: TableRef, tableOID: UInt32, columns: [Column], kind: DatabaseKind, writer: any ResultEditWriter,
-                mysqlTableIdentity: String? = nil) {
-        self.table = table; self.tableOID = tableOID; self.columns = columns
-        self.kind = kind; self.writer = writer; self.mysqlTableIdentity = mysqlTableIdentity
+    public init(
+        table: TableRef,
+        tableOID: UInt32,
+        columns: [Column],
+        kind: DatabaseKind,
+        writer: any ResultEditWriter,
+        mysqlTableIdentity: String? = nil
+    ) {
+        self.table = table
+        self.tableOID = tableOID
+        self.columns = columns
+        self.kind = kind
+        self.writer = writer
+        self.mysqlTableIdentity = mysqlTableIdentity
     }
 
     public func editableRow(_ row: Int, in rows: [[String?]]) -> Bool {
@@ -62,7 +86,9 @@ public struct QueryRowEdit: Sendable {
     public var original: [String?]
     public var values: [Int: String?]
     public init(row: Int, original: [String?], values: [Int: String?]) {
-        self.row = row; self.original = original; self.values = values
+        self.row = row
+        self.original = original
+        self.values = values
     }
 }
 

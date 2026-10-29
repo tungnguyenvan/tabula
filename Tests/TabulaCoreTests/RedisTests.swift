@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaFoundation
 @testable import TabulaRedis
 
@@ -55,7 +56,7 @@ final class RedisCommandLineTests: XCTestCase {
         XCTAssertThrowsError(try RedisTTL.parse("5x"))
         XCTAssertThrowsError(try RedisTTL.parse("1h 5"))
         XCTAssertEqual(RedisTTL.format(milliseconds: 5_400_000), "1h 30m")
-        XCTAssertEqual(try RedisTTL.parse(RedisTTL.format(milliseconds: 93_784_000)), 93_600) // shown as "1d 2h"
+        XCTAssertEqual(try RedisTTL.parse(RedisTTL.format(milliseconds: 93_784_000)), 93_600)  // shown as "1d 2h"
         XCTAssertEqual(RedisTTL.format(milliseconds: nil), "")
     }
 
@@ -79,9 +80,16 @@ final class RedisIntegrationTests: XCTestCase {
         port = ProcessInfo.processInfo.environment["TABULA_TEST_REDIS_PORT"].flatMap(Int.init)
     }
 
-    private func connect(user: String = "tabula", password: String? = "tabula", database: String = "9") async throws -> RedisDriver {
+    private func connect(
+        user: String = "tabula",
+        password: String? = "tabula",
+        database: String = "9"
+    ) async throws -> RedisDriver {
         guard let port else { throw XCTSkip("TABULA_TEST_REDIS_PORT not set") }
-        return try await RedisDriver.connect(ConnectionConfig(kind: .redis, port: port, user: user, database: database), password: password)
+        return try await RedisDriver.connect(
+            ConnectionConfig(kind: .redis, port: port, user: user, database: database),
+            password: password
+        )
     }
 
     func testAuthentication() async throws {
@@ -90,7 +98,10 @@ final class RedisIntegrationTests: XCTestCase {
             _ = try await connect(password: "wrong")
             XCTFail("expected an auth error")
         } catch {
-            XCTAssertTrue(error.localizedDescription.localizedCaseInsensitiveContains("WRONGPASS"), error.localizedDescription)
+            XCTAssertTrue(
+                error.localizedDescription.localizedCaseInsensitiveContains("WRONGPASS"),
+                error.localizedDescription
+            )
         }
         // Password-only AUTH uses the default user, whose password is also "tabula" (requirepass).
         let legacy = try await connect(user: "", password: "tabula")
@@ -132,10 +143,31 @@ final class RedisIntegrationTests: XCTestCase {
         var page = try await redis.page(hash, type: .hash, after: nil)
         XCTAssertEqual(page.columns, ["field", "value"])
         XCTAssertEqual(Set(page.rows.map { $0[0].display }), ["name", "city", "age"])
-        try await redis.update(hash, type: .hash, element: RedisBytes("city"), column: 1, to: RedisBytes("Đà Lạt"), row: [RedisBytes("city"), RedisBytes("Huế")])
-        try await redis.update(hash, type: .hash, element: RedisBytes("age"), column: 0, to: RedisBytes("years"), row: [RedisBytes("age"), RedisBytes("30")])
+        try await redis.update(
+            hash,
+            type: .hash,
+            element: RedisBytes("city"),
+            column: 1,
+            to: RedisBytes("Đà Lạt"),
+            row: [RedisBytes("city"), RedisBytes("Huế")]
+        )
+        try await redis.update(
+            hash,
+            type: .hash,
+            element: RedisBytes("age"),
+            column: 0,
+            to: RedisBytes("years"),
+            row: [RedisBytes("age"), RedisBytes("30")]
+        )
         do {
-            try await redis.update(hash, type: .hash, element: RedisBytes("years"), column: 0, to: RedisBytes("name"), row: [RedisBytes("years"), RedisBytes("30")])
+            try await redis.update(
+                hash,
+                type: .hash,
+                element: RedisBytes("years"),
+                column: 0,
+                to: RedisBytes("name"),
+                row: [RedisBytes("years"), RedisBytes("30")]
+            )
             XCTFail("renaming onto an existing field must fail")
         } catch {}
         try await redis.remove(hash, type: .hash, elements: [RedisBytes("name")])
@@ -158,14 +190,28 @@ final class RedisIntegrationTests: XCTestCase {
         // set and sorted set
         let set = RedisBytes("tags")
         for member in ["x", "y"] { try await redis.add(set, type: .set, values: [RedisBytes(member)]) }
-        try await redis.update(set, type: .set, element: RedisBytes("y"), column: 0, to: RedisBytes("w"), row: [RedisBytes("y")])
+        try await redis.update(
+            set,
+            type: .set,
+            element: RedisBytes("y"),
+            column: 0,
+            to: RedisBytes("w"),
+            row: [RedisBytes("y")]
+        )
         let awaited3 = try await redis.page(set, type: .set, after: nil).rows.map { $0[0].display }
         XCTAssertEqual(Set(awaited3), ["x", "w"])
 
         let zset = RedisBytes("scores")
         try await redis.add(zset, type: .zset, values: [RedisBytes("an"), RedisBytes("10")])
         try await redis.add(zset, type: .zset, values: [RedisBytes("binh"), RedisBytes("2.5")])
-        try await redis.update(zset, type: .zset, element: RedisBytes("an"), column: 1, to: RedisBytes("1"), row: [RedisBytes("an"), RedisBytes("10")])
+        try await redis.update(
+            zset,
+            type: .zset,
+            element: RedisBytes("an"),
+            column: 1,
+            to: RedisBytes("1"),
+            row: [RedisBytes("an"), RedisBytes("10")]
+        )
         do {
             try await redis.add(zset, type: .zset, values: [RedisBytes("c"), RedisBytes("not-a-number")])
             XCTFail("non-numeric score must fail")
@@ -176,7 +222,11 @@ final class RedisIntegrationTests: XCTestCase {
         // stream: add entries, page with exclusive start, delete
         let stream = RedisBytes("events")
         for index in 0..<3 {
-            try await redis.add(stream, type: .stream, values: [RedisBytes("n"), RedisBytes(String(index)), RedisBytes("kind"), RedisBytes("click")])
+            try await redis.add(
+                stream,
+                type: .stream,
+                values: [RedisBytes("n"), RedisBytes(String(index)), RedisBytes("kind"), RedisBytes("click")]
+            )
         }
         let first = try await redis.page(stream, type: .stream, after: nil, count: 2)
         XCTAssertEqual(first.columns, ["id", "n", "kind"])
@@ -217,9 +267,15 @@ final class RedisIntegrationTests: XCTestCase {
         XCTAssertNil(summaries[0].ttlMilliseconds)
         XCTAssertGreaterThan(summaries[1].ttlMilliseconds ?? 0, 490_000)
         XCTAssertEqual(summaries[1].length, 2)
-        XCTAssertTrue(summaries[1].preview.hasPrefix("{") && summaries[1].preview.contains("city: Đà Lạt"), summaries[1].preview)
+        XCTAssertTrue(
+            summaries[1].preview.hasPrefix("{") && summaries[1].preview.contains("city: Đà Lạt"),
+            summaries[1].preview
+        )
         XCTAssertEqual(summaries[2].preview, "[an (1), binh (2.5)]")
-        XCTAssertTrue(summaries[3].preview.hasPrefix("latest ") && summaries[3].preview.contains("n=2"), summaries[3].preview)
+        XCTAssertTrue(
+            summaries[3].preview.hasPrefix("latest ") && summaries[3].preview.contains("n=2"),
+            summaries[3].preview
+        )
         XCTAssertEqual(summaries[4].preview, "\\x00\\xfe")
 
         // databases list includes this one, with its key count

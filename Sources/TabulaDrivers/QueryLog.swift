@@ -48,7 +48,9 @@ public actor LoggingDriver: DatabaseDriver {
     }
 
     public func execute(_ sql: String) async throws -> QueryResult {
-        try await logged(sql) { try await $0.execute(sql) } outcome: { result in
+        try await logged(sql) {
+            try await $0.execute(sql)
+        } outcome: { result in
             result.hasResultSet ? .rows(result.rows.count) : .affected(result.affectedRows)
         }
     }
@@ -60,11 +62,17 @@ public actor LoggingDriver: DatabaseDriver {
     public func commitQueryEdits(_ edits: [QueryRowEdit], target: QueryEditTarget) async throws -> [Int: [String?]] {
         try await logged("-- Commit query result changes to \(target.table.schema).\(target.table.name)") {
             try await $0.commitQueryEdits(edits, target: target)
-        } outcome: { .affected($0.count) }
+        } outcome: {
+            .affected($0.count)
+        }
     }
 
     public func schemas() async throws -> [String] {
-        try await logged("-- list schemas", meta: true) { try await $0.schemas() } outcome: { .rows($0.count) }
+        try await logged("-- list schemas", meta: true) {
+            try await $0.schemas()
+        } outcome: {
+            .rows($0.count)
+        }
     }
 
     public func defaultSchema() async throws -> String {
@@ -72,32 +80,62 @@ public actor LoggingDriver: DatabaseDriver {
     }
 
     public func tables(in schema: String) async throws -> [TableRef] {
-        try await logged("-- list tables in \(schema)", meta: true) { try await $0.tables(in: schema) } outcome: { .rows($0.count) }
+        try await logged("-- list tables in \(schema)", meta: true) {
+            try await $0.tables(in: schema)
+        } outcome: {
+            .rows($0.count)
+        }
     }
 
     public func columns(of table: TableRef) async throws -> [ColumnInfo] {
-        try await logged("-- columns of \(table.schema).\(table.name)", meta: true) { try await $0.columns(of: table) } outcome: { .rows($0.count) }
+        try await logged("-- columns of \(table.schema).\(table.name)", meta: true) {
+            try await $0.columns(of: table)
+        } outcome: {
+            .rows($0.count)
+        }
     }
 
     public func indexes(of table: TableRef) async throws -> [IndexInfo] {
-        try await logged("-- indexes of \(table.schema).\(table.name)", meta: true) { try await $0.indexes(of: table) } outcome: { .rows($0.count) }
+        try await logged("-- indexes of \(table.schema).\(table.name)", meta: true) {
+            try await $0.indexes(of: table)
+        } outcome: {
+            .rows($0.count)
+        }
     }
 
     public func close() async {
         await inner.close()
     }
 
-    private func logged<T>(_ statement: String, meta: Bool = false,
-                           _ operation: (any DatabaseDriver) async throws -> T,
-                           outcome: (T) -> QueryLogEntry.Outcome) async throws -> T {
+    private func logged<T>(
+        _ statement: String,
+        meta: Bool = false,
+        _ operation: (any DatabaseDriver) async throws -> T,
+        outcome: (T) -> QueryLogEntry.Outcome
+    ) async throws -> T {
         let start = Date()
         do {
             let value = try await operation(inner)
-            sink(QueryLogEntry(date: start, statement: statement, duration: Date().timeIntervalSince(start), outcome: outcome(value), isMeta: meta))
+            sink(
+                QueryLogEntry(
+                    date: start,
+                    statement: statement,
+                    duration: Date().timeIntervalSince(start),
+                    outcome: outcome(value),
+                    isMeta: meta
+                )
+            )
             return value
         } catch {
-            sink(QueryLogEntry(date: start, statement: statement, duration: Date().timeIntervalSince(start),
-                               outcome: .failed(error.localizedDescription), isMeta: meta))
+            sink(
+                QueryLogEntry(
+                    date: start,
+                    statement: statement,
+                    duration: Date().timeIntervalSince(start),
+                    outcome: .failed(error.localizedDescription),
+                    isMeta: meta
+                )
+            )
             throw error
         }
     }

@@ -46,7 +46,9 @@ public struct AgentToolCall: Codable, Equatable, Sendable {
         if let schema { object["schema"] = schema }
         if let table { object["table"] = table }
         if let query { object["query"] = query }
-        let data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
+        let data =
+            (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]))
+            ?? Data()
         return String(decoding: data, as: UTF8.self)
     }
 }
@@ -58,7 +60,8 @@ public enum AgentProtocol {
     /// Added to the chat instructions whatever the user's own prompt says, so tools always work.
     public static func instructions(kind: DatabaseKind, canQuery: Bool) -> String {
         let language = kind.isDocument ? "MongoDB shell" : "\(kind.displayName) SQL"
-        let read = kind.isDocument
+        let read =
+            kind.isDocument
             ? "find, findOne, aggregate (without $out or $merge), countDocuments, estimatedDocumentCount, distinct or getIndexes"
             : "SELECT, WITH … SELECT, EXPLAIN (without ANALYZE), SHOW or DESCRIBE"
         var tools = """
@@ -66,7 +69,8 @@ public enum AgentProtocol {
             - {"tool": "describe_table", "table": "<schema.table>"}: columns with types, indexes and foreign keys.
             """
         if canQuery {
-            tools += "\n- {\"tool\": \"run_query\", \"query\": \"<one \(language) statement>\"}: runs one read-only statement "
+            tools +=
+                "\n- {\"tool\": \"run_query\", \"query\": \"<one \(language) statement>\"}: runs one read-only statement "
                 + "(\(read)) and returns at most \(Defaults.AI.agentRowLimit) rows. Anything that changes data is refused."
         }
         return """
@@ -88,16 +92,24 @@ public enum AgentProtocol {
         var body = reply[open.upperBound...]
         if let close = body.range(of: "```") { body = body[..<close.lowerBound] }
         guard let data = body.trimmingCharacters(in: .whitespacesAndNewlines).data(using: .utf8),
-              var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+            var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
         // Some models nest the arguments.
         for key in ["arguments", "args", "input", "parameters"] {
             if let nested = object[key] as? [String: Any] { object.merge(nested) { current, _ in current } }
         }
-        guard let name = (object["tool"] ?? object["name"]) as? String, let tool = AgentTool(rawValue: name) else { return nil }
+        guard let name = (object["tool"] ?? object["name"]) as? String, let tool = AgentTool(rawValue: name) else {
+            return nil
+        }
         func text(_ key: String) -> String? {
             (object[key] as? String).flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         }
-        return AgentToolCall(tool: tool, schema: text("schema"), table: text("table"), query: text("query") ?? text("sql"))
+        return AgentToolCall(
+            tool: tool,
+            schema: text("schema"),
+            table: text("table"),
+            query: text("query") ?? text("sql")
+        )
     }
 
     /// The reply as the user sees it: anything before a tool request.
@@ -154,18 +166,23 @@ public struct AgentToolbox: Sendable {
 
     private func listTables(_ schema: String?) async throws -> String {
         let schemas = try await driver.schemas()
-        let name = schema.flatMap { wanted in schemas.first { $0.caseInsensitiveCompare(wanted) == .orderedSame } } ?? currentSchema
+        let name =
+            schema.flatMap { wanted in schemas.first { $0.caseInsensitiveCompare(wanted) == .orderedSame } }
+            ?? currentSchema
         if let schema, schemas.first(where: { $0.caseInsensitiveCompare(schema) == .orderedSame }) == nil {
             return "Error: no schema named \(schema). Schemas: \(schemas.joined(separator: ", "))"
         }
         let tables = try await driver.tables(in: name)
         let list = tables.map { $0.kind == .view ? "\($0.name) (view)" : $0.name }
-        return "\(name): \(tables.count) \(driver.kind.isDocument ? "collections" : "tables")\n" + list.joined(separator: "\n")
+        return "\(name): \(tables.count) \(driver.kind.isDocument ? "collections" : "tables")\n"
+            + list.joined(separator: "\n")
             + "\nOther schemas: " + schemas.filter { $0 != name }.joined(separator: ", ")
     }
 
     private func describe(_ name: String) async throws -> String {
-        guard let table = try await resolve(name) else { return "Error: no table named \(name). Use list_tables to see them." }
+        guard let table = try await resolve(name) else {
+            return "Error: no table named \(name). Use list_tables to see them."
+        }
         var lines = ["\(table.schema).\(table.name)\(table.kind == .view ? " (view)" : "")", "Columns:"]
         for column in try await driver.columns(of: table) {
             var line = "  \(column.name) \(column.dataType)"
@@ -178,9 +195,12 @@ public struct AgentToolbox: Sendable {
         let indexes = (try? await driver.indexes(of: table)) ?? []
         if !indexes.isEmpty {
             lines.append("Indexes:")
-            lines += indexes.map { "  \($0.name) (\($0.columns.joined(separator: ", ")))\($0.isUnique ? " UNIQUE" : "")" }
+            lines += indexes.map {
+                "  \($0.name) (\($0.columns.joined(separator: ", ")))\($0.isUnique ? " UNIQUE" : "")"
+            }
         }
-        let keys = ((try? await driver.foreignKeys(in: table.schema)) ?? []).filter { $0.table == table || $0.referencedTable == table }
+        let keys = ((try? await driver.foreignKeys(in: table.schema)) ?? [])
+            .filter { $0.table == table || $0.referencedTable == table }
         if !keys.isEmpty {
             lines.append("Foreign keys:")
             lines += keys.map { key in
@@ -200,7 +220,9 @@ public struct AgentToolbox: Sendable {
         if let table = try await find(unquoted, in: currentSchema) { return table }
         guard let dot = unquoted.firstIndex(of: ".") else { return nil }
         let wanted = String(unquoted[..<dot])
-        guard let schema = try await driver.schemas().first(where: { $0.caseInsensitiveCompare(wanted) == .orderedSame }) else { return nil }
+        guard
+            let schema = try await driver.schemas().first(where: { $0.caseInsensitiveCompare(wanted) == .orderedSame })
+        else { return nil }
         return try await find(String(unquoted[unquoted.index(after: dot)...]), in: schema)
     }
 
@@ -242,7 +264,8 @@ public struct AgentToolbox: Sendable {
         func cell(_ value: String?) -> String {
             guard let value else { return "NULL" }
             let flat = value.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ")
-            return flat.count > Defaults.AI.agentCellLength ? String(flat.prefix(Defaults.AI.agentCellLength)) + "…" : flat
+            return flat.count > Defaults.AI.agentCellLength
+                ? String(flat.prefix(Defaults.AI.agentCellLength)) + "…" : flat
         }
         var text = result.columns.joined(separator: "\t")
         var shown = 0
@@ -268,12 +291,17 @@ public struct AgentToolbox: Sendable {
                 widths[index] = max(widths[index], cell.count)
             }
         }
-        return zip(lines, cells).map { line, row in
-            guard let row else { return line }
-            return row.enumerated().map { index, cell in
-                index == row.count - 1 ? cell : cell.padding(toLength: widths[index] + columnGap, withPad: " ", startingAt: 0)
-            }.joined()
-        }.joined(separator: "\n")
+        return zip(lines, cells)
+            .map { line, row in
+                guard let row else { return line }
+                return row.enumerated()
+                    .map { index, cell in
+                        index == row.count - 1
+                            ? cell : cell.padding(toLength: widths[index] + columnGap, withPad: " ", startingAt: 0)
+                    }
+                    .joined()
+            }
+            .joined(separator: "\n")
     }
 
     private static let columnGap = 2

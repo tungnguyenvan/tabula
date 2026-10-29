@@ -41,8 +41,16 @@ final class DatabaseTransfer: Identifiable {
     private let password: String?
     private let onRestored: () -> Void
 
-    init(direction: Direction, config: ConnectionConfig, database: String, password: String?, serverMajor: Int?,
-         serverIsMariaDB: Bool, tables: [TableRef] = [], onRestored: @escaping () -> Void = {}) {
+    init(
+        direction: Direction,
+        config: ConnectionConfig,
+        database: String,
+        password: String?,
+        serverMajor: Int?,
+        serverIsMariaDB: Bool,
+        tables: [TableRef] = [],
+        onRestored: @escaping () -> Void = {}
+    ) {
         self.direction = direction
         self.config = config
         self.database = database
@@ -65,7 +73,8 @@ final class DatabaseTransfer: Identifiable {
         case (.dump, .postgres): [.pgDump]
         case (.dump, _): [.mysqldump]
         case (.restore, .postgres):
-            fileKind == .postgresArchive ? ((restoreOptions.serverMajor ?? 0) >= 17 ? [.pgRestore] : [.pgRestore, .psql]) : [.psql]
+            fileKind == .postgresArchive
+                ? ((restoreOptions.serverMajor ?? 0) >= 17 ? [.pgRestore] : [.pgRestore, .psql]) : [.psql]
         case (.restore, _): [.mysql]
         }
     }
@@ -76,7 +85,8 @@ final class DatabaseTransfer: Identifiable {
         toolSearch?.cancel()
         tool = nil
         toolProblem = nil
-        let needed = neededTools, mariaDB = config.kind == .mysql ? restoreOptions.serverIsMariaDB : nil
+        let needed = neededTools
+        let mariaDB = config.kind == .mysql ? restoreOptions.serverIsMariaDB : nil
         toolSearch = Task { [weak self] in
             var first: DatabaseDump.Located?
             for kind in needed {
@@ -146,21 +156,41 @@ final class DatabaseTransfer: Identifiable {
             var options = dumpOptions
             options.format = format
             run { [config, password, database] progress in
-                try await DatabaseDump.dump(config, password: password, database: database, options: options, to: url, progress: progress)
+                try await DatabaseDump.dump(
+                    config,
+                    password: password,
+                    database: database,
+                    options: options,
+                    to: url,
+                    progress: progress
+                )
                 return "Saved “\(url.lastPathComponent)”."
-            } finishing: { [weak self] in self?.savedFile = url }
+            } finishing: { [weak self] in
+                self?.savedFile = url
+            }
         case .restore:
             guard let file else { return }
             let options = restoreOptions
             run { [config, password, database] progress in
-                try await DatabaseDump.restore(config, password: password, database: database, options: options, from: file, progress: progress)
+                try await DatabaseDump.restore(
+                    config,
+                    password: password,
+                    database: database,
+                    options: options,
+                    from: file,
+                    progress: progress
+                )
                 return "Restored “\(file.lastPathComponent)” into \(database)."
-            } finishing: { [onRestored] in onRestored() }
+            } finishing: { [onRestored] in
+                onRestored()
+            }
         }
     }
 
-    private func run(_ work: @escaping @Sendable (@escaping @Sendable (DatabaseDump.Progress) -> Void) async throws -> String,
-                     finishing: @escaping () -> Void) {
+    private func run(
+        _ work: @escaping @Sendable (@escaping @Sendable (DatabaseDump.Progress) -> Void) async throws -> String,
+        finishing: @escaping () -> Void
+    ) {
         phase = .running
         started = Date()
         progress = DatabaseDump.Progress(total: direction == .restore && fileKind == .script ? fileSize : nil)
@@ -170,9 +200,11 @@ final class DatabaseTransfer: Identifiable {
                 self?.phase = .finished(message)
                 finishing()
             } catch is CancellationError {
-                self?.phase = .failed(self?.direction == .dump
-                    ? "Cancelled. No file was saved."
-                    : "Cancelled. " + (self?.cancelledRestoreNote ?? ""))
+                self?.phase = .failed(
+                    self?.direction == .dump
+                        ? "Cancelled. No file was saved."
+                        : "Cancelled. " + (self?.cancelledRestoreNote ?? "")
+                )
             } catch {
                 self?.phase = .failed(self?.explain(error) ?? error.localizedDescription)
             }
@@ -184,7 +216,8 @@ final class DatabaseTransfer: Identifiable {
         var text = error.localizedDescription
         guard direction == .restore else { return text + "\n\nNo file was saved." }
         if text.contains("already exists") {
-            text += isPostgres && fileKind == .postgresArchive
+            text +=
+                isPostgres && fileKind == .postgresArchive
                 ? "\n\nThe database already has these objects. Turn on “Drop existing objects first”, or restore into an empty database."
                 : "\n\nThe database already has these objects. Restore into an empty database, or dump again with “Drop objects before creating them”."
         }
@@ -265,7 +298,8 @@ struct DatabaseTransferSheet: View {
                 LabeledContent("Tables", value: "All")
             } else {
                 LabeledContent("Tables") {
-                    Text(transfer.dumpOptions.tables.map(\.name).joined(separator: ", ")).lineLimit(2).truncationMode(.middle)
+                    Text(transfer.dumpOptions.tables.map(\.name).joined(separator: ", ")).lineLimit(2)
+                        .truncationMode(.middle)
                 }
             }
             Picker("Content", selection: $transfer.dumpOptions.content) {
@@ -276,11 +310,16 @@ struct DatabaseTransferSheet: View {
                     Text("SQL script (.sql)").tag(DatabaseDump.Format.sql)
                     Text("Custom archive (.dump)").tag(DatabaseDump.Format.custom)
                 }
-                .help("A SQL script can be read and run anywhere; the custom archive is compressed and restored with pg_restore.")
+                .help(
+                    "A SQL script can be read and run anywhere; the custom archive is compressed and restored with pg_restore."
+                )
             }
             Toggle("Drop objects before creating them", isOn: $transfer.dumpOptions.addDrop)
                 .help("Restoring the dump then replaces existing tables instead of failing on them.")
-                .disabled(transfer.dumpOptions.content == .data || (transfer.isPostgres && transfer.dumpOptions.format == .custom))
+                .disabled(
+                    transfer.dumpOptions.content == .data
+                        || (transfer.isPostgres && transfer.dumpOptions.format == .custom)
+                )
             if transfer.isPostgres {
                 Toggle("Include owners and privileges", isOn: $transfer.dumpOptions.ownersAndPrivileges)
                     .help("Off: the dump restores under any login, as when copying a database to this Mac.")
@@ -293,14 +332,23 @@ struct DatabaseTransferSheet: View {
         Section {
             if let file = transfer.file {
                 LabeledContent("File") {
-                    Text("\(file.lastPathComponent) · \(ByteCountFormatter.string(fromByteCount: transfer.fileSize, countStyle: .file))")
-                        .lineLimit(1).truncationMode(.middle).help(file.path)
+                    Text(
+                        "\(file.lastPathComponent) · \(ByteCountFormatter.string(fromByteCount: transfer.fileSize, countStyle: .file))"
+                    )
+                    .lineLimit(1).truncationMode(.middle).help(file.path)
                 }
-                LabeledContent("Kind", value: transfer.fileKind == .postgresArchive ? "PostgreSQL archive (pg_dump custom format)" : "SQL script")
+                LabeledContent(
+                    "Kind",
+                    value: transfer.fileKind == .postgresArchive
+                        ? "PostgreSQL archive (pg_dump custom format)" : "SQL script"
+                )
             }
             if transfer.fileKind == .postgresArchive && !transfer.isPostgres {
-                Label("A PostgreSQL archive can't be restored into \(transfer.config.kind.displayName).", systemImage: "xmark.octagon")
-                    .foregroundStyle(.red)
+                Label(
+                    "A PostgreSQL archive can't be restored into \(transfer.config.kind.displayName).",
+                    systemImage: "xmark.octagon"
+                )
+                .foregroundStyle(.red)
             }
             if transfer.isPostgres {
                 Toggle("All or nothing (one transaction)", isOn: $transfer.restoreOptions.singleTransaction)
@@ -311,14 +359,17 @@ struct DatabaseTransferSheet: View {
                 }
             }
         } footer: {
-            Text("The restore stops at the first error. It changes \(transfer.database) and can replace data in it. Restore only dumps you trust: a dump can contain any SQL.")
-                .font(.callout).foregroundStyle(.secondary)
+            Text(
+                "The restore stops at the first error. It changes \(transfer.database) and can replace data in it. Restore only dumps you trust: a dump can contain any SQL."
+            )
+            .font(.callout).foregroundStyle(.secondary)
         }
         if transfer.isProduction {
             Section {
                 TextField("Type \(transfer.database) to confirm", text: $transfer.typedConfirmation)
             } header: {
-                Label("This is a PRODUCTION connection", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                Label("This is a PRODUCTION connection", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
             }
         }
     }
@@ -334,14 +385,18 @@ struct DatabaseTransferSheet: View {
                 Text(status(at: context.date)).font(.callout).monospacedDigit().foregroundStyle(.secondary)
             }
             // Until the tool says something, it is still connecting (through SSH, opening the tunnel first).
-            Text(transfer.progress.message.isEmpty && transfer.progress.bytes == 0 ? "Connecting…" : transfer.progress.message)
-                .font(Layout.Font.monoSmall).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
+            Text(
+                transfer.progress.message.isEmpty && transfer.progress.bytes == 0
+                    ? "Connecting…" : transfer.progress.message
+            )
+            .font(Layout.Font.monoSmall).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
         }
     }
 
     private func status(at now: Date) -> String {
         let bytes = ByteCountFormatter.string(fromByteCount: transfer.progress.bytes, countStyle: .file)
-        let elapsed = Duration.seconds(now.timeIntervalSince(transfer.started ?? now)).formatted(.time(pattern: .minuteSecond))
+        let elapsed = Duration.seconds(now.timeIntervalSince(transfer.started ?? now))
+            .formatted(.time(pattern: .minuteSecond))
         guard transfer.progress.bytes > 0 else { return elapsed }
         if let total = transfer.progress.total, total > 0 {
             return "\(bytes) of \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file)) · \(elapsed)"

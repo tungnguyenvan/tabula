@@ -36,10 +36,18 @@ struct WorkspaceWindow: View {
                 switch active {
                 case .sql(let model):
                     SidebarView(model: model).id(model.config.id)
-                        .navigationSplitViewColumnWidth(min: Layout.Sidebar.minWidth, ideal: Layout.Sidebar.idealWidth, max: Layout.Sidebar.maxWidth)
+                        .navigationSplitViewColumnWidth(
+                            min: Layout.Sidebar.minWidth,
+                            ideal: Layout.Sidebar.idealWidth,
+                            max: Layout.Sidebar.maxWidth
+                        )
                 case .redis(let model):
                     RedisSidebar(model: model).id(model.config.id)
-                        .navigationSplitViewColumnWidth(min: Layout.Sidebar.redisMinWidth, ideal: Layout.Sidebar.redisIdealWidth, max: Layout.Sidebar.redisMaxWidth)
+                        .navigationSplitViewColumnWidth(
+                            min: Layout.Sidebar.redisMinWidth,
+                            ideal: Layout.Sidebar.redisIdealWidth,
+                            max: Layout.Sidebar.redisMaxWidth
+                        )
                 }
             } detail: {
                 switch active {
@@ -65,8 +73,11 @@ struct WorkspaceWindow: View {
     private var emptyWindow: some View {
         if let connectionID, !openedInitial {
             if appState.connection(connectionID) == nil {
-                ContentUnavailableView("Connection not found", systemImage: "questionmark.circle",
-                                       description: Text("It may have been deleted."))
+                ContentUnavailableView(
+                    "Connection not found",
+                    systemImage: "questionmark.circle",
+                    description: Text("It may have been deleted.")
+                )
             } else {
                 ProgressView()
             }
@@ -94,60 +105,96 @@ struct WorkspaceView: View {
 
     var body: some View {
         detail
-        .inspector(isPresented: $model.showInspector) {
-            VStack(spacing: 0) {
-                Picker("Panel", selection: $model.rightPanel) {
-                    ForEach(WorkspaceModel.RightPanel.allCases) { Text($0.rawValue).tag($0) }
+            .inspector(isPresented: $model.showInspector) {
+                VStack(spacing: 0) {
+                    Picker("Panel", selection: $model.rightPanel) {
+                        ForEach(WorkspaceModel.RightPanel.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .padding(Layout.barPadding)
+                    Divider()
+                    switch model.rightPanel {
+                    case .rowDetails: RowInspectorView(model: model)
+                    case .ai: AIChatView(workspace: model, chat: model.chat)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(Layout.barPadding)
-                Divider()
-                switch model.rightPanel {
-                case .rowDetails: RowInspectorView(model: model)
-                case .ai: AIChatView(workspace: model, chat: model.chat)
+                .inspectorColumnWidth(
+                    min: recordingInspectorWidth ?? Layout.Inspector.minWidth,
+                    ideal: recordingInspectorWidth ?? Layout.Inspector.idealWidth,
+                    max: recordingInspectorWidth ?? Layout.Inspector.maxWidth
+                )
+            }
+            .navigationTitle(model.config.displayName)
+            .sheet(item: $model.transfer) { transfer in
+                DatabaseTransferSheet(transfer: transfer) { model.transfer = nil }
+            }
+            .toolbar {
+                ConnectionPillItem(
+                    pill: ConnectionPill(
+                        config: model.config,
+                        status: model.status,
+                        location: location,
+                        serverVersion: model.serverVersion,
+                        connectedAt: model.connectedAt,
+                        onReconnect: { Task { await model.reconnect() } }
+                    )
+                )
+                ToolbarItem(placement: .navigation) {
+                    OpenConnectionMenu(current: model.config.id)
                 }
-            }
-            .inspectorColumnWidth(min: recordingInspectorWidth ?? Layout.Inspector.minWidth,
-                                   ideal: recordingInspectorWidth ?? Layout.Inspector.idealWidth,
-                                   max: recordingInspectorWidth ?? Layout.Inspector.maxWidth)
-        }
-        .navigationTitle(model.config.displayName)
-        .sheet(item: $model.transfer) { transfer in
-            DatabaseTransferSheet(transfer: transfer) { model.transfer = nil }
-        }
-        .toolbar {
-            ConnectionPillItem(pill: ConnectionPill(config: model.config, status: model.status,
-                                                    location: location,
-                                                    serverVersion: model.serverVersion, connectedAt: model.connectedAt,
-                                                    onReconnect: { Task { await model.reconnect() } }))
-            ToolbarItem(placement: .navigation) {
-                OpenConnectionMenu(current: model.config.id)
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button { model.newQueryTab() } label: { Label("New Query", systemImage: "plus.square.on.square") }
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        model.newQueryTab()
+                    } label: {
+                        Label("New Query", systemImage: "plus.square.on.square")
+                    }
                     .help("New query tab (⌘T)")
                     .disabled(model.driver == nil)
-                if model.config.kind.supportsDiagram {
-                    Button { model.openDiagram() } label: { Label("Diagram", systemImage: "point.3.connected.trianglepath.dotted") }
+                    if model.config.kind.supportsDiagram {
+                        Button {
+                            model.openDiagram()
+                        } label: {
+                            Label("Diagram", systemImage: "point.3.connected.trianglepath.dotted")
+                        }
                         .help("Relationship diagram (⌥⌘3)")
                         .disabled(model.driver == nil)
-                }
-                Button { model.openMetrics() } label: { Label("Metrics", systemImage: "gauge.with.dots.needle.33percent") }
+                    }
+                    Button {
+                        model.openMetrics()
+                    } label: {
+                        Label("Metrics", systemImage: "gauge.with.dots.needle.33percent")
+                    }
                     .help("Server metrics (⌥⌘4)")
                     .disabled(model.driver == nil)
-                Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    Button {
+                        Task { await model.refresh() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
                     .help("Refresh (⌘R)")
                     .disabled(model.driver == nil)
-                Button { model.showConsole.toggle() } label: { Label("Console", systemImage: "rectangle.bottomthird.inset.filled") }
+                    Button {
+                        model.showConsole.toggle()
+                    } label: {
+                        Label("Console", systemImage: "rectangle.bottomthird.inset.filled")
+                    }
                     .help("Console log (⇧⌘C)")
-                Button { model.toggleRightPanel(.ai) } label: { Label("AI Chat", systemImage: "bubble.left.and.text.bubble.right") }
+                    Button {
+                        model.toggleRightPanel(.ai)
+                    } label: {
+                        Label("AI Chat", systemImage: "bubble.left.and.text.bubble.right")
+                    }
                     .help("AI chat (⌥⌘A)")
-                Button { model.toggleRightPanel(.rowDetails) } label: { Label("Row Details", systemImage: "sidebar.right") }
+                    Button {
+                        model.toggleRightPanel(.rowDetails)
+                    } label: {
+                        Label("Row Details", systemImage: "sidebar.right")
+                    }
                     .help("Show row details (⌥⌘0)")
                     .keyboardShortcut("0", modifiers: [.command, .option])
+                }
             }
-        }
     }
 
     @ViewBuilder
@@ -159,7 +206,8 @@ struct WorkspaceView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let message):
             VStack(spacing: 10) {
-                Image(systemName: "bolt.horizontal.circle").font(.system(size: 34, weight: .light)).foregroundStyle(.secondary)
+                Image(systemName: "bolt.horizontal.circle").font(.system(size: 34, weight: .light))
+                    .foregroundStyle(.secondary)
                 Text("Could not connect to \(model.config.displayName)").font(.headline)
                 Text(message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     .textSelection(.enabled).frame(maxWidth: 480)
@@ -182,8 +230,13 @@ struct WorkspaceView: View {
                     Divider()
                     console.frame(height: Layout.Console.idealHeight)
                 } else {
-                    VerticalSplit(topMinimum: Layout.Console.contentMinHeight, bottomMinimum: Layout.Console.minHeight,
-                                  bottomIdeal: Layout.Console.idealHeight, growing: .top, autosaveName: "ConsoleLog") {
+                    VerticalSplit(
+                        topMinimum: Layout.Console.contentMinHeight,
+                        bottomMinimum: Layout.Console.minHeight,
+                        bottomIdeal: Layout.Console.idealHeight,
+                        growing: .top,
+                        autosaveName: "ConsoleLog"
+                    ) {
                         tabContent
                     } bottom: {
                         console
@@ -220,7 +273,8 @@ private struct TabContentArea: View {
     var body: some View {
         VStack(spacing: 0) {
             if model.selectedTab != nil {
-                TabContentHost(tabs: model.tabs, selectedID: model.selectedTabID, transient: transientTabs) { [model] tab in
+                TabContentHost(tabs: model.tabs, selectedID: model.selectedTabID, transient: transientTabs) {
+                    [model] tab in
                     Self.content(of: tab, workspace: model)
                 }
             } else {
@@ -296,8 +350,17 @@ struct ConnectionPill: View {
         .onTapGesture { showingInfo.toggle() }
         .help("Connection details")
         .popover(isPresented: $showingInfo, arrowEdge: .bottom) {
-            ConnectionInfoPopover(config: config, status: status, location: location, serverVersion: serverVersion,
-                                  connectedAt: connectedAt, onReconnect: { showingInfo = false; onReconnect() })
+            ConnectionInfoPopover(
+                config: config,
+                status: status,
+                location: location,
+                serverVersion: serverVersion,
+                connectedAt: connectedAt,
+                onReconnect: {
+                    showingInfo = false
+                    onReconnect()
+                }
+            )
         }
     }
 
@@ -324,13 +387,21 @@ private struct TabStrip: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 0) {
                             ForEach(model.tabs) { tab in
-                                TabButton(tab: tab, selected: tab.id == model.selectedTabID, isPreview: model.isPreview(tab.id),
-                                          select: { model.selectedTabID = tab.id },
-                                          pin: { model.pin(tab.id) },
-                                          close: { model.requestClose(tab.id) },
-                                          closeOthers: { for other in model.tabs where other.id != tab.id { model.requestClose(other.id) } })
-                                    .frame(width: width)
-                                    .id(tab.id)
+                                TabButton(
+                                    tab: tab,
+                                    selected: tab.id == model.selectedTabID,
+                                    isPreview: model.isPreview(tab.id),
+                                    select: { model.selectedTabID = tab.id },
+                                    pin: { model.pin(tab.id) },
+                                    close: { model.requestClose(tab.id) },
+                                    closeOthers: {
+                                        for other in model.tabs where other.id != tab.id {
+                                            model.requestClose(other.id)
+                                        }
+                                    }
+                                )
+                                .frame(width: width)
+                                .id(tab.id)
                                 Divider().frame(height: 14)
                             }
                         }
@@ -345,7 +416,9 @@ private struct TabStrip: View {
                     }
                 }
             }
-            Button { model.newQueryTab() } label: {
+            Button {
+                model.newQueryTab()
+            } label: {
                 Image(systemName: "plus").font(.system(size: 11, weight: .medium)).frame(width: 28, height: 26)
             }
             .buttonStyle(.plain)
@@ -390,8 +463,10 @@ private struct TabButton: View {
     var body: some View {
         ZStack {
             HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 10)).foregroundStyle(selected ? Color.accentColor : .secondary)
-                Text(tab.title).font(.system(size: 12, weight: selected ? .medium : .regular)).italic(isPreview).lineLimit(1)
+                Image(systemName: icon).font(.system(size: 10))
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                Text(tab.title).font(.system(size: 12, weight: selected ? .medium : .regular)).italic(isPreview)
+                    .lineLimit(1)
                 if hasChanges { Circle().fill(.orange).frame(width: 6, height: 6) }
             }
             .padding(.horizontal, 22)
@@ -410,8 +485,10 @@ private struct TabButton: View {
             .padding(.leading, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(selected ? Color(nsColor: .windowBackgroundColor) : (hovering ? Color.primary.opacity(0.04) : .clear),
-                    ignoresSafeAreaEdges: [])
+        .background(
+            selected ? Color(nsColor: .windowBackgroundColor) : (hovering ? Color.primary.opacity(0.04) : .clear),
+            ignoresSafeAreaEdges: []
+        )
         .overlay(alignment: .top) {
             if selected { Rectangle().fill(Color.accentColor).frame(height: 2) }
         }
@@ -469,9 +546,12 @@ private struct ConnectionPicker: View {
     @State private var search = ""
 
     private var matches: [ConnectionConfig] {
-        search.isEmpty ? appState.connections : appState.connections.filter {
-            $0.displayName.localizedCaseInsensitiveContains(search) || $0.subtitle.localizedCaseInsensitiveContains(search)
-        }
+        search.isEmpty
+            ? appState.connections
+            : appState.connections.filter {
+                $0.displayName.localizedCaseInsensitiveContains(search)
+                    || $0.subtitle.localizedCaseInsensitiveContains(search)
+            }
     }
 
     var body: some View {
@@ -484,12 +564,15 @@ private struct ConnectionPicker: View {
             ScrollView {
                 VStack(spacing: 2) {
                     ForEach(matches) { connection in
-                        Button { onPick(connection.id) } label: {
+                        Button {
+                            onPick(connection.id)
+                        } label: {
                             HStack(spacing: 10) {
                                 KindBadge(kind: connection.kind, size: 26)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(connection.displayName).font(.system(size: 13, weight: .medium))
-                                    Text(connection.subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(connection.subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
                                 Spacer()
                                 if let color = connection.tag.color { Circle().fill(color).frame(width: 7, height: 7) }
@@ -547,7 +630,13 @@ struct ConnectionInfoPopover: View {
         }
         if config.tag != .none { rows.append(("Tag", config.tag.displayName)) }
         switch status {
-        case .connected: rows.append(("Status", connectedAt.map { "Connected \($0.formatted(.relative(presentation: .named)))" } ?? "Connected"))
+        case .connected:
+            rows.append(
+                (
+                    "Status",
+                    connectedAt.map { "Connected \($0.formatted(.relative(presentation: .named)))" } ?? "Connected"
+                )
+            )
         case .connecting: rows.append(("Status", "Connecting…"))
         case .failed(let message): rows.append(("Status", message))
         }
@@ -560,7 +649,8 @@ struct ConnectionInfoPopover: View {
                 KindBadge(kind: config.kind, size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(config.displayName).font(.headline)
-                    Text(config.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(config.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 5) {
@@ -585,7 +675,9 @@ struct ConnectionInfoPopover: View {
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(others) { other in
-                            Button { ConnectionRouter.open(other.id, appState: appState, openWindow: openWindow) } label: {
+                            Button {
+                                ConnectionRouter.open(other.id, appState: appState, openWindow: openWindow)
+                            } label: {
                                 HStack(spacing: 8) {
                                     KindBadge(kind: other.kind, size: 18)
                                     Text(other.displayName).lineLimit(1)

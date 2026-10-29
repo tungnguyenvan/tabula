@@ -127,7 +127,8 @@ package enum CivilTime {
             return true
         }
         guard let year = number(4), take("-"), let month = number(2), take("-"), let day = number(2),
-              (1...12).contains(month), (1...31).contains(day) else { return nil }
+            (1...12).contains(month), (1...31).contains(day)
+        else { return nil }
         let date = Day(year: year, month: month, day: day)
         let dayNumber = days(from: date)
         // Rejects dates that don't exist, such as February 30.
@@ -135,7 +136,8 @@ package enum CivilTime {
         var milliseconds = dayNumber * secondsPerDay * 1000
         guard !scanner.isEmpty else { return milliseconds }
 
-        guard take("T") || take(" "), let hour = number(2), take(":"), let minute = number(2), hour < 24, minute < 60 else { return nil }
+        guard take("T") || take(" "), let hour = number(2), take(":"), let minute = number(2), hour < 24, minute < 60
+        else { return nil }
         var second: Int64 = 0
         if take(":") {
             guard let value = number(2), value < 61 else { return nil }
@@ -143,13 +145,20 @@ package enum CivilTime {
         }
         milliseconds += ((hour * 60 + minute) * 60 + second) * 1000
         if take(".") || take(",") {
-            var fraction: Int64 = 0, digits = 0
+            var fraction: Int64 = 0
+            var digits = 0
             while let byte = scanner.first, byte >= 0x30 && byte <= 0x39 {
-                if digits < 3 { fraction = fraction * 10 + Int64(byte - 0x30); digits += 1 }
+                if digits < 3 {
+                    fraction = fraction * 10 + Int64(byte - 0x30)
+                    digits += 1
+                }
                 scanner = scanner.dropFirst()
             }
             guard digits > 0 else { return nil }
-            while digits < 3 { fraction *= 10; digits += 1 }
+            while digits < 3 {
+                fraction *= 10
+                digits += 1
+            }
             milliseconds += fraction
         }
         if take("Z") || take("z") || scanner.isEmpty {

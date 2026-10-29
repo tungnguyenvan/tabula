@@ -50,7 +50,8 @@ final class DiagramModel {
 
     func visibleColumns(_ node: Node) -> [ColumnInfo] {
         let keyColumns = Set(foreignKeys.filter { $0.table == node.table }.flatMap(\.columns))
-        let columns = showAllColumns ? node.columns : node.columns.filter { $0.isPrimaryKey || keyColumns.contains($0.name) }
+        let columns =
+            showAllColumns ? node.columns : node.columns.filter { $0.isPrimaryKey || keyColumns.contains($0.name) }
         return Array(columns.prefix(Self.maxRows))
     }
 
@@ -72,11 +73,14 @@ final class DiagramModel {
         loading = true
         defer { loading = false }
         do {
-            let tables = try await driver.tables(in: schema).filter { $0.kind == .table }.prefix(Defaults.Diagram.tableLimit)
+            let tables = try await driver.tables(in: schema).filter { $0.kind == .table }
+                .prefix(Defaults.Diagram.tableLimit)
             foreignKeys = try await driver.foreignKeys(in: schema)
             var loaded: [Node] = []
             for table in tables {
-                loaded.append(Node(table: table, columns: (try? await driver.columns(of: table)) ?? [], position: .zero))
+                loaded.append(
+                    Node(table: table, columns: (try? await driver.columns(of: table)) ?? [], position: .zero)
+                )
             }
             nodes = loaded
             layout()
@@ -90,7 +94,8 @@ final class DiagramModel {
     func layout() {
         let names = Set(nodes.map(\.table.name))
         var references: [String: Set<String>] = [:]
-        for key in foreignKeys where names.contains(key.referencedTable.name) && key.referencedTable.name != key.table.name {
+        for key in foreignKeys
+        where names.contains(key.referencedTable.name) && key.referencedTable.name != key.table.name {
             references[key.table.name, default: []].insert(key.referencedTable.name)
         }
         var level: [String: Int] = [:]
@@ -99,26 +104,36 @@ final class DiagramModel {
             for node in nodes {
                 let parents = references[node.table.name] ?? []
                 let value = parents.isEmpty ? 0 : (parents.compactMap { level[$0] }.max() ?? 0) + 1
-                if level[node.table.name] != min(value, 12) { level[node.table.name] = min(value, 12); changed = true }
+                if level[node.table.name] != min(value, 12) {
+                    level[node.table.name] = min(value, 12)
+                    changed = true
+                }
             }
             if !changed { break }
         }
         let connected = Set(references.keys).union(references.values.flatMap { $0 })
         var columnHeights: [Int: CGFloat] = [:]
-        let gapX: CGFloat = 90, gapY: CGFloat = 28
-        for index in nodes.indices.sorted(by: { nodes[$0].table.name < nodes[$1].table.name }) where connected.contains(nodes[index].table.name) {
+        let gapX: CGFloat = 90
+        let gapY: CGFloat = 28
+        for index in nodes.indices.sorted(by: { nodes[$0].table.name < nodes[$1].table.name })
+        where connected.contains(nodes[index].table.name) {
             let column = level[nodes[index].table.name] ?? 0
             let y = columnHeights[column, default: 30]
             nodes[index].position = CGPoint(x: 30 + CGFloat(column) * (Self.nodeWidth + gapX), y: y)
             columnHeights[column] = y + height(nodes[index]) + gapY
         }
         // Tables without relationships: a grid below the connected part.
-        let lonely = nodes.indices.filter { !connected.contains(nodes[$0].table.name) }.sorted { nodes[$0].table.name < nodes[$1].table.name }
+        let lonely = nodes.indices.filter { !connected.contains(nodes[$0].table.name) }
+            .sorted { nodes[$0].table.name < nodes[$1].table.name }
         let top = (columnHeights.values.max() ?? 30) + (connected.isEmpty ? 0 : 30)
         let perRow = max(3, (columnHeights.keys.max() ?? 0) + 1)
-        var rowTop = top, rowHeight: CGFloat = 0
+        var rowTop = top
+        var rowHeight: CGFloat = 0
         for (offset, index) in lonely.enumerated() {
-            if offset > 0 && offset % perRow == 0 { rowTop += rowHeight + gapY; rowHeight = 0 }
+            if offset > 0 && offset % perRow == 0 {
+                rowTop += rowHeight + gapY
+                rowHeight = 0
+            }
             nodes[index].position = CGPoint(x: 30 + CGFloat(offset % perRow) * (Self.nodeWidth + gapX), y: rowTop)
             rowHeight = max(rowHeight, height(nodes[index]))
         }
@@ -132,7 +147,9 @@ final class DiagramModel {
     /// Y offset (from the node top) of a column's row, or the header when it isn't shown.
     func rowY(_ node: Node, column: String?) -> CGFloat {
         let columns = visibleColumns(node)
-        guard let column, let index = columns.firstIndex(where: { $0.name == column }) else { return Self.headerHeight / 2 }
+        guard let column, let index = columns.firstIndex(where: { $0.name == column }) else {
+            return Self.headerHeight / 2
+        }
         return Self.headerHeight + CGFloat(index) * Self.rowHeight + Self.rowHeight / 2 + 3
     }
 }
@@ -155,16 +172,22 @@ struct DiagramView: View {
                     canvas
                         .frame(width: model.canvasSize.width, height: model.canvasSize.height, alignment: .topLeading)
                         .scaleEffect(model.zoom, anchor: .topLeading)
-                        .frame(width: model.canvasSize.width * model.zoom, height: model.canvasSize.height * model.zoom, alignment: .topLeading)
+                        .frame(
+                            width: model.canvasSize.width * model.zoom,
+                            height: model.canvasSize.height * model.zoom,
+                            alignment: .topLeading
+                        )
                 }
                 .background(Color(nsColor: .textBackgroundColor))
                 // Magnification is relative to where the pinch started.
-                .gesture(MagnifyGesture()
-                    .onChanged { value in
-                        if pinchStart == nil { pinchStart = model.zoom }
-                        model.zoom = (pinchStart ?? 1) * value.magnification
-                    }
-                    .onEnded { _ in pinchStart = nil })
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            if pinchStart == nil { pinchStart = model.zoom }
+                            model.zoom = (pinchStart ?? 1) * value.magnification
+                        }
+                        .onEnded { _ in pinchStart = nil }
+                )
             }
         }
         .task { if model.nodes.isEmpty { await model.load() } }
@@ -172,7 +195,8 @@ struct DiagramView: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
-            Text("\(model.nodes.count) tables · \(model.foreignKeys.count) relationships").font(.system(size: 11)).foregroundStyle(.secondary)
+            Text("\(model.nodes.count) tables · \(model.foreignKeys.count) relationships").font(.system(size: 11))
+                .foregroundStyle(.secondary)
             Spacer()
             Toggle("All columns", isOn: $model.showAllColumns).toggleStyle(.checkbox)
                 .onChange(of: model.showAllColumns) { _, _ in model.layout() }
@@ -194,13 +218,22 @@ struct DiagramView: View {
             Canvas { context, _ in drawEdges(in: &context) }
             ForEach(model.nodes) { node in
                 TableNode(model: model, node: node, selected: model.selected == node.id)
-                    .position(x: node.position.x + DiagramModel.nodeWidth / 2, y: node.position.y + model.height(node) / 2)
+                    .position(
+                        x: node.position.x + DiagramModel.nodeWidth / 2,
+                        y: node.position.y + model.height(node) / 2
+                    )
                     .gesture(
                         DragGesture()
                             .onChanged { value in
                                 let start = dragStart[node.id] ?? node.position
                                 dragStart[node.id] = start
-                                model.move(node.id, to: CGPoint(x: start.x + value.translation.width, y: start.y + value.translation.height))
+                                model.move(
+                                    node.id,
+                                    to: CGPoint(
+                                        x: start.x + value.translation.width,
+                                        y: start.y + value.translation.height
+                                    )
+                                )
                             }
                             .onEnded { _ in dragStart[node.id] = nil }
                     )
@@ -220,26 +253,38 @@ struct DiagramView: View {
             let toY = to.position.y + model.rowY(to, column: targetColumn)
             let width = DiagramModel.nodeWidth
             var path = Path()
-            let start: CGPoint, end: CGPoint, bend: CGFloat
+            let start: CGPoint
+            let end: CGPoint
+            let bend: CGFloat
             if from.id == to.id {
                 // Self reference: a loop on the right.
                 start = CGPoint(x: from.position.x + width, y: fromY)
                 end = CGPoint(x: from.position.x + width, y: toY)
                 path.move(to: start)
-                path.addCurve(to: end, control1: CGPoint(x: start.x + 50, y: start.y), control2: CGPoint(x: end.x + 50, y: end.y))
+                path.addCurve(
+                    to: end,
+                    control1: CGPoint(x: start.x + 50, y: start.y),
+                    control2: CGPoint(x: end.x + 50, y: end.y)
+                )
             } else {
                 let leftToRight = to.position.x + width < from.position.x
                 start = CGPoint(x: leftToRight ? from.position.x : from.position.x + width, y: fromY)
                 end = CGPoint(x: leftToRight ? to.position.x + width : to.position.x, y: toY)
                 bend = max(40, abs(end.x - start.x) / 2)
                 path.move(to: start)
-                path.addCurve(to: end, control1: CGPoint(x: start.x + (leftToRight ? -bend : bend), y: start.y),
-                              control2: CGPoint(x: end.x + (leftToRight ? bend : -bend), y: end.y))
+                path.addCurve(
+                    to: end,
+                    control1: CGPoint(x: start.x + (leftToRight ? -bend : bend), y: start.y),
+                    control2: CGPoint(x: end.x + (leftToRight ? bend : -bend), y: end.y)
+                )
             }
             let color = highlighted ? Color.accentColor : Color.secondary.opacity(0.25)
             context.stroke(path, with: .color(color), lineWidth: highlighted && model.selected != nil ? 2 : 1.3)
             // Many side: small fork; one side: a dot.
-            context.fill(Path(ellipseIn: CGRect(x: end.x - 3.5, y: end.y - 3.5, width: 7, height: 7)), with: .color(color))
+            context.fill(
+                Path(ellipseIn: CGRect(x: end.x - 3.5, y: end.y - 3.5, width: 7, height: 7)),
+                with: .color(color)
+            )
             var fork = Path()
             let direction: CGFloat = start.x <= from.position.x + 1 ? -1 : 1
             fork.move(to: CGPoint(x: start.x + 10 * direction, y: start.y))
@@ -251,12 +296,18 @@ struct DiagramView: View {
     }
 
     private func exportPNG() {
-        let renderer = ImageRenderer(content: canvas.frame(width: model.canvasSize.width, height: model.canvasSize.height)
-            .background(Color(nsColor: .textBackgroundColor)))
+        let renderer = ImageRenderer(
+            content: canvas.frame(width: model.canvasSize.width, height: model.canvasSize.height)
+                .background(Color(nsColor: .textBackgroundColor))
+        )
         renderer.scale = 2
         guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
-              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
-            Confirmation.report("Couldn’t export the diagram.", error: DatabaseError("The diagram could not be rendered as a PNG image."))
+            let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
+        else {
+            Confirmation.report(
+                "Couldn’t export the diagram.",
+                error: DatabaseError("The diagram could not be rendered as a PNG image.")
+            )
             return
         }
         let panel = NSSavePanel()
@@ -305,12 +356,14 @@ private struct TableNode: View {
                         .frame(width: 10)
                         Text(column.name).font(.system(size: 11, design: .monospaced)).lineLimit(1)
                         Spacer(minLength: 4)
-                        Text(column.dataType).font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary).lineLimit(1)
+                        Text(column.dataType).font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                            .lineLimit(1)
                     }
                     .frame(height: DiagramModel.rowHeight)
                 }
                 if hiddenCount > 0 {
-                    Text("+ \(hiddenCount) more").font(.system(size: 10)).foregroundStyle(.tertiary).frame(height: DiagramModel.rowHeight)
+                    Text("+ \(hiddenCount) more").font(.system(size: 10)).foregroundStyle(.tertiary)
+                        .frame(height: DiagramModel.rowHeight)
                 }
             }
             .padding(.horizontal, 6)
@@ -319,7 +372,10 @@ private struct TableNode: View {
         .frame(width: DiagramModel.nodeWidth, height: model.height(node), alignment: .top)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: selected ? 2 : 1))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: selected ? 2 : 1)
+        )
         .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
         .help("Drag to move · double-click to open \(node.table.name)")
     }

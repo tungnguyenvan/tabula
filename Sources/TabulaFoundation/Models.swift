@@ -172,7 +172,14 @@ public struct ColumnInfo: Hashable, Sendable, Identifiable {
     public var isPrimaryKey: Bool
     public var comment: String?
 
-    public init(name: String, dataType: String, isNullable: Bool, defaultValue: String?, isPrimaryKey: Bool, comment: String? = nil) {
+    public init(
+        name: String,
+        dataType: String,
+        isNullable: Bool,
+        defaultValue: String?,
+        isPrimaryKey: Bool,
+        comment: String? = nil
+    ) {
         self.name = name
         self.dataType = dataType
         self.isNullable = isNullable
@@ -239,8 +246,14 @@ public struct QueryResult: Sendable {
     /// MySQL protocol origins, separate from PostgreSQL OIDs. Display aliases are never physical names.
     public var mysqlOrigins: [MySQLQueryColumnOrigin]?
 
-    public init(columns: [String] = [], rows: [[String?]] = [], affectedRows: Int? = nil, duration: TimeInterval = 0, statement: String = "",
-                documents: DocumentTexts? = nil) {
+    public init(
+        columns: [String] = [],
+        rows: [[String?]] = [],
+        affectedRows: Int? = nil,
+        duration: TimeInterval = 0,
+        statement: String = "",
+        documents: DocumentTexts? = nil
+    ) {
         self.columns = columns
         self.rows = rows
         self.affectedRows = affectedRows

@@ -27,8 +27,11 @@ public enum MySQLScriptCheck {
     static func check(line: Data.SubSequence, number: Int) throws {
         // Statements mysqldump writes start a line; INSERT data never does with these words.
         let text = String(decoding: line.prefix(80), as: UTF8.self).trimmingCharacters(in: .whitespaces).uppercased()
-        for keyword in ["USE ", "USE`", "CREATE DATABASE", "CREATE SCHEMA", "DROP DATABASE", "DROP SCHEMA"] where text.hasPrefix(keyword) {
-            throw DatabaseError("Line \(number) of the script switches to or creates another database (\(keyword.trimmingCharacters(in: .whitespaces))). Tabula restores only into the selected database: dump it without --databases, or restore this file with mysql in Terminal.")
+        for keyword in ["USE ", "USE`", "CREATE DATABASE", "CREATE SCHEMA", "DROP DATABASE", "DROP SCHEMA"]
+        where text.hasPrefix(keyword) {
+            throw DatabaseError(
+                "Line \(number) of the script switches to or creates another database (\(keyword.trimmingCharacters(in: .whitespaces))). Tabula restores only into the selected database: dump it without --databases, or restore this file with mysql in Terminal."
+            )
         }
     }
 

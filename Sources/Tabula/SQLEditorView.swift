@@ -33,7 +33,11 @@ final class EditorHandle {
 
     private func flash(_ range: NSRange) {
         guard let layoutManager = textView?.layoutManager else { return }
-        layoutManager.addTemporaryAttribute(.backgroundColor, value: NSColor.controlAccentColor.withAlphaComponent(0.22), forCharacterRange: range)
+        layoutManager.addTemporaryAttribute(
+            .backgroundColor,
+            value: NSColor.controlAccentColor.withAlphaComponent(0.22),
+            forCharacterRange: range
+        )
         DispatchQueue.main.asyncAfter(deadline: .now() + Timing.runFlash) { [weak layoutManager] in
             layoutManager?.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
         }
@@ -96,13 +100,16 @@ final class EditorHandle {
     func beautify(dialect: any QueryDialect) {
         guard let textView else { return }
         let selection = textView.selectedRange()
-        let range = selection.length > 0 ? selection : NSRange(location: 0, length: (textView.string as NSString).length)
+        let range =
+            selection.length > 0 ? selection : NSRange(location: 0, length: (textView.string as NSString).length)
         let original = (textView.string as NSString).substring(with: range)
         let formatted = dialect.beautify(original)
         guard formatted != original, textView.shouldChangeText(in: range, replacementString: formatted) else { return }
         textView.replaceCharacters(in: range, with: formatted)
         textView.didChangeText()
-        textView.setSelectedRange(NSRange(location: range.location, length: selection.length > 0 ? (formatted as NSString).length : 0))
+        textView.setSelectedRange(
+            NSRange(location: range.location, length: selection.length > 0 ? (formatted as NSString).length : 0)
+        )
     }
 }
 
@@ -208,8 +215,12 @@ struct SQLEditorView: NSViewRepresentable {
         }
 
         /// The native completion list (⎋, ⌃Space).
-        func textView(_ textView: NSTextView, completions words: [String], forPartialWordRange charRange: NSRange,
-                      indexOfSelectedItem index: UnsafeMutablePointer<Int>?) -> [String] {
+        func textView(
+            _ textView: NSTextView,
+            completions words: [String],
+            forPartialWordRange charRange: NSRange,
+            indexOfSelectedItem index: UnsafeMutablePointer<Int>?
+        ) -> [String] {
             parent.suggest(textView.string, NSMaxRange(charRange)).items
         }
     }
@@ -240,7 +251,10 @@ final class SQLTextView: NSTextView {
     func updateInlineSuggestion() {
         aiTask?.cancel()
         let caret = selectedRange()
-        guard typedCharacter, caret.length == 0, let coordinator else { inlineSuggestion = nil; return }
+        guard typedCharacter, caret.length == 0, let coordinator else {
+            inlineSuggestion = nil
+            return
+        }
         // With AI suggestions on, the grey text comes from the model only; the completion list (⎋) still
         // offers tables, columns and keywords.
         if coordinator.parent.aiSuggest != nil {
@@ -251,11 +265,14 @@ final class SQLTextView: NSTextView {
         let (range, items) = coordinator.parent.suggest(string, caret.location)
         let partial = (string as NSString).substring(with: range)
         // Only complete at the end of a word, never in the middle of one.
-        let nextIsWord = caret.location < (string as NSString).length
-            && (string as NSString).substring(with: NSRange(location: caret.location, length: 1)).rangeOfCharacter(from: .alphanumerics) != nil
+        let nextIsWord =
+            caret.location < (string as NSString).length
+            && (string as NSString).substring(with: NSRange(location: caret.location, length: 1))
+                .rangeOfCharacter(from: .alphanumerics) != nil
         // Right after "schema." or "alias." there is no word yet; the first table or column is offered as is.
         // (Not the completion list: NSTextView runs it modally, which would stall the app while it's open.)
-        let afterDot = caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
+        let afterDot =
+            caret.location > 0 && (string as NSString).character(at: caret.location - 1) == UInt16(UInt8(ascii: "."))
         guard !partial.isEmpty || afterDot, !nextIsWord, let best = items.first, best.count > partial.count else {
             inlineSuggestion = nil
             return
@@ -276,8 +293,10 @@ final class SQLTextView: NSTextView {
         let location = selectedRange().location
         let text = string
         let full = text as NSString
-        let nextIsWord = location < full.length
-            && full.substring(with: NSRange(location: location, length: 1)).rangeOfCharacter(from: .alphanumerics) != nil
+        let nextIsWord =
+            location < full.length
+            && full.substring(with: NSRange(location: location, length: 1)).rangeOfCharacter(from: .alphanumerics)
+                != nil
         guard !nextIsWord else { return }
         if let lastAnswer, lastAnswer.text == text, lastAnswer.location == location {
             inlineSuggestion = (location, lastAnswer.suggestion)
@@ -289,7 +308,8 @@ final class SQLTextView: NSTextView {
             guard !Task.isCancelled else { return }
             let suggestion = await ai(full.substring(to: location), full.substring(from: location))
             guard let self, !Task.isCancelled, let suggestion, self.string == text,
-                  self.selectedRange() == NSRange(location: location, length: 0) else { return }
+                self.selectedRange() == NSRange(location: location, length: 0)
+            else { return }
             self.lastAnswer = (text, location, suggestion)
             self.inlineSuggestion = (location, suggestion)
         }
@@ -303,7 +323,9 @@ final class SQLTextView: NSTextView {
 
     /// Recomputes the suggestion after table or column names arrive, if the caret is still where the user typed.
     func refreshInlineSuggestion() {
-        guard inlineSuggestion == nil, let location = lastTypedLocation, selectedRange() == NSRange(location: location, length: 0) else { return }
+        guard inlineSuggestion == nil, let location = lastTypedLocation,
+            selectedRange() == NSRange(location: location, length: 0)
+        else { return }
         typedCharacter = true
         updateInlineSuggestion()
         typedCharacter = false
@@ -312,7 +334,9 @@ final class SQLTextView: NSTextView {
     func dropInlineSuggestionIfMoved() {
         // Moving the caret away from where the user typed cancels a pending AI request.
         if selectedRange() != NSRange(location: lastTypedLocation ?? -1, length: 0) { aiTask?.cancel() }
-        if let suggestion = inlineSuggestion, selectedRange() != NSRange(location: suggestion.location, length: 0) { inlineSuggestion = nil }
+        if let suggestion = inlineSuggestion, selectedRange() != NSRange(location: suggestion.location, length: 0) {
+            inlineSuggestion = nil
+        }
     }
 
     override func insertTab(_ sender: Any?) {
@@ -350,10 +374,15 @@ final class SQLTextView: NSTextView {
             origin = lastIsNewline ? layoutManager.extraLineFragmentRect.origin : NSPoint(x: rect.maxX, y: rect.minY)
         } else {
             let glyph = layoutManager.glyphIndexForCharacter(at: suggestion.location)
-            origin = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 0), in: textContainer).origin
+            origin =
+                layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 0), in: textContainer).origin
         }
         let point = NSPoint(x: origin.x + textContainerOrigin.x, y: origin.y + textContainerOrigin.y)
-        (suggestion.text as NSString).draw(at: point, withAttributes: [.font: SQLHighlighter.font, .foregroundColor: NSColor.placeholderTextColor])
+        (suggestion.text as NSString)
+            .draw(
+                at: point,
+                withAttributes: [.font: SQLHighlighter.font, .foregroundColor: NSColor.placeholderTextColor]
+            )
     }
 
     override var undoManager: UndoManager? {
@@ -363,11 +392,15 @@ final class SQLTextView: NSTextView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self else { return super.performKeyEquivalent(with: event) }
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        if event.keyCode == KeyCode.return || event.keyCode == KeyCode.enter, flags == [.command] || flags == [.command, .shift] {
+        if event.keyCode == KeyCode.return || event.keyCode == KeyCode.enter,
+            flags == [.command] || flags == [.command, .shift]
+        {
             coordinator?.parent.onRun(flags.contains(.shift))
             return true
         }
-        if event.charactersIgnoringModifiers?.lowercased() == "z", flags == [.command] || flags == [.command, .shift], let undo = undoManager {
+        if event.charactersIgnoringModifiers?.lowercased() == "z", flags == [.command] || flags == [.command, .shift],
+            let undo = undoManager
+        {
             if flags.contains(.shift) { if undo.canRedo { undo.redo() } } else if undo.canUndo { undo.undo() }
             return true
         }
@@ -395,13 +428,16 @@ final class SQLTextView: NSTextView {
         let hasTrailingNewline = parts.last == ""
         if hasTrailingNewline { parts.removeLast() }
         let nonEmpty = parts.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        let allCommented = !nonEmpty.isEmpty && nonEmpty.allSatisfy { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
+        let allCommented =
+            !nonEmpty.isEmpty && nonEmpty.allSatisfy { $0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
         let updated = parts.map { line -> String in
             guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return line }
             if allCommented, let range = line.range(of: "--") {
                 var result = line
                 let after = result.index(range.upperBound, offsetBy: 0)
-                result.removeSubrange(range.lowerBound..<(result[after...].hasPrefix(" ") ? result.index(after: after) : after))
+                result.removeSubrange(
+                    range.lowerBound..<(result[after...].hasPrefix(" ") ? result.index(after: after) : after)
+                )
                 return result
             }
             let indent = line.prefix(while: { $0 == " " || $0 == "\t" })
@@ -411,7 +447,12 @@ final class SQLTextView: NSTextView {
         if shouldChangeText(in: lines, replacementString: replacement) {
             replaceCharacters(in: lines, with: replacement)
             didChangeText()
-            setSelectedRange(NSRange(location: lines.location, length: (replacement as NSString).length - (hasTrailingNewline ? 1 : 0)))
+            setSelectedRange(
+                NSRange(
+                    location: lines.location,
+                    length: (replacement as NSString).length - (hasTrailingNewline ? 1 : 0)
+                )
+            )
         }
     }
 
@@ -436,8 +477,12 @@ final class LineNumberRuler: NSRulerView {
         super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
         clientView = textView
         ruleThickness = 36
-        NotificationCenter.default.addObserver(self, selector: #selector(redraw), name: NSView.boundsDidChangeNotification,
-                                               object: textView.enclosingScrollView?.contentView)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(redraw),
+            name: NSView.boundsDidChangeNotification,
+            object: textView.enclosingScrollView?.contentView
+        )
         textView.enclosingScrollView?.contentView.postsBoundsChangedNotifications = true
     }
 
@@ -446,7 +491,9 @@ final class LineNumberRuler: NSRulerView {
     @objc private func redraw() { needsDisplay = true }
 
     override func drawHashMarksAndLabels(in rect: NSRect) {
-        guard let textView, let layoutManager = textView.layoutManager, let container = textView.textContainer else { return }
+        guard let textView, let layoutManager = textView.layoutManager, let container = textView.textContainer else {
+            return
+        }
         NSColor.textBackgroundColor.setFill()
         bounds.fill()
         let text = textView.string as NSString
@@ -454,7 +501,8 @@ final class LineNumberRuler: NSRulerView {
         let glyphs = layoutManager.glyphRange(forBoundingRect: visible, in: container)
         let characters = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
         var lineNumber = text.substring(to: characters.location).reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
-        let caretLine = text.substring(to: min(textView.selectedRange().location, text.length)).reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
+        let caretLine = text.substring(to: min(textView.selectedRange().location, text.length))
+            .reduce(1) { $1 == "\n" ? $0 + 1 : $0 }
         let inset = textView.textContainerInset.height
         let relativeY = convert(NSPoint.zero, from: textView).y
 
@@ -521,7 +569,9 @@ enum SQLHighlighter {
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
         for token in dialect.tokens(text) {
-            if let color = color(for: token, dialect: dialect) { storage.addAttribute(.foregroundColor, value: color, range: token.range) }
+            if let color = color(for: token, dialect: dialect) {
+                storage.addAttribute(.foregroundColor, value: color, range: token.range)
+            }
         }
         storage.endEditing()
         textView.typingAttributes = [.font: font, .foregroundColor: NSColor.textColor]

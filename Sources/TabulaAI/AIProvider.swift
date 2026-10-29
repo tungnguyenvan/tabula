@@ -64,7 +64,11 @@ public enum AIProviderKind: String, Codable, CaseIterable, Identifiable, Sendabl
     /// Models offered in the chat panel's picker, newest first, as (id, display name).
     public var suggestedModels: [(id: String, name: String)] {
         switch self {
-        case .anthropic: [("claude-opus-5-5", "Claude Opus 5.5"), ("claude-sonnet-5-5", "Claude Sonnet 5.5"), ("claude-haiku-5-5", "Claude Haiku 5.5")]
+        case .anthropic:
+            [
+                ("claude-opus-5-5", "Claude Opus 5.5"), ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+                ("claude-haiku-5-5", "Claude Haiku 5.5"),
+            ]
         case .builtIn, .appleIntelligence, .ollama, .openAICompatible, .claudeCode, .codex: []
         }
     }
@@ -124,7 +128,13 @@ public struct AIEndpoint: Sendable, Equatable {
     /// Reasoning effort, for providers that take one; nil leaves the provider's default.
     public var effort: String?
 
-    public init(kind: AIProviderKind, baseURL: String = "", model: String = "", apiKey: String = "", effort: String? = nil) {
+    public init(
+        kind: AIProviderKind,
+        baseURL: String = "",
+        model: String = "",
+        apiKey: String = "",
+        effort: String? = nil
+    ) {
         self.kind = kind
         self.baseURL = baseURL.isEmpty ? kind.defaultBaseURL : baseURL
         self.model = model
@@ -175,8 +185,15 @@ public struct AISettings: Codable, Equatable, Sendable {
     public func endpoint(for purpose: AIRequest.Purpose, apiKey: String) -> AIEndpoint {
         let kind = provider(for: purpose)
         // Suggestions while typing always use the provider's quickest setting.
-        let effort = purpose == .inline ? nil : efforts[kind.rawValue].flatMap { kind.effortLevels.contains($0) ? $0 : nil }
-        return AIEndpoint(kind: kind, baseURL: baseURL(kind), model: model(kind, for: purpose), apiKey: apiKey, effort: effort)
+        let effort =
+            purpose == .inline ? nil : efforts[kind.rawValue].flatMap { kind.effortLevels.contains($0) ? $0 : nil }
+        return AIEndpoint(
+            kind: kind,
+            baseURL: baseURL(kind),
+            model: model(kind, for: purpose),
+            apiKey: apiKey,
+            effort: effort
+        )
     }
 
     /// The user's own system prompt for `prompt`, or nil for the default.
@@ -266,14 +283,18 @@ public enum SQLPrompts {
 
         var text: String {
             var lines: [String] = []
-            if let defaultSchema { lines.append(isDocument ? "Database: \(defaultSchema)" : "Default schema: \(defaultSchema)") }
-            lines += tables.prefix(Defaults.AI.schemaTableLimit).map { table in
-                guard !table.columns.isEmpty else { return table.name }
-                let columns = table.columns.map { column in
-                    [column.name, column.type, column.isPrimaryKey ? "PK" : nil].compactMap { $0 }.joined(separator: " ")
-                }
-                return "\(table.name)(\(columns.joined(separator: ", ")))"
+            if let defaultSchema {
+                lines.append(isDocument ? "Database: \(defaultSchema)" : "Default schema: \(defaultSchema)")
             }
+            lines += tables.prefix(Defaults.AI.schemaTableLimit)
+                .map { table in
+                    guard !table.columns.isEmpty else { return table.name }
+                    let columns = table.columns.map { column in
+                        [column.name, column.type, column.isPrimaryKey ? "PK" : nil].compactMap { $0 }
+                            .joined(separator: " ")
+                    }
+                    return "\(table.name)(\(columns.joined(separator: ", ")))"
+                }
             if !foreignKeys.isEmpty {
                 lines.append("Foreign keys:")
                 lines += foreignKeys.prefix(Defaults.AI.schemaForeignKeyLimit)
@@ -286,11 +307,13 @@ public enum SQLPrompts {
     static let tableNamesRule = "Write table names exactly as the schema lists them, keeping any schema prefix."
 
     /// The same rule for collections, which the shell reaches as `db.name` or `db.getCollection("name")`.
-    static let collectionNamesRule = "Write collection names exactly as the schema lists them; use db.getCollection(\"name\") "
+    static let collectionNamesRule =
+        "Write collection names exactly as the schema lists them; use db.getCollection(\"name\") "
         + "for names that aren't plain identifiers. A name listed as other_db.collection is in another database: "
         + "db.getSiblingDB(\"other_db\").getCollection(\"collection\")."
     /// Tabula reads shell statements; it doesn't run JavaScript.
-    static let shellRule = "Write MongoDB shell statements only, such as db.orders.find({ … }).sort({ … }) or "
+    static let shellRule =
+        "Write MongoDB shell statements only, such as db.orders.find({ … }).sort({ … }) or "
         + "db.orders.aggregate([ … ]): no variables, loops, functions or print calls. Put each statement on its own line."
 
     /// The system prompts, each editable in Settings › AI. `{database}` becomes the database's name
@@ -311,16 +334,19 @@ public enum SQLPrompts {
         public var defaultTemplate: String {
             switch self {
             case .chat:
-                return "You are the SQL assistant of a {database} database client. Answer briefly. Put every query in a "
+                return
+                    "You are the SQL assistant of a {database} database client. Answer briefly. Put every query in a "
                     + "```sql fenced block. Use only tables and columns from the schema. \(tableNamesRule)"
             case .generate:
                 return "You write {database} SQL for a database client. Use only tables and columns from the schema. "
                     + "\(tableNamesRule) Reply with the SQL alone: no explanation, no Markdown fences. Use a comment line "
                     + "(-- ...) only when something needs a short note."
             case .fix:
-                return "You fix {database} SQL. \(tableNamesRule) Reply with the corrected SQL alone: no explanation, no Markdown fences."
+                return
+                    "You fix {database} SQL. \(tableNamesRule) Reply with the corrected SQL alone: no explanation, no Markdown fences."
             case .inline:
-                return "You complete {database} SQL as the user types. \(tableNamesRule) Reply with only the characters to "
+                return
+                    "You complete {database} SQL as the user types. \(tableNamesRule) Reply with only the characters to "
                     + "insert at <cursor>, at most one line, nothing else. Reply with an empty message if nothing fits."
             }
         }
@@ -333,18 +359,22 @@ extension SQLPrompts.PromptKind {
     public var documentTemplate: String {
         switch self {
         case .chat:
-            return "You are the MongoDB assistant of a database client. Answer briefly. Put every command in a ```javascript "
+            return
+                "You are the MongoDB assistant of a database client. Answer briefly. Put every command in a ```javascript "
                 + "fenced block. \(SQLPrompts.shellRule) Use only collections and fields from the schema. \(SQLPrompts.collectionNamesRule) "
                 + "The schema's fields are sampled from documents."
         case .generate:
-            return "You write MongoDB shell commands for a database client. \(SQLPrompts.shellRule) Use only collections and fields "
+            return
+                "You write MongoDB shell commands for a database client. \(SQLPrompts.shellRule) Use only collections and fields "
                 + "from the schema. \(SQLPrompts.collectionNamesRule) Reply with the commands alone: no explanation, no Markdown "
                 + "fences. Use a comment line (// ...) only when something needs a short note."
         case .fix:
-            return "You fix MongoDB shell commands. \(SQLPrompts.shellRule) \(SQLPrompts.collectionNamesRule) Reply with the "
+            return
+                "You fix MongoDB shell commands. \(SQLPrompts.shellRule) \(SQLPrompts.collectionNamesRule) Reply with the "
                 + "corrected command alone: no explanation, no Markdown fences."
         case .inline:
-            return "You complete MongoDB shell commands as the user types. \(SQLPrompts.collectionNamesRule) Reply with only the "
+            return
+                "You complete MongoDB shell commands as the user types. \(SQLPrompts.collectionNamesRule) Reply with only the "
                 + "characters to insert at <cursor>, at most one line, nothing else. Reply with an empty message if nothing fits."
         }
     }
@@ -353,7 +383,8 @@ extension SQLPrompts.PromptKind {
 extension SQLPrompts {
     /// The instructions for a request: the user's own template if set, else the default.
     static func instructions(_ prompt: PromptKind, custom: String?, kind: DatabaseKind) -> String {
-        let template = custom.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+        let template =
+            custom.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
             ?? (kind.isDocument ? prompt.documentTemplate : prompt.defaultTemplate)
         return template.replacingOccurrences(of: "{database}", with: kind.displayName)
     }
@@ -361,19 +392,39 @@ extension SQLPrompts {
     /// What the prompt calls the user's code.
     static func language(_ kind: DatabaseKind) -> String { kind.isDocument ? "MongoDB shell commands" : "SQL" }
 
-    public static func generate(description: String, current: String?, schema: Schema, kind: DatabaseKind,
-                                instructions custom: String? = nil) -> AIRequest {
+    public static func generate(
+        description: String,
+        current: String?,
+        schema: Schema,
+        kind: DatabaseKind,
+        instructions custom: String? = nil
+    ) -> AIRequest {
         var prompt = "Schema:\n\(schema.text)\n\n"
         if let current, !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             prompt += "Current \(language(kind)):\n\(current)\n\nChange it as follows: \(description)"
         } else {
             prompt += "Write \(language(kind)) for: \(description)"
         }
-        return AIRequest(purpose: .generate, instructions: instructions(.generate, custom: custom, kind: kind), prompt: prompt)
+        return AIRequest(
+            purpose: .generate,
+            instructions: instructions(.generate, custom: custom, kind: kind),
+            prompt: prompt
+        )
     }
 
-    public static func fix(sql: String, error: String, schema: Schema, kind: DatabaseKind, instructions custom: String? = nil) -> AIRequest {
-        AIRequest(purpose: .generate, instructions: instructions(.fix, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\n\(language(kind)):\n\(sql)\n\nThe server answered:\n\(redacted(error, kind: kind))")
+    public static func fix(
+        sql: String,
+        error: String,
+        schema: Schema,
+        kind: DatabaseKind,
+        instructions custom: String? = nil
+    ) -> AIRequest {
+        AIRequest(
+            purpose: .generate,
+            instructions: instructions(.fix, custom: custom, kind: kind),
+            prompt:
+                "Schema:\n\(schema.text)\n\n\(language(kind)):\n\(sql)\n\nThe server answered:\n\(redacted(error, kind: kind))"
+        )
     }
 
     /// Database errors can quote row values ("Key (email)=(an@example.com) already exists", "invalid input
@@ -388,7 +439,7 @@ extension SQLPrompts {
         }
         let patterns = [
             #"\)=\((?:[^()]|\([^()]*\))*\)"#,  // Postgres key details: (column)=(value)
-            #"'(?:[^']|'')*'"#,                    // quoted literals (MySQL quotes the values it reports)
+            #"'(?:[^']|'')*'"#,  // quoted literals (MySQL quotes the values it reports)
         ]
         let replacements = [")=(…)", "'…'"]
         for (pattern, replacement) in zip(patterns, replacements) {
@@ -418,15 +469,23 @@ extension SQLPrompts {
     /// One turn of the chat panel: earlier turns, the editor's SQL and the schema come along.
     /// `tools` describes the assistant's tools (`AgentProtocol.instructions`); `steps` are the tool calls made
     /// for this question so far, with their results. Without tools, the model is told to answer.
-    public static func chat(question: String, history: [(role: String, text: String)], editorSQL: String?,
-                            schema: Schema, kind: DatabaseKind, instructions custom: String? = nil,
-                            tools: String? = nil, steps: [(call: AgentToolCall, result: String)] = []) -> AIRequest {
+    public static func chat(
+        question: String,
+        history: [(role: String, text: String)],
+        editorSQL: String?,
+        schema: Schema,
+        kind: DatabaseKind,
+        instructions custom: String? = nil,
+        tools: String? = nil,
+        steps: [(call: AgentToolCall, result: String)] = []
+    ) -> AIRequest {
         var prompt = "Schema:\n\(schema.text)\n\n"
         if let editorSQL, !editorSQL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             prompt += "\(language(kind)) in the editor:\n\(editorSQL.prefix(Defaults.AI.chatEditorLength))\n\n"
         }
         if !history.isEmpty {
-            prompt += "Conversation so far:\n" + history.map { "\($0.role): \($0.text)" }.joined(separator: "\n\n") + "\n\n"
+            prompt +=
+                "Conversation so far:\n" + history.map { "\($0.role): \($0.text)" }.joined(separator: "\n\n") + "\n\n"
         }
         prompt += "User: \(question)"
         if !steps.isEmpty {
@@ -434,7 +493,9 @@ extension SQLPrompts {
             for step in steps {
                 prompt += "\n\n```tool\n\(step.call.json)\n```\nResult:\n\(step.result)"
             }
-            prompt += tools == nil ? "\n\nNo more tools now: answer the user with what you found."
+            prompt +=
+                tools == nil
+                ? "\n\nNo more tools now: answer the user with what you found."
                 : "\n\nContinue: use another tool, or answer the user."
         }
         var system = instructions(.chat, custom: custom, kind: kind)
@@ -444,14 +505,25 @@ extension SQLPrompts {
 
     /// Asks for the text that continues `before`, placed before `after`. Only the text near the caret is
     /// sent, which keeps the request small and fast.
-    public static func inline(before: String, after: String, schema: Schema, kind: DatabaseKind,
-                              instructions custom: String? = nil) -> AIRequest {
-        let before = String(before.suffix(Defaults.AI.inlineContextLength)), after = String(after.prefix(Defaults.AI.inlineContextLength / 4))
+    public static func inline(
+        before: String,
+        after: String,
+        schema: Schema,
+        kind: DatabaseKind,
+        instructions custom: String? = nil
+    ) -> AIRequest {
+        let before = String(before.suffix(Defaults.AI.inlineContextLength))
+        let after = String(after.prefix(Defaults.AI.inlineContextLength / 4))
         // For fill-in-the-middle models the schema rides along as comments above the text.
         let comment = kind.isDocument ? "// " : "-- "
         let header = schema.text.split(separator: "\n").map { comment + $0 }.joined(separator: "\n")
         let fill = AIRequest.Fill(prefix: header + "\n" + before, suffix: after)
-        return AIRequest(purpose: .inline, instructions: instructions(.inline, custom: custom, kind: kind), prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)", fill: fill)
+        return AIRequest(
+            purpose: .inline,
+            instructions: instructions(.inline, custom: custom, kind: kind),
+            prompt: "Schema:\n\(schema.text)\n\n\(before)<cursor>\(after)",
+            fill: fill
+        )
     }
 
     /// Removes Markdown fences and chatter that models add despite instructions.

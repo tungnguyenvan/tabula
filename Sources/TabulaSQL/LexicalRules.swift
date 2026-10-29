@@ -19,8 +19,15 @@ public struct LexicalRules: Sendable, Equatable {
     /// `"name"` and `` `name` `` are names rather than strings (SQL).
     public var quotedIdentifiers: Bool
 
-    public init(dashDashComments: Bool, hashComments: Bool, slashSlashComments: Bool, backslashEscapes: Bool,
-                doubledQuotes: Bool, dollarQuotes: Bool, quotedIdentifiers: Bool) {
+    public init(
+        dashDashComments: Bool,
+        hashComments: Bool,
+        slashSlashComments: Bool,
+        backslashEscapes: Bool,
+        doubledQuotes: Bool,
+        dollarQuotes: Bool,
+        quotedIdentifiers: Bool
+    ) {
         self.dashDashComments = dashDashComments
         self.hashComments = hashComments
         self.slashSlashComments = slashSlashComments
@@ -37,9 +44,15 @@ public enum SQLFlavor: Sendable, Equatable, CaseIterable {
     case postgres, mysql, sqlite
 
     public var lexicalRules: LexicalRules {
-        LexicalRules(dashDashComments: true, hashComments: self == .mysql, slashSlashComments: false,
-                     backslashEscapes: self == .mysql, doubledQuotes: true, dollarQuotes: self == .postgres,
-                     quotedIdentifiers: true)
+        LexicalRules(
+            dashDashComments: true,
+            hashComments: self == .mysql,
+            slashSlashComments: false,
+            backslashEscapes: self == .mysql,
+            doubledQuotes: true,
+            dollarQuotes: self == .postgres,
+            quotedIdentifiers: true
+        )
     }
 
     /// The SQL flavor of a database kind, or nil for the document and key-value stores.

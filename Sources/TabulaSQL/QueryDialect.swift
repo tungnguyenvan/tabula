@@ -17,8 +17,16 @@ public struct TableChanges: Sendable {
     public var edited: [Int: [Int: String?]]
     public var inserted: [[Int: String?]]
 
-    public init(table: TableRef, columns: [String], rows: [[String?]], documents: DocumentTexts?, keyColumns: [Int],
-                deleted: Set<Int>, edited: [Int: [Int: String?]], inserted: [[Int: String?]]) {
+    public init(
+        table: TableRef,
+        columns: [String],
+        rows: [[String?]],
+        documents: DocumentTexts?,
+        keyColumns: [Int],
+        deleted: Set<Int>,
+        edited: [Int: [Int: String?]],
+        inserted: [[Int: String?]]
+    ) {
         self.table = table
         self.columns = columns
         self.rows = rows
@@ -31,9 +39,10 @@ public struct TableChanges: Sendable {
 
     /// Edited rows that aren't also deleted, in row order, with their changes in column order.
     public var updates: [(row: Int, values: [(column: String, value: String?)])] {
-        edited.keys.sorted().filter { !deleted.contains($0) }.map { row in
-            (row, (edited[row] ?? [:]).sorted { $0.key < $1.key }.map { (columns[$0.key], $0.value) })
-        }
+        edited.keys.sorted().filter { !deleted.contains($0) }
+            .map { row in
+                (row, (edited[row] ?? [:]).sorted { $0.key < $1.key }.map { (columns[$0.key], $0.value) })
+            }
     }
 
     public var insertions: [[(column: String, value: String?)]] {

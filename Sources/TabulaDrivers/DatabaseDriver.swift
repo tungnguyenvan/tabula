@@ -58,7 +58,9 @@ extension DatabaseDriver {
                     _ = try await execute(statement)
                 } catch {
                     let saved = index == 0 ? "" : " The \(index) change\(index == 1 ? "" : "s") before it were saved."
-                    throw DatabaseError("Change \(index + 1) of \(statements.count) failed: \(error.localizedDescription)\(saved)")
+                    throw DatabaseError(
+                        "Change \(index + 1) of \(statements.count) failed: \(error.localizedDescription)\(saved)"
+                    )
                 }
             }
             return

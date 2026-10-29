@@ -43,7 +43,8 @@ public enum ChatSegment: Equatable, Sendable {
         var index = 0
         while index < lines.count {
             if index + 1 < lines.count, MarkdownTable.isRow(lines[index]),
-               let alignments = MarkdownTable.separator(lines[index + 1]) {
+                let alignments = MarkdownTable.separator(lines[index + 1])
+            {
                 var rows: [[String]] = []
                 var next = index + 2
                 while next < lines.count, MarkdownTable.isRow(lines[next]) {
@@ -51,7 +52,9 @@ public enum ChatSegment: Equatable, Sendable {
                     next += 1
                 }
                 flushText()
-                segments.append(.table(MarkdownTable(header: MarkdownTable.cells(lines[index]), alignments: alignments, rows: rows)))
+                segments.append(
+                    .table(MarkdownTable(header: MarkdownTable.cells(lines[index]), alignments: alignments, rows: rows))
+                )
                 index = next
             } else {
                 pending.append(lines[index])
@@ -118,7 +121,8 @@ public struct MarkdownTable: Equatable, Sendable {
         let cells = cells(line)
         var alignments: [Alignment] = []
         for cell in cells {
-            let left = cell.hasPrefix(":"), right = cell.hasSuffix(":")
+            let left = cell.hasPrefix(":")
+            let right = cell.hasSuffix(":")
             let dashes = cell.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
             guard !dashes.isEmpty, dashes.allSatisfy({ $0 == "-" }) else { return nil }
             alignments.append(left && right ? .center : right ? .trailing : .leading)

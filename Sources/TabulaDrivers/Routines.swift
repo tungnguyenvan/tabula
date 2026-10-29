@@ -31,7 +31,15 @@ public struct RoutineInfo: Identifiable, Hashable, Sendable {
     public var id: String { "\(kind.rawValue):\(schema).\(table.map { "\($0)." } ?? "")\(name)(\(arguments))" }
     public var displayName: String { kind == .trigger || arguments.isEmpty ? name : "\(name)(\(arguments))" }
 
-    public init(kind: Kind, schema: String, name: String, arguments: String = "", table: String? = nil, detail: String = "", oid: String? = nil) {
+    public init(
+        kind: Kind,
+        schema: String,
+        name: String,
+        arguments: String = "",
+        table: String? = nil,
+        detail: String = "",
+        oid: String? = nil
+    ) {
         self.kind = kind
         self.schema = schema
         self.name = name

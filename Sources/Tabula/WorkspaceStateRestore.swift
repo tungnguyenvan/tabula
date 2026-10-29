@@ -15,7 +15,9 @@ extension WorkspaceModel {
 
     /// Saved states, next to the connections (in TABULA_DATA_DIR when that is set).
     nonisolated static let stateStore: WorkspaceStateStore = {
-        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else { return WorkspaceStateStore() }
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else {
+            return WorkspaceStateStore()
+        }
         return WorkspaceStateStore(base: URL(fileURLWithPath: directory))
     }()
 
@@ -28,15 +30,27 @@ extension WorkspaceModel {
             case .query(let model):
                 saved.append(.query(title: model.title, sql: model.sql, file: model.fileURL))
             case .table(let model):
-                saved.append(.table(schema: model.table.schema, name: model.table.name, kind: model.table.kind.rawValue, mode: model.mode.rawValue))
+                saved.append(
+                    .table(
+                        schema: model.table.schema,
+                        name: model.table.name,
+                        kind: model.table.kind.rawValue,
+                        mode: model.mode.rawValue
+                    )
+                )
             case .diagram, .metrics, .routine:
                 continue
             }
             if tab.id == selectedTabID { selected = saved.count - 1 }
         }
         let database = currentDatabase.flatMap { $0 == savedDatabase ? nil : $0 }
-        return WorkspaceState(database: database, schema: selectedSchema.isEmpty ? nil : selectedSchema, tabs: saved,
-                              selected: selected, history: history)
+        return WorkspaceState(
+            database: database,
+            schema: selectedSchema.isEmpty ? nil : selectedSchema,
+            tabs: saved,
+            selected: selected,
+            history: history
+        )
     }
 
     /// Writes what is open, when it changed since the last save. Nothing is written before the saved state was
@@ -79,8 +93,14 @@ extension WorkspaceModel {
                 if let file, let text = Self.contents(of: file) { model.attach(file, savedText: text) }
                 tab = .query(model)
             case .table(let schema, let name, let kind, let mode):
-                if schema == selectedSchema, !tables.contains(where: { $0.schema == schema && $0.name == name }) { continue }
-                let model = TableTabModel(table: TableRef(schema: schema, name: name, kind: TableKind(rawValue: kind) ?? .table), driver: driver, connectionTag: config.tag)
+                if schema == selectedSchema, !tables.contains(where: { $0.schema == schema && $0.name == name }) {
+                    continue
+                }
+                let model = TableTabModel(
+                    table: TableRef(schema: schema, name: name, kind: TableKind(rawValue: kind) ?? .table),
+                    driver: driver,
+                    connectionTag: config.tag
+                )
                 model.mode = TableTabModel.Mode(rawValue: mode) ?? .data
                 unloadedTabs.insert(model.id)
                 tab = .table(model)
@@ -101,7 +121,9 @@ extension WorkspaceModel {
 
     /// Loads a restored table tab's rows the first time it is selected.
     func loadIfUnloaded() {
-        guard let id = selectedTabID, unloadedTabs.remove(id) != nil, case .table(let model) = selectedTab else { return }
+        guard let id = selectedTabID, unloadedTabs.remove(id) != nil, case .table(let model) = selectedTab else {
+            return
+        }
         Task { await model.reload() }
     }
 

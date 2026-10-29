@@ -12,12 +12,16 @@ extension ConnectionConfig {
         components.host = resolvedHost
         components.port = kind == .mongodb && srv == true ? nil : port
         // URLComponents leaves ":" in a user name, where it would start the password.
-        if !user.isEmpty { components.percentEncodedUser = user.addingPercentEncoding(withAllowedCharacters: Self.userCharacters) }
+        if !user.isEmpty {
+            components.percentEncodedUser = user.addingPercentEncoding(withAllowedCharacters: Self.userCharacters)
+        }
         if let password, !password.isEmpty { components.password = password }
         let path = kind == .redis ? (database.isEmpty ? "" : database) : database
         if !path.isEmpty { components.path = "/" + path }
         var parameters = tlsParameters
-        if kind == .mongodb, let authSource, !authSource.isEmpty { parameters.append(URLQueryItem(name: "authSource", value: authSource)) }
+        if kind == .mongodb, let authSource, !authSource.isEmpty {
+            parameters.append(URLQueryItem(name: "authSource", value: authSource))
+        }
         if !parameters.isEmpty { components.queryItems = parameters }
         // A replica set lists its members, "a:27017,b:27017", which URLComponents won't take as a host.
         if kind == .mongodb, resolvedHost.contains(",") {
@@ -25,10 +29,11 @@ extension ConnectionConfig {
             components.host = placeholder
             components.port = nil
             // Members without their own port use the connection's, as the driver does.
-            let members = resolvedHost.split(separator: ",").map { member -> String in
-                let text = member.trimmingCharacters(in: .whitespaces)
-                return text.contains(":") ? text : "\(text):\(port)"
-            }
+            let members = resolvedHost.split(separator: ",")
+                .map { member -> String in
+                    let text = member.trimmingCharacters(in: .whitespaces)
+                    return text.contains(":") ? text : "\(text):\(port)"
+                }
             return components.string?.replacingOccurrences(of: placeholder, with: members.joined(separator: ",")) ?? ""
         }
         return components.string ?? ""
@@ -54,7 +59,9 @@ extension ConnectionConfig {
         case .postgres: return [URLQueryItem(name: "sslmode", value: tls == .verifyFull ? "verify-full" : "require")]
         case .mysql: return [URLQueryItem(name: "ssl-mode", value: tls == .verifyFull ? "VERIFY_IDENTITY" : "REQUIRED")]
         case .mongodb:
-            if srv == true { return tls == .verifyFull ? [] : [URLQueryItem(name: "tlsAllowInvalidCertificates", value: "true")] }
+            if srv == true {
+                return tls == .verifyFull ? [] : [URLQueryItem(name: "tlsAllowInvalidCertificates", value: "true")]
+            }
             return [URLQueryItem(name: "tls", value: "true")]
                 + (tls == .verifyFull ? [] : [URLQueryItem(name: "tlsAllowInvalidCertificates", value: "true")])
         // rediss:// alone means a verified certificate, as in redis-cli and redis-py.

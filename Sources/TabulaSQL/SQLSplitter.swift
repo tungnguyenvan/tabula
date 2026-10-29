@@ -49,7 +49,8 @@ public enum SQLSplitter {
             let word = word.uppercased()
             words.append(word)
             guard flavor != .postgres, words.first == "CREATE",
-                  words.contains(where: { ["TRIGGER", "PROCEDURE", "FUNCTION", "EVENT"].contains($0) }) else { return }
+                words.contains(where: { ["TRIGGER", "PROCEDURE", "FUNCTION", "EVENT"].contains($0) })
+            else { return }
             let afterEnd = words.dropLast().last == "END"
             switch word {
             case "BEGIN", "CASE":
@@ -66,14 +67,24 @@ public enum SQLSplitter {
         }
 
         func flush() {
-            defer { current = ""; segmentStart = i + 1; words = []; blockDepth = 0 }
+            defer {
+                current = ""
+                segmentStart = i + 1
+                words = []
+                blockDepth = 0
+            }
             let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty && !isOnlyComments(trimmed, flavor: flavor) else { return }
             let leading = current.prefix(while: { $0.isWhitespace || $0.isNewline }).count
             let trailing = current.reversed().prefix(while: { $0.isWhitespace || $0.isNewline }).count
             let start = segmentStart + leading
             let end = segmentStart + current.count - trailing
-            statements.append(ScriptStatement(text: trimmed, range: NSRange(location: utf16Offsets[start], length: utf16Offsets[end] - utf16Offsets[start])))
+            statements.append(
+                ScriptStatement(
+                    text: trimmed,
+                    range: NSRange(location: utf16Offsets[start], length: utf16Offsets[end] - utf16Offsets[start])
+                )
+            )
         }
 
         while i < chars.count {
@@ -81,56 +92,80 @@ public enum SQLSplitter {
             let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
 
             if c == "-" && next == "-" || (c == "#" && flavor.lexicalRules.hashComments) {
-                while i < chars.count && chars[i] != "\n" { current.append(chars[i]); i += 1 }
+                while i < chars.count && chars[i] != "\n" {
+                    current.append(chars[i])
+                    i += 1
+                }
                 continue
             }
             if c == "/" && next == "*" {
-                current.append("/*"); i += 2
+                current.append("/*")
+                i += 2
                 while i < chars.count && !(chars[i] == "*" && i + 1 < chars.count && chars[i + 1] == "/") {
-                    current.append(chars[i]); i += 1
+                    current.append(chars[i])
+                    i += 1
                 }
-                if i < chars.count { current.append("*/"); i += 2 }
+                if i < chars.count {
+                    current.append("*/")
+                    i += 2
+                }
                 continue
             }
             if c == "'" || c == "\"" || c == "`" {
-                current.append(c); i += 1
+                current.append(c)
+                i += 1
                 while i < chars.count {
                     let q = chars[i]
-                    current.append(q); i += 1
+                    current.append(q)
+                    i += 1
                     if q == "\\" && flavor.lexicalRules.backslashEscapes && i < chars.count {
-                        current.append(chars[i]); i += 1
+                        current.append(chars[i])
+                        i += 1
                         continue
                     }
                     if q == c {
                         // Doubled quote is an escaped quote.
-                        if i < chars.count && chars[i] == c { current.append(c); i += 1; continue }
+                        if i < chars.count && chars[i] == c {
+                            current.append(c)
+                            i += 1
+                            continue
+                        }
                         break
                     }
                 }
                 continue
             }
             if c == "$" && flavor.lexicalRules.dollarQuotes, let tag = dollarTag(chars, at: i) {
-                current.append(contentsOf: tag); i += tag.count
+                current.append(contentsOf: tag)
+                i += tag.count
                 while i < chars.count {
                     if chars[i] == "$", matches(chars, at: i, tag: tag) {
-                        current.append(contentsOf: tag); i += tag.count
+                        current.append(contentsOf: tag)
+                        i += tag.count
                         break
                     }
-                    current.append(chars[i]); i += 1
+                    current.append(chars[i])
+                    i += 1
                 }
                 continue
             }
             if c == ";" && blockDepth == 0 {
-                flush(); i += 1
+                flush()
+                i += 1
                 continue
             }
             if isWordCharacter(c) {
                 var word = ""
-                while i < chars.count, isWordCharacter(chars[i]) { word.append(chars[i]); current.append(chars[i]); i += 1 }
+                while i < chars.count, isWordCharacter(chars[i]) {
+                    word.append(chars[i])
+                    current.append(chars[i])
+                    i += 1
+                }
                 note(word)
                 continue
             }
-            current.append(c); i += 1
+            current.append(c)
+            i += 1
         }
         flush()
         return statements
@@ -159,7 +194,9 @@ public enum SQLSplitter {
             stripped.removeSubrange(range)
         }
         let lines = stripped.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-        return lines.allSatisfy { $0.isEmpty || $0.hasPrefix("--") || (flavor.lexicalRules.hashComments && $0.hasPrefix("#")) }
+        return lines.allSatisfy {
+            $0.isEmpty || $0.hasPrefix("--") || (flavor.lexicalRules.hashComments && $0.hasPrefix("#"))
+        }
     }
 
     /// Whether a statement produces a result set, judged by its leading keyword.

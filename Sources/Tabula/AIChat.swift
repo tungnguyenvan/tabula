@@ -72,7 +72,12 @@ final class AIChatModel {
     /// Writes the current conversation into the saved list.
     private func save() {
         guard let currentID, messages.contains(where: { $0.role == .user }) else { return }
-        let conversation = ChatConversation(id: currentID, title: ChatConversation.title(for: messages), updated: Date(), messages: messages)
+        let conversation = ChatConversation(
+            id: currentID,
+            title: ChatConversation.title(for: messages),
+            updated: Date(),
+            messages: messages
+        )
         conversations.removeAll { $0.id == currentID }
         conversations.insert(conversation, at: 0)
         persist()
@@ -132,19 +137,34 @@ final class AIChatModel {
                 for step in 0..<Defaults.AI.agentMaxSteps {
                     let last = step == Defaults.AI.agentMaxSteps - 1
                     if step > 0 { reply = startReply(preparing: false) }
-                    let request = SQLPrompts.chat(question: question, history: history, editorSQL: editorSQL, schema: schema, kind: kind,
-                                                  instructions: AIService.shared.settings.instructions(.chat),
-                                                  tools: last ? nil : tools, steps: steps)
+                    let request = SQLPrompts.chat(
+                        question: question,
+                        history: history,
+                        editorSQL: editorSQL,
+                        schema: schema,
+                        kind: kind,
+                        instructions: AIService.shared.settings.instructions(.chat),
+                        tools: last ? nil : tools,
+                        steps: steps
+                    )
                     try await receive(AIService.shared.stream(request), into: reply)
                     // A cancelled stream ends without an error; a stopped answer must not go on to use a tool.
                     try Task.checkCancellation()
                     guard self.run == run else { throw CancellationError() }
-                    guard !last, let call = messages.first(where: { $0.id == reply })
-                        .flatMap({ AgentProtocol.call(in: $0.text) }) else { break }
+                    guard !last,
+                        let call = messages.first(where: { $0.id == reply })
+                            .flatMap({ AgentProtocol.call(in: $0.text) })
+                    else { break }
                     // What the model wrote before the request stays; the request shows as a tool step.
                     update(reply) { $0.text = AgentProtocol.visibleText($0.text) }
                     finish(reply)
-                    let result = try await use(call, workspace: workspace, canQuery: canQuery, askFirst: askFirst, run: run)
+                    let result = try await use(
+                        call,
+                        workspace: workspace,
+                        canQuery: canQuery,
+                        askFirst: askFirst,
+                        run: run
+                    )
                     steps.append((call, result))
                     save()
                 }
@@ -155,13 +175,26 @@ final class AIChatModel {
     }
 
     /// Runs a tool call, after asking when it is a Production query, and shows it in the conversation.
-    private func use(_ call: AgentToolCall, workspace: WorkspaceModel, canQuery: Bool, askFirst: Bool, run: UUID) async throws -> String {
+    private func use(
+        _ call: AgentToolCall,
+        workspace: WorkspaceModel,
+        canQuery: Bool,
+        askFirst: Bool,
+        run: UUID
+    ) async throws -> String {
         let isQuery = call.tool == .runQuery
-        let step = Message(role: .tool, text: "", tool: .init(call: call, status: isQuery && askFirst ? .awaitingApproval : .running))
+        let step = Message(
+            role: .tool,
+            text: "",
+            tool: .init(call: call, status: isQuery && askFirst ? .awaitingApproval : .running)
+        )
         messages.append(step)
         revision += 1
         func done(_ status: Message.ToolStep.Status, _ result: String) -> String {
-            update(step.id) { $0.tool?.status = status; $0.tool?.result = result }
+            update(step.id) {
+                $0.tool?.status = status
+                $0.tool?.result = result
+            }
             return result
         }
         if isQuery && !canQuery {
@@ -176,7 +209,9 @@ final class AIChatModel {
             }
             try Task.checkCancellation()
             guard self.run == run else { throw CancellationError() }
-            guard allowed else { return done(.denied, "The user didn't allow this query. Answer without it, or suggest it as SQL.") }
+            guard allowed else {
+                return done(.denied, "The user didn't allow this query. Answer without it, or suggest it as SQL.")
+            }
             update(step.id) { $0.tool?.status = .running }
         }
         let toolbox = try await workspace.agentToolbox()
@@ -211,9 +246,13 @@ final class AIChatModel {
                 return text.isEmpty ? nil : ("Assistant", text)
             case .tool:
                 guard let step = message.tool, step.status == .done else { return nil }
-                let result = step.result.count > Defaults.AI.agentHistoryResultLength
+                let result =
+                    step.result.count > Defaults.AI.agentHistoryResultLength
                     ? String(step.result.prefix(Defaults.AI.agentHistoryResultLength)) + "…" : step.result
-                return ("Tool", "\(step.call.summary): \(step.call.query ?? step.call.table ?? step.call.schema ?? "")\n\(result)")
+                return (
+                    "Tool",
+                    "\(step.call.summary): \(step.call.query ?? step.call.table ?? step.call.schema ?? "")\n\(result)"
+                )
             }
         }
     }
@@ -222,7 +261,8 @@ final class AIChatModel {
     private func receive(_ stream: AIStream, into id: UUID) async throws {
         let started = Date()
         var lastRefresh = Date.distantPast
-        var text = "", thinking = ""
+        var text = ""
+        var thinking = ""
         func flush() {
             update(id) { message in
                 message.thinking += thinking
@@ -258,12 +298,19 @@ final class AIChatModel {
         messages.append(reply)
         busy = true
         task = Task {
-            defer { busy = false; update(reply.id) { $0.streaming = false } }
+            defer {
+                busy = false
+                update(reply.id) { $0.streaming = false }
+            }
             let stream = AIStream { continuation in
                 Task {
-                    for word in thinking.split(separator: " ") { try await Task.sleep(for: piece); continuation.yield(.thinking(word + " ")) }
+                    for word in thinking.split(separator: " ") {
+                        try await Task.sleep(for: piece)
+                        continuation.yield(.thinking(word + " "))
+                    }
                     for word in answer.split(separator: " ", omittingEmptySubsequences: false) {
-                        try await Task.sleep(for: piece); continuation.yield(.text(word + " "))
+                        try await Task.sleep(for: piece)
+                        continuation.yield(.text(word + " "))
                     }
                     continuation.finish()
                 }
@@ -281,9 +328,13 @@ final class AIChatModel {
     /// Ends a reply: it stops showing progress, and one that never got any text disappears.
     private func finish(_ id: UUID) {
         if replyID == id { replyID = nil }
-        update(id) { $0.streaming = false; $0.preparing = false }
+        update(id) {
+            $0.streaming = false
+            $0.preparing = false
+        }
         if let index = messages.firstIndex(where: { $0.id == id }), messages[index].role == .assistant,
-           AgentProtocol.visibleText(messages[index].text).isEmpty, messages[index].thinking.isEmpty {
+            AgentProtocol.visibleText(messages[index].text).isEmpty, messages[index].thinking.isEmpty
+        {
             messages.remove(at: index)
         }
     }
@@ -297,7 +348,8 @@ final class AIChatModel {
             approval.continuation.resume(returning: false)
         }
         if let replyID { finish(replyID) }
-        for index in messages.indices where messages[index].tool.map({ $0.status == .running || $0.status == .awaitingApproval }) == true {
+        for index in messages.indices
+        where messages[index].tool.map({ $0.status == .running || $0.status == .awaitingApproval }) == true {
             messages[index].tool?.status = .stopped
         }
         if run != nil {
@@ -336,7 +388,8 @@ struct AIChatView: View {
                         }
 
                         if let error = chat.error {
-                            Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled)
+                            Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                                .textSelection(.enabled)
                         }
                         Color.clear.frame(height: 1).id(Self.endID)
                             .onAppear { atBottom = true }
@@ -391,7 +444,10 @@ struct AIChatView: View {
             .menuStyle(.borderlessButton)
             .help("Earlier conversations with this connection")
             Spacer(minLength: 0)
-            Button { chat.newConversation(); inputFocused = true } label: {
+            Button {
+                chat.newConversation()
+                inputFocused = true
+            } label: {
                 Label("New Chat", systemImage: "square.and.pencil")
             }
             .labelStyle(.iconOnly)
@@ -408,10 +464,12 @@ struct AIChatView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding) {
             Label("Ask about this database", systemImage: "sparkles").font(.headline)
-            Text(AIService.shared.settings.assistantQueries
-                 ? "Write or explain queries, find tables, or change the SQL in the editor. The AI sees table and column names, keys and the editor's SQL, and can run read-only queries to look at the data\(workspace.config.tag == .production ? " after you allow each one" : ""). Earlier conversations are under the title above."
-                 : "Write or explain queries, find tables, or change the SQL in the editor. The AI sees table and column names, keys and the editor's SQL, never rows. Earlier conversations are under the title above.")
-                .font(.callout).foregroundStyle(.secondary)
+            Text(
+                AIService.shared.settings.assistantQueries
+                    ? "Write or explain queries, find tables, or change the SQL in the editor. The AI sees table and column names, keys and the editor's SQL, and can run read-only queries to look at the data\(workspace.config.tag == .production ? " after you allow each one" : ""). Earlier conversations are under the title above."
+                    : "Write or explain queries, find tables, or change the SQL in the editor. The AI sees table and column names, keys and the editor's SQL, never rows. Earlier conversations are under the title above."
+            )
+            .font(.callout).foregroundStyle(.secondary)
             if !AIService.shared.settings.assistantQueries && AIService.shared.refusal(for: workspace.config) == nil {
                 SettingsLink { Text("Let the AI run read-only queries…") }
             }
@@ -439,15 +497,21 @@ struct AIChatView: View {
                     Button("New Chat") { chat.newConversation() }.disabled(chat.messages.isEmpty)
                     Button("Edit Chat Instructions…") { editingInstructions = true }
                     SettingsLink { Text("AI Settings…") }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .help("More")
                 if chat.busy {
-                    Button { chat.stop() } label: { Image(systemName: "stop.circle.fill").font(.title2) }
-                        .buttonStyle(.borderless)
-                        .help("Stop")
+                    Button {
+                        chat.stop()
+                    } label: {
+                        Image(systemName: "stop.circle.fill").font(.title2)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Stop")
                 } else {
                     Button(action: send) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
                         .buttonStyle(.borderless)
@@ -457,7 +521,10 @@ struct AIChatView: View {
             }
         }
         .padding(Layout.barPadding)
-        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: Layout.Chat.composerRadius))
+        .background(
+            Color(nsColor: .textBackgroundColor),
+            in: RoundedRectangle(cornerRadius: Layout.Chat.composerRadius)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: Layout.Chat.composerRadius)
                 .strokeBorder(inputFocused ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor))
@@ -542,8 +609,12 @@ private struct MessageView: View {
             } else {
                 Text("AI").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 if !message.thinking.isEmpty {
-                    DisclosureGroup(isExpanded: Binding(get: { showThinking ?? (message.streaming && message.text.isEmpty) },
-                                                        set: { showThinking = $0 })) {
+                    DisclosureGroup(
+                        isExpanded: Binding(
+                            get: { showThinking ?? (message.streaming && message.text.isEmpty) },
+                            set: { showThinking = $0 }
+                        )
+                    ) {
                         // Selectable text ignores hierarchical styles; the system's secondary label color sets it apart.
                         Text(message.thinking.trimmingCharacters(in: .whitespacesAndNewlines))
                             .font(.callout)
@@ -562,8 +633,13 @@ private struct MessageView: View {
                 ForEach(Array(ChatSegment.split(shownText).enumerated()), id: \.offset) { _, segment in
                     switch segment {
                     case .text(let text):
-                        Text((try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text))
-                            .textSelection(.enabled)
+                        Text(
+                            (try? AttributedString(
+                                markdown: text,
+                                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+                            )) ?? AttributedString(text)
+                        )
+                        .textSelection(.enabled)
                     case .code(let sql):
                         CodeBlock(sql: sql, insert: insert, run: run)
                     case .table(let table):
@@ -599,16 +675,22 @@ private struct ToolStepView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding) {
-            DisclosureGroup(isExpanded: Binding(get: { expanded ?? (step.status == .awaitingApproval) }, set: { expanded = $0 })) {
+            DisclosureGroup(
+                isExpanded: Binding(get: { expanded ?? (step.status == .awaitingApproval) }, set: { expanded = $0 })
+            ) {
                 VStack(alignment: .leading, spacing: Layout.barPadding / 2) {
                     if let query = step.call.query {
                         Text(query).font(Layout.Font.monoSmall).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(Layout.barPadding / 2)
-                            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: Layout.cornerRadius))
+                            .background(
+                                Color(nsColor: .textBackgroundColor),
+                                in: RoundedRectangle(cornerRadius: Layout.cornerRadius)
+                            )
                     }
                     if !step.result.isEmpty {
-                        Text(AgentToolbox.aligned(step.result)).font(Layout.Font.monoSmall).foregroundColor(Color(nsColor: .secondaryLabelColor))
+                        Text(AgentToolbox.aligned(step.result)).font(Layout.Font.monoSmall)
+                            .foregroundColor(Color(nsColor: .secondaryLabelColor))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -656,7 +738,8 @@ private struct TableBlock: View {
 
     var body: some View {
         ScrollView(.horizontal) {
-            Grid(alignment: .leading, horizontalSpacing: Layout.barPadding * 2, verticalSpacing: Layout.barPadding / 2) {
+            Grid(alignment: .leading, horizontalSpacing: Layout.barPadding * 2, verticalSpacing: Layout.barPadding / 2)
+            {
                 GridRow {
                     ForEach(Array(table.header.enumerated()), id: \.offset) { column, title in
                         Self.text(title).fontWeight(.semibold)
@@ -679,8 +762,13 @@ private struct TableBlock: View {
     }
 
     private static func text(_ markdown: String) -> Text {
-        Text((try? AttributedString(markdown: markdown, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-             ?? AttributedString(markdown))
+        Text(
+            (try? AttributedString(
+                markdown: markdown,
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            ))
+                ?? AttributedString(markdown)
+        )
     }
 
     private static func alignment(_ alignment: MarkdownTable.Alignment) -> HorizontalAlignment {
@@ -709,8 +797,12 @@ private struct CodeBlock: View {
                 Button("Insert") { insert(sql) }.help("Insert into the query editor")
                 Button("Run") { run(sql) }.help("Insert into the query editor and run it")
                 Spacer()
-                Button { Clipboard.copy(sql) } label: { Image(systemName: "doc.on.doc") }
-                    .buttonStyle(.borderless).help("Copy")
+                Button {
+                    Clipboard.copy(sql)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless).help("Copy")
             }
             .controlSize(.small)
             .padding(.horizontal, Layout.barPadding)
@@ -764,7 +856,11 @@ private struct ModelPicker: View {
                 Section("OpenAI-compatible") { choice(openAI, kind: .openAICompatible, model: openAI) }
             }
             Section("Installed tools") {
-                choice("Claude Code", kind: .claudeCode, model: ai.settings.models[AIProviderKind.claudeCode.rawValue] ?? "")
+                choice(
+                    "Claude Code",
+                    kind: .claudeCode,
+                    model: ai.settings.models[AIProviderKind.claudeCode.rawValue] ?? ""
+                )
                 choice("Codex", kind: .codex, model: ai.settings.models[AIProviderKind.codex.rawValue] ?? "")
             }
             Divider()
@@ -778,7 +874,8 @@ private struct ModelPicker: View {
     }
 
     private func choice(_ title: String, kind: AIProviderKind, model: String) -> some View {
-        let selected = ai.settings.provider == kind && (model.isEmpty || ai.settings.model(kind, for: .generate) == model)
+        let selected =
+            ai.settings.provider == kind && (model.isEmpty || ai.settings.model(kind, for: .generate) == model)
         return Button {
             ai.settings.provider = kind
             if !model.isEmpty { ai.settings.models[kind.rawValue] = model }
@@ -796,16 +893,23 @@ private struct ChatEffortPicker: View {
         let kind = ai.settings.provider
         if !kind.effortLevels.isEmpty {
             Menu {
-                Picker("Effort", selection: Binding(
-                    get: { ai.settings.efforts[kind.rawValue] ?? "" },
-                    set: { ai.settings.efforts[kind.rawValue] = $0.isEmpty ? nil : $0 })) {
+                Picker(
+                    "Effort",
+                    selection: Binding(
+                        get: { ai.settings.efforts[kind.rawValue] ?? "" },
+                        set: { ai.settings.efforts[kind.rawValue] = $0.isEmpty ? nil : $0 }
+                    )
+                ) {
                     Text("Default").tag("")
                     ForEach(kind.effortLevels, id: \.self) { Text($0.capitalized).tag($0) }
                 }
                 .pickerStyle(.inline)
             } label: {
-                Label("Effort: \((ai.settings.efforts[kind.rawValue] ?? "default").capitalized)", systemImage: "gauge.with.dots.needle.50percent")
-                    .font(Layout.Font.small)
+                Label(
+                    "Effort: \((ai.settings.efforts[kind.rawValue] ?? "default").capitalized)",
+                    systemImage: "gauge.with.dots.needle.50percent"
+                )
+                .font(Layout.Font.small)
             }
             .menuStyle(.borderlessButton)
             .help("How much the model thinks before answering. Higher is slower and costs more.")

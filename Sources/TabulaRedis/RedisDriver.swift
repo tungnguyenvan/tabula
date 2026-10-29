@@ -3,9 +3,9 @@ import Logging
 import NIOCore
 import NIOPosix
 import NIOSSL
+@preconcurrency import RediStack
 import TabulaDrivers
 import TabulaFoundation
-@preconcurrency import RediStack
 
 public enum RedisKeyType: String, CaseIterable, Sendable {
     case string, hash, list, set, zset, stream
@@ -105,10 +105,18 @@ public actor RedisDriver {
         do {
             let address = try await config.resolveAddress()
             let configuration = try RedisConnection.Configuration(
-                address: address, username: username, password: password,
-                initialDatabase: database == 0 ? nil : database, defaultLogger: logger)
+                address: address,
+                username: username,
+                password: password,
+                initialDatabase: database == 0 ? nil : database,
+                defaultLogger: logger
+            )
             let eventLoop = MultiThreadedEventLoopGroup.singleton.next()
-            let box = try await withTimeout(seconds: config.timeout, "Connecting to \(host):\(port)", discard: { _ = $0.connection.close() }) {
+            let box = try await withTimeout(
+                seconds: config.timeout,
+                "Connecting to \(host):\(port)",
+                discard: { _ = $0.connection.close() }
+            ) {
                 // TLS sits in front of RediStack's RESP handlers when enabled.
                 let bootstrap = ClientBootstrap(group: eventLoop)
                     .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
@@ -124,13 +132,19 @@ public actor RedisDriver {
                         }
                         return channel.pipeline.addBaseRedisHandlers()
                     }
-                let connection = try await RedisConnection.make(configuration: configuration, boundEventLoop: eventLoop,
-                                                                configuredTCPClient: bootstrap).get()
+                let connection =
+                    try await RedisConnection.make(
+                        configuration: configuration,
+                        boundEventLoop: eventLoop,
+                        configuredTCPClient: bootstrap
+                    )
+                    .get()
                 return ConnectionBox(connection: connection)
             }
             let connection = box.connection
             let info = try? await connection.send(command: "INFO", with: [RedisArgument.text("server").resp]).get()
-            let version = (info?.string ?? "").split(separator: "\r\n").first { $0.hasPrefix("redis_version:") }
+            let version =
+                (info?.string ?? "").split(separator: "\r\n").first { $0.hasPrefix("redis_version:") }
                 .map { "Redis " + $0.dropFirst("redis_version:".count) } ?? "Redis"
             return RedisDriver(connection: connection, database: database, serverDescription: version)
         } catch {
@@ -153,16 +167,20 @@ public actor RedisDriver {
 
     /// Sends one command. Redis errors are returned as `.error`, not thrown; transport failures throw.
     public func send(_ arguments: [[UInt8]]) async throws -> RedisReply {
-        guard let name = arguments.first.flatMap({ String(bytes: $0, encoding: .utf8) }) else { throw DatabaseError("Empty command") }
-        let rest = arguments.dropFirst().map { bytes -> RESPValue in
-            var buffer = ByteBufferAllocator().buffer(capacity: bytes.count)
-            buffer.writeBytes(bytes)
-            return .bulkString(buffer)
+        guard let name = arguments.first.flatMap({ String(bytes: $0, encoding: .utf8) }) else {
+            throw DatabaseError("Empty command")
         }
+        let rest = arguments.dropFirst()
+            .map { bytes -> RESPValue in
+                var buffer = ByteBufferAllocator().buffer(capacity: bytes.count)
+                buffer.writeBytes(bytes)
+                return .bulkString(buffer)
+            }
         do {
             let reply = Self.convert(try await connection.send(command: name, with: rest).get())
             if name.uppercased() == "SELECT", case .status = reply, arguments.count > 1,
-               let index = Int(String(decoding: arguments[1], as: UTF8.self)) {
+                let index = Int(String(decoding: arguments[1], as: UTF8.self))
+            {
                 database = index
             }
             return reply
@@ -213,12 +231,16 @@ public actor RedisDriver {
             // db0:keys=12,expires=0,avg_ttl=0
             let parts = line.split(separator: ":", maxSplits: 1)
             guard parts.count == 2, let index = Int(parts[0].dropFirst(2)),
-                  let keys = parts[1].split(separator: ",").first(where: { $0.hasPrefix("keys=") }).flatMap({ Int($0.dropFirst(5)) }) else { continue }
+                let keys = parts[1].split(separator: ",").first(where: { $0.hasPrefix("keys=") })
+                    .flatMap({ Int($0.dropFirst(5)) })
+            else { continue }
             counts[index] = keys
         }
         // CONFIG is often disabled on managed services; fall back to the default of 16.
         var total = Defaults.Redis.databaseCount
-        if case .array(let items) = try await send("CONFIG", "GET", "databases"), items.count == 2, let value = items[1].int {
+        if case .array(let items) = try await send("CONFIG", "GET", "databases"), items.count == 2,
+            let value = items[1].int
+        {
             total = value
         }
         let maxIndex = max(total - 1, counts.keys.max() ?? 0, database)
@@ -233,8 +255,16 @@ public actor RedisDriver {
     // MARK: Keys
 
     /// One SCAN round-trip. Pass cursor "0" to start; the returned cursor is "0" when done.
-    public func scan(cursor: String, match: String, type: RedisKeyType?, count: Int = Defaults.Redis.scanBatch) async throws -> (cursor: String, keys: [RedisBytes]) {
-        var arguments: [RedisArgument] = [.text("SCAN"), .text(cursor), .text("MATCH"), .text(match.isEmpty ? "*" : match), .text("COUNT"), .text(String(count))]
+    public func scan(
+        cursor: String,
+        match: String,
+        type: RedisKeyType?,
+        count: Int = Defaults.Redis.scanBatch
+    ) async throws -> (cursor: String, keys: [RedisBytes]) {
+        var arguments: [RedisArgument] = [
+            .text("SCAN"), .text(cursor), .text("MATCH"), .text(match.isEmpty ? "*" : match), .text("COUNT"),
+            .text(String(count)),
+        ]
         if let type, type != .unknown { arguments += [.text("TYPE"), .text(type.rawValue)] }
         let reply = try await run(arguments).array
         guard reply.count == 2, let next = reply[0].string else { throw DatabaseError("Unexpected SCAN reply") }
@@ -242,7 +272,12 @@ public actor RedisDriver {
     }
 
     /// Scans until at least `limit` keys are collected or the keyspace is exhausted.
-    public func scanKeys(from cursor: String = "0", match: String, type: RedisKeyType?, limit: Int = 500) async throws -> (cursor: String, keys: [RedisBytes]) {
+    public func scanKeys(
+        from cursor: String = "0",
+        match: String,
+        type: RedisKeyType?,
+        limit: Int = 500
+    ) async throws -> (cursor: String, keys: [RedisBytes]) {
         var cursor = cursor
         var keys: [RedisBytes] = []
         var rounds = 0
@@ -270,7 +305,10 @@ public actor RedisDriver {
 
     /// Type, TTL, length and a value preview for many keys. Commands are pipelined: every request is
     /// written before any reply is awaited, so 500 keys cost a few round trips, not thousands.
-    public func summaries(of keys: [RedisBytes], previewLength: Int = Defaults.Redis.previewLength) async throws -> [RedisKeySummary] {
+    public func summaries(
+        of keys: [RedisBytes],
+        previewLength: Int = Defaults.Redis.previewLength
+    ) async throws -> [RedisKeySummary] {
         guard !keys.isEmpty else { return [] }
         func send(_ arguments: [RedisArgument]) -> EventLoopFuture<RESPValue> {
             connection.send(command: arguments[0].text, with: arguments.dropFirst().map(\.resp))
@@ -282,18 +320,34 @@ public actor RedisDriver {
             types.append(Self.convert(try await future.get()).string.flatMap(RedisKeyType.init(rawValue:)) ?? .unknown)
         }
         let previewLimit = String(previewLength - 1)
-        let requests: [(length: EventLoopFuture<RESPValue>?, value: EventLoopFuture<RESPValue>?)] = zip(keys, types).map { key, type in
-            let k = RedisArgument.bytes(key.bytes)
-            switch type {
-            case .string: return (send([.text("STRLEN"), k]), send([.text("GETRANGE"), k, .text("0"), .text(previewLimit)]))
-            case .hash: return (send([.text("HLEN"), k]), send([.text("HSCAN"), k, .text("0"), .text("COUNT"), .text("8")]))
-            case .list: return (send([.text("LLEN"), k]), send([.text("LRANGE"), k, .text("0"), .text("7")]))
-            case .set: return (send([.text("SCARD"), k]), send([.text("SSCAN"), k, .text("0"), .text("COUNT"), .text("8")]))
-            case .zset: return (send([.text("ZCARD"), k]), send([.text("ZRANGE"), k, .text("0"), .text("7"), .text("WITHSCORES")]))
-            case .stream: return (send([.text("XLEN"), k]), send([.text("XREVRANGE"), k, .text("+"), .text("-"), .text("COUNT"), .text("1")]))
-            case .unknown: return (nil, nil)
+        let requests: [(length: EventLoopFuture<RESPValue>?, value: EventLoopFuture<RESPValue>?)] = zip(keys, types)
+            .map { key, type in
+                let k = RedisArgument.bytes(key.bytes)
+                switch type {
+                case .string:
+                    return (send([.text("STRLEN"), k]), send([.text("GETRANGE"), k, .text("0"), .text(previewLimit)]))
+                case .hash:
+                    return (
+                        send([.text("HLEN"), k]), send([.text("HSCAN"), k, .text("0"), .text("COUNT"), .text("8")])
+                    )
+                case .list: return (send([.text("LLEN"), k]), send([.text("LRANGE"), k, .text("0"), .text("7")]))
+                case .set:
+                    return (
+                        send([.text("SCARD"), k]), send([.text("SSCAN"), k, .text("0"), .text("COUNT"), .text("8")])
+                    )
+                case .zset:
+                    return (
+                        send([.text("ZCARD"), k]),
+                        send([.text("ZRANGE"), k, .text("0"), .text("7"), .text("WITHSCORES")])
+                    )
+                case .stream:
+                    return (
+                        send([.text("XLEN"), k]),
+                        send([.text("XREVRANGE"), k, .text("+"), .text("-"), .text("COUNT"), .text("1")])
+                    )
+                case .unknown: return (nil, nil)
+                }
             }
-        }
         var summaries: [RedisKeySummary] = []
         for (index, key) in keys.enumerated() {
             let pttl = Self.convert(try await ttlFutures[index].get()).int ?? RedisDriver.missingKeyTTL
@@ -303,15 +357,23 @@ public actor RedisDriver {
             if let future = requests[index].value { value = Self.convert(try await future.get()) }
             // Keys that expired or were deleted since the scan (TYPE "none", PTTL -2) are dropped.
             guard types[index] != .unknown, pttl != RedisDriver.missingKeyTTL else { continue }
-            summaries.append(RedisKeySummary(key: key, type: types[index], ttlMilliseconds: pttl >= 0 ? pttl : nil, length: length,
-                                             preview: Self.preview(type: types[index], reply: value, length: length, limit: previewLength)))
+            summaries.append(
+                RedisKeySummary(
+                    key: key,
+                    type: types[index],
+                    ttlMilliseconds: pttl >= 0 ? pttl : nil,
+                    length: length,
+                    preview: Self.preview(type: types[index], reply: value, length: length, limit: previewLength)
+                )
+            )
         }
         return summaries
     }
 
     static func preview(type: RedisKeyType, reply: RedisReply, length: Int, limit: Int) -> String {
         func flat(_ bytes: [UInt8]) -> String {
-            RedisBytes(bytes).display.replacingOccurrences(of: "\r\n", with: " ⏎ ").replacingOccurrences(of: "\n", with: " ⏎ ")
+            RedisBytes(bytes).display.replacingOccurrences(of: "\r\n", with: " ⏎ ")
+                .replacingOccurrences(of: "\n", with: " ⏎ ")
         }
         let more = { (shown: Int) in shown < length ? ", …" : "" }
         switch type {
@@ -330,12 +392,16 @@ public actor RedisDriver {
             return "{" + items.joined(separator: ", ") + more(items.count) + "}"
         case .zset:
             let items = reply.array.compactMap(\.bytes)
-            let pairs = stride(from: 0, to: items.count - 1, by: 2).map { "\(flat(items[$0])) (\(flat(items[$0 + 1])))" }
+            let pairs = stride(from: 0, to: items.count - 1, by: 2)
+                .map { "\(flat(items[$0])) (\(flat(items[$0 + 1])))" }
             return "[" + pairs.joined(separator: ", ") + more(pairs.count) + "]"
         case .stream:
-            guard let entry = reply.array.first?.array, entry.count == 2, let id = entry[0].bytes else { return "(empty)" }
+            guard let entry = reply.array.first?.array, entry.count == 2, let id = entry[0].bytes else {
+                return "(empty)"
+            }
             let fields = entry[1].array.compactMap(\.bytes)
-            let pairs = stride(from: 0, to: fields.count - 1, by: 2).map { "\(flat(fields[$0]))=\(flat(fields[$0 + 1]))" }
+            let pairs = stride(from: 0, to: fields.count - 1, by: 2)
+                .map { "\(flat(fields[$0]))=\(flat(fields[$0 + 1]))" }
             return "latest \(flat(id)): " + pairs.joined(separator: " ")
         case .unknown:
             return ""
@@ -346,20 +412,28 @@ public actor RedisDriver {
         let k = RedisArgument.bytes(key.bytes)
         let type = try await run([.text("TYPE"), k]).string.flatMap(RedisKeyType.init(rawValue:)) ?? .unknown
         let pttl = try await run([.text("PTTL"), k]).int ?? RedisDriver.noExpiryTTL
-        let lengthCommand: String? = switch type {
-        case .string: "STRLEN"
-        case .hash: "HLEN"
-        case .list: "LLEN"
-        case .set: "SCARD"
-        case .zset: "ZCARD"
-        case .stream: "XLEN"
-        case .unknown: nil
-        }
+        let lengthCommand: String? =
+            switch type {
+            case .string: "STRLEN"
+            case .hash: "HLEN"
+            case .list: "LLEN"
+            case .set: "SCARD"
+            case .zset: "ZCARD"
+            case .stream: "XLEN"
+            case .unknown: nil
+            }
         var length = 0
         if let lengthCommand { length = try await run([.text(lengthCommand), k]).int ?? 0 }
         let memory = try? await run([.text("MEMORY"), .text("USAGE"), k]).int
         let encoding = try? await run([.text("OBJECT"), .text("ENCODING"), k]).string
-        return RedisKeyInfo(key: key, type: type, ttlMilliseconds: pttl >= 0 ? pttl : nil, length: length, memoryBytes: memory, encoding: encoding)
+        return RedisKeyInfo(
+            key: key,
+            type: type,
+            ttlMilliseconds: pttl >= 0 ? pttl : nil,
+            length: length,
+            memoryBytes: memory,
+            encoding: encoding
+        )
     }
 
     // MARK: Reading values
@@ -371,14 +445,21 @@ public actor RedisDriver {
         let k = RedisArgument.bytes(key.bytes)
         let length = try await run([.text("STRLEN"), k]).int ?? 0
         if length > Self.maxEditableStringBytes {
-            let prefix = try await run([.text("GETRANGE"), k, .text("0"), .text(String(Self.maxEditableStringBytes - 1))]).bytes ?? []
+            let prefix =
+                try await run([.text("GETRANGE"), k, .text("0"), .text(String(Self.maxEditableStringBytes - 1))]).bytes
+                ?? []
             return (RedisBytes(prefix), true)
         }
         return (RedisBytes(try await run([.text("GET"), k]).bytes ?? []), false)
     }
 
     /// One page of a collection. `next` is the token from the previous page (nil for the first page).
-    public func page(_ key: RedisBytes, type: RedisKeyType, after next: String?, count: Int = Defaults.Redis.pageSize) async throws -> RedisPage {
+    public func page(
+        _ key: RedisBytes,
+        type: RedisKeyType,
+        after next: String?,
+        count: Int = Defaults.Redis.pageSize
+    ) async throws -> RedisPage {
         let k = RedisArgument.bytes(key.bytes)
         switch type {
         case .hash, .set, .zset:
@@ -388,26 +469,38 @@ public actor RedisDriver {
             var rounds = 0
             // SCAN may return few or no elements per call; keep going to fill a page.
             repeat {
-                let reply = try await run([.text(command), k, .text(cursor), .text("COUNT"), .text(String(count))]).array
-                guard reply.count == 2, let nextCursor = reply[0].string else { throw DatabaseError("Unexpected \(command) reply") }
+                let reply = try await run([.text(command), k, .text(cursor), .text("COUNT"), .text(String(count))])
+                    .array
+                guard reply.count == 2, let nextCursor = reply[0].string else {
+                    throw DatabaseError("Unexpected \(command) reply")
+                }
                 items += reply[1].array.compactMap(\.bytes).map(RedisBytes.init)
                 cursor = nextCursor
                 rounds += 1
             } while cursor != "0" && items.count < count * (type == .set ? 1 : 2) && rounds < 50
-            let rows: [[RedisBytes]] = type == .set
+            let rows: [[RedisBytes]] =
+                type == .set
                 ? items.map { [$0] }
                 : stride(from: 0, to: items.count - 1, by: 2).map { [items[$0], items[$0 + 1]] }
             let columns = type == .hash ? ["field", "value"] : type == .set ? ["member"] : ["member", "score"]
             return RedisPage(columns: columns, rows: rows, next: cursor == "0" ? nil : cursor)
         case .list:
             let start = Int(next ?? "0") ?? 0
-            let values = try await run([.text("LRANGE"), k, .text(String(start)), .text(String(start + count - 1))]).array.compactMap(\.bytes)
+            let values = try await run([.text("LRANGE"), k, .text(String(start)), .text(String(start + count - 1))])
+                .array.compactMap(\.bytes)
             let rows = values.enumerated().map { [RedisBytes(String(start + $0.offset)), RedisBytes($0.element)] }
-            return RedisPage(columns: ["index", "value"], rows: rows, next: values.count == count ? String(start + count) : nil)
+            return RedisPage(
+                columns: ["index", "value"],
+                rows: rows,
+                next: values.count == count ? String(start + count) : nil
+            )
         case .stream:
             // Exclusive start "(id" needs Redis 6.2+.
             let start = next.map { "(" + $0 } ?? "-"
-            let entries = try await run([.text("XRANGE"), k, .text(start), .text("+"), .text("COUNT"), .text(String(count))]).array
+            let entries = try await run([
+                .text("XRANGE"), k, .text(start), .text("+"), .text("COUNT"), .text(String(count)),
+            ])
+            .array
             var fieldNames: [String] = []
             var parsed: [(id: RedisBytes, fields: [String: RedisBytes])] = []
             for entry in entries {
@@ -423,8 +516,11 @@ public actor RedisDriver {
                 parsed.append((RedisBytes(id), fields))
             }
             let rows = parsed.map { entry in [entry.id] + fieldNames.map { entry.fields[$0] ?? RedisBytes("") } }
-            return RedisPage(columns: ["id"] + fieldNames, rows: rows,
-                             next: entries.count == count ? parsed.last?.id.display : nil)
+            return RedisPage(
+                columns: ["id"] + fieldNames,
+                rows: rows,
+                next: entries.count == count ? parsed.last?.id.display : nil
+            )
         case .string, .unknown:
             return RedisPage(columns: [], rows: [], next: nil)
         }
@@ -482,7 +578,9 @@ public actor RedisDriver {
             guard let member = v.first else { return }
             try await run([.text("SADD"), k, member])
         case .zset:
-            guard values.count == 2, let score = values[1].text, Double(score) != nil else { throw DatabaseError("A sorted set entry needs a member and a numeric score.") }
+            guard values.count == 2, let score = values[1].text, Double(score) != nil else {
+                throw DatabaseError("A sorted set entry needs a member and a numeric score.")
+            }
             try await run([.text("ZADD"), k, .text(score), v[0]])
         case .stream:
             guard !v.isEmpty, v.count % 2 == 0 else { throw DatabaseError("A stream entry needs field/value pairs.") }
@@ -493,7 +591,14 @@ public actor RedisDriver {
     }
 
     /// Changes one element. For hashes `old` is the field; for lists the index; for sets/zsets the member.
-    public func update(_ key: RedisBytes, type: RedisKeyType, element old: RedisBytes, column: Int, to newValue: RedisBytes, row: [RedisBytes]) async throws {
+    public func update(
+        _ key: RedisBytes,
+        type: RedisKeyType,
+        element old: RedisBytes,
+        column: Int,
+        to newValue: RedisBytes,
+        row: [RedisBytes]
+    ) async throws {
         let k = RedisArgument.bytes(key.bytes)
         switch (type, column) {
         case (.hash, 1):
@@ -508,12 +613,16 @@ public actor RedisDriver {
                 [.text("HDEL"), k, .bytes(old.bytes)],
             ])
         case (.list, 1):
-            guard let index = old.text, Int(index) != nil else { throw DatabaseError("Can’t locate this list element.") }
+            guard let index = old.text, Int(index) != nil else {
+                throw DatabaseError("Can’t locate this list element.")
+            }
             try await run([.text("LSET"), k, .text(index), .bytes(newValue.bytes)])
         case (.set, 0):
             try await transaction([[.text("SREM"), k, .bytes(old.bytes)], [.text("SADD"), k, .bytes(newValue.bytes)]])
         case (.zset, 1):
-            guard let score = newValue.text, Double(score) != nil else { throw DatabaseError("Score must be a number.") }
+            guard let score = newValue.text, Double(score) != nil else {
+                throw DatabaseError("Score must be a number.")
+            }
             try await run([.text("ZADD"), k, .text("XX"), .text(score), .bytes(old.bytes)])
         case (.zset, 0):
             try await transaction([
@@ -538,7 +647,8 @@ public actor RedisDriver {
         case .list:
             // Lists have no delete-by-index: mark the slots with a unique tombstone, then remove it.
             let tombstone = RedisArgument.text("__tabula_deleted_\(UUID().uuidString)__")
-            var commands: [[RedisArgument]] = elements.compactMap { $0.text.flatMap(Int.init) }.map { [.text("LSET"), k, .text(String($0)), tombstone] }
+            var commands: [[RedisArgument]] = elements.compactMap { $0.text.flatMap(Int.init) }
+                .map { [.text("LSET"), k, .text(String($0)), tombstone] }
             commands.append([.text("LREM"), k, .text("0"), tombstone])
             try await transaction(commands)
         case .string, .unknown:
@@ -560,7 +670,10 @@ public actor RedisDriver {
         }
         let results = try await run([.text("EXEC")])
         if results == .null { throw DatabaseError("The transaction was aborted; nothing was changed.") }
-        if let failure = results.array.first(where: { if case .error = $0 { return true }; return false }), case .error(let message) = failure {
+        if let failure = results.array.first(where: {
+            if case .error = $0 { return true }
+            return false
+        }), case .error(let message) = failure {
             throw DatabaseError(message)
         }
     }

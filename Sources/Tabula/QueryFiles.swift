@@ -99,7 +99,8 @@ extension WorkspaceModel {
         }
         // The empty tab a connection opens with is used for the file rather than left behind it.
         if case .query(let current) = selectedTab, current.fileURL == nil,
-           current.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            current.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
             current.sql = text
             current.attach(url, savedText: text)
         } else {

@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 enum GridCell: Equatable {
-    case value(String), null, defaultValue
+    case value(String)
+    case null, defaultValue
 }
 
 enum GridCellState {
@@ -124,17 +125,26 @@ struct DataGridView: NSViewRepresentable {
             // (updated asynchronously) would undo a selection the user just made with the keyboard.
             if parent.selection != lastParentSelection {
                 lastParentSelection = parent.selection
-                if tableView.selectedRowIndexes != parent.selection, parent.selection.allSatisfy({ $0 < parent.source.rowCount }) {
+                if tableView.selectedRowIndexes != parent.selection,
+                    parent.selection.allSatisfy({ $0 < parent.source.rowCount })
+                {
                     tableView.selectRowIndexes(parent.selection, byExtendingSelection: false)
                     if let first = parent.selection.first { tableView.scrollRowToVisible(first) }
                 }
             }
             // A hidden tab's grid takes its focus request when the tab is shown, not from the tab in front.
-            if let request = parent.focusRequest, request.id != handledFocusRequest, request.row < parent.source.rowCount,
-               !tableView.isHiddenOrHasHiddenAncestor {
+            if let request = parent.focusRequest, request.id != handledFocusRequest,
+                request.row < parent.source.rowCount,
+                !tableView.isHiddenOrHasHiddenAncestor
+            {
                 handledFocusRequest = request.id
                 DispatchQueue.main.async { [weak self] in
-                    self?.focus(row: request.row, tableColumn: (self?.tableColumn(forData: request.column) ?? 1), edit: request.edit)
+                    self?
+                        .focus(
+                            row: request.row,
+                            tableColumn: (self?.tableColumn(forData: request.column) ?? 1),
+                            edit: request.edit
+                        )
                 }
             }
         }
@@ -171,15 +181,21 @@ struct DataGridView: NSViewRepresentable {
                 let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("\(index)"))
                 column.title = name
                 column.headerToolTip = name
-                column.sortDescriptorPrototype = parent.onSort == nil ? nil : NSSortDescriptor(key: name, ascending: true)
+                column.sortDescriptorPrototype =
+                    parent.onSort == nil ? nil : NSSortDescriptor(key: name, ascending: true)
                 column.minWidth = 40
                 column.headerCell.font = .systemFont(ofSize: 11, weight: .medium)
-                var widest = (name as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium)]).width + 28
+                var widest =
+                    (name as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium)])
+                    .width + 28
                 // Sample up to ~200 rows spread over the whole result, not just the top.
                 let count = parent.source.rowCount
                 for row in stride(from: 0, to: count, by: max(1, count / 200)) {
                     if case .value(let text) = parent.source.cell(row, index) {
-                        widest = max(widest, (String(text.prefix(80)) as NSString).size(withAttributes: [.font: font]).width + 16)
+                        widest = max(
+                            widest,
+                            (String(text.prefix(80)) as NSString).size(withAttributes: [.font: font]).width + 16
+                        )
                     }
                 }
                 column.width = min(max(widest, 64), index == columns.count - 1 ? 640 : 380)
@@ -194,32 +210,40 @@ struct DataGridView: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
             guard let tableColumn else { return nil }
             if tableColumn.identifier == Self.gutterID {
-                let view = (tableView.makeView(withIdentifier: Self.gutterID, owner: nil) as? GutterCellView) ?? {
-                    let view = GutterCellView()
-                    view.identifier = Self.gutterID
-                    return view
-                }()
+                let view =
+                    (tableView.makeView(withIdentifier: Self.gutterID, owner: nil) as? GutterCellView)
+                    ?? {
+                        let view = GutterCellView()
+                        view.identifier = Self.gutterID
+                        return view
+                    }()
                 let source = parent.source
                 view.textField?.stringValue = row >= source.insertedFrom ? "+" : "\(row + 1 + source.rowNumberOffset)"
                 return view
             }
             guard let column = Int(tableColumn.identifier.rawValue) else { return nil }
             let identifier = NSUserInterfaceItemIdentifier("cell")
-            let view = (tableView.makeView(withIdentifier: identifier, owner: nil) as? GridCellView) ?? {
-                let view = GridCellView()
-                view.identifier = identifier
-                view.textField?.delegate = self
-                return view
-            }()
+            let view =
+                (tableView.makeView(withIdentifier: identifier, owner: nil) as? GridCellView)
+                ?? {
+                    let view = GridCellView()
+                    view.identifier = identifier
+                    view.textField?.delegate = self
+                    return view
+                }()
             // The table can ask for a cell before it has caught up with a new result (while editing, say).
             guard row < parent.source.rowCount, column < parent.source.columns.count else { return view }
             view.configure(parent.source.cell(row, column), state: parent.source.state(row, column))
-            view.isFocusedCell = row == tableView.selectedRow && tableView.column(withIdentifier: tableColumn.identifier) == focusedColumn
+            view.isFocusedCell =
+                row == tableView.selectedRow
+                && tableView.column(withIdentifier: tableColumn.identifier) == focusedColumn
             return view
         }
 
         func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
-            guard !applyingSort, let descriptor = tableView.sortDescriptors.first, let key = descriptor.key else { return }
+            guard !applyingSort, let descriptor = tableView.sortDescriptors.first, let key = descriptor.key else {
+                return
+            }
             parent.onSort?(key, descriptor.ascending)
         }
 
@@ -243,7 +267,8 @@ struct DataGridView: NSViewRepresentable {
             focusedRow = tableView.selectedRow
             for row in rows {
                 for column in 1..<max(1, tableView.numberOfColumns) {
-                    (tableView.view(atColumn: column, row: row, makeIfNecessary: false) as? GridCellView)?.isFocusedCell =
+                    (tableView.view(atColumn: column, row: row, makeIfNecessary: false) as? GridCellView)?
+                        .isFocusedCell =
                         row == focusedRow && column == focusedColumn
                 }
             }
@@ -261,7 +286,9 @@ struct DataGridView: NSViewRepresentable {
         }
 
         func focus(row: Int, tableColumn: Int, edit: Bool) {
-            guard let tableView, !tableView.isHiddenOrHasHiddenAncestor, row >= 0, row < tableView.numberOfRows else { return }
+            guard let tableView, !tableView.isHiddenOrHasHiddenAncestor, row >= 0, row < tableView.numberOfRows else {
+                return
+            }
             tableView.selectRowIndexes([row], byExtendingSelection: false)
             tableView.scrollRowToVisible(row)
             tableView.window?.makeFirstResponder(tableView)
@@ -275,8 +302,14 @@ struct DataGridView: NSViewRepresentable {
             var row = tableView.selectedRow
             var column = focusedColumn + step
             let last = tableView.numberOfColumns - 1
-            if column > last { column = 1; row += 1 }
-            if column < 1 { column = last; row -= 1 }
+            if column > last {
+                column = 1
+                row += 1
+            }
+            if column < 1 {
+                column = last
+                row -= 1
+            }
             guard row >= 0 && row < tableView.numberOfRows else { return }
             focus(row: row, tableColumn: column, edit: edit && parent.source.isEditable(row))
         }
@@ -295,7 +328,8 @@ struct DataGridView: NSViewRepresentable {
             guard let tableView, tableView.clickedRow >= 0, tableView.clickedColumn >= 1 else { return }
             focusedColumn = tableView.clickedColumn
             if parent.onEdit != nil && parent.source.isEditable(tableView.clickedRow),
-               dataColumn(focusedColumn).map(parent.source.isColumnEditable) == true {
+                dataColumn(focusedColumn).map(parent.source.isColumnEditable) == true
+            {
                 beginEditing(row: tableView.clickedRow, column: focusedColumn)
             } else {
                 showQuickLook()
@@ -310,10 +344,12 @@ struct DataGridView: NSViewRepresentable {
 
         /// Starts editing; `replacingWith` begins with typed text instead of the current value.
         func beginEditing(row: Int, column: Int, replacingWith initial: String? = nil) {
-            guard let tableView, parent.onEdit != nil, row >= 0, let dataColumn = dataColumn(column), parent.source.isEditable(row),
-                  parent.source.isColumnEditable(dataColumn),
-                  let view = tableView.view(atColumn: column, row: row, makeIfNecessary: true) as? GridCellView,
-                  let field = view.textField else { return }
+            guard let tableView, parent.onEdit != nil, row >= 0, let dataColumn = dataColumn(column),
+                parent.source.isEditable(row),
+                parent.source.isColumnEditable(dataColumn),
+                let view = tableView.view(atColumn: column, row: row, makeIfNecessary: true) as? GridCellView,
+                let field = view.textField
+            else { return }
             if let initial {
                 field.stringValue = initial
             } else if case .value(let text) = parent.source.cell(row, dataColumn) {
@@ -345,7 +381,9 @@ struct DataGridView: NSViewRepresentable {
                     tableView.reloadData(forRowIndexes: [row], columnIndexes: [column])
                 }
             }
-            guard row >= 0, let dataColumn = dataColumn(column), movement != NSTextMovement.cancel.rawValue else { return }
+            guard row >= 0, let dataColumn = dataColumn(column), movement != NSTextMovement.cancel.rawValue else {
+                return
+            }
             let newValue = field.stringValue
             switch parent.source.cell(row, dataColumn) {
             case .value(let old) where old == newValue: return
@@ -362,7 +400,8 @@ struct DataGridView: NSViewRepresentable {
                 // Escape: leave the cell unchanged.
                 field.abortEditing()
                 field.isEditable = false
-                let row = tableView.row(for: field), column = tableView.column(for: field)
+                let row = tableView.row(for: field)
+                let column = tableView.column(for: field)
                 if row >= 0 && column >= 0 { tableView.reloadData(forRowIndexes: [row], columnIndexes: [column]) }
                 tableView.window?.makeFirstResponder(tableView)
                 return true
@@ -403,11 +442,12 @@ struct DataGridView: NSViewRepresentable {
 
         func copyFocusedCell() {
             guard let tableView, tableView.selectedRow >= 0, let column = dataColumn(focusedColumn) else { return }
-            let text: String = switch parent.source.cell(tableView.selectedRow, column) {
-            case .value(let value): value
-            case .null: "NULL"
-            case .defaultValue: ""
-            }
+            let text: String =
+                switch parent.source.cell(tableView.selectedRow, column) {
+                case .value(let value): value
+                case .null: "NULL"
+                case .defaultValue: ""
+                }
             Clipboard.copy(text)
         }
 
@@ -424,7 +464,10 @@ struct DataGridView: NSViewRepresentable {
 
         /// Space: show the full value of the focused cell (JSON pretty-printed) in a popover.
         func showQuickLook() {
-            if let popover, popover.isShown { popover.close(); return }
+            if let popover, popover.isShown {
+                popover.close()
+                return
+            }
             guard let tableView, tableView.selectedRow >= 0, let column = dataColumn(focusedColumn) else { return }
             let row = tableView.selectedRow
             let text: String
@@ -437,14 +480,22 @@ struct DataGridView: NSViewRepresentable {
             let popover = NSPopover()
             popover.behavior = .transient
             popover.contentViewController = controller
-            popover.show(relativeTo: tableView.frameOfCell(atColumn: focusedColumn, row: row), of: tableView, preferredEdge: .maxY)
+            popover.show(
+                relativeTo: tableView.frameOfCell(atColumn: focusedColumn, row: row),
+                of: tableView,
+                preferredEdge: .maxY
+            )
             self.popover = popover
         }
 
         private static func prettyJSON(_ text: String) -> String? {
             guard let first = text.trimmingCharacters(in: .whitespaces).first, first == "{" || first == "[",
-                  let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)),
-                  let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else {
+                let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)),
+                let data = try? JSONSerialization.data(
+                    withJSONObject: object,
+                    options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                )
+            else {
                 return nil
             }
             return String(data: data, encoding: .utf8)
@@ -465,37 +516,66 @@ struct DataGridView: NSViewRepresentable {
 
             if dataColumn != nil {
                 menu.addItem(ClosureMenuItem("Quick Look", key: " ") { [weak self] in self?.showQuickLook() })
-                menu.addItem(ClosureMenuItem("Copy Cell Value", key: "c", modifiers: [.command, .option]) { [weak self] in self?.copyFocusedCell() })
+                menu.addItem(
+                    ClosureMenuItem("Copy Cell Value", key: "c", modifiers: [.command, .option]) { [weak self] in
+                        self?.copyFocusedCell()
+                    }
+                )
             }
-            menu.addItem(ClosureMenuItem(rows.count > 1 ? "Copy \(rows.count) Rows" : "Copy Row", key: "c") { [weak self] in self?.copySelection() })
-            menu.addItem(ClosureMenuItem("Copy with Column Names", key: "c", modifiers: [.command, .option, .shift]) { [weak self] in
-                self?.copySelection(withHeader: true)
-            })
+            menu.addItem(
+                ClosureMenuItem(rows.count > 1 ? "Copy \(rows.count) Rows" : "Copy Row", key: "c") { [weak self] in
+                    self?.copySelection()
+                }
+            )
+            menu.addItem(
+                ClosureMenuItem("Copy with Column Names", key: "c", modifiers: [.command, .option, .shift]) {
+                    [weak self] in
+                    self?.copySelection(withHeader: true)
+                }
+            )
             if let onFilter = parent.onFilterByValue, let dataColumn, row < parent.source.insertedFrom {
                 menu.addItem(.separator())
                 menu.addItem(ClosureMenuItem("Filter by This Value") { onFilter(row, dataColumn) })
             }
-            if let onEdit = parent.onEdit, let dataColumn, parent.source.isEditable(row), parent.source.isColumnEditable(dataColumn) {
+            if let onEdit = parent.onEdit, let dataColumn, parent.source.isEditable(row),
+                parent.source.isColumnEditable(dataColumn)
+            {
                 menu.addItem(.separator())
-                menu.addItem(ClosureMenuItem("Edit Cell", key: "\r", modifiers: []) { [weak self] in
-                    self?.beginEditing(row: row, column: column)
-                })
-                menu.addItem(ClosureMenuItem("Set NULL", key: "\u{8}", modifiers: [.option]) { onEdit(row, dataColumn, nil) })
+                menu.addItem(
+                    ClosureMenuItem("Edit Cell", key: "\r", modifiers: []) { [weak self] in
+                        self?.beginEditing(row: row, column: column)
+                    }
+                )
+                menu.addItem(
+                    ClosureMenuItem("Set NULL", key: "\u{8}", modifiers: [.option]) { onEdit(row, dataColumn, nil) }
+                )
                 menu.addItem(ClosureMenuItem("Set Empty String") { onEdit(row, dataColumn, "") })
             }
             if let onDuplicate = parent.onDuplicate {
                 menu.addItem(.separator())
-                menu.addItem(ClosureMenuItem(rows.count > 1 ? "Duplicate \(rows.count) Rows" : "Duplicate Row", key: "d") { onDuplicate(rows) })
+                menu.addItem(
+                    ClosureMenuItem(rows.count > 1 ? "Duplicate \(rows.count) Rows" : "Duplicate Row", key: "d") {
+                        onDuplicate(rows)
+                    }
+                )
             }
             if let onDelete = parent.onDelete {
                 if parent.onDuplicate == nil { menu.addItem(.separator()) }
                 let deleted = rows.filter { parent.source.state($0, 0) == .deleted }
                 if !deleted.isEmpty, let onRestore = parent.onRestore {
-                    menu.addItem(ClosureMenuItem("Restore Row\(deleted.count > 1 ? "s" : "")") { onRestore(IndexSet(deleted)) })
+                    menu.addItem(
+                        ClosureMenuItem("Restore Row\(deleted.count > 1 ? "s" : "")") { onRestore(IndexSet(deleted)) }
+                    )
                 }
-                menu.addItem(ClosureMenuItem(rows.count > 1 ? "Delete \(rows.count) Rows" : "Delete Row", key: "\u{8}", modifiers: [.command]) {
-                    onDelete(rows)
-                })
+                menu.addItem(
+                    ClosureMenuItem(
+                        rows.count > 1 ? "Delete \(rows.count) Rows" : "Delete Row",
+                        key: "\u{8}",
+                        modifiers: [.command]
+                    ) {
+                        onDelete(rows)
+                    }
+                )
             }
             return menu
         }
@@ -517,7 +597,8 @@ final class GridTableView: NSTableView {
     /// there, so it is caught here.
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2, let onAddRow = coordinator?.parent.onAddRow,
-           row(at: convert(event.locationInWindow, from: nil)) < 0 {
+            row(at: convert(event.locationInWindow, from: nil)) < 0
+        {
             onAddRow()
             return
         }
@@ -536,9 +617,11 @@ final class GridTableView: NSTableView {
             if let undo = undoManager, undo.canRedo { undo.redo() }
             return true
         case ("c", [.command, .option]):
-            coordinator.copyFocusedCell(); return true
+            coordinator.copyFocusedCell()
+            return true
         case ("c", [.command, .option, .shift]):
-            coordinator.copySelection(withHeader: true); return true
+            coordinator.copySelection(withHeader: true)
+            return true
         default:
             return super.performKeyEquivalent(with: event)
         }
@@ -548,38 +631,43 @@ final class GridTableView: NSTableView {
         guard let coordinator else { return super.keyDown(with: event) }
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
         switch event.keyCode {
-        case 123 where flags.contains(.command), 115: // ⌘← / Home: first column
+        case 123 where flags.contains(.command), 115:  // ⌘← / Home: first column
             coordinator.moveFocus(toColumn: 1)
-        case 124 where flags.contains(.command), 119: // ⌘→ / End: last column
+        case 124 where flags.contains(.command), 119:  // ⌘→ / End: last column
             coordinator.moveFocus(toColumn: numberOfColumns - 1)
-        case 126 where flags.contains(.command): // ⌘↑: first row
+        case 126 where flags.contains(.command):  // ⌘↑: first row
             if numberOfRows > 0 { coordinator.focus(row: 0, tableColumn: coordinator.focusedColumn, edit: false) }
-        case 125 where flags.contains(.command): // ⌘↓: last row
-            if numberOfRows > 0 { coordinator.focus(row: numberOfRows - 1, tableColumn: coordinator.focusedColumn, edit: false) }
-        case 123: // ←
+        case 125 where flags.contains(.command):  // ⌘↓: last row
+            if numberOfRows > 0 {
+                coordinator.focus(row: numberOfRows - 1, tableColumn: coordinator.focusedColumn, edit: false)
+            }
+        case 123:  // ←
             coordinator.moveFocus(toColumn: coordinator.focusedColumn - 1)
-        case 124: // →
+        case 124:  // →
             coordinator.moveFocus(toColumn: coordinator.focusedColumn + 1)
-        case 48: // Tab / ⇧Tab
+        case 48:  // Tab / ⇧Tab
             coordinator.advance(by: flags.contains(.shift) ? -1 : 1, edit: false)
-        case 36, 76, 120: // Return, Enter, F2
+        case 36, 76, 120:  // Return, Enter, F2
             guard flags.isEmpty else { return super.keyDown(with: event) }
             if coordinator.canEditFocusedCell {
                 coordinator.beginEditing(row: selectedRow, column: coordinator.focusedColumn)
             } else {
                 coordinator.showQuickLook()
             }
-        case 49 where flags.isEmpty: // Space
+        case 49 where flags.isEmpty:  // Space
             coordinator.showQuickLook()
-        case 51, 117: // ⌫ / ⌦
+        case 51, 117:  // ⌫ / ⌦
             if flags.contains(.option) { coordinator.setFocusedCellNull() } else { coordinator.deleteSelection() }
-        case 53: // Escape
+        case 53:  // Escape
             deselectAll(nil)
         default:
             // Typing a character starts editing the focused cell with that character.
             if flags.subtracting(.shift).isEmpty, let characters = event.characters, !characters.isEmpty,
-               characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && $0.value < 0xF700 }),
-               coordinator.canEditFocusedCell {
+                characters.unicodeScalars.allSatisfy({
+                    !CharacterSet.controlCharacters.contains($0) && $0.value < 0xF700
+                }),
+                coordinator.canEditFocusedCell
+            {
                 coordinator.beginEditing(row: selectedRow, column: coordinator.focusedColumn, replacingWith: characters)
             } else {
                 super.keyDown(with: event)
@@ -634,7 +722,8 @@ final class GridCellView: NSTableCellView {
         switch cell {
         case .value(let text):
             let singleLine = text.count > 2000 ? String(text.prefix(2000)) + "…" : text
-            field.stringValue = singleLine.replacingOccurrences(of: "\r\n", with: " ⏎ ").replacingOccurrences(of: "\n", with: " ⏎ ")
+            field.stringValue = singleLine.replacingOccurrences(of: "\r\n", with: " ⏎ ")
+                .replacingOccurrences(of: "\n", with: " ⏎ ")
             field.font = Self.font
             field.textColor = .labelColor
             field.toolTip = text.count > 40 ? String(text.prefix(1000)) : nil
@@ -650,18 +739,22 @@ final class GridCellView: NSTableCellView {
             field.toolTip = nil
         }
         if state == .deleted {
-            field.attributedStringValue = NSAttributedString(string: field.stringValue, attributes: [
-                .strikethroughStyle: NSUnderlineStyle.single.rawValue,
-                .font: field.font ?? Self.font,
-                .foregroundColor: NSColor.secondaryLabelColor,
-            ])
+            field.attributedStringValue = NSAttributedString(
+                string: field.stringValue,
+                attributes: [
+                    .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                    .font: field.font ?? Self.font,
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                ]
+            )
         }
-        layer?.backgroundColor = switch state {
-        case .normal: nil
-        case .edited: NSColor.systemYellow.withAlphaComponent(0.28).cgColor
-        case .deleted: NSColor.systemRed.withAlphaComponent(0.18).cgColor
-        case .inserted: NSColor.systemGreen.withAlphaComponent(0.18).cgColor
-        }
+        layer?.backgroundColor =
+            switch state {
+            case .normal: nil
+            case .edited: NSColor.systemYellow.withAlphaComponent(0.28).cgColor
+            case .deleted: NSColor.systemRed.withAlphaComponent(0.18).cgColor
+            case .inserted: NSColor.systemGreen.withAlphaComponent(0.18).cgColor
+            }
     }
 
     func beginEditingAppearance() {
@@ -740,7 +833,12 @@ final class ClosureMenuItem: NSMenuItem {
     private let handler: () -> Void
 
     /// `key` is shown for discoverability; the real shortcut is handled by the grid or the menu bar.
-    init(_ title: String, key: String = "", modifiers: NSEvent.ModifierFlags = [.command], handler: @escaping () -> Void) {
+    init(
+        _ title: String,
+        key: String = "",
+        modifiers: NSEvent.ModifierFlags = [.command],
+        handler: @escaping () -> Void
+    ) {
         self.handler = handler
         super.init(title: title, action: #selector(run), keyEquivalent: key)
         keyEquivalentModifierMask = key.isEmpty ? [] : modifiers

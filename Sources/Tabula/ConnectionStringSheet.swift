@@ -8,24 +8,32 @@ struct ConnectionStringSheet: View {
     let onContinue: (ConnectionConfig, String?) -> Void
     let onCancel: () -> Void
 
-    private var parsed: (config: ConnectionConfig, password: String?)? { ConnectionConfig.parse(connectionString: text) }
+    private var parsed: (config: ConnectionConfig, password: String?)? {
+        ConnectionConfig.parse(connectionString: text)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             Form {
                 Section {
-                    TextField("Connection string", text: $text, prompt: Text("postgresql://user:password@host:5432/database"),
-                              axis: .vertical)
-                        .lineLimit(Layout.ConnectionForm.stringLines)
-                        .font(Layout.Font.mono)
-                        .labelsHidden()
+                    TextField(
+                        "Connection string",
+                        text: $text,
+                        prompt: Text("postgresql://user:password@host:5432/database"),
+                        axis: .vertical
+                    )
+                    .lineLimit(Layout.ConnectionForm.stringLines)
+                    .font(Layout.Font.mono)
+                    .labelsHidden()
                     summary
                 } header: {
                     Text("Connection String")
                 } footer: {
-                    Text("A URL (postgresql://, mysql://, mongodb+srv://, redis://, file://), a JDBC URL, or key=value pairs such as host=… dbname=… user=… or Server=…;Database=…;Uid=….")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    Text(
+                        "A URL (postgresql://, mysql://, mongodb+srv://, redis://, file://), a JDBC URL, or key=value pairs such as host=… dbname=… user=… or Server=…;Database=…;Uid=…."
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)

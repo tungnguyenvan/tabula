@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaFoundation
 @testable import TabulaSQL
 @testable import TabulaStorage
@@ -6,19 +7,34 @@ import XCTest
 
 final class ExportAndStoreTests: XCTestCase {
     func testCSVEscaping() throws {
-        let csv = try ResultExporter.export(columns: ["a", "b"], rows: [["x,y", nil], ["say \"hi\"", "line\nbreak"]], format: .csv, dialect: SQLDialect(flavor: .postgres))
+        let csv = try ResultExporter.export(
+            columns: ["a", "b"],
+            rows: [["x,y", nil], ["say \"hi\"", "line\nbreak"]],
+            format: .csv,
+            dialect: SQLDialect(flavor: .postgres)
+        )
         XCTAssertEqual(csv, "a,b\n\"x,y\",\n\"say \"\"hi\"\"\",\"line\nbreak\"\n")
     }
 
     func testJSONKeepsNulls() throws {
-        let json = try ResultExporter.export(columns: ["a", "b"], rows: [["1", nil]], format: .json, dialect: SQLDialect(flavor: .postgres))
+        let json = try ResultExporter.export(
+            columns: ["a", "b"],
+            rows: [["1", nil]],
+            format: .json,
+            dialect: SQLDialect(flavor: .postgres)
+        )
         let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: Any]])
         XCTAssertTrue(parsed[0]["b"] is NSNull)
     }
 
     func testSQLInsertExport() throws {
-        let sql = try ResultExporter.export(columns: ["id"], rows: [["1"]], format: .sqlInsert,
-                                        table: TableRef(schema: "db", name: "t"), dialect: SQLDialect(flavor: .mysql))
+        let sql = try ResultExporter.export(
+            columns: ["id"],
+            rows: [["1"]],
+            format: .sqlInsert,
+            table: TableRef(schema: "db", name: "t"),
+            dialect: SQLDialect(flavor: .mysql)
+        )
         XCTAssertEqual(sql, "INSERT INTO `db`.`t` (`id`) VALUES ('1');")
     }
 

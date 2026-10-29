@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaAI
 @testable import TabulaConnections
 @testable import TabulaFoundation
@@ -36,14 +37,30 @@ final class AgentProtocolTests: XCTestCase {
 
     func testChatPromptCarriesToolsAndSteps() {
         let schema = SQLPrompts.Schema(tables: [], foreignKeys: [], defaultSchema: "public")
-        let step = (call: AgentToolCall(tool: .runQuery, query: "SELECT count(*) FROM orders"), result: "1 row:\ncount\n42")
-        let request = SQLPrompts.chat(question: "How many orders?", history: [], editorSQL: nil, schema: schema, kind: .postgres,
-                                      tools: AgentProtocol.instructions(kind: .postgres, canQuery: true), steps: [step])
+        let step = (
+            call: AgentToolCall(tool: .runQuery, query: "SELECT count(*) FROM orders"), result: "1 row:\ncount\n42"
+        )
+        let request = SQLPrompts.chat(
+            question: "How many orders?",
+            history: [],
+            editorSQL: nil,
+            schema: schema,
+            kind: .postgres,
+            tools: AgentProtocol.instructions(kind: .postgres, canQuery: true),
+            steps: [step]
+        )
         XCTAssertTrue(request.instructions.contains("run_query"))
         XCTAssertTrue(request.prompt.contains("Result:\n1 row:\ncount\n42"))
         XCTAssertTrue(request.prompt.contains("use another tool, or answer"))
 
-        let last = SQLPrompts.chat(question: "How many orders?", history: [], editorSQL: nil, schema: schema, kind: .postgres, steps: [step])
+        let last = SQLPrompts.chat(
+            question: "How many orders?",
+            history: [],
+            editorSQL: nil,
+            schema: schema,
+            kind: .postgres,
+            steps: [step]
+        )
         XCTAssertFalse(last.instructions.contains("run_query"))
         XCTAssertTrue(last.prompt.contains("No more tools now"))
 
@@ -55,66 +72,82 @@ final class AgentProtocolTests: XCTestCase {
 
 final class AgentReadOnlyTests: XCTestCase {
     func testSQLReads() {
-        for sql in ["SELECT * FROM orders WHERE status = 'paid'",
-                    "with t as (select 1 as x) select replace(name, 'a', 'b') from t",
-                    "SELECT substring(name FROM 1 FOR 3) FROM customers",
-                    "EXPLAIN SELECT * FROM orders",
-                    "SHOW TABLES",
-                    "select 'delete from x; update y' as text"] {
+        for sql in [
+            "SELECT * FROM orders WHERE status = 'paid'",
+            "with t as (select 1 as x) select replace(name, 'a', 'b') from t",
+            "SELECT substring(name FROM 1 FOR 3) FROM customers",
+            "EXPLAIN SELECT * FROM orders",
+            "SHOW TABLES",
+            "select 'delete from x; update y' as text",
+        ] {
             XCTAssertNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
         }
     }
 
     func testSQLWritesAreRefused() {
-        for sql in ["DELETE FROM orders", "UPDATE orders SET total = 0", "insert into t values (1)", "DROP TABLE orders",
-                    "SELECT 1; DELETE FROM orders",
-                    "WITH gone AS (DELETE FROM orders RETURNING *) SELECT * FROM gone",
-                    "SELECT * INTO backup FROM orders",
-                    "SELECT * FROM orders FOR UPDATE",
-                    "EXPLAIN ANALYZE DELETE FROM orders",
-                    "SET search_path TO other",
-                    "SELECT pg_terminate_backend(123)",
-                    "SELECT * FROM t INTO OUTFILE '/tmp/x'",
-                    "BEGIN", "VACUUM", "COPY orders TO '/tmp/x'"] {
+        for sql in [
+            "DELETE FROM orders", "UPDATE orders SET total = 0", "insert into t values (1)", "DROP TABLE orders",
+            "SELECT 1; DELETE FROM orders",
+            "WITH gone AS (DELETE FROM orders RETURNING *) SELECT * FROM gone",
+            "SELECT * INTO backup FROM orders",
+            "SELECT * FROM orders FOR UPDATE",
+            "EXPLAIN ANALYZE DELETE FROM orders",
+            "SET search_path TO other",
+            "SELECT pg_terminate_backend(123)",
+            "SELECT * FROM t INTO OUTFILE '/tmp/x'",
+            "BEGIN", "VACUUM", "COPY orders TO '/tmp/x'",
+        ] {
             XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
         }
     }
 
     /// Ways around the check found in review: quoted function names, comments MySQL runs, backslash escapes.
     func testSQLCheckBypassesAreRefused() {
-        XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation("SELECT \"set_config\"('default_transaction_read_only', 'off', false)"))
-        XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation("SELECT pg_catalog.\"pg_terminate_backend\"(1)"))
+        XCTAssertNotNil(
+            SQLDialect(flavor: .postgres)
+                .readOnlyViolation("SELECT \"set_config\"('default_transaction_read_only', 'off', false)")
+        )
+        XCTAssertNotNil(
+            SQLDialect(flavor: .postgres).readOnlyViolation("SELECT pg_catalog.\"pg_terminate_backend\"(1)")
+        )
         XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT `GET_LOCK`('x', 0)"))
         XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 1 /*! , SLEEP(5) */"))
         XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 1 --x\n, SLEEP(5)"))
-        XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation("SELECT E'\\'', set_config('a', 'b', false), ''"))
+        XCTAssertNotNil(
+            SQLDialect(flavor: .postgres).readOnlyViolation("SELECT E'\\'', set_config('a', 'b', false), ''")
+        )
         XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 'a\\'' , SLEEP(5) -- '"))
     }
 
     func testMongoEscapesAreReadBeforeTheCheck() {
         let out = MongoQueryDialect().readOnlyViolation("db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])")
         XCTAssertEqual(out, "$out writes to a collection, so the command can't run.")
-        let merge = MongoQueryDialect().readOnlyViolation("db.orders.aggregate([{ \"\\x24merge\": { into: \"copy\" } }])")
+        let merge = MongoQueryDialect()
+            .readOnlyViolation("db.orders.aggregate([{ \"\\x24merge\": { into: \"copy\" } }])")
         XCTAssertEqual(merge, "$merge writes to a collection, so the command can't run.")
         let where_ = MongoQueryDialect().readOnlyViolation("db.orders.find({ $where: \"true\" })")
         XCTAssertEqual(where_, "$where runs code on the server, so the command can't run.")
     }
 
     func testMongoReads() {
-        for command in ["db.orders.find({ status: \"paid\" }).sort({ total: -1 })",
-                        "db.orders.aggregate([{ $group: { _id: \"$status\", n: { $sum: 1 } } }])",
-                        "db.orders.countDocuments({})", "db.orders.distinct(\"status\")", "show collections",
-                        "db.getCollectionNames()"] {
+        for command in [
+            "db.orders.find({ status: \"paid\" }).sort({ total: -1 })",
+            "db.orders.aggregate([{ $group: { _id: \"$status\", n: { $sum: 1 } } }])",
+            "db.orders.countDocuments({})", "db.orders.distinct(\"status\")", "show collections",
+            "db.getCollectionNames()",
+        ] {
             XCTAssertNil(MongoQueryDialect().readOnlyViolation(command), command)
         }
-        for command in ["db.orders.deleteMany({})", "db.orders.updateOne({}, { $set: { a: 1 } })", "db.orders.drop()",
-                        "db.orders.aggregate([{ $match: {} }, { $out: \"copy\" }])", "db.dropDatabase()",
-                        "db.runCommand({ drop: \"orders\" })", "use admin", "db.orders.find(); db.orders.drop()",
-                        // Escapes are decoded by the parser, so they can't hide a stage.
-                        "db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])",
-                        "db.orders.aggregate([{ $match: {} }, { \"\\x24merge\": { into: \"copy\" } }])",
-                        "db.orders.find({ $where: \"sleep(100) || true\" })",
-                        "db.orders.aggregate([{ $addFields: { x: { $function: { body: \"function() {}\", args: [], lang: \"js\" } } } }])"] {
+        for command in [
+            "db.orders.deleteMany({})", "db.orders.updateOne({}, { $set: { a: 1 } })", "db.orders.drop()",
+            "db.orders.aggregate([{ $match: {} }, { $out: \"copy\" }])", "db.dropDatabase()",
+            "db.runCommand({ drop: \"orders\" })", "use admin", "db.orders.find(); db.orders.drop()",
+            // Escapes are decoded by the parser, so they can't hide a stage.
+            "db.orders.aggregate([{ \"\\u0024out\": \"copy\" }])",
+            "db.orders.aggregate([{ $match: {} }, { \"\\x24merge\": { into: \"copy\" } }])",
+            "db.orders.find({ $where: \"sleep(100) || true\" })",
+            "db.orders.aggregate([{ $addFields: { x: { $function: { body: \"function() {}\", args: [], lang: \"js\" } } } }])",
+        ] {
             XCTAssertNotNil(MongoQueryDialect().readOnlyViolation(command), command)
         }
     }
@@ -124,16 +157,22 @@ final class AgentToolboxTests: XCTestCase {
     private var path = ""
 
     override func setUp() async throws {
-        path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-agent-\(UUID().uuidString).sqlite").path
+        path =
+            FileManager.default.temporaryDirectory.appendingPathComponent("tabula-agent-\(UUID().uuidString).sqlite")
+            .path
         let setup = try SQLiteDriver(path: path)
-        _ = try await setup.executeScript("""
+        _ = try await setup.executeScript(
+            """
             CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
             CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id), total REAL, note TEXT);
             CREATE INDEX orders_customer ON orders(customer_id);
             INSERT INTO customers (name) VALUES ('An'), ('Bình');
-            """)
+            """
+        )
         for index in 1...120 {
-            _ = try await setup.execute("INSERT INTO orders (customer_id, total, note) VALUES (\(index % 2 + 1), \(index), 'n\(index)')")
+            _ = try await setup.execute(
+                "INSERT INTO orders (customer_id, total, note) VALUES (\(index % 2 + 1), \(index), 'n\(index)')"
+            )
         }
         await setup.close()
     }
@@ -197,8 +236,10 @@ final class AgentToolboxTests: XCTestCase {
 
         // Even past the check, each query's own read-only transaction can't be switched back to read-write.
         _ = try await driver.execute("SET default_transaction_read_only = off")
-        for statement in ["SELECT set_config('transaction_read_only', 'off', true)",
-                          "CREATE TABLE tabula_agent_probe (id int)"] {
+        for statement in [
+            "SELECT set_config('transaction_read_only', 'off', true)",
+            "CREATE TABLE tabula_agent_probe (id int)",
+        ] {
             do {
                 _ = try await toolbox.runReadOnly(statement)
                 XCTFail("Ran in the agent's transaction: \(statement)")
@@ -231,7 +272,9 @@ final class AgentToolboxTests: XCTestCase {
 
     func testResultTextCutsLongCells() {
         let long = String(repeating: "x", count: Defaults.AI.agentCellLength + 50)
-        let text = AgentToolbox.text(of: QueryResult(columns: ["a", "b"], rows: [[long, nil], ["tab\there", "line\nbreak"]]))
+        let text = AgentToolbox.text(
+            of: QueryResult(columns: ["a", "b"], rows: [[long, nil], ["tab\there", "line\nbreak"]])
+        )
         XCTAssertTrue(text.hasPrefix("2 rows:\na\tb\n"))
         XCTAssertTrue(text.contains(String(repeating: "x", count: Defaults.AI.agentCellLength) + "…\tNULL"))
         XCTAssertTrue(text.hasSuffix("tab here\tline break"))
@@ -240,12 +283,15 @@ final class AgentToolboxTests: XCTestCase {
 
     func testResultsAreShownInColumns() {
         let text = "2 rows:\nstatus\trevenue\torders\npaid\t393963.90\t857\nshipped\t263090.96\t572"
-        XCTAssertEqual(AgentToolbox.aligned(text), """
+        XCTAssertEqual(
+            AgentToolbox.aligned(text),
+            """
             2 rows:
             status   revenue    orders
             paid     393963.90  857
             shipped  263090.96  572
-            """)
+            """
+        )
         XCTAssertEqual(AgentToolbox.aligned("No rows returned."), "No rows returned.")
     }
 }
@@ -258,10 +304,16 @@ final class ChatStoreTests: XCTestCase {
         let connection = UUID()
         XCTAssertEqual(store.load(connection), [])
 
-        var running = ChatMessage(role: .tool, text: "", tool: .init(call: AgentToolCall(tool: .runQuery, query: "SELECT 1"), status: .running))
+        var running = ChatMessage(
+            role: .tool,
+            text: "",
+            tool: .init(call: AgentToolCall(tool: .runQuery, query: "SELECT 1"), status: .running)
+        )
         running.thinking = ""
-        let messages = [ChatMessage(role: .user, text: "How many orders?\nAnd by status?"), running,
-                        ChatMessage(role: .assistant, text: "There are 42.")]
+        let messages = [
+            ChatMessage(role: .user, text: "How many orders?\nAnd by status?"), running,
+            ChatMessage(role: .assistant, text: "There are 42."),
+        ]
         let old = ChatConversation(title: "Old", updated: Date(timeIntervalSinceNow: -100), messages: messages)
         let new = ChatConversation(title: ChatConversation.title(for: messages), messages: messages)
         try store.save([old, new], for: connection)
@@ -274,9 +326,10 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(loaded.first?.messages[1].tool?.status, .stopped)
         XCTAssertEqual(loaded.first?.messages[1].tool?.call.query, "SELECT 1")
 
-        let many = (0..<(Defaults.AI.savedConversations + 5)).map {
-            ChatConversation(title: "\($0)", updated: Date(timeIntervalSince1970: Double($0)), messages: messages)
-        }
+        let many = (0..<(Defaults.AI.savedConversations + 5))
+            .map {
+                ChatConversation(title: "\($0)", updated: Date(timeIntervalSince1970: Double($0)), messages: messages)
+            }
         try store.save(many, for: connection)
         XCTAssertEqual(store.load(connection).count, Defaults.AI.savedConversations)
         XCTAssertEqual(store.load(connection).first?.title, "\(Defaults.AI.savedConversations + 4)")
@@ -304,8 +357,10 @@ final class ChatStoreTests: XCTestCase {
         try store.save([], for: connection)
         XCTAssertEqual(store.load(connection), [])
         XCTAssertEqual(ChatConversation.title(for: []), "New Chat")
-        XCTAssertEqual(ChatConversation.title(for: [ChatMessage(role: .user, text: String(repeating: "a", count: 100))]).count,
-                       Defaults.AI.conversationTitleLength + 1)
+        XCTAssertEqual(
+            ChatConversation.title(for: [ChatMessage(role: .user, text: String(repeating: "a", count: 100))]).count,
+            Defaults.AI.conversationTitleLength + 1
+        )
     }
 
 }

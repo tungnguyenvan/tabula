@@ -28,16 +28,31 @@ public final class LocalModelRunner: @unchecked Sendable {
 
     /// Generates a reply to `prompt` with the model at `path`. Cancelling the calling task stops
     /// generation at the next token. `onText` receives the reply as it grows, a piece at a time.
-    public func generate(path: String, instructions: String, prompt: String, maxTokens: Int,
-                         stopAtNewline: Bool = false, onText: (@Sendable (String) -> Void)? = nil) async throws -> String {
+    public func generate(
+        path: String,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        stopAtNewline: Bool = false,
+        onText: (@Sendable (String) -> Void)? = nil
+    ) async throws -> String {
         let cancelled = CancelFlag()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
-                    continuation.resume(with: Result {
-                        try self.run(path: path, instructions: instructions, prompt: prompt, maxTokens: maxTokens,
-                                     stopAtNewline: stopAtNewline, cancelled: cancelled, onText: onText)
-                    })
+                    continuation.resume(
+                        with: Result {
+                            try self.run(
+                                path: path,
+                                instructions: instructions,
+                                prompt: prompt,
+                                maxTokens: maxTokens,
+                                stopAtNewline: stopAtNewline,
+                                cancelled: cancelled,
+                                onText: onText
+                            )
+                        }
+                    )
                 }
             }
         } onCancel: {
@@ -53,9 +68,17 @@ public final class LocalModelRunner: @unchecked Sendable {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
-                    continuation.resume(with: Result {
-                        try self.runFill(path: path, prefix: prefix, suffix: suffix, maxTokens: maxTokens, cancelled: cancelled)
-                    })
+                    continuation.resume(
+                        with: Result {
+                            try self.runFill(
+                                path: path,
+                                prefix: prefix,
+                                suffix: suffix,
+                                maxTokens: maxTokens,
+                                cancelled: cancelled
+                            )
+                        }
+                    )
                 }
             }
         } onCancel: {
@@ -70,8 +93,15 @@ public final class LocalModelRunner: @unchecked Sendable {
 
     // MARK: On the queue
 
-    private func run(path: String, instructions: String, prompt: String, maxTokens: Int,
-                     stopAtNewline: Bool, cancelled: CancelFlag, onText: (@Sendable (String) -> Void)?) throws -> String {
+    private func run(
+        path: String,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        stopAtNewline: Bool,
+        cancelled: CancelFlag,
+        onText: (@Sendable (String) -> Void)?
+    ) throws -> String {
         unloadWork?.cancel()
         defer { scheduleUnload() }
         let (model, context) = try load(path)
@@ -83,26 +113,57 @@ public final class LocalModelRunner: @unchecked Sendable {
         // output starts inside it; say so to whoever splits the reasoning out.
         if formatted.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("<think>") { onText?("<think>") }
         let tokens = tokenize(formatted, vocab: vocab, special: true)
-        return try complete(tokens, context: context, vocab: vocab, maxTokens: maxTokens, stopAtNewline: stopAtNewline,
-                            cancelled: cancelled, onText: onText)
+        return try complete(
+            tokens,
+            context: context,
+            vocab: vocab,
+            maxTokens: maxTokens,
+            stopAtNewline: stopAtNewline,
+            cancelled: cancelled,
+            onText: onText
+        )
     }
 
-    private func runFill(path: String, prefix: String, suffix: String, maxTokens: Int, cancelled: CancelFlag) throws -> String? {
+    private func runFill(
+        path: String,
+        prefix: String,
+        suffix: String,
+        maxTokens: Int,
+        cancelled: CancelFlag
+    ) throws -> String? {
         unloadWork?.cancel()
         defer { scheduleUnload() }
         let (model, context) = try load(path)
         guard let vocab = llama_model_get_vocab(model) else { throw AIError.server("The model has no vocabulary.") }
-        let pre = llama_vocab_fim_pre(vocab), suf = llama_vocab_fim_suf(vocab), mid = llama_vocab_fim_mid(vocab)
+        let pre = llama_vocab_fim_pre(vocab)
+        let suf = llama_vocab_fim_suf(vocab)
+        let mid = llama_vocab_fim_mid(vocab)
         guard pre >= 0, suf >= 0, mid >= 0 else { return nil }
         llama_memory_clear(llama_get_memory(context), true)
         // <fim_prefix>before<fim_suffix>after<fim_middle> - the user's text is never parsed for special tokens.
-        let tokens = [pre] + tokenize(prefix, vocab: vocab, special: false) + [suf] + tokenize(suffix, vocab: vocab, special: false) + [mid]
-        return try complete(tokens, context: context, vocab: vocab, maxTokens: maxTokens, stopAtNewline: true, cancelled: cancelled)
+        let tokens =
+            [pre] + tokenize(prefix, vocab: vocab, special: false) + [suf]
+            + tokenize(suffix, vocab: vocab, special: false) + [mid]
+        return try complete(
+            tokens,
+            context: context,
+            vocab: vocab,
+            maxTokens: maxTokens,
+            stopAtNewline: true,
+            cancelled: cancelled
+        )
     }
 
     /// Feeds `prompt` to the model and samples up to `maxTokens` tokens of answer.
-    private func complete(_ prompt: [llama_token], context: OpaquePointer, vocab: OpaquePointer, maxTokens: Int,
-                          stopAtNewline: Bool, cancelled: CancelFlag, onText: (@Sendable (String) -> Void)? = nil) throws -> String {
+    private func complete(
+        _ prompt: [llama_token],
+        context: OpaquePointer,
+        vocab: OpaquePointer,
+        maxTokens: Int,
+        stopAtNewline: Bool,
+        cancelled: CancelFlag,
+        onText: (@Sendable (String) -> Void)? = nil
+    ) throws -> String {
         var tokens = prompt
         // Keep the end of an over-long prompt (the question, or the text at the caret, is last) and leave
         // room for the answer.
@@ -220,20 +281,44 @@ public final class LocalModelRunner: @unchecked Sendable {
         guard let template = llama_model_chat_template(model, nil) else { return fallback }
         return instructions.withCString { system in
             prompt.withCString { user in
-                "system".withCString { systemRole in
-                    "user".withCString { userRole in
-                        var messages = [llama_chat_message(role: systemRole, content: system),
-                                        llama_chat_message(role: userRole, content: user)]
-                        var buffer = [CChar](repeating: 0, count: (instructions.utf8.count + prompt.utf8.count) * 2 + 512)
-                        var length = llama_chat_apply_template(template, &messages, messages.count, true, &buffer, Int32(buffer.count))
-                        if length > Int32(buffer.count) {
-                            buffer = [CChar](repeating: 0, count: Int(length) + 1)
-                            length = llama_chat_apply_template(template, &messages, messages.count, true, &buffer, Int32(buffer.count))
-                        }
-                        guard length > 0 else { return fallback }
-                        return String(decoding: buffer[0..<Int(length)].map { UInt8(bitPattern: $0) }, as: UTF8.self)
+                "system"
+                    .withCString { systemRole in
+                        "user"
+                            .withCString { userRole in
+                                var messages = [
+                                    llama_chat_message(role: systemRole, content: system),
+                                    llama_chat_message(role: userRole, content: user),
+                                ]
+                                var buffer = [CChar](
+                                    repeating: 0,
+                                    count: (instructions.utf8.count + prompt.utf8.count) * 2 + 512
+                                )
+                                var length = llama_chat_apply_template(
+                                    template,
+                                    &messages,
+                                    messages.count,
+                                    true,
+                                    &buffer,
+                                    Int32(buffer.count)
+                                )
+                                if length > Int32(buffer.count) {
+                                    buffer = [CChar](repeating: 0, count: Int(length) + 1)
+                                    length = llama_chat_apply_template(
+                                        template,
+                                        &messages,
+                                        messages.count,
+                                        true,
+                                        &buffer,
+                                        Int32(buffer.count)
+                                    )
+                                }
+                                guard length > 0 else { return fallback }
+                                return String(
+                                    decoding: buffer[0..<Int(length)].map { UInt8(bitPattern: $0) },
+                                    as: UTF8.self
+                                )
+                            }
                     }
-                }
             }
         }
     }

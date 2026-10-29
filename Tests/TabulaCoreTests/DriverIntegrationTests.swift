@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
@@ -9,14 +10,17 @@ import XCTest
 /// TABULA_TEST_PG_PORT / TABULA_TEST_MYSQL_PORT are set (user/password/database "tabula").
 final class DriverIntegrationTests: XCTestCase {
     func testSQLite() async throws {
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-\(UUID().uuidString).sqlite").path
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-\(UUID().uuidString).sqlite")
+            .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         let driver = try SQLiteDriver(path: path)
-        _ = try await driver.executeScript("""
+        _ = try await driver.executeScript(
+            """
             CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT NOT NULL, photo BLOB, score REAL DEFAULT 1.5);
             CREATE UNIQUE INDEX people_name ON people(name);
             CREATE VIEW names AS SELECT name FROM people;
-            """)
+            """
+        )
         try await exerciseEditing(driver, table: TableRef(schema: "main", name: "people"))
 
         let blob = try await driver.execute("SELECT x'00ff', NULL, 3")
@@ -57,7 +61,8 @@ final class DriverIntegrationTests: XCTestCase {
         await cleanup.close()
 
         // Other engines list their databases as schemas.
-        let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-\(UUID().uuidString).sqlite").path
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-\(UUID().uuidString).sqlite")
+            .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         let sqlite = try SQLiteDriver(path: path)
         let sqliteDatabases = try await sqlite.serverDatabases()
@@ -73,7 +78,8 @@ final class DriverIntegrationTests: XCTestCase {
         }
         let config = ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula")
         let driver = try await DriverFactory.connect(config, password: "tabula")
-        _ = try await driver.executeScript("""
+        _ = try await driver.executeScript(
+            """
             DROP SCHEMA IF EXISTS tabula_test CASCADE;
             CREATE SCHEMA tabula_test;
             CREATE TYPE tabula_test.mood AS ENUM ('ok', 'happy');
@@ -82,25 +88,34 @@ final class DriverIntegrationTests: XCTestCase {
                 amount numeric(12,3), tags text[], meta jsonb, born date, seen timestamptz, at time,
                 took interval, uid uuid, ip inet, mood tabula_test.mood, flag boolean, big bigint, matrix int[][]
             );
-            """)
+            """
+        )
         let table = TableRef(schema: "tabula_test", name: "people")
         try await exerciseEditing(driver, table: table)
 
-        _ = try await driver.execute("""
+        _ = try await driver.execute(
+            """
             INSERT INTO tabula_test.people (name, photo, amount, tags, meta, born, seen, at, took, uid, ip, mood, flag, big, matrix)
             VALUES ('typed', '\\x00ff', -1234.5, ARRAY['a', 'b c', NULL], '{"k": [1, 2]}', '2024-02-29',
                     '2024-01-02 03:04:05.25+00', '13:14:15.5', '1 year 2 mons 3 days 04:05:06', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
                     '192.168.0.1/24', 'happy', true, 9007199254740993, '{{1,2},{3,4}}')
-            """)
-        let typed = try await driver.execute("""
+            """
+        )
+        let typed = try await driver.execute(
+            """
             SELECT photo, amount, tags, meta, born, seen, at, took, uid, ip, mood, flag, big, matrix, 0.5::float8, 7::int2
             FROM tabula_test.people WHERE name = 'typed'
-            """)
-        XCTAssertEqual(typed.rows.first, [
-            "\\x00ff", "-1234.500", "{a,\"b c\",NULL}", "{\"k\": [1, 2]}", "2024-02-29", "2024-01-02 03:04:05.25+00",
-            "13:14:15.5", "1 year 2 mons 3 days 04:05:06", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "192.168.0.1/24",
-            "happy", "true", "9007199254740993", "{{1,2},{3,4}}", "0.5", "7",
-        ])
+            """
+        )
+        XCTAssertEqual(
+            typed.rows.first,
+            [
+                "\\x00ff", "-1234.500", "{a,\"b c\",NULL}", "{\"k\": [1, 2]}", "2024-02-29",
+                "2024-01-02 03:04:05.25+00",
+                "13:14:15.5", "1 year 2 mons 3 days 04:05:06", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "192.168.0.1/24",
+                "happy", "true", "9007199254740993", "{{1,2},{3,4}}", "0.5", "7",
+            ]
+        )
         let empty = try await driver.execute("SELECT id, name FROM tabula_test.people WHERE false")
         XCTAssertEqual(empty.columns, ["id", "name"])
 
@@ -128,17 +143,21 @@ final class DriverIntegrationTests: XCTestCase {
         }
         let config = ConnectionConfig(kind: .mysql, port: port, user: "tabula", database: "tabula", tls: .require)
         let driver = try await DriverFactory.connect(config, password: "tabula")
-        _ = try await driver.executeScript("""
+        _ = try await driver.executeScript(
+            """
             DROP TABLE IF EXISTS people;
             CREATE TABLE people (
                 id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, photo BLOB,
                 score DOUBLE DEFAULT 1.5, amount DECIMAL(12,3), born DATE, seen DATETIME(3), flag TINYINT(1)
             );
-            """)
+            """
+        )
         let table = TableRef(schema: "tabula", name: "people")
         try await exerciseEditing(driver, table: table)
 
-        _ = try await driver.execute("INSERT INTO people (name, amount, born, seen, flag) VALUES ('typed', -1234.5, '2024-02-29', '2024-01-02 03:04:05.250', 1)")
+        _ = try await driver.execute(
+            "INSERT INTO people (name, amount, born, seen, flag) VALUES ('typed', -1234.5, '2024-02-29', '2024-01-02 03:04:05.250', 1)"
+        )
         let typed = try await driver.execute("SELECT amount, born, seen, flag FROM people WHERE name = 'typed'")
         XCTAssertEqual(typed.rows.first, ["-1234.500", "2024-02-29", "2024-01-02 03:04:05.250", "1"])
 
@@ -158,7 +177,12 @@ final class DriverIntegrationTests: XCTestCase {
     }
 
     /// Insert / update / delete through the generated SQL, then verify via paging and counting.
-    private func exerciseEditing(_ driver: any DatabaseDriver, table: TableRef, file: StaticString = #filePath, line: UInt = #line) async throws {
+    private func exerciseEditing(
+        _ driver: any DatabaseDriver,
+        table: TableRef,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
         let d = try XCTUnwrap(driver.dialect.sql)
         try await driver.applyInTransaction([
             d.insert(table, values: [("name", "O'Brien \\ slash")]),
@@ -169,17 +193,26 @@ final class DriverIntegrationTests: XCTestCase {
         let idIndex = try XCTUnwrap(page.columns.firstIndex(of: "id"), file: file, line: line)
         XCTAssertEqual(page.rows.map { $0[nameIndex] }, ["O'Brien \\ slash", "Zed"], file: file, line: line)
 
-        let likeCount = try await driver.countRows(table, filter: d.condition([FilterRule(column: "name", op: .contains, value: "'brien \\")]))
+        let likeCount = try await driver.countRows(
+            table,
+            filter: d.condition([FilterRule(column: "name", op: .contains, value: "'brien \\")])
+        )
         XCTAssertEqual(likeCount, 1, "case-insensitive contains with quote and backslash", file: file, line: line)
 
         let zedID = page.rows[1][idIndex]
-        try await driver.applyInTransaction([d.update(table, set: [("name", "Zoe"), ("photo", nil)], key: [("id", zedID)])])
-        let filtered = try await driver.fetchPage(TablePageRequest(table: table, filter: "\(d.quoteIdentifier("name")) = 'Zoe'"))
+        try await driver.applyInTransaction([
+            d.update(table, set: [("name", "Zoe"), ("photo", nil)], key: [("id", zedID)])
+        ])
+        let filtered = try await driver.fetchPage(
+            TablePageRequest(table: table, filter: "\(d.quoteIdentifier("name")) = 'Zoe'")
+        )
         XCTAssertEqual(filtered.rows.count, 1, file: file, line: line)
 
         // A failing batch must leave the table untouched.
         do {
-            try await driver.applyInTransaction([d.delete(table, key: [("id", zedID)]), "INSERT INTO nowhere VALUES (1)"])
+            try await driver.applyInTransaction([
+                d.delete(table, key: [("id", zedID)]), "INSERT INTO nowhere VALUES (1)",
+            ])
             XCTFail("expected failure", file: file, line: line)
         } catch {}
         let count = try await driver.countRows(table, filter: nil)
@@ -199,13 +232,18 @@ final class UseSchemaTests: XCTestCase {
         guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
             throw XCTSkip("TABULA_TEST_PG_PORT not set")
         }
-        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"), password: "tabula")
-        _ = try await driver.executeScript("""
+        let driver = try await DriverFactory.connect(
+            ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"),
+            password: "tabula"
+        )
+        _ = try await driver.executeScript(
+            """
             DROP SCHEMA IF EXISTS tabula_use CASCADE;
             CREATE SCHEMA tabula_use;
             CREATE TABLE tabula_use.transactions (id int);
             INSERT INTO tabula_use.transactions VALUES (7);
-            """)
+            """
+        )
         do {
             _ = try await driver.execute("SELECT id FROM transactions")
             XCTFail("expected the table to be invisible before useSchema")
@@ -226,12 +264,14 @@ final class UseSchemaTests: XCTestCase {
         }
         let config = ConnectionConfig(kind: .mysql, port: port, user: "root", database: "tabula", tls: .require)
         let driver = try await DriverFactory.connect(config, password: "tabula")
-        _ = try await driver.executeScript("""
+        _ = try await driver.executeScript(
+            """
             DROP DATABASE IF EXISTS tabula_use;
             CREATE DATABASE tabula_use;
             CREATE TABLE tabula_use.transactions (id int);
             INSERT INTO tabula_use.transactions VALUES (8);
-            """)
+            """
+        )
         try await driver.useSchema("tabula_use")
         let rows = try await driver.execute("SELECT id FROM transactions").rows
         XCTAssertEqual(rows, [["8"]])
@@ -243,11 +283,15 @@ final class UseSchemaTests: XCTestCase {
 /// Viewing and editing functions and triggers.
 final class RoutineTests: XCTestCase {
     func testSQLiteTriggers() async throws {
-        let driver = try SQLiteDriver(path: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).db").path)
-        _ = try await driver.executeScript("""
+        let driver = try SQLiteDriver(
+            path: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).db").path
+        )
+        _ = try await driver.executeScript(
+            """
             CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT, updated TEXT);
             CREATE TRIGGER touch AFTER UPDATE ON items BEGIN UPDATE items SET updated = 'yes' WHERE id = NEW.id; END;
-            """)
+            """
+        )
         let routines = try await driver.routines(in: "main")
         XCTAssertEqual(routines.map(\.name), ["touch"])
         let trigger = try XCTUnwrap(routines.first)
@@ -257,13 +301,22 @@ final class RoutineTests: XCTestCase {
 
         // A broken definition changes nothing.
         do {
-            try await driver.replace(trigger, original: original, with: "CREATE TRIGGER touch AFTER UPDATE ON nowhere BEGIN SELECT 1; END;")
+            try await driver.replace(
+                trigger,
+                original: original,
+                with: "CREATE TRIGGER touch AFTER UPDATE ON nowhere BEGIN SELECT 1; END;"
+            )
             XCTFail("expected an error")
         } catch {}
         let unchanged = try await driver.definition(of: trigger)
         XCTAssertEqual(unchanged, original)
 
-        try await driver.replace(trigger, original: original, with: "CREATE TRIGGER touch AFTER UPDATE ON items BEGIN UPDATE items SET updated = 'v2' WHERE id = NEW.id; END;")
+        try await driver.replace(
+            trigger,
+            original: original,
+            with:
+                "CREATE TRIGGER touch AFTER UPDATE ON items BEGIN UPDATE items SET updated = 'v2' WHERE id = NEW.id; END;"
+        )
         _ = try await driver.execute("INSERT INTO items (id, name) VALUES (1, 'a')")
         _ = try await driver.execute("UPDATE items SET name = 'b' WHERE id = 1")
         let updated = try await driver.execute("SELECT updated FROM items").rows.first?.first
@@ -277,21 +330,30 @@ final class RoutineTests: XCTestCase {
         guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
             throw XCTSkip("TABULA_TEST_PG_PORT not set")
         }
-        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"), password: "tabula")
-        _ = try await driver.executeScript("""
+        let driver = try await DriverFactory.connect(
+            ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"),
+            password: "tabula"
+        )
+        _ = try await driver.executeScript(
+            """
             DROP SCHEMA IF EXISTS tabula_routines CASCADE;
             CREATE SCHEMA tabula_routines;
             CREATE TABLE tabula_routines.items (id int, touched text);
             CREATE FUNCTION tabula_routines.add_one(n integer) RETURNS integer LANGUAGE sql AS $$ SELECT n + 1 $$;
             CREATE FUNCTION tabula_routines.touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.touched := 'v1'; RETURN NEW; END $$;
             CREATE TRIGGER touch_items BEFORE INSERT ON tabula_routines.items FOR EACH ROW EXECUTE FUNCTION tabula_routines.touch();
-            """)
+            """
+        )
         let routines = try await driver.routines(in: "tabula_routines")
         XCTAssertEqual(Set(routines.map(\.displayName)), ["add_one(n integer)", "touch", "touch_items"])
         let addOne = try XCTUnwrap(routines.first { $0.name == "add_one" })
         let definition = try await driver.definition(of: addOne)
         XCTAssertTrue(definition.contains("CREATE OR REPLACE FUNCTION tabula_routines.add_one"), definition)
-        try await driver.replace(addOne, original: definition, with: definition.replacingOccurrences(of: "n + 1", with: "n + 2"))
+        try await driver.replace(
+            addOne,
+            original: definition,
+            with: definition.replacingOccurrences(of: "n + 1", with: "n + 2")
+        )
         let two = try await driver.execute("SELECT tabula_routines.add_one(1)").rows.first?.first
         XCTAssertEqual(two, "3")
 
@@ -299,7 +361,11 @@ final class RoutineTests: XCTestCase {
         XCTAssertEqual(trigger.detail, "BEFORE INSERT ON items")
         let triggerDefinition = try await driver.definition(of: trigger)
         XCTAssertTrue(triggerDefinition.hasPrefix("CREATE TRIGGER touch_items BEFORE INSERT"), triggerDefinition)
-        try await driver.replace(trigger, original: triggerDefinition, with: triggerDefinition.replacingOccurrences(of: "BEFORE INSERT", with: "BEFORE INSERT OR UPDATE"))
+        try await driver.replace(
+            trigger,
+            original: triggerDefinition,
+            with: triggerDefinition.replacingOccurrences(of: "BEFORE INSERT", with: "BEFORE INSERT OR UPDATE")
+        )
         let changed = try await driver.routines(in: "tabula_routines").first { $0.kind == .trigger }
         XCTAssertEqual(changed?.detail, "BEFORE INSERT OR UPDATE ON items")
         _ = try await driver.execute("DROP SCHEMA tabula_routines CASCADE")
@@ -310,14 +376,21 @@ final class RoutineTests: XCTestCase {
         guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else {
             throw XCTSkip("TABULA_TEST_MYSQL_PORT not set")
         }
-        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .mysql, port: port, user: "root", database: "tabula", tls: .require), password: "tabula")
+        let driver = try await DriverFactory.connect(
+            ConnectionConfig(kind: .mysql, port: port, user: "root", database: "tabula", tls: .require),
+            password: "tabula"
+        )
         _ = try await driver.execute("DROP FUNCTION IF EXISTS tabula_add_one")
         _ = try await driver.execute("CREATE FUNCTION tabula_add_one(n INT) RETURNS INT DETERMINISTIC RETURN n + 1")
         let all = try await driver.routines(in: "tabula")
         let routine = try XCTUnwrap(all.first { $0.name == "tabula_add_one" })
         let original = try await driver.definition(of: routine)
         do {
-            try await driver.replace(routine, original: original, with: "CREATE FUNCTION tabula_add_one(n INT) RETURNS INT DETERMINISTIC RETURN nonsense(")
+            try await driver.replace(
+                routine,
+                original: original,
+                with: "CREATE FUNCTION tabula_add_one(n INT) RETURNS INT DETERMINISTIC RETURN nonsense("
+            )
             XCTFail("expected an error")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("restored"), error.localizedDescription)

@@ -79,14 +79,24 @@ public enum UpdateFeed {
     /// is a draft or pre-release, or lacks the ZIP and checksum assets.
     public static func update(from data: Data, current: SemanticVersion) throws -> AvailableUpdate? {
         let release = try JSONDecoder().decode(Release.self, from: data)
-        guard !release.draft, !release.prerelease, let version = SemanticVersion(release.tag_name), version.prerelease == nil,
-              current < version else { return nil }
+        guard !release.draft, !release.prerelease, let version = SemanticVersion(release.tag_name),
+            version.prerelease == nil,
+            current < version
+        else { return nil }
         let archiveName = "Tabula-\(version).zip"
         guard let archive = release.assets.first(where: { $0.name == archiveName }),
-              let sums = release.assets.first(where: { $0.name == "SHA256SUMS.txt" }) else { return nil }
-        return AvailableUpdate(version: version, title: release.name ?? "Tabula \(version)", notes: release.body ?? "",
-                               pageURL: release.html_url, archiveURL: archive.browser_download_url, archiveName: archiveName,
-                               archiveSize: archive.size, checksumsURL: sums.browser_download_url)
+            let sums = release.assets.first(where: { $0.name == "SHA256SUMS.txt" })
+        else { return nil }
+        return AvailableUpdate(
+            version: version,
+            title: release.name ?? "Tabula \(version)",
+            notes: release.body ?? "",
+            pageURL: release.html_url,
+            archiveURL: archive.browser_download_url,
+            archiveName: archiveName,
+            archiveSize: archive.size,
+            checksumsURL: sums.browser_download_url
+        )
     }
 
     /// The expected SHA-256 for `file` from `shasum -a 256` output ("<hex>  <name>" per line).
@@ -95,7 +105,7 @@ public enum UpdateFeed {
             let parts = line.split(separator: " ", maxSplits: 1)
             guard parts.count == 2 else { continue }
             var name = parts[1].trimmingCharacters(in: .whitespaces)
-            if name.hasPrefix("*") { name.removeFirst() } // binary-mode marker
+            if name.hasPrefix("*") { name.removeFirst() }  // binary-mode marker
             let hex = parts[0].lowercased()
             if name == file, hex.count == 64, hex.allSatisfy(\.isHexDigit) { return hex }
         }
@@ -103,14 +113,24 @@ public enum UpdateFeed {
     }
 
     /// Fetches the feed. GitHub answers 404 when no release has been published yet; that means "no update".
-    public static func check(feed: URL, current: SemanticVersion, session: URLSession = .shared) async throws -> AvailableUpdate? {
-        var request = URLRequest(url: feed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Defaults.Updates.requestTimeout)
+    public static func check(
+        feed: URL,
+        current: SemanticVersion,
+        session: URLSession = .shared
+    ) async throws -> AvailableUpdate? {
+        var request = URLRequest(
+            url: feed,
+            cachePolicy: .reloadIgnoringLocalCacheData,
+            timeoutInterval: Defaults.Updates.requestTimeout
+        )
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("Tabula/\(current)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 404 { return nil }
-        if status == 403 || status == 429 { throw DatabaseError("GitHub is limiting update checks right now. Try again later.") }
+        if status == 403 || status == 429 {
+            throw DatabaseError("GitHub is limiting update checks right now. Try again later.")
+        }
         guard status == 200 else { throw DatabaseError("Update check failed (HTTP \(status)).") }
         return try update(from: data, current: current)
     }

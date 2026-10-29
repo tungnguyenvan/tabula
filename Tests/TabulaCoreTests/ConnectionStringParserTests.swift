@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaFoundation
 
 final class ConnectionStringParserTests: XCTestCase {
@@ -13,7 +14,9 @@ final class ConnectionStringParserTests: XCTestCase {
         XCTAssertEqual(urlPassword, "s?cret")
 
         // JDBC gives the login as options.
-        let (jdbc, jdbcPassword) = try parse("jdbc:postgresql://db.example.com:5433/shop?user=app&password=p%26ss&ssl=true")
+        let (jdbc, jdbcPassword) = try parse(
+            "jdbc:postgresql://db.example.com:5433/shop?user=app&password=p%26ss&ssl=true"
+        )
         XCTAssertEqual(jdbc.kind, .postgres)
         XCTAssertEqual([jdbc.host, jdbc.user, jdbc.database], ["db.example.com", "app", "shop"])
         XCTAssertEqual(jdbc.port, 5433)
@@ -33,7 +36,9 @@ final class ConnectionStringParserTests: XCTestCase {
     }
 
     func testLibpqKeyValues() throws {
-        let (config, password) = try parse("host=db.example.com port=5433 dbname=shop user=app password='s3 cret' sslmode=verify-full")
+        let (config, password) = try parse(
+            "host=db.example.com port=5433 dbname=shop user=app password='s3 cret' sslmode=verify-full"
+        )
         XCTAssertEqual(config.kind, .postgres)
         XCTAssertEqual([config.host, config.database, config.user], ["db.example.com", "shop", "app"])
         XCTAssertEqual(config.port, 5433)
@@ -47,7 +52,9 @@ final class ConnectionStringParserTests: XCTestCase {
     }
 
     func testSemicolonSeparated() throws {
-        let (mysql, mysqlPassword) = try parse("Server=db.example.com;Port=3307;Database=shop;Uid=app;Pwd=p@ss;SslMode=Required;")
+        let (mysql, mysqlPassword) = try parse(
+            "Server=db.example.com;Port=3307;Database=shop;Uid=app;Pwd=p@ss;SslMode=Required;"
+        )
         XCTAssertEqual(mysql.kind, .mysql)
         XCTAssertEqual([mysql.host, mysql.database, mysql.user], ["db.example.com", "shop", "app"])
         XCTAssertEqual(mysql.port, 3307)
@@ -55,7 +62,9 @@ final class ConnectionStringParserTests: XCTestCase {
         XCTAssertEqual(mysqlPassword, "p@ss")
 
         // Npgsql
-        let (postgres, postgresPassword) = try parse("Host=db.example.com;Username=app;Password=\"a;b\"\"c\";Database=shop")
+        let (postgres, postgresPassword) = try parse(
+            "Host=db.example.com;Username=app;Password=\"a;b\"\"c\";Database=shop"
+        )
         XCTAssertEqual(postgres.kind, .postgres)
         XCTAssertEqual(postgres.port, 5432)
         XCTAssertEqual(postgresPassword, "a;b\"c")
@@ -68,8 +77,10 @@ final class ConnectionStringParserTests: XCTestCase {
     }
 
     func testNotAConnectionString() {
-        for text in ["", "db.example.com", "a=b", "SELECT 1; SELECT 2", "https://example.com", "name=x color=blue",
-                     "Server=db;Password=\"unclosed", "foo bar=baz"] {
+        for text in [
+            "", "db.example.com", "a=b", "SELECT 1; SELECT 2", "https://example.com", "name=x color=blue",
+            "Server=db;Password=\"unclosed", "foo bar=baz",
+        ] {
             XCTAssertNil(ConnectionConfig.parse(connectionString: text), text)
         }
     }

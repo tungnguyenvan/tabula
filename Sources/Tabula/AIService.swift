@@ -21,7 +21,9 @@ final class AIService {
     private let keychain = DispatchQueue(label: "app.tabula.ai.keychain")
 
     private init() {
-        var loaded = UserDefaults.standard.data(forKey: Self.settingsKey).flatMap { try? JSONDecoder().decode(AISettings.self, from: $0) } ?? AISettings()
+        var loaded =
+            UserDefaults.standard.data(forKey: Self.settingsKey)
+            .flatMap { try? JSONDecoder().decode(AISettings.self, from: $0) } ?? AISettings()
         #if DEBUG
         // Applied before the single assignment below: mutating `settings` afterwards, even here in init,
         // would trigger didSet and save the overrides as the developer's real settings.
@@ -47,7 +49,11 @@ final class AIService {
     }
 
     private func item(for provider: AIProviderKind) -> KeychainItem {
-        KeychainItem(service: Self.keychainService, account: provider.rawValue, label: "Tabula AI (\(provider.displayName))")
+        KeychainItem(
+            service: Self.keychainService,
+            account: provider.rawValue,
+            label: "Tabula AI (\(provider.displayName))"
+        )
     }
 
     func apiKey(for provider: AIProviderKind) async -> String {
@@ -98,7 +104,9 @@ final class AIService {
     private func provider(for purpose: AIRequest.Purpose) async -> any AIProvider {
         let settings = settings
         let kind = settings.provider(for: purpose)
-        return AIProviders.make(settings.endpoint(for: purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : ""))
+        return AIProviders.make(
+            settings.endpoint(for: purpose, apiKey: kind.needsAPIKey ? await apiKey(for: kind) : "")
+        )
     }
 
     /// The answer as the model writes it, with its reasoning when the provider shares it.
@@ -108,7 +116,9 @@ final class AIService {
 
     /// A tiny round trip, for the Test buttons in Settings.
     func test(_ purpose: AIRequest.Purpose) async throws -> String {
-        let reply = try await complete(AIRequest(purpose: purpose, instructions: "Reply with the single word OK.", prompt: "Say OK."))
+        let reply = try await complete(
+            AIRequest(purpose: purpose, instructions: "Reply with the single word OK.", prompt: "Say OK.")
+        )
         return reply.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

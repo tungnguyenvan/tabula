@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaStorage
 
 final class WorkspaceStateTests: XCTestCase {
@@ -16,11 +17,17 @@ final class WorkspaceStateTests: XCTestCase {
         let store = WorkspaceStateStore(base: base)
         let connection = UUID()
         XCTAssertNil(store.load(connection))
-        let state = WorkspaceState(database: "analytics", schema: "public", tabs: [
-            .query(title: "Query 2", sql: "SELECT 1;\n-- unsaved", file: URL(fileURLWithPath: "/tmp/report.sql")),
-            .table(schema: "public", name: "orders", kind: "table", mode: "Structure"),
-            .query(title: "Query 3", sql: "", file: nil),
-        ], selected: 1, history: ["SELECT 2", "SELECT 1"])
+        let state = WorkspaceState(
+            database: "analytics",
+            schema: "public",
+            tabs: [
+                .query(title: "Query 2", sql: "SELECT 1;\n-- unsaved", file: URL(fileURLWithPath: "/tmp/report.sql")),
+                .table(schema: "public", name: "orders", kind: "table", mode: "Structure"),
+                .query(title: "Query 3", sql: "", file: nil),
+            ],
+            selected: 1,
+            history: ["SELECT 2", "SELECT 1"]
+        )
         try store.save(state, for: connection)
         XCTAssertEqual(store.load(connection), state)
         XCTAssertNil(store.load(UUID()), "another connection has its own state")
@@ -39,7 +46,8 @@ final class WorkspaceStateTests: XCTestCase {
 
     func testRemove() throws {
         let store = WorkspaceStateStore(base: base)
-        let kept = UUID(), deleted = UUID()
+        let kept = UUID()
+        let deleted = UUID()
         try store.save(WorkspaceState(schema: "a"), for: kept)
         try store.save(WorkspaceState(schema: "b"), for: deleted)
         store.remove(deleted)

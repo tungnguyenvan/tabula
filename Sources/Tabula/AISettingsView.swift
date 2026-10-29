@@ -12,7 +12,9 @@ final class OllamaModels {
     private(set) var downloads: [String: OllamaLibrary.PullProgress] = [:]
     private(set) var checked = false
     var error: String?
-    private var library: OllamaLibrary { OllamaLibrary(baseURL: AIEndpoint(kind: .ollama, baseURL: AIService.shared.settings.baseURL(.ollama)).baseURL) }
+    private var library: OllamaLibrary {
+        OllamaLibrary(baseURL: AIEndpoint(kind: .ollama, baseURL: AIService.shared.settings.baseURL(.ollama)).baseURL)
+    }
 
     func refresh() async {
         version = await library.version()
@@ -75,9 +77,11 @@ struct AISettingsView: View {
                 Toggle("Let the chat run read-only queries", isOn: $ai.settings.assistantQueries)
                     .disabled(!ai.settings.enabled)
             } footer: {
-                Text("Table and column names, keys and the SQL in the editor are sent. With read-only queries on, the chat "
-                     + "can also run SELECT statements (or MongoDB reads) and sees up to \(Defaults.AI.agentRowLimit) rows of "
-                     + "each result; on Production connections it asks you first. Ask AI, Fix with AI and suggestions never see rows.")
+                Text(
+                    "Table and column names, keys and the SQL in the editor are sent. With read-only queries on, the chat "
+                        + "can also run SELECT statements (or MongoDB reads) and sees up to \(Defaults.AI.agentRowLimit) rows of "
+                        + "each result; on Production connections it asks you first. Ask AI, Fix with AI and suggestions never see rows."
+                )
             }
 
             if ai.settings.enabled {
@@ -97,21 +101,31 @@ struct AISettingsView: View {
                     Toggle("Suggest SQL while I type", isOn: $ai.settings.inlineSuggestions)
                     if ai.settings.inlineSuggestions {
                         Picker("Provider", selection: $ai.settings.inlineProvider) {
-                            Text(assistant.supportsInline ? "Same as above" : "Same as above (too slow)").tag(AIProviderKind?.none)
+                            Text(assistant.supportsInline ? "Same as above" : "Same as above (too slow)")
+                                .tag(AIProviderKind?.none)
                             Divider()
-                            ForEach(AIProviderKind.allCases.filter(\.supportsInline)) { Text($0.displayName).tag(AIProviderKind?.some($0)) }
+                            ForEach(AIProviderKind.allCases.filter(\.supportsInline)) {
+                                Text($0.displayName).tag(AIProviderKind?.some($0))
+                            }
                         }
                         if ai.settings.inlineProvider != nil || typing.supportsInline {
-                            ProviderFields(kind: typing, purpose: .inline, ollama: ollama, showsShared: ai.settings.inlineProvider != nil)
+                            ProviderFields(
+                                kind: typing,
+                                purpose: .inline,
+                                ollama: ollama,
+                                showsShared: ai.settings.inlineProvider != nil
+                            )
                             TestRow(purpose: .inline)
                         }
                     }
                 } header: {
                     Text("Suggestions while typing")
                 } footer: {
-                    Text(typing.supportsInline
-                         ? "A suggestion appears in grey when you pause; Tab accepts it. A small model on this Mac keeps up best."
-                         : "Command-line agents are too slow to suggest while typing. Choose a local model or an API here.")
+                    Text(
+                        typing.supportsInline
+                            ? "A suggestion appears in grey when you pause; Tab accepts it. A small model on this Mac keeps up best."
+                            : "Command-line agents are too slow to suggest while typing. Choose a local model or an API here."
+                    )
                 }
 
                 if usesBuiltIn { BuiltInModelsSection() }
@@ -144,8 +158,10 @@ private struct ProviderFields: View {
 
     private var modelBinding: Binding<String> {
         let store: WritableKeyPath<AISettings, [String: String]> = purpose == .inline ? \.inlineModels : \.models
-        return Binding(get: { ai.settings[keyPath: store][kind.rawValue] ?? "" },
-                       set: { ai.settings[keyPath: store][kind.rawValue] = $0 })
+        return Binding(
+            get: { ai.settings[keyPath: store][kind.rawValue] ?? "" },
+            set: { ai.settings[keyPath: store][kind.rawValue] = $0 }
+        )
     }
 
     private var baseURLBinding: Binding<String> {
@@ -159,7 +175,8 @@ private struct ProviderFields: View {
                 let current = ai.settings.model(kind, for: purpose)
                 let installed = LocalModelStore().installed().map(\.id)
                 if !installed.contains(current) {
-                    Text(current.isEmpty ? "None" : "\(BuiltInModels.name(of: current)) (not downloaded)").tag(modelBinding.wrappedValue)
+                    Text(current.isEmpty ? "None" : "\(BuiltInModels.name(of: current)) (not downloaded)")
+                        .tag(modelBinding.wrappedValue)
                 }
                 ForEach(installed, id: \.self) { Text(BuiltInModels.name(of: $0)).tag($0) }
             }
@@ -167,8 +184,11 @@ private struct ProviderFields: View {
             if let reason = AppleIntelligenceProvider.unavailableReason {
                 Label(reason, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
             } else {
-                Label("Ready. Runs on this Mac; nothing is sent over the network.", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                Label(
+                    "Ready. Runs on this Mac; nothing is sent over the network.",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundStyle(.green)
             }
         case .ollama:
             if showsShared { TextField("Server", text: baseURLBinding, prompt: Text(kind.defaultBaseURL)) }
@@ -184,12 +204,19 @@ private struct ProviderFields: View {
                 TextField("Base URL", text: baseURLBinding, prompt: Text(kind.defaultBaseURL))
                 APIKeyField(kind: kind)
             }
-            TextField("Model", text: modelBinding, prompt: Text(purpose == .inline ? "Same as Ask AI" : "e.g. gpt-4.1, or a LiteLLM model name"))
+            TextField(
+                "Model",
+                text: modelBinding,
+                prompt: Text(purpose == .inline ? "Same as Ask AI" : "e.g. gpt-4.1, or a LiteLLM model name")
+            )
             if purpose == .generate { EffortPicker(kind: kind) }
         case .anthropic:
             if showsShared { APIKeyField(kind: kind) }
-            TextField("Model", text: modelBinding,
-                      prompt: Text(purpose == .inline ? "Same as Ask AI; claude-haiku-5-5 is faster" : kind.defaultModel))
+            TextField(
+                "Model",
+                text: modelBinding,
+                prompt: Text(purpose == .inline ? "Same as Ask AI; claude-haiku-5-5 is faster" : kind.defaultModel)
+            )
             if purpose == .generate { EffortPicker(kind: kind) }
         case .claudeCode, .codex:
             Group {
@@ -198,8 +225,11 @@ private struct ProviderFields: View {
                 } else if let cliPath {
                     LabeledContent("Found", value: cliPath)
                 } else {
-                    Label("Not found. Install it, sign in once in Terminal, then reopen Settings.", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
+                    Label(
+                        "Not found. Install it, sign in once in Terminal, then reopen Settings.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .foregroundStyle(.orange)
                 }
             }
             .task(id: kind) {
@@ -234,7 +264,8 @@ private struct APIKeyField: View {
 
     private func save() {
         guard loaded else { return }
-        let key = key, kind = kind
+        let key = key
+        let kind = kind
         Task {
             do {
                 try await AIService.shared.setAPIKey(key, for: kind)
@@ -257,7 +288,8 @@ private struct TestRow: View {
             if testing { ProgressView().controlSize(.small) }
             Spacer()
             switch result {
-            case .success(let reply): Label("Answered “\(reply.prefix(40))”", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            case .success(let reply):
+                Label("Answered “\(reply.prefix(40))”", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             case .failure(let error): Text(error.localizedDescription).foregroundStyle(.red).lineLimit(3)
             case nil: EmptyView()
             }
@@ -284,8 +316,11 @@ private struct LocalModelsSection: View {
             if !ollama.checked {
                 ProgressView().controlSize(.small)
             } else if ollama.version == nil {
-                Label("Ollama runs the models on this Mac. Install it, open it, then come back here to download one.",
-                      systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                Label(
+                    "Ollama runs the models on this Mac. Install it, open it, then come back here to download one.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .foregroundStyle(.orange)
                 HStack {
                     Link("Download Ollama", destination: URL(string: "https://ollama.com/download")!)
                     Spacer()
@@ -295,8 +330,16 @@ private struct LocalModelsSection: View {
                 ForEach(Defaults.AI.recommendedLocalModels) { model in
                     row(name: model.name, summary: model.summary, forTyping: model.forTyping)
                 }
-                ForEach(ollama.installed.filter { installed in !Defaults.AI.recommendedLocalModels.contains { $0.name == installed.name } }) { model in
-                    row(name: model.name, summary: ByteCountFormatter.string(fromByteCount: model.size, countStyle: .file), forTyping: false)
+                ForEach(
+                    ollama.installed.filter { installed in
+                        !Defaults.AI.recommendedLocalModels.contains { $0.name == installed.name }
+                    }
+                ) { model in
+                    row(
+                        name: model.name,
+                        summary: ByteCountFormatter.string(fromByteCount: model.size, countStyle: .file),
+                        forTyping: false
+                    )
                 }
             }
             if let error = ollama.error { Text(error).foregroundStyle(.red) }
@@ -424,7 +467,10 @@ final class BuiltInModels {
 
     func delete(_ id: String) {
         LocalModelRunner.shared.unload()
-        do { try store.delete(id); error = nil } catch { self.error = error.localizedDescription }
+        do {
+            try store.delete(id)
+            error = nil
+        } catch { self.error = error.localizedDescription }
         refresh()
     }
 }
@@ -454,7 +500,10 @@ private struct BuiltInModelsSection: View {
                 Button("Add from Link…") { addingLink = true }
                 Spacer()
                 Button("Show in Finder") {
-                    try? FileManager.default.createDirectory(at: models.store.directory, withIntermediateDirectories: true)
+                    try? FileManager.default.createDirectory(
+                        at: models.store.directory,
+                        withIntermediateDirectories: true
+                    )
                     NSWorkspace.shared.activateFileViewerSelecting([models.store.directory])
                 }
             }
@@ -462,13 +511,16 @@ private struct BuiltInModelsSection: View {
         } header: {
             Text("Models on this Mac")
         } footer: {
-            Text("Models run inside Tabula and never leave this Mac. Any GGUF model works: add a file, or a link to one (for example from Hugging Face). Models are stored in Tabula's folder, not in the app.")
+            Text(
+                "Models run inside Tabula and never leave this Mac. Any GGUF model works: add a file, or a link to one (for example from Hugging Face). Models are stored in Tabula's folder, not in the app."
+            )
         }
         .onAppear { models.refresh() }
         .sheet(isPresented: $addingLink) { linkSheet }
     }
 
-    private func row(id: String, name: String, detail: String, @ViewBuilder notInstalled: () -> some View) -> some View {
+    private func row(id: String, name: String, detail: String, @ViewBuilder notInstalled: () -> some View) -> some View
+    {
         HStack {
             VStack(alignment: .leading) {
                 Text(name)
@@ -477,8 +529,12 @@ private struct BuiltInModelsSection: View {
             Spacer()
             if let progress = models.downloads[id] {
                 ProgressView(value: progress).frame(width: Layout.Settings.progressWidth)
-                Button { models.cancel(id) } label: { Image(systemName: "xmark.circle.fill") }
-                    .buttonStyle(.borderless).help("Stop downloading")
+                Button {
+                    models.cancel(id)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless).help("Stop downloading")
             } else if models.installed.contains(where: { $0.id == id }) {
                 Menu {
                     Button("Use for Ask AI") { use(id, for: .generate) }
@@ -577,14 +633,18 @@ struct PromptEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.barPadding) {
             Text("\(prompt.title) instructions").font(.headline)
-            Text("Sent as the system prompt. {database} becomes the database's name (PostgreSQL, MySQL / MariaDB, SQLite). "
-                 + "The schema and your SQL are added after it automatically. MongoDB connections use built-in shell prompts "
-                 + "unless you change this one.")
-                .font(.callout).foregroundStyle(.secondary)
+            Text(
+                "Sent as the system prompt. {database} becomes the database's name (PostgreSQL, MySQL / MariaDB, SQLite). "
+                    + "The schema and your SQL are added after it automatically. MongoDB connections use built-in shell prompts "
+                    + "unless you change this one."
+            )
+            .font(.callout).foregroundStyle(.secondary)
             TextEditor(text: $text)
                 .font(Layout.Font.mono)
                 .frame(width: Layout.Settings.width, height: Layout.Settings.promptHeight)
-                .overlay(RoundedRectangle(cornerRadius: Layout.cornerRadius).strokeBorder(Color(nsColor: .separatorColor)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Layout.cornerRadius).strokeBorder(Color(nsColor: .separatorColor))
+                )
             HStack {
                 Button("Restore Default") { text = prompt.defaultTemplate }
                     .disabled(text == prompt.defaultTemplate)
@@ -621,7 +681,9 @@ struct PromptsSection: View {
         } header: {
             Text("Instructions")
         } footer: {
-            Text("The system prompts Tabula sends. Change them to set a style, language or rules (for example: answer in Vietnamese, always add LIMIT).")
+            Text(
+                "The system prompts Tabula sends. Change them to set a style, language or rules (for example: answer in Vietnamese, always add LIMIT)."
+            )
         }
         .sheet(item: $editing) { PromptEditor(prompt: $0) }
     }
@@ -635,9 +697,13 @@ struct EffortPicker: View {
 
     var body: some View {
         if !kind.effortLevels.isEmpty {
-            Picker("Effort", selection: Binding(
-                get: { ai.settings.efforts[kind.rawValue] ?? "" },
-                set: { ai.settings.efforts[kind.rawValue] = $0.isEmpty ? nil : $0 })) {
+            Picker(
+                "Effort",
+                selection: Binding(
+                    get: { ai.settings.efforts[kind.rawValue] ?? "" },
+                    set: { ai.settings.efforts[kind.rawValue] = $0.isEmpty ? nil : $0 }
+                )
+            ) {
                 Text("Default").tag("")
                 Divider()
                 ForEach(kind.effortLevels, id: \.self) { Text($0.capitalized).tag($0) }

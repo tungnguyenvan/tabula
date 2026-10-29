@@ -11,7 +11,13 @@ public struct ForeignKeyInfo: Hashable, Sendable, Identifiable {
     public var referencedColumns: [String]
     public var id: String { "\(table.id).\(name)" }
 
-    public init(name: String, table: TableRef, columns: [String], referencedTable: TableRef, referencedColumns: [String]) {
+    public init(
+        name: String,
+        table: TableRef,
+        columns: [String],
+        referencedTable: TableRef,
+        referencedColumns: [String]
+    ) {
         self.name = name
         self.table = table
         self.columns = columns
@@ -25,14 +31,20 @@ public struct MetricsSample: Sendable {
     public struct Item: Sendable, Hashable {
         public var label: String
         public var value: String
-        public init(_ label: String, _ value: String) { self.label = label; self.value = value }
+        public init(_ label: String, _ value: String) {
+            self.label = label
+            self.value = value
+        }
     }
 
     public struct Group: Sendable, Identifiable {
         public var title: String
         public var items: [Item]
         public var id: String { title }
-        public init(_ title: String, _ items: [Item]) { self.title = title; self.items = items.filter { !$0.value.isEmpty } }
+        public init(_ title: String, _ items: [Item]) {
+            self.title = title
+            self.items = items.filter { !$0.value.isEmpty }
+        }
     }
 
     public struct TableStat: Sendable, Identifiable, Hashable {
@@ -61,7 +73,13 @@ public struct MetricsSample: Sendable {
     /// MongoDB lists collections of documents.
     public var tablesAreCollections = false
 
-    public init(time: Date = Date(), groups: [Group], counters: [String: Double] = [:], gauges: [String: Double] = [:], tables: [TableStat] = []) {
+    public init(
+        time: Date = Date(),
+        groups: [Group],
+        counters: [String: Double] = [:],
+        gauges: [String: Double] = [:],
+        tables: [TableStat] = []
+    ) {
         self.time = time
         self.groups = groups
         self.counters = counters
@@ -81,7 +99,12 @@ package enum Units {
 extension MetricsSample.TableStat {
     /// From a row with name, row_count, data_bytes and index_bytes columns.
     package init(_ row: Record) {
-        self.init(name: row["name"] ?? "", rows: row.int("row_count"), dataBytes: row.int("data_bytes"), indexBytes: row.int("index_bytes"))
+        self.init(
+            name: row["name"] ?? "",
+            rows: row.int("row_count"),
+            dataBytes: row.int("data_bytes"),
+            indexBytes: row.int("index_bytes")
+        )
     }
 }
 
@@ -93,8 +116,10 @@ public enum MetricFormat {
 
     public static func duration(seconds: Double?) -> String {
         guard var seconds = seconds.map({ Int($0) }) else { return "" }
-        let days = seconds / Units.secondsPerDay; seconds %= Units.secondsPerDay
-        let hours = seconds / Units.secondsPerHour; seconds %= Units.secondsPerHour
+        let days = seconds / Units.secondsPerDay
+        seconds %= Units.secondsPerDay
+        let hours = seconds / Units.secondsPerHour
+        seconds %= Units.secondsPerHour
         let minutes = seconds / Units.secondsPerMinute
         if days > 0 { return "\(days)d \(hours)h" }
         if hours > 0 { return "\(hours)h \(minutes)m" }
@@ -111,4 +136,3 @@ public enum MetricFormat {
         return value.formatted(.number.precision(.fractionLength(0)))
     }
 }
-

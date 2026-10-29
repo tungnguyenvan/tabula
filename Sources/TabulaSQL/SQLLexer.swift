@@ -31,7 +31,7 @@ public enum SQLLexer {
         func unit(_ c: Character) -> UInt16 { c.utf16.first! }
         func at(_ index: Int) -> UInt16? { index < chars.count ? chars[index] : nil }
         func isWordUnit(_ u: UInt16) -> Bool {
-            guard let scalar = Unicode.Scalar(u) else { return true } // surrogate halves belong to words
+            guard let scalar = Unicode.Scalar(u) else { return true }  // surrogate halves belong to words
             return CharacterSet.alphanumerics.contains(scalar) || scalar == "_" || scalar == "$"
         }
         func emit(_ kind: SQLToken.Kind, from start: Int) {
@@ -44,7 +44,8 @@ public enum SQLLexer {
             let c = chars[i]
             let next = at(i + 1)
             if (c == unit("-") && next == unit("-") && rules.dashDashComments) || (c == unit("#") && rules.hashComments)
-                || (c == unit("/") && next == unit("/") && rules.slashSlashComments) {
+                || (c == unit("/") && next == unit("/") && rules.slashSlashComments)
+            {
                 while let u = at(i), u != unit("\n") { i += 1 }
                 emit(.comment, from: start)
             } else if c == unit("/") && next == unit("*") {
@@ -55,9 +56,15 @@ public enum SQLLexer {
             } else if c == unit("'") || c == unit("\"") || c == unit("`") {
                 i += 1
                 while i < chars.count {
-                    if chars[i] == unit("\\") && rules.backslashEscapes { i += 2; continue }
+                    if chars[i] == unit("\\") && rules.backslashEscapes {
+                        i += 2
+                        continue
+                    }
                     if chars[i] == c {
-                        if at(i + 1) == c && rules.doubledQuotes { i += 2; continue } // doubled quote
+                        if at(i + 1) == c && rules.doubledQuotes {
+                            i += 2
+                            continue
+                        }  // doubled quote
                         i += 1
                         break
                     }
@@ -68,14 +75,20 @@ public enum SQLLexer {
                 emit(c == unit("'") || !rules.quotedIdentifiers ? .string : .quotedIdentifier, from: start)
             } else if c == unit("$") && rules.dollarQuotes, let tag = dollarTag(chars, at: i) {
                 i += tag.count
-                while i < chars.count && !(chars[i] == unit("$") && Array(chars[i..<min(chars.count, i + tag.count)]) == tag) { i += 1 }
+                while i < chars.count
+                    && !(chars[i] == unit("$") && Array(chars[i..<min(chars.count, i + tag.count)]) == tag)
+                { i += 1 }
                 i = min(chars.count, i + tag.count)
                 emit(.string, from: start)
             } else if let scalar = Unicode.Scalar(c), CharacterSet.whitespacesAndNewlines.contains(scalar) {
-                while let u = at(i), let s = Unicode.Scalar(u), CharacterSet.whitespacesAndNewlines.contains(s) { i += 1 }
+                while let u = at(i), let s = Unicode.Scalar(u), CharacterSet.whitespacesAndNewlines.contains(s) {
+                    i += 1
+                }
                 emit(.whitespace, from: start)
             } else if let scalar = Unicode.Scalar(c), CharacterSet.decimalDigits.contains(scalar) {
-                while let u = at(i), let s = Unicode.Scalar(u), CharacterSet.decimalDigits.contains(s) || s == "." { i += 1 }
+                while let u = at(i), let s = Unicode.Scalar(u), CharacterSet.decimalDigits.contains(s) || s == "." {
+                    i += 1
+                }
                 emit(.number, from: start)
             } else if isWordUnit(c) {
                 while let u = at(i), isWordUnit(u) { i += 1 }
@@ -83,7 +96,11 @@ public enum SQLLexer {
             } else {
                 // Two-character operators stay together so the formatter keeps them intact.
                 i += 1
-                if let n = at(i), ["<=", ">=", "<>", "!=", "::", "||", "->"].contains(String(utf16CodeUnits: [c, n], count: 2)) { i += 1 }
+                if let n = at(i),
+                    ["<=", ">=", "<>", "!=", "::", "||", "->"].contains(String(utf16CodeUnits: [c, n], count: 2))
+                {
+                    i += 1
+                }
                 emit(.punctuation, from: start)
             }
         }
@@ -92,9 +109,13 @@ public enum SQLLexer {
 
     private static func dollarTag(_ chars: [UInt16], at start: Int) -> [UInt16]? {
         var j = start + 1
-        while j < chars.count, let s = Unicode.Scalar(chars[j]), CharacterSet.alphanumerics.contains(s) || s == "_" { j += 1 }
+        while j < chars.count, let s = Unicode.Scalar(chars[j]), CharacterSet.alphanumerics.contains(s) || s == "_" {
+            j += 1
+        }
         guard j < chars.count, chars[j] == "$".utf16.first! else { return nil }
-        if j > start + 1, let s = Unicode.Scalar(chars[start + 1]), CharacterSet.decimalDigits.contains(s) { return nil } // $1 parameter
+        if j > start + 1, let s = Unicode.Scalar(chars[start + 1]), CharacterSet.decimalDigits.contains(s) {
+            return nil
+        }  // $1 parameter
         return Array(chars[start...j])
     }
 }

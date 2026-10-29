@@ -70,7 +70,8 @@ extension ConnectionConfig {
             let after = authority[authority.index(after: close)...]
             if after.hasPrefix(":"), let port = Int(after.dropFirst()), Self.ports.contains(port) { config.port = port }
         } else if let colon = authority.lastIndex(of: ":"), let port = Int(authority[authority.index(after: colon)...]),
-                  Self.ports.contains(port) {
+            Self.ports.contains(port)
+        {
             config.host = String(authority[..<colon])
             config.port = port
         } else {
@@ -161,10 +162,12 @@ public enum PasswordEscapes {
         let bytes = Array(password.utf8)
         var output: [UInt8] = []
         output.reserveCapacity(bytes.count)
-        var index = 0, escapes = 0
+        var index = 0
+        var escapes = 0
         while index < bytes.count {
             if bytes[index] == UInt8(ascii: "%"),
-               let high = hexValue(bytes, index + 1), let low = hexValue(bytes, index + 2) {
+                let high = hexValue(bytes, index + 1), let low = hexValue(bytes, index + 2)
+            {
                 output.append(high << 4 | low)
                 index += 3
                 escapes += 1
@@ -192,7 +195,9 @@ public enum PasswordEscapes {
         let message = error.localizedDescription
         guard let password, decoded(password) != nil else { return message }
         let lowered = message.lowercased()
-        let loginFailures = ["authentication failed", "wrongpass", "access denied", "invalid username-password", "auth failed"]
+        let loginFailures = [
+            "authentication failed", "wrongpass", "access denied", "invalid username-password", "auth failed",
+        ]
         guard loginFailures.contains(where: lowered.contains) else { return message }
         return message + " The password contains URL escapes such as %3F (which stands for ?). If you copied it "
             + "from a URL or a dashboard, edit the connection and click Decode."

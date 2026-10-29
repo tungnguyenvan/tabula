@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
@@ -15,8 +16,13 @@ final class SSHTunnelTests: XCTestCase {
     }
 
     func testArgumentsUseKeyAuthAndVerifiedHostKeys() {
-        let args = SSHTunnel.arguments(SSHConfig(host: "bastion", user: "app"), localPort: 12345,
-                                       targetHost: "db.internal", targetPort: 5432, timeout: 15)
+        let args = SSHTunnel.arguments(
+            SSHConfig(host: "bastion", user: "app"),
+            localPort: 12345,
+            targetHost: "db.internal",
+            targetPort: 5432,
+            timeout: 15
+        )
         XCTAssertTrue(args.contains("BatchMode=yes"))
         XCTAssertTrue(args.contains("StrictHostKeyChecking=yes"))
         XCTAssertTrue(args.contains("PasswordAuthentication=no"))
@@ -29,8 +35,13 @@ final class SSHTunnelTests: XCTestCase {
     }
 
     func testVerifiedTLSToAnIPAddressIsRefusedThroughSSH() async {
-        let config = ConnectionConfig(kind: .postgres, host: "10.0.0.8", user: "app", tls: .verifyFull,
-                                      ssh: SSHConfig(host: "bastion", user: "app"))
+        let config = ConnectionConfig(
+            kind: .postgres,
+            host: "10.0.0.8",
+            user: "app",
+            tls: .verifyFull,
+            ssh: SSHConfig(host: "bastion", user: "app")
+        )
         do {
             let driver = try await DriverFactory.connect(config, password: nil)
             await driver.close()
@@ -41,9 +52,17 @@ final class SSHTunnelTests: XCTestCase {
     }
 
     func testQuittingStopsOpenTunnels() async throws {
-        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else { throw XCTSkip("TABULA_TEST_SSH_DIR not set") }
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else {
+            throw XCTSkip("TABULA_TEST_SSH_DIR not set")
+        }
         let ssh = SSHConfig(host: "127.0.0.1", port: 52222, user: NSUserName(), identityFile: directory + "/client_key")
-        let tunnel = try await SSHTunnel.open(ssh, targetHost: "127.0.0.1", targetPort: 55432, timeout: 5, knownHosts: directory + "/known_hosts")
+        let tunnel = try await SSHTunnel.open(
+            ssh,
+            targetHost: "127.0.0.1",
+            targetPort: 55432,
+            timeout: 5,
+            knownHosts: directory + "/known_hosts"
+        )
         SSHTunnel.terminateAll()
         try await Task.sleep(for: .milliseconds(500))
         let alive = await tunnel.isAlive
@@ -52,13 +71,21 @@ final class SSHTunnelTests: XCTestCase {
     }
 
     func testUntrustedHostKeyFails() async throws {
-        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else { throw XCTSkip("TABULA_TEST_SSH_DIR not set") }
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else {
+            throw XCTSkip("TABULA_TEST_SSH_DIR not set")
+        }
         let empty = FileManager.default.temporaryDirectory.appendingPathComponent("known-\(UUID().uuidString)").path
         FileManager.default.createFile(atPath: empty, contents: Data())
         defer { try? FileManager.default.removeItem(atPath: empty) }
         let ssh = SSHConfig(host: "127.0.0.1", port: 52222, user: NSUserName(), identityFile: directory + "/client_key")
         do {
-            let tunnel = try await SSHTunnel.open(ssh, targetHost: "127.0.0.1", targetPort: 55432, timeout: 5, knownHosts: empty)
+            let tunnel = try await SSHTunnel.open(
+                ssh,
+                targetHost: "127.0.0.1",
+                targetPort: 55432,
+                timeout: 5,
+                knownHosts: empty
+            )
             await tunnel.close()
             XCTFail("An unknown host key must not be accepted")
         } catch {
@@ -67,11 +94,21 @@ final class SSHTunnelTests: XCTestCase {
     }
 
     func testDriverThroughTunnelClosesItWithTheConnection() async throws {
-        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else { throw XCTSkip("TABULA_TEST_SSH_DIR not set") }
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else {
+            throw XCTSkip("TABULA_TEST_SSH_DIR not set")
+        }
         let ssh = SSHConfig(host: "127.0.0.1", port: 52222, user: NSUserName(), identityFile: directory + "/client_key")
-        let tunnel = try await SSHTunnel.open(ssh, targetHost: "127.0.0.1", targetPort: 55432, timeout: 5, knownHosts: directory + "/known_hosts")
-        let inner = try await PostgresDriver.connect(ConnectionConfig(kind: .postgres, port: tunnel.localPort, user: "tabula", database: "tabula"),
-                                                     password: "tabula")
+        let tunnel = try await SSHTunnel.open(
+            ssh,
+            targetHost: "127.0.0.1",
+            targetPort: 55432,
+            timeout: 5,
+            knownHosts: directory + "/known_hosts"
+        )
+        let inner = try await PostgresDriver.connect(
+            ConnectionConfig(kind: .postgres, port: tunnel.localPort, user: "tabula", database: "tabula"),
+            password: "tabula"
+        )
         let driver = TunneledDriver(inner, tunnel: tunnel)
         let result = try await driver.execute("SELECT current_user")
         XCTAssertEqual(result.rows, [["tabula"]])
@@ -83,13 +120,27 @@ final class SSHTunnelTests: XCTestCase {
     }
 
     func testTunnelToLocalPostgres() async throws {
-        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else { throw XCTSkip("TABULA_TEST_SSH_DIR not set") }
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_TEST_SSH_DIR"] else {
+            throw XCTSkip("TABULA_TEST_SSH_DIR not set")
+        }
         let ssh = SSHConfig(host: "127.0.0.1", port: 52222, user: NSUserName(), identityFile: directory + "/client_key")
-        let tunnel = try await SSHTunnel.open(ssh, targetHost: "127.0.0.1", targetPort: 55432,
-                                              timeout: 5, knownHosts: directory + "/known_hosts")
+        let tunnel = try await SSHTunnel.open(
+            ssh,
+            targetHost: "127.0.0.1",
+            targetPort: 55432,
+            timeout: 5,
+            knownHosts: directory + "/known_hosts"
+        )
         do {
-            let driver = try await PostgresDriver.connect(ConnectionConfig(kind: .postgres, port: tunnel.localPort,
-                                                                           user: "tabula", database: "tabula"), password: "tabula")
+            let driver = try await PostgresDriver.connect(
+                ConnectionConfig(
+                    kind: .postgres,
+                    port: tunnel.localPort,
+                    user: "tabula",
+                    database: "tabula"
+                ),
+                password: "tabula"
+            )
             let result = try await driver.execute("SELECT 42")
             XCTAssertEqual(result.rows, [["42"]])
             await driver.close()

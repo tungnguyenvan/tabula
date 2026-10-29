@@ -12,8 +12,15 @@ public struct MongoQueryDialect: QueryDialect {
 
     /// `//` comments; every quote is a string with backslash escapes.
     public var lexicalRules: LexicalRules {
-        LexicalRules(dashDashComments: false, hashComments: false, slashSlashComments: true, backslashEscapes: true,
-                     doubledQuotes: false, dollarQuotes: false, quotedIdentifiers: false)
+        LexicalRules(
+            dashDashComments: false,
+            hashComments: false,
+            slashSlashComments: true,
+            backslashEscapes: true,
+            doubledQuotes: false,
+            dollarQuotes: false,
+            quotedIdentifiers: false
+        )
     }
 
     public var sql: SQLDialect? { nil }
@@ -24,7 +31,9 @@ public struct MongoQueryDialect: QueryDialect {
     public func qualified(_ table: TableRef) -> String { MongoDialect.collection(table) }
     public func literal(_ value: String?) -> String { value.map(MongoShell.quoted) ?? "null" }
     public func selectPage(_ request: TablePageRequest) -> String { MongoDialect.selectPage(request) }
-    public func countRows(_ table: TableRef, filter: String?) -> String { MongoDialect.countRows(table, filter: filter) }
+    public func countRows(_ table: TableRef, filter: String?) -> String {
+        MongoDialect.countRows(table, filter: filter)
+    }
     public func insert(_ table: TableRef, values: [(column: String, value: String?)]) -> String {
         MongoDialect.insert(table, values: values)
     }
@@ -43,8 +52,13 @@ public struct MongoQueryDialect: QueryDialect {
         }
         return try changes.deleted.sorted().map { try MongoChanges.delete(changes.table, document: document($0)) }
             + changes.updates.map { update in
-                try MongoChanges.update(changes.table, row: .init(document: document(update.row),
-                                                                  changes: Dictionary(uniqueKeysWithValues: update.values)))
+                try MongoChanges.update(
+                    changes.table,
+                    row: .init(
+                        document: document(update.row),
+                        changes: Dictionary(uniqueKeysWithValues: update.values)
+                    )
+                )
             }
             + changes.insertions.map { MongoChanges.insert(changes.table, values: $0) }
     }
@@ -63,9 +77,17 @@ public struct MongoQueryDialect: QueryDialect {
         return MongoVocabulary.highlighted.contains(word.text) ? .keyword : nil
     }
 
-    public func completions(in text: String, caret: Int, catalog: any CompletionCatalog) -> (range: NSRange, items: [String]) {
-        MongoCompletion.suggestions(in: text, caret: caret, collections: catalog.tableNames,
-                                    fields: { catalog.columnNames(of: SQLCompletion.TableName(name: $0)) })
+    public func completions(
+        in text: String,
+        caret: Int,
+        catalog: any CompletionCatalog
+    ) -> (range: NSRange, items: [String]) {
+        MongoCompletion.suggestions(
+            in: text,
+            caret: caret,
+            collections: catalog.tableNames,
+            fields: { catalog.columnNames(of: SQLCompletion.TableName(name: $0)) }
+        )
     }
 
     /// Shell statements name their collection after `db.`, which the assistant's schema already lists in full.
@@ -141,11 +163,15 @@ enum MongoDialect {
             [field: [op: candidates.first ?? rule.value] as Document]
         }
         func pattern(_ prefix: String, _ suffix: String) -> RegularExpression {
-            RegularExpression(pattern: prefix + NSRegularExpression.escapedPattern(for: rule.value) + suffix, options: "i")
+            RegularExpression(
+                pattern: prefix + NSRegularExpression.escapedPattern(for: rule.value) + suffix,
+                options: "i"
+            )
         }
         switch rule.op {
         case .equals:
-            return candidates.count == 1 ? [field: candidates[0]] : [field: ["$in": MongoDriver.array(candidates)] as Document]
+            return candidates.count == 1
+                ? [field: candidates[0]] : [field: ["$in": MongoDriver.array(candidates)] as Document]
         case .notEquals:
             return [field: ["$nin": MongoDriver.array(candidates)] as Document]
         case .less: return operand("$lt")
@@ -159,7 +185,8 @@ enum MongoDialect {
         case .isNull: return [field: Null()]
         case .isNotNull: return [field: ["$ne": Null()] as Document]
         case .inList:
-            let items = rule.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            let items = rule.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
             return [field: ["$in": MongoDriver.array(items.flatMap { Self.candidates($0) })] as Document]
         }
     }
@@ -172,7 +199,9 @@ enum MongoDialect {
             return [string]
         }
         if trimmed.count == 24, let id = ObjectId(trimmed) { return [id, trimmed] }
-        if trimmed.count >= 10, trimmed.first?.isNumber == true, trimmed.contains("-"), let date = MongoDates.parse(trimmed) {
+        if trimmed.count >= 10, trimmed.first?.isNumber == true, trimmed.contains("-"),
+            let date = MongoDates.parse(trimmed)
+        {
             return [date, trimmed]
         }
         if let value = try? MongoShell.parseValue(trimmed), !(value is Document) {
@@ -205,18 +234,23 @@ public enum MongoChanges {
 
     public static func update(_ table: TableRef, row: Row) throws -> String {
         let document = try MongoShell.parseDocument(row.document)
-        guard let id = document["_id"] else { throw DatabaseError("This document has no _id, so it can't be edited here.") }
+        guard let id = document["_id"] else {
+            throw DatabaseError("This document has no _id, so it can't be edited here.")
+        }
         var set = Document()
         for (field, text) in row.changes.sorted(by: { $0.key < $1.key }) {
             set.appendValue(try value(text, original: document[field], field: field), forKey: field)
         }
         let update: Document = ["$set": set]
-        return MongoDialect.collection(table) + ".updateOne(\(MongoShell.format(["_id": id] as Document)), \(MongoShell.format(update)))"
+        return MongoDialect.collection(table)
+            + ".updateOne(\(MongoShell.format(["_id": id] as Document)), \(MongoShell.format(update)))"
     }
 
     public static func delete(_ table: TableRef, document text: String) throws -> String {
         let document = try MongoShell.parseDocument(text)
-        guard let id = document["_id"] else { throw DatabaseError("This document has no _id, so it can't be deleted here.") }
+        guard let id = document["_id"] else {
+            throw DatabaseError("This document has no _id, so it can't be deleted here.")
+        }
         return MongoDialect.collection(table) + ".deleteOne(\(MongoShell.format(["_id": id] as Document)))"
     }
 
@@ -229,7 +263,8 @@ public enum MongoChanges {
         let old = try MongoShell.parseDocument(original)
         let new = try MongoShell.parseDocument(text)
         guard let id = old["_id"] else { throw DatabaseError("This document has no _id, so it can't be replaced.") }
-        return MongoDialect.collection(table) + ".replaceOne(\(MongoShell.format(["_id": id] as Document)), \(MongoShell.format(new)))"
+        return MongoDialect.collection(table)
+            + ".replaceOne(\(MongoShell.format(["_id": id] as Document)), \(MongoShell.format(new)))"
     }
 
     /// Inserts a document written in the editor.
@@ -241,7 +276,9 @@ public enum MongoChanges {
     static func value(_ text: String?, original: Primitive?, field: String) throws -> Primitive {
         guard let text else { return Null() }
         func invalid(_ kind: String) -> DatabaseError {
-            DatabaseError("“\(text)” isn't \(kind) for \(field). Type a shell value such as \"text\" to change the field's type.")
+            DatabaseError(
+                "“\(text)” isn't \(kind) for \(field). Type a shell value such as \"text\" to change the field's type."
+            )
         }
         let parsed = try? MongoShell.parseValue(text)
         switch original {
@@ -281,7 +318,11 @@ public enum MongoChanges {
         case is Double:
             return value is Int32 || value is Int ? number : value
         case is Decimal128:
-            if value is Int32 || value is Int || value is Double, let decimal = MongoDecimal.parse(MongoShell.cell(value) ?? "") { return decimal }
+            if value is Int32 || value is Int || value is Double,
+                let decimal = MongoDecimal.parse(MongoShell.cell(value) ?? "")
+            {
+                return decimal
+            }
             return value
         default:
             return value
@@ -292,7 +333,9 @@ public enum MongoChanges {
     /// only when it reads back the same, so "02134" or a 20-digit account number stays text.
     static func typed(_ text: String) -> Primitive {
         guard let value = try? MongoShell.parseValue(text) else { return text }
-        if value is Int32 || value is Int || value is Double, MongoShell.cell(value) != text.trimmingCharacters(in: .whitespaces) {
+        if value is Int32 || value is Int || value is Double,
+            MongoShell.cell(value) != text.trimmingCharacters(in: .whitespaces)
+        {
             return text
         }
         return value

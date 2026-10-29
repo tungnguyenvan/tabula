@@ -65,14 +65,20 @@ struct AppMark: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.23, style: .continuous)
-                .fill(LinearGradient(colors: [Color(red: 0.29, green: 0.36, blue: 0.95), Color(red: 0.55, green: 0.27, blue: 0.86)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.29, green: 0.36, blue: 0.95), Color(red: 0.55, green: 0.27, blue: 0.86)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
             VStack(spacing: size * 0.06) {
                 RoundedRectangle(cornerRadius: size * 0.03).fill(.white).frame(height: size * 0.12)
                 ForEach(0..<3, id: \.self) { _ in
                     HStack(spacing: size * 0.06) {
                         ForEach(0..<3, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: size * 0.02).fill(.white.opacity(0.55)).frame(height: size * 0.08)
+                            RoundedRectangle(cornerRadius: size * 0.02).fill(.white.opacity(0.55))
+                                .frame(height: size * 0.08)
                         }
                     }
                 }

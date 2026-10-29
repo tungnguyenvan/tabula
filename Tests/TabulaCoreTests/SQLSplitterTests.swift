@@ -1,11 +1,15 @@
 import XCTest
+
 @testable import TabulaFoundation
 @testable import TabulaSQL
 
 final class SQLSplitterTests: XCTestCase {
     func testSplitsOnTopLevelSemicolons() {
         let script = "SELECT 1; SELECT 'a;b'; -- c;d\nSELECT \"x;y\";"
-        XCTAssertEqual(SQLSplitter.split(script, flavor: .postgres), ["SELECT 1", "SELECT 'a;b'", "-- c;d\nSELECT \"x;y\""])
+        XCTAssertEqual(
+            SQLSplitter.split(script, flavor: .postgres),
+            ["SELECT 1", "SELECT 'a;b'", "-- c;d\nSELECT \"x;y\""]
+        )
     }
 
     func testDollarQuotedBodiesStayIntact() {
@@ -43,12 +47,28 @@ final class SQLDialectTests: XCTestCase {
     func testGeneratedStatements() {
         let d = SQLDialect(flavor: .postgres)
         let table = TableRef(schema: "public", name: "users")
-        XCTAssertEqual(d.update(table, set: [("name", "Ann")], key: [("id", "1"), ("org", nil)]),
-                       "UPDATE \"public\".\"users\" SET \"name\" = 'Ann' WHERE \"id\" = '1' AND \"org\" IS NULL")
+        XCTAssertEqual(
+            d.update(table, set: [("name", "Ann")], key: [("id", "1"), ("org", nil)]),
+            "UPDATE \"public\".\"users\" SET \"name\" = 'Ann' WHERE \"id\" = '1' AND \"org\" IS NULL"
+        )
         XCTAssertEqual(d.insert(table, values: []), "INSERT INTO \"public\".\"users\" DEFAULT VALUES")
-        XCTAssertEqual(SQLDialect(flavor: .mysql).insert(TableRef(schema: "db", name: "t"), values: []), "INSERT INTO `db`.`t` () VALUES ()")
-        XCTAssertEqual(d.selectPage(TablePageRequest(table: table, limit: 10, offset: 20, orderBy: "id", ascending: false, filter: " age > 3 ")),
-                       "SELECT * FROM \"public\".\"users\" WHERE age > 3 ORDER BY \"id\" DESC LIMIT 10 OFFSET 20")
+        XCTAssertEqual(
+            SQLDialect(flavor: .mysql).insert(TableRef(schema: "db", name: "t"), values: []),
+            "INSERT INTO `db`.`t` () VALUES ()"
+        )
+        XCTAssertEqual(
+            d.selectPage(
+                TablePageRequest(
+                    table: table,
+                    limit: 10,
+                    offset: 20,
+                    orderBy: "id",
+                    ascending: false,
+                    filter: " age > 3 "
+                )
+            ),
+            "SELECT * FROM \"public\".\"users\" WHERE age > 3 ORDER BY \"id\" DESC LIMIT 10 OFFSET 20"
+        )
         XCTAssertEqual(SQLDialect(flavor: .sqlite).qualified(TableRef(schema: "main", name: "t")), "\"t\"")
     }
 }
@@ -68,8 +88,10 @@ final class StatementAtCursorTests: XCTestCase {
         let ns = script as NSString
         XCTAssertEqual(SQLDialect(flavor: .postgres).statement(at: 3, in: script)?.text, "SELECT 1")
         // Right after the semicolon / in trailing spaces: still the statement just written.
-        XCTAssertEqual(SQLDialect(flavor: .postgres).statement(at: ns.range(of: "t;   ").location + 4, in: script)?.text,
-                       "-- note\nSELECT 'é;x' FROM t")
+        XCTAssertEqual(
+            SQLDialect(flavor: .postgres).statement(at: ns.range(of: "t;   ").location + 4, in: script)?.text,
+            "-- note\nSELECT 'é;x' FROM t"
+        )
         XCTAssertEqual(SQLDialect(flavor: .postgres).statement(at: ns.length, in: script)?.text, "UPDATE t SET a = 2")
         XCTAssertEqual(SQLDialect(flavor: .postgres).statement(at: 0, in: "  "), nil)
     }

@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaDrivers
 @testable import TabulaFoundation
 @testable import TabulaMySQL
@@ -9,7 +10,12 @@ final class QueryCancellationTests: XCTestCase {
     func testStopBeforeStartRejectsAttachment() async throws {
         let scope = QueryCancelScope()
         scope.requestStop()
-        XCTAssertNil(scope.attach { XCTFail("must not run"); return .requested })
+        XCTAssertNil(
+            scope.attach {
+                XCTFail("must not run")
+                return .requested
+            }
+        )
         XCTAssertThrowsError(try scope.checkCancellation()) { XCTAssertTrue($0 is QueryCancelledError) }
         let outcome = await scope.cancel()
         XCTAssertEqual(outcome, .notRunning)
@@ -18,7 +24,10 @@ final class QueryCancellationTests: XCTestCase {
     func testStopOnlyCallsCurrentHandlerOnce() async {
         let scope = QueryCancelScope()
         let calls = CancellationCounter()
-        _ = scope.attach { await calls.increment(); return .requested }
+        _ = scope.attach {
+            await calls.increment()
+            return .requested
+        }
         async let first = scope.cancel()
         async let second = scope.cancel()
         let outcomes = await [first, second]
@@ -31,7 +40,12 @@ final class QueryCancellationTests: XCTestCase {
 
     func testOldDetachDoesNotDetachNextStatement() async throws {
         let scope = QueryCancelScope()
-        let old = try XCTUnwrap(scope.attach { XCTFail("old statement"); return .requested })
+        let old = try XCTUnwrap(
+            scope.attach {
+                XCTFail("old statement")
+                return .requested
+            }
+        )
         scope.detach(old)
         let next = try XCTUnwrap(scope.attach { .requested })
         scope.detach(old)
@@ -43,7 +57,12 @@ final class QueryCancellationTests: XCTestCase {
     func testCompletedRunCannotCancelUnrelatedRun() async throws {
         let first = QueryCancelScope()
         let second = QueryCancelScope()
-        let token = try XCTUnwrap(first.attach { XCTFail("completed statement"); return .requested })
+        let token = try XCTUnwrap(
+            first.attach {
+                XCTFail("completed statement")
+                return .requested
+            }
+        )
         first.detach(token)
         _ = second.attach { .requested }
         let firstOutcome = await first.cancel()
@@ -130,17 +149,20 @@ final class PostgresCancellationTests: XCTestCase {
         }
         return try await PostgresDriver.connect(
             ConnectionConfig(kind: .postgres, host: "127.0.0.1", port: 55432, user: "tabula", database: "tabula"),
-            password: "tabula")
+            password: "tabula"
+        )
     }
 
     /// Wait for pg_sleep, rather than guessing with a fixed delay, before pressing Stop.
     private func waitForSleep(_ observer: PostgresDriver) async throws {
         for _ in 0..<200 {
-            let result = try await observer.execute("""
+            let result = try await observer.execute(
+                """
                 SELECT count(*)::text FROM pg_catalog.pg_stat_activity
                 WHERE application_name = 'Tabula' AND query LIKE '/* tabula-run:%'
                   AND query LIKE '%pg_sleep(15)%' AND wait_event = 'PgSleep'
-                """)
+                """
+            )
             if result.rows.first?.first != "0" { return }
             try await Task.sleep(for: .milliseconds(25))
         }
@@ -162,8 +184,10 @@ final class PostgresCancellationTests: XCTestCase {
             XCTAssertEqual(outcome, .requested)
             // Even when queued before the old execute finishes, this query cannot be targeted by Stop.
             let next = Task { try await driver.execute("SELECT 42") }
-            do { _ = try await run.value; XCTFail("expected server cancellation") }
-            catch { XCTAssertEqual((error as? QueryCancelledError)?.serverInterrupted, true, "\(error)") }
+            do {
+                _ = try await run.value
+                XCTFail("expected server cancellation")
+            } catch { XCTAssertEqual((error as? QueryCancelledError)?.serverInterrupted, true, "\(error)") }
             XCTAssertLessThan(Date().timeIntervalSince(start), 10)
             let result = try await next.value
             XCTAssertEqual(result.rows, [["42"]])
@@ -174,10 +198,12 @@ final class PostgresCancellationTests: XCTestCase {
         } catch {
             _ = await scope.cancel()
             _ = try? await run.value
-            await observer.close(); await driver.close()
+            await observer.close()
+            await driver.close()
             throw error
         }
-        await observer.close(); await driver.close()
+        await observer.close()
+        await driver.close()
     }
 
     func testCancelledScriptDoesNotRunRemainingWriteOrCommitAndPreservesFailedTransaction() async throws {
@@ -196,20 +222,27 @@ final class PostgresCancellationTests: XCTestCase {
             try await waitForSleep(observer)
             let outcome = await scope.cancel()
             XCTAssertEqual(outcome, .requested)
-            do { _ = try await run.value; XCTFail("expected cancellation") }
-            catch { XCTAssertTrue(error is QueryCancelledError, "\(error)") }
+            do {
+                _ = try await run.value
+                XCTFail("expected cancellation")
+            } catch { XCTAssertTrue(error is QueryCancelledError, "\(error)") }
             // No automatic ROLLBACK: the user's failed transaction remains theirs to resolve.
-            do { _ = try await driver.execute("SELECT 1"); XCTFail("transaction should still be aborted") }
-            catch { XCTAssertTrue(error.localizedDescription.contains("transaction is aborted"), "\(error)") }
+            do {
+                _ = try await driver.execute("SELECT 1")
+                XCTFail("transaction should still be aborted")
+            } catch { XCTAssertTrue(error.localizedDescription.contains("transaction is aborted"), "\(error)") }
             _ = try await driver.execute("ROLLBACK")
             let count = try await driver.execute("SELECT count(*)::text FROM tabula_cancel_test")
             XCTAssertEqual(count.rows, [["0"]])
         } catch {
-            _ = await scope.cancel(); _ = try? await run.value
-            await observer.close(); await driver.close()
+            _ = await scope.cancel()
+            _ = try? await run.value
+            await observer.close()
+            await driver.close()
             throw error
         }
-        await observer.close(); await driver.close()
+        await observer.close()
+        await driver.close()
     }
 
     func testStoppedQueuedRunDoesNotCancelOtherRun() async throws {
@@ -217,7 +250,9 @@ final class PostgresCancellationTests: XCTestCase {
         let firstScope = QueryCancelScope()
         let observer = try await connect()
         let first = Task {
-            try await QueryCancelScope.$current.withValue(firstScope) { try await driver.execute("SELECT pg_sleep(15)") }
+            try await QueryCancelScope.$current.withValue(firstScope) {
+                try await driver.execute("SELECT pg_sleep(15)")
+            }
         }
         do {
             try await waitForSleep(observer)
@@ -230,16 +265,21 @@ final class PostgresCancellationTests: XCTestCase {
             XCTAssertFalse(firstScope.isCancelled)
             _ = await firstScope.cancel()
             _ = try? await first.value
-            do { _ = try await queued.value; XCTFail("queued statement must not execute") }
-            catch { XCTAssertEqual((error as? QueryCancelledError)?.serverInterrupted, false, "\(error)") }
+            do {
+                _ = try await queued.value
+                XCTFail("queued statement must not execute")
+            } catch { XCTAssertEqual((error as? QueryCancelledError)?.serverInterrupted, false, "\(error)") }
             let result = try await driver.execute("SELECT 7")
             XCTAssertEqual(result.rows, [["7"]])
         } catch {
-            _ = await firstScope.cancel(); _ = try? await first.value
-            await observer.close(); await driver.close()
+            _ = await firstScope.cancel()
+            _ = try? await first.value
+            await observer.close()
+            await driver.close()
             throw error
         }
-        await observer.close(); await driver.close()
+        await observer.close()
+        await driver.close()
     }
 
     func testAlreadyStoppedScopeDoesNotExecuteAnything() async throws {

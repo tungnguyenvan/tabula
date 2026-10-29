@@ -4,9 +4,19 @@ import TabulaFoundation
 /// One condition of the visual filter builder.
 public struct FilterRule: Identifiable, Hashable, Sendable {
     public enum Operator: String, CaseIterable, Identifiable, Sendable {
-        case equals = "=", notEquals = "≠", less = "<", greater = ">", lessOrEqual = "≤", greaterOrEqual = "≥"
-        case contains = "contains", notContains = "not contains", startsWith = "starts with", endsWith = "ends with"
-        case isNull = "is NULL", isNotNull = "is not NULL", inList = "in"
+        case equals = "="
+        case notEquals = "≠"
+        case less = "<"
+        case greater = ">"
+        case lessOrEqual = "≤"
+        case greaterOrEqual = "≥"
+        case contains = "contains"
+        case notContains = "not contains"
+        case startsWith = "starts with"
+        case endsWith = "ends with"
+        case isNull = "is NULL"
+        case isNotNull = "is not NULL"
+        case inList = "in"
 
         public var id: String { rawValue }
         public var needsValue: Bool { self != .isNull && self != .isNotNull }
@@ -14,7 +24,8 @@ public struct FilterRule: Identifiable, Hashable, Sendable {
 
     /// How a rule joins the rules before it. AND binds tighter than OR, as in SQL.
     public enum Conjunction: String, CaseIterable, Identifiable, Sendable {
-        case and = "AND", or = "OR"
+        case and = "AND"
+        case or = "OR"
         public var id: String { rawValue }
     }
 

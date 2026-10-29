@@ -79,25 +79,31 @@ public struct OllamaLibrary: Sendable {
     }
 
     private func url(_ path: String) throws -> URL {
-        guard let url = URL(string: baseURL + path) else { throw AIError.notConfigured("The Ollama address isn't a valid URL.") }
+        guard let url = URL(string: baseURL + path) else {
+            throw AIError.notConfigured("The Ollama address isn't a valid URL.")
+        }
         return url
     }
 
     /// The server version, or nil when Ollama isn't running.
     public func version() async -> String? {
         guard let url = try? url("/api/version"),
-              let (data, _) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: Defaults.AI.inlineTimeout)),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            let (data, _) = try? await URLSession.shared.data(
+                for: URLRequest(url: url, timeoutInterval: Defaults.AI.inlineTimeout)
+            ),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
         return json["version"] as? String
     }
 
     public func installed() async throws -> [InstalledModel] {
         let (data, _) = try await URLSession.shared.data(from: try url("/api/tags"))
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        return (json?["models"] as? [[String: Any]] ?? []).compactMap { model in
-            guard let name = model["name"] as? String else { return nil }
-            return InstalledModel(name: name, size: (model["size"] as? NSNumber)?.int64Value ?? 0)
-        }
+        return (json?["models"] as? [[String: Any]] ?? [])
+            .compactMap { model in
+                guard let name = model["name"] as? String else { return nil }
+                return InstalledModel(name: name, size: (model["size"] as? NSNumber)?.int64Value ?? 0)
+            }
     }
 
     /// Downloads a model, reporting progress as it goes.
@@ -107,12 +113,22 @@ public struct OllamaLibrary: Sendable {
         request.httpBody = try JSONSerialization.data(withJSONObject: ["model": name, "stream": true])
         request.timeoutInterval = .infinity
         let (lines, response) = try await URLSession.shared.bytes(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw AIError.server("Ollama couldn't download \(name).") }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw AIError.server("Ollama couldn't download \(name).")
+        }
         for try await line in lines.lines {
-            guard let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
+            guard let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
+                continue
+            }
             if let error = json["error"] as? String { throw AIError.server(error) }
-            let total = (json["total"] as? NSNumber)?.doubleValue, completed = (json["completed"] as? NSNumber)?.doubleValue
-            progress(PullProgress(status: json["status"] as? String ?? "", fraction: total.flatMap { total in completed.map { $0 / max(total, 1) } }))
+            let total = (json["total"] as? NSNumber)?.doubleValue
+            let completed = (json["completed"] as? NSNumber)?.doubleValue
+            progress(
+                PullProgress(
+                    status: json["status"] as? String ?? "",
+                    fraction: total.flatMap { total in completed.map { $0 / max(total, 1) } }
+                )
+            )
         }
     }
 
@@ -121,6 +137,8 @@ public struct OllamaLibrary: Sendable {
         request.httpMethod = "DELETE"
         request.httpBody = try JSONSerialization.data(withJSONObject: ["model": name])
         let (_, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw AIError.server("Ollama couldn't remove \(name).") }
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw AIError.server("Ollama couldn't remove \(name).")
+        }
     }
 }

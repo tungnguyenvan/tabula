@@ -69,7 +69,9 @@ public struct MongoStatement: Sendable {
             var head = rest[..<(rest.firstIndex { $0 == ";" || $0.isNewline } ?? rest.endIndex)]
             if let comment = head.range(of: "//") { head = head[..<comment.lowerBound] }
             let argument = head.trimmingCharacters(in: .whitespaces)
-            guard !argument.isEmpty, !argument.contains(where: \.isWhitespace) else { throw parser.error("\(word) needs one name") }
+            guard !argument.isEmpty, !argument.contains(where: \.isWhitespace) else {
+                throw parser.error("\(word) needs one name")
+            }
             var remainder = MongoShellParser(String(rest[head.endIndex...]))
             try remainder.expectEnd()
             var statement = MongoStatement(target: word == "show" ? .show(argument.lowercased()) : .use(argument))
@@ -100,10 +102,14 @@ public struct MongoStatement: Sendable {
             }
             let first = path.isEmpty && collection == nil
             if first, name == "getSiblingDB" || name == "getDB" {
-                guard let other = arguments.first as? String else { throw parser.error("\(name) needs a database name") }
+                guard let other = arguments.first as? String else {
+                    throw parser.error("\(name) needs a database name")
+                }
                 database = other
             } else if first, name == "getCollection" {
-                guard let named = arguments.first as? String else { throw parser.error("getCollection needs a collection name") }
+                guard let named = arguments.first as? String else {
+                    throw parser.error("getCollection needs a collection name")
+                }
                 collection = named
             } else {
                 if !path.isEmpty { collection = path.joined(separator: ".") }
@@ -112,11 +118,17 @@ public struct MongoStatement: Sendable {
         }
         while parser.take(".") {
             guard let name = parser.identifier() else { throw parser.error("Expected a method name") }
-            guard let arguments = try parser.optionalArguments() else { throw parser.error("Expected “(” after \(name)") }
+            guard let arguments = try parser.optionalArguments() else {
+                throw parser.error("Expected “(” after \(name)")
+            }
             calls.append(Call(name, arguments))
         }
         try parser.expectEnd()
-        var statement = MongoStatement(target: collection.map(Target.collection) ?? .database, database: database, calls: calls)
+        var statement = MongoStatement(
+            target: collection.map(Target.collection) ?? .database,
+            database: database,
+            calls: calls
+        )
         statement.hasComments = parser.sawComment
         statement.makesValues = parser.madeValue
         return statement
@@ -135,10 +147,15 @@ public struct MongoStatement: Sendable {
         if let database { text += ".getSiblingDB(\(MongoShell.quoted(database)))" }
         if let collection { text += Self.collectionAccessor(collection) }
         for call in calls {
-            text += "." + call.name + "(" + call.arguments.map { argument in
-                let compact = MongoShell.format(argument)
-                return pretty && compact.count > Defaults.Mongo.inlineWidth ? MongoShell.format(argument, pretty: true) : compact
-            }.joined(separator: ", ") + ")"
+            text +=
+                "." + call.name + "("
+                + call.arguments
+                .map { argument in
+                    let compact = MongoShell.format(argument)
+                    return pretty && compact.count > Defaults.Mongo.inlineWidth
+                        ? MongoShell.format(argument, pretty: true) : compact
+                }
+                .joined(separator: ", ") + ")"
         }
         return text
     }
@@ -146,7 +163,9 @@ public struct MongoStatement: Sendable {
     /// `.users` when the name reads as one, `.getCollection("…")` otherwise.
     public static func collectionAccessor(_ name: String) -> String {
         let parts = name.split(separator: ".", omittingEmptySubsequences: false)
-        let plain = !name.isEmpty && parts.allSatisfy { MongoShell.isIdentifier(String($0)) } && !databaseMethods.contains(String(parts[0]))
+        let plain =
+            !name.isEmpty && parts.allSatisfy { MongoShell.isIdentifier(String($0)) }
+            && !databaseMethods.contains(String(parts[0]))
         return plain ? "." + name : ".getCollection(\(MongoShell.quoted(name)))"
     }
 
@@ -180,22 +199,35 @@ public enum MongoSplitter {
         var hasCode = false
 
         func flush(upTo end: Int) {
-            defer { start = end + 1; hasCode = false; lastSignificant = nil; depth = 0 }
+            defer {
+                start = end + 1
+                hasCode = false
+                lastSignificant = nil
+                depth = 0
+            }
             guard hasCode, start < end else { return }
             let piece = String(chars[start..<end])
             let leading = piece.prefix(while: { $0.isWhitespace }).count
             let trailing = piece.reversed().prefix(while: { $0.isWhitespace }).count
-            let from = start + leading, to = end - trailing
+            let from = start + leading
+            let to = end - trailing
             guard from < to else { return }
-            statements.append(ScriptStatement(text: String(chars[from..<to]),
-                                                    range: NSRange(location: utf16Offsets[from], length: utf16Offsets[to] - utf16Offsets[from])))
+            statements.append(
+                ScriptStatement(
+                    text: String(chars[from..<to]),
+                    range: NSRange(location: utf16Offsets[from], length: utf16Offsets[to] - utf16Offsets[from])
+                )
+            )
         }
 
         /// The next character that isn't space, skipping whole comment lines.
         func nextSignificant(after index: Int) -> Character? {
             var j = index
             while j < chars.count {
-                if chars[j].isWhitespace { j += 1; continue }
+                if chars[j].isWhitespace {
+                    j += 1
+                    continue
+                }
                 if chars[j] == "/", j + 1 < chars.count, chars[j + 1] == "/" {
                     while j < chars.count, chars[j] != "\n" { j += 1 }
                     continue
@@ -235,8 +267,17 @@ public enum MongoSplitter {
                 i += 1
                 var inClass = false
                 while i < chars.count, chars[i] != "\n" {
-                    if chars[i] == "\\" { i += 2; continue }
-                    if chars[i] == "[" { inClass = true } else if chars[i] == "]" { inClass = false } else if chars[i] == "/" && !inClass { break }
+                    if chars[i] == "\\" {
+                        i += 2
+                        continue
+                    }
+                    if chars[i] == "[" {
+                        inClass = true
+                    } else if chars[i] == "]" {
+                        inClass = false
+                    } else if chars[i] == "/" && !inClass {
+                        break
+                    }
                     i += 1
                 }
                 i += 1
@@ -255,7 +296,8 @@ public enum MongoSplitter {
                 continue
             }
             if c == "\n" && depth == 0 && hasCode {
-                let continues = nextSignificant(after: i + 1) == "." || lastSignificant.map { ".,(+-*=:&|?".contains($0) } == true
+                let continues =
+                    nextSignificant(after: i + 1) == "." || lastSignificant.map { ".,(+-*=:&|?".contains($0) } == true
                 if !continues {
                     flush(upTo: i)
                     i += 1
@@ -289,9 +331,10 @@ extension MongoStatement {
     /// Adds `.limit(n)` to a find or aggregate that has none, as the toolbar's row limit promises.
     public static func applyingRowLimit(_ text: String, limit: Int) -> String {
         guard let statement = try? parse(text), statement.collection != nil,
-              let method = statement.method, method == "find" || method == "aggregate",
-              statement.modifier("limit") == nil,
-              !["count", "explain", "itcount", "size"].contains(where: { statement.modifier($0) != nil }) else { return text }
+            let method = statement.method, method == "find" || method == "aggregate",
+            statement.modifier("limit") == nil,
+            !["count", "explain", "itcount", "size"].contains(where: { statement.modifier($0) != nil })
+        else { return text }
         var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         while trimmed.hasSuffix(";") { trimmed.removeLast() }
         // A trailing line comment would swallow the added call; put it on its own line.

@@ -101,7 +101,9 @@ public enum DatabaseDump {
         /// The tool's latest message, such as the table it is on.
         public var message: String = ""
         public init(bytes: Int64 = 0, total: Int64? = nil, message: String = "") {
-            self.bytes = bytes; self.total = total; self.message = message
+            self.bytes = bytes
+            self.total = total
+            self.message = message
         }
     }
 
@@ -125,7 +127,8 @@ public enum DatabaseDump {
             case .pgDump, .pgRestore, .psql:
                 directories += ["\(brew)/opt/libpq/bin"] + versions("\(brew)/opt", prefix: "postgresql")
             case .mysqldump, .mysql:
-                directories += ["\(brew)/opt/mysql-client/bin"] + versions("\(brew)/opt", prefix: "mysql-client@")
+                directories +=
+                    ["\(brew)/opt/mysql-client/bin"] + versions("\(brew)/opt", prefix: "mysql-client@")
                     + ["\(brew)/opt/mysql/bin", "\(brew)/opt/mariadb/bin"]
             }
             directories.append("\(brew)/bin")
@@ -144,7 +147,8 @@ public enum DatabaseDump {
         for name in [tool.rawValue] + tool.alternatives {
             paths += candidateDirectories(for: tool).map { "\($0)/\(name)" }
             if let output = try? await ShellCommand.run(script: #"command -v "$0""#, arguments: [name], timeout: 10),
-               let path = output.stdout.split(whereSeparator: \.isNewline).last.map(String.init), path.hasPrefix("/") {
+                let path = output.stdout.split(whereSeparator: \.isNewline).last.map(String.init), path.hasPrefix("/")
+            {
                 paths.append(path)
             }
         }
@@ -162,7 +166,9 @@ public enum DatabaseDump {
     }
 
     static func describe(_ path: String) async -> Located? {
-        guard let result = try? await run(path, ["--version"], environment: [:], timeout: 10), result.status == 0 else { return nil }
+        guard let result = try? await run(path, ["--version"], environment: [:], timeout: 10), result.status == 0 else {
+            return nil
+        }
         var line = result.output.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         // mysql prints its own path first ("/opt/…/bin/mysql  Ver 9.4.0 …"); the name is enough to show.
         if line.hasPrefix(path) { line = (path as NSString).lastPathComponent + line.dropFirst(path.count) }
@@ -198,8 +204,13 @@ public enum DatabaseDump {
         var address: String?
     }
 
-    static func postgresEnvironment(_ config: ConnectionConfig, database: String, password: String?, endpoint: Endpoint,
-                                    tool: Located) throws -> [String: String] {
+    static func postgresEnvironment(
+        _ config: ConnectionConfig,
+        database: String,
+        password: String?,
+        endpoint: Endpoint,
+        tool: Located
+    ) throws -> [String: String] {
         var environment = [
             "PGHOST": endpoint.host, "PGPORT": String(endpoint.port), "PGUSER": config.user, "PGDATABASE": database,
             "PGAPPNAME": Defaults.applicationName, "PGCONNECT_TIMEOUT": String(Int(config.timeout.rounded(.up))),
@@ -212,7 +223,9 @@ public enum DatabaseDump {
         case .verifyFull:
             // The certificates macOS trusts, as Tabula's own connection uses; libpq reads them from version 16.
             guard tool.major >= 16 else {
-                throw DatabaseError("Verify certificate needs PostgreSQL client tools 16 or later (found \(tool.major)). \(Tool.pgDump.installHint)")
+                throw DatabaseError(
+                    "Verify certificate needs PostgreSQL client tools 16 or later (found \(tool.major)). \(Tool.pgDump.installHint)"
+                )
             }
             environment["PGSSLMODE"] = "verify-full"
             environment["PGSSLROOTCERT"] = "system"
@@ -221,21 +234,28 @@ public enum DatabaseDump {
     }
 
     static func pgDumpArguments(_ options: DumpOptions, file: URL) -> [String] {
-        var arguments = ["--no-password", "--verbose", "--format=\(options.format == .custom ? "custom" : "plain")", "--file=\(file.path)"]
+        var arguments = [
+            "--no-password", "--verbose", "--format=\(options.format == .custom ? "custom" : "plain")",
+            "--file=\(file.path)",
+        ]
         switch options.content {
         case .all: break
         case .structure: arguments.append("--schema-only")
         case .data: arguments.append("--data-only")
         }
         // An archive keeps no DROPs; pg_restore adds them when asked.
-        if options.addDrop, options.content != .data, options.format == .sql { arguments += ["--clean", "--if-exists"] }
+        if options.addDrop, options.content != .data, options.format == .sql {
+            arguments += ["--clean", "--if-exists"]
+        }
         if !options.ownersAndPrivileges { arguments += ["--no-owner", "--no-privileges"] }
         // Quoted names are matched literally, not as patterns, and keep their case.
         arguments += options.tables.map { "--table=\(quotedPattern($0.schema)).\(quotedPattern($0.name))" }
         return arguments
     }
 
-    static func quotedPattern(_ name: String) -> String { "\"" + name.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
+    static func quotedPattern(_ name: String) -> String {
+        "\"" + name.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
 
     static func psqlArguments() -> [String] {
         // The script comes on standard input, so progress can be counted; ~/.psqlrc is not read.
@@ -296,20 +316,35 @@ public enum DatabaseDump {
     /// Keeps the client from reading login paths saved with mysql_config_editor, which are read last and could
     /// replace the host or password.
     static func mysqlEnvironment(optionFile: URL) -> [String: String] {
-        ["MYSQL_TEST_LOGIN_FILE": optionFile.deletingLastPathComponent().appendingPathComponent("none.mylogin.cnf").path]
+        [
+            "MYSQL_TEST_LOGIN_FILE": optionFile.deletingLastPathComponent().appendingPathComponent("none.mylogin.cnf")
+                .path
+        ]
     }
 
     /// A quoted option file value; MySQL reads \\, \" and \n escapes inside quotes.
     static func optionValue(_ value: String) -> String {
-        "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        "\""
+            + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n") + "\""
     }
 
-    static func mysqldumpArguments(_ options: DumpOptions, optionFile: URL, connection: [String], database: String, file: URL,
-                                   tool: Located, supportsColumnStatistics: Bool) -> [String] {
+    static func mysqldumpArguments(
+        _ options: DumpOptions,
+        optionFile: URL,
+        connection: [String],
+        database: String,
+        file: URL,
+        tool: Located,
+        supportsColumnStatistics: Bool
+    ) -> [String] {
         // --defaults-file must come first.
-        var arguments = ["--defaults-file=\(optionFile.path)"] + connection + ["--verbose", "--single-transaction", "--routines",
-                         "--triggers", "--no-tablespaces", "--hex-blob", "--default-character-set=utf8mb4", "--result-file=\(file.path)"]
+        var arguments =
+            ["--defaults-file=\(optionFile.path)"] + connection + [
+                "--verbose", "--single-transaction", "--routines",
+                "--triggers", "--no-tablespaces", "--hex-blob", "--default-character-set=utf8mb4",
+                "--result-file=\(file.path)",
+            ]
         if !tool.isMariaDB { arguments.append("--set-gtid-purged=OFF") }
         // MySQL 8's mysqldump otherwise asks for column statistics that MariaDB and older servers don't have.
         if supportsColumnStatistics { arguments.append("--skip-column-statistics") }
@@ -326,15 +361,22 @@ public enum DatabaseDump {
     /// The script can't use the client's own commands: no `system` (run commands on this Mac), `tee` (write files),
     /// `source` (read files), `connect` (another server); --binary-mode leaves only `delimiter` and `charset`, which
     /// dumps use. `LOAD DATA LOCAL` can't read local files either.
-    static func mysqlArguments(optionFile: URL, connection: [String], database: String, help: String) throws -> [String] {
-        var arguments = ["--defaults-file=\(optionFile.path)"] + connection
-            + ["--default-character-set=utf8mb4", "--batch", "--binary-mode", "--local-infile=0", "--database=\(database)"]
+    static func mysqlArguments(optionFile: URL, connection: [String], database: String, help: String) throws -> [String]
+    {
+        var arguments =
+            ["--defaults-file=\(optionFile.path)"] + connection
+            + [
+                "--default-character-set=utf8mb4", "--batch", "--binary-mode", "--local-infile=0",
+                "--database=\(database)",
+            ]
         if help.contains("system-command") {
             arguments.append("--skip-system-command")
         } else if help.contains("--sandbox") {
             arguments.append("--sandbox")
         } else {
-            throw DatabaseError("This mysql client can't be stopped from running shell commands found in a script. Update it to restore here. \(Tool.mysql.installHint)")
+            throw DatabaseError(
+                "This mysql client can't be stopped from running shell commands found in a script. Update it to restore here. \(Tool.mysql.installHint)"
+            )
         }
         return arguments
     }
@@ -342,27 +384,58 @@ public enum DatabaseDump {
     // MARK: Running
 
     /// Dumps `database` to `file`. A failed or cancelled dump leaves no file behind.
-    public static func dump(_ config: ConnectionConfig, password: String?, database: String, options: DumpOptions,
-                            to file: URL, progress: @escaping @Sendable (Progress) -> Void) async throws {
+    public static func dump(
+        _ config: ConnectionConfig,
+        password: String?,
+        database: String,
+        options: DumpOptions,
+        to file: URL,
+        progress: @escaping @Sendable (Progress) -> Void
+    ) async throws {
         try await withEndpoint(config) { endpoint in
-            let partial = file.deletingLastPathComponent().appendingPathComponent(".\(file.lastPathComponent).tabula-partial")
+            let partial = file.deletingLastPathComponent()
+                .appendingPathComponent(".\(file.lastPathComponent).tabula-partial")
             try? FileManager.default.removeItem(at: partial)
             defer { try? FileManager.default.removeItem(at: partial) }
             switch config.kind {
             case .postgres:
                 let tool = try await required(.pgDump)
-                let environment = try postgresEnvironment(config, database: database, password: password, endpoint: endpoint, tool: tool)
-                try await runTool(tool, .pgDump, pgDumpArguments(options, file: partial), environment: environment,
-                                  watching: partial, progress: progress)
+                let environment = try postgresEnvironment(
+                    config,
+                    database: database,
+                    password: password,
+                    endpoint: endpoint,
+                    tool: tool
+                )
+                try await runTool(
+                    tool,
+                    .pgDump,
+                    pgDumpArguments(options, file: partial),
+                    environment: environment,
+                    watching: partial,
+                    progress: progress
+                )
             case .mysql:
                 let tool = try await required(.mysqldump, preferMariaDB: options.serverIsMariaDB)
                 try await withOptionFile(mysqlOptionFile(config, password: password, tool: tool)) { optionFile in
                     let help = (try? await run(tool.path, ["--help"], environment: [:], timeout: 10).output) ?? ""
-                    let arguments = mysqldumpArguments(options, optionFile: optionFile, connection: mysqlConnectionArguments(config, endpoint: endpoint),
-                                                       database: database, file: partial, tool: tool,
-                                                       supportsColumnStatistics: help.contains("column-statistics"))
-                    try await runTool(tool, .mysqldump, arguments, environment: mysqlEnvironment(optionFile: optionFile),
-                                      watching: partial, progress: progress)
+                    let arguments = mysqldumpArguments(
+                        options,
+                        optionFile: optionFile,
+                        connection: mysqlConnectionArguments(config, endpoint: endpoint),
+                        database: database,
+                        file: partial,
+                        tool: tool,
+                        supportsColumnStatistics: help.contains("column-statistics")
+                    )
+                    try await runTool(
+                        tool,
+                        .mysqldump,
+                        arguments,
+                        environment: mysqlEnvironment(optionFile: optionFile),
+                        watching: partial,
+                        progress: progress
+                    )
                 }
             default:
                 throw DatabaseError("Dumps are available for PostgreSQL and MySQL connections.")
@@ -377,23 +450,53 @@ public enum DatabaseDump {
     }
 
     /// Restores `file` into `database`. Scripts run with psql or mysql, PostgreSQL archives with pg_restore.
-    public static func restore(_ config: ConnectionConfig, password: String?, database: String, options: RestoreOptions,
-                               from file: URL, progress: @escaping @Sendable (Progress) -> Void) async throws {
+    public static func restore(
+        _ config: ConnectionConfig,
+        password: String?,
+        database: String,
+        options: RestoreOptions,
+        from file: URL,
+        progress: @escaping @Sendable (Progress) -> Void
+    ) async throws {
         let kind = try kind(of: file)
         try await withEndpoint(config) { endpoint in
             switch (config.kind, kind) {
             case (.postgres, .postgresArchive) where (options.serverMajor ?? 0) >= 17:
                 let tool = try await required(.pgRestore)
-                let environment = try postgresEnvironment(config, database: database, password: password, endpoint: endpoint, tool: tool)
-                try await runTool(tool, .pgRestore, pgRestoreArguments(options, database: database, file: file), environment: environment,
-                                  progress: progress)
+                let environment = try postgresEnvironment(
+                    config,
+                    database: database,
+                    password: password,
+                    endpoint: endpoint,
+                    tool: tool
+                )
+                try await runTool(
+                    tool,
+                    .pgRestore,
+                    pgRestoreArguments(options, database: database, file: file),
+                    environment: environment,
+                    progress: progress
+                )
             case (.postgres, .postgresArchive):
-                try await restoreArchiveThroughPsql(config, password: password, database: database, options: options, file: file,
-                                                    endpoint: endpoint, progress: progress)
+                try await restoreArchiveThroughPsql(
+                    config,
+                    password: password,
+                    database: database,
+                    options: options,
+                    file: file,
+                    endpoint: endpoint,
+                    progress: progress
+                )
             case (.postgres, .script):
                 try PostgresScriptCheck.check(file)
                 let tool = try await required(.psql)
-                let environment = try postgresEnvironment(config, database: database, password: password, endpoint: endpoint, tool: tool)
+                let environment = try postgresEnvironment(
+                    config,
+                    database: database,
+                    password: password,
+                    endpoint: endpoint,
+                    tool: tool
+                )
                 // pg_dump 17 and later write "SET transaction_timeout = 0;" into every script, which older servers
                 // reject as an unknown setting, stopping the restore at its first line.
                 let unsupported = (options.serverMajor ?? 0) < 17 ? [Data("\nSET transaction_timeout = 0;\n".utf8)] : []
@@ -401,21 +504,42 @@ public enum DatabaseDump {
                 let ending = DatabaseDump.commit
                 var trailer: (@Sendable () -> Data?)?
                 if options.singleTransaction { trailer = { ending } }
-                try await runTool(tool, .psql, psqlArguments(), environment: environment, input: .file(file),
-                                  prefix: options.singleTransaction ? begin : Data(), trailer: trailer,
-                                  dropFromHeader: unsupported, checkScript: true, progress: progress)
+                try await runTool(
+                    tool,
+                    .psql,
+                    psqlArguments(),
+                    environment: environment,
+                    input: .file(file),
+                    prefix: options.singleTransaction ? begin : Data(),
+                    trailer: trailer,
+                    dropFromHeader: unsupported,
+                    checkScript: true,
+                    progress: progress
+                )
             case (.mysql, .script):
                 try MySQLScriptCheck.check(file)
                 let tool = try await required(.mysql, preferMariaDB: options.serverIsMariaDB)
                 try await withOptionFile(mysqlOptionFile(config, password: password, tool: tool)) { optionFile in
                     let help = (try? await run(tool.path, ["--help"], environment: [:], timeout: 10).output) ?? ""
-                    let arguments = try mysqlArguments(optionFile: optionFile, connection: mysqlConnectionArguments(config, endpoint: endpoint),
-                                                       database: database, help: help)
-                    try await runTool(tool, .mysql, arguments, environment: mysqlEnvironment(optionFile: optionFile), input: .file(file),
-                                      progress: progress)
+                    let arguments = try mysqlArguments(
+                        optionFile: optionFile,
+                        connection: mysqlConnectionArguments(config, endpoint: endpoint),
+                        database: database,
+                        help: help
+                    )
+                    try await runTool(
+                        tool,
+                        .mysql,
+                        arguments,
+                        environment: mysqlEnvironment(optionFile: optionFile),
+                        input: .file(file),
+                        progress: progress
+                    )
                 }
             case (.mysql, .postgresArchive):
-                throw DatabaseError("This is a PostgreSQL archive (pg_dump's custom format); it can't be restored into MySQL.")
+                throw DatabaseError(
+                    "This is a PostgreSQL archive (pg_dump's custom format); it can't be restored into MySQL."
+                )
             default:
                 throw DatabaseError("Restoring is available for PostgreSQL and MySQL connections.")
             }
@@ -424,20 +548,38 @@ public enum DatabaseDump {
 
     /// pg_restore 17 and later send "SET transaction_timeout", which older servers reject. pg_restore turns the
     /// archive into a script instead, the setting is left out, and psql runs it.
-    static func restoreArchiveThroughPsql(_ config: ConnectionConfig, password: String?, database: String, options: RestoreOptions,
-                                          file: URL, endpoint: Endpoint,
-                                          progress: @escaping @Sendable (Progress) -> Void) async throws {
+    static func restoreArchiveThroughPsql(
+        _ config: ConnectionConfig,
+        password: String?,
+        database: String,
+        options: RestoreOptions,
+        file: URL,
+        endpoint: Endpoint,
+        progress: @escaping @Sendable (Progress) -> Void
+    ) async throws {
         // pg_restore 17 and later send "SET transaction_timeout", which older servers reject. pg_restore turns
         // the archive into a script instead, the setting is left out, and psql runs it.
         let tool = try await required(.pgRestore)
         let psql = try await required(.psql)
-        let environment = try postgresEnvironment(config, database: database, password: password, endpoint: endpoint, tool: psql)
+        let environment = try postgresEnvironment(
+            config,
+            database: database,
+            password: password,
+            endpoint: endpoint,
+            tool: psql
+        )
         let script = Pipe()
         let producerStatus = StatusGate()
         let producerArguments = pgRestoreScriptArguments(options, file: file)
         let producer = Task { () throws -> RunResult in
             do {
-                let result = try await run(tool.path, producerArguments, environment: [:], timeout: nil, standardOutput: script)
+                let result = try await run(
+                    tool.path,
+                    producerArguments,
+                    environment: [:],
+                    timeout: nil,
+                    standardOutput: script
+                )
                 producerStatus.finish(result.status)
                 return result
             } catch {
@@ -452,9 +594,18 @@ public enum DatabaseDump {
         var trailer: (@Sendable () -> Data?)?
         if options.singleTransaction { trailer = { producerStatus.wait() == 0 ? ending : nil } }
         do {
-            try await runTool(psql, .psql, psqlArguments(), environment: environment, input: .pipe(script.fileHandleForReading),
-                              prefix: options.singleTransaction ? begin : Data(), trailer: trailer,
-                              dropFromHeader: [Data("\nSET transaction_timeout = 0;\n".utf8)], checkScript: true, progress: progress)
+            try await runTool(
+                psql,
+                .psql,
+                psqlArguments(),
+                environment: environment,
+                input: .pipe(script.fileHandleForReading),
+                prefix: options.singleTransaction ? begin : Data(),
+                trailer: trailer,
+                dropFromHeader: [Data("\nSET transaction_timeout = 0;\n".utf8)],
+                checkScript: true,
+                progress: progress
+            )
         } catch {
             failure = error
         }
@@ -466,7 +617,11 @@ public enum DatabaseDump {
             _ = try? await producer.value
             throw failure
         }
-        let produced = try await withTaskCancellationHandler { try await producer.value } onCancel: { producer.cancel() }
+        let produced = try await withTaskCancellationHandler {
+            try await producer.value
+        } onCancel: {
+            producer.cancel()
+        }
         guard produced.status == 0 else {
             throw DatabaseError(describeFailure(produced.output, tool: tool, kind: .pgRestore, status: produced.status))
         }
@@ -487,12 +642,20 @@ public enum DatabaseDump {
             return try await body(Endpoint(host: config.resolvedHost, port: config.port))
         }
         if config.kind == .mysql, config.tls == .verifyFull {
-            throw DatabaseError("MySQL's client tools can't verify the server's certificate through an SSH tunnel. Set TLS to Required for this connection to dump or restore it.")
+            throw DatabaseError(
+                "MySQL's client tools can't verify the server's certificate through an SSH tunnel. Set TLS to Required for this connection to dump or restore it."
+            )
         }
-        let tunnel = try await SSHTunnel.open(ssh, targetHost: config.resolvedHost, targetPort: config.port, timeout: config.timeout)
+        let tunnel = try await SSHTunnel.open(
+            ssh,
+            targetHost: config.resolvedHost,
+            targetPort: config.port,
+            timeout: config.timeout
+        )
         do {
             // PostgreSQL connects to the tunnel while checking the certificate against the real host name.
-            let endpoint = config.kind == .postgres
+            let endpoint =
+                config.kind == .postgres
                 ? Endpoint(host: config.resolvedHost, port: tunnel.localPort, address: "127.0.0.1")
                 : Endpoint(host: "127.0.0.1", port: tunnel.localPort)
             try await body(endpoint)
@@ -505,11 +668,24 @@ public enum DatabaseDump {
 
     /// The option file lives in a directory only this user can read, and is deleted when the tool is done.
     static func withOptionFile(_ contents: String, _ body: (URL) async throws -> Void) async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("TabulaDump-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "TabulaDump-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700]
+        )
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("client.cnf")
-        guard FileManager.default.createFile(atPath: file.path, contents: Data(contents.utf8), attributes: [.posixPermissions: 0o600]) else {
+        guard
+            FileManager.default.createFile(
+                atPath: file.path,
+                contents: Data(contents.utf8),
+                attributes: [.posixPermissions: 0o600]
+            )
+        else {
             throw DatabaseError("Couldn't write the MySQL option file.")
         }
         try await body(file)
@@ -522,16 +698,38 @@ public enum DatabaseDump {
         case pipe(FileHandle)
     }
 
-    static func runTool(_ tool: Located, _ kind: Tool, _ arguments: [String], environment: [String: String],
-                        input: Input? = nil, prefix: Data = Data(), trailer: (@Sendable () -> Data?)? = nil,
-                        dropFromHeader: [Data] = [], checkScript: Bool = false, watching output: URL? = nil,
-                        progress: @escaping @Sendable (Progress) -> Void) async throws {
+    static func runTool(
+        _ tool: Located,
+        _ kind: Tool,
+        _ arguments: [String],
+        environment: [String: String],
+        input: Input? = nil,
+        prefix: Data = Data(),
+        trailer: (@Sendable () -> Data?)? = nil,
+        dropFromHeader: [Data] = [],
+        checkScript: Bool = false,
+        watching output: URL? = nil,
+        progress: @escaping @Sendable (Progress) -> Void
+    ) async throws {
         var total: Int64?
-        if case .file(let url) = input { total = Int64(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int ?? 0) }
+        if case .file(let url) = input {
+            total = Int64(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int ?? 0)
+        }
         let state = ToolProgress(total: total, report: progress)
-        let result = try await run(tool.path, arguments, environment: environment, timeout: nil, input: input,
-                                   prefix: prefix, trailer: trailer, dropFromHeader: dropFromHeader, checkScript: checkScript, output: output,
-                                   onLine: { state.line($0) }, onRead: { state.read($0) })
+        let result = try await run(
+            tool.path,
+            arguments,
+            environment: environment,
+            timeout: nil,
+            input: input,
+            prefix: prefix,
+            trailer: trailer,
+            dropFromHeader: dropFromHeader,
+            checkScript: checkScript,
+            output: output,
+            onLine: { state.line($0) },
+            onRead: { state.read($0) }
+        )
         guard result.status == 0 else {
             throw DatabaseError(describeFailure(result.output, tool: tool, kind: kind, status: result.status))
         }
@@ -540,14 +738,20 @@ public enum DatabaseDump {
     /// The tool's last messages, with the usual causes explained.
     static func describeFailure(_ output: String, tool: Located, kind: Tool, status: Int32) -> String {
         let lines = output.split(whereSeparator: \.isNewline).map(String.init)
-            .filter { !$0.hasPrefix("pg_dump: dumping") && !$0.hasPrefix("pg_restore: creating") && !$0.hasPrefix("-- ") }
+            .filter {
+                !$0.hasPrefix("pg_dump: dumping") && !$0.hasPrefix("pg_restore: creating") && !$0.hasPrefix("-- ")
+            }
         var text = lines.suffix(6).joined(separator: "\n")
         if text.isEmpty { text = "\(kind.rawValue) stopped (status \(status))." }
-        if output.contains("server version mismatch") || output.contains("aborting because of server version mismatch") {
+        if output.contains("server version mismatch") || output.contains("aborting because of server version mismatch")
+        {
             text += "\n\nThe server is newer than \(kind.rawValue) \(tool.major) (\(tool.path)). \(kind.installHint)"
         }
-        if output.contains("unrecognized configuration parameter \"transaction_timeout\"") || output.contains("invalid command \\restrict") {
-            text += "\n\nThe dump was made by a newer pg_dump than this \(kind.rawValue) understands. \(kind.installHint)"
+        if output.contains("unrecognized configuration parameter \"transaction_timeout\"")
+            || output.contains("invalid command \\restrict")
+        {
+            text +=
+                "\n\nThe dump was made by a newer pg_dump than this \(kind.rawValue) understands. \(kind.installHint)"
         }
         return text
     }
@@ -578,7 +782,10 @@ public enum DatabaseDump {
         }
     }
 
-    struct RunResult { var status: Int32; var output: String }
+    struct RunResult {
+        var status: Int32
+        var output: String
+    }
 
     /// Another tool's exit status, waited for from the thread feeding psql.
     final class StatusGate: @unchecked Sendable {
@@ -586,7 +793,10 @@ public enum DatabaseDump {
         private let lock = NSLock()
         private var status: Int32?
         func finish(_ value: Int32) {
-            let first: Bool = lock.withLock { defer { if status == nil { status = value } }; return status == nil }
+            let first: Bool = lock.withLock {
+                defer { if status == nil { status = value } }
+                return status == nil
+            }
             if first { semaphore.signal() }
         }
         func wait() -> Int32 {
@@ -601,17 +811,29 @@ public enum DatabaseDump {
     /// `dropFromHeader`: lines removed from the first chunk of `input` (the script's header of settings).
     /// `prefix` goes to standard input before `input`; `trailer` is asked for what follows it once `input` has been
     /// read to the end without errors, and may block until it knows (nil sends nothing).
-    static func run(_ path: String, _ arguments: [String], environment: [String: String], timeout: Double?,
-                    input: Input? = nil, prefix: Data = Data(), trailer: (@Sendable () -> Data?)? = nil,
-                    dropFromHeader: [Data] = [], checkScript: Bool = false, output: URL? = nil,
-                    standardOutput: Pipe? = nil,
-                    onLine: (@Sendable (String) -> Void)? = nil, onRead: (@Sendable (Int64) -> Void)? = nil) async throws -> RunResult {
+    static func run(
+        _ path: String,
+        _ arguments: [String],
+        environment: [String: String],
+        timeout: Double?,
+        input: Input? = nil,
+        prefix: Data = Data(),
+        trailer: (@Sendable () -> Data?)? = nil,
+        dropFromHeader: [Data] = [],
+        checkScript: Bool = false,
+        output: URL? = nil,
+        standardOutput: Pipe? = nil,
+        onLine: (@Sendable (String) -> Void)? = nil,
+        onRead: (@Sendable (Int64) -> Void)? = nil
+    ) async throws -> RunResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
         // Only what the tools need: settings from the user's environment (PGSERVICE, MYSQL_HOST…) could send them
         // to another server.
-        var base = ProcessInfo.processInfo.environment.filter { key, _ in ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE"].contains(key) }
+        var base = ProcessInfo.processInfo.environment.filter { key, _ in
+            ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE"].contains(key)
+        }
         base["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
         process.environment = base.merging(environment) { _, new in new }
         let messages = Pipe()
@@ -642,7 +864,9 @@ public enum DatabaseDump {
                     } else if collected.cancelled {
                         continuation.resume(throwing: CancellationError())
                     } else {
-                        continuation.resume(returning: RunResult(status: finished.terminationStatus, output: collected.text))
+                        continuation.resume(
+                            returning: RunResult(status: finished.terminationStatus, output: collected.text)
+                        )
                     }
                 }
                 do {
@@ -657,77 +881,97 @@ public enum DatabaseDump {
                 if let reader {
                     // Streamed from a background queue in chunks, so a large dump never sits in memory and progress
                     // follows what the tool has read.
-                    DispatchQueue.global().async {
-                        // A tool that exits early must not take Tabula down with SIGPIPE; the write fails instead.
-                        _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
-                        var sent: Int64 = 0
-                        var first = true
-                        var scanner = checkScript ? PostgresScriptCheck.Scanner() : nil
-                        var carry = Data()
-                        func write(_ data: Data) -> Bool {
-                            guard !data.isEmpty else { return true }
-                            do { try stdin.fileHandleForWriting.write(contentsOf: data); return true } catch { return false }
-                        }
-                        // Clean means every byte of the input was read and passed on: only then may the trailer
-                        // (COMMIT) follow. A read error, a refused line or a tool that stopped reading leaves it out.
-                        var clean = write(prefix)
-                        while clean, !collected.cancelled {
-                            var chunk: Data
-                            do {
-                                guard let read = try reader.read(upToCount: 1 << 20), !read.isEmpty else { break }
-                                chunk = read
-                            } catch {
-                                collected.fail(DatabaseError("Couldn't read the dump: \(error.localizedDescription)"))
-                                clean = false
-                                break
-                            }
-                            let size = chunk.count
-                            if first {
-                                first = false
-                                for line in dropFromHeader {
-                                    if let range = chunk.range(of: line, in: 0..<min(chunk.count, 1 << 16)) {
-                                        chunk.replaceSubrange(range, with: Data("\n".utf8))
-                                    }
-                                }
-                            }
-                            if scanner != nil {
-                                // Only whole lines that passed the check reach the tool.
-                                carry.append(chunk)
-                                var start = carry.startIndex
-                                var checked = Data()
+                    DispatchQueue.global()
+                        .async {
+                            // A tool that exits early must not take Tabula down with SIGPIPE; the write fails instead.
+                            _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+                            var sent: Int64 = 0
+                            var first = true
+                            var scanner = checkScript ? PostgresScriptCheck.Scanner() : nil
+                            var carry = Data()
+                            func write(_ data: Data) -> Bool {
+                                guard !data.isEmpty else { return true }
                                 do {
-                                    while let newline = carry[start...].firstIndex(of: UInt8(ascii: "\n")) {
-                                        try scanner?.line(carry[start..<newline])
-                                        checked.append(carry[start...newline])
-                                        start = carry.index(after: newline)
-                                    }
+                                    try stdin.fileHandleForWriting.write(contentsOf: data)
+                                    return true
+                                } catch { return false }
+                            }
+                            // Clean means every byte of the input was read and passed on: only then may the trailer
+                            // (COMMIT) follow. A read error, a refused line or a tool that stopped reading leaves it out.
+                            var clean = write(prefix)
+                            while clean, !collected.cancelled {
+                                var chunk: Data
+                                do {
+                                    guard let read = try reader.read(upToCount: 1 << 20), !read.isEmpty else { break }
+                                    chunk = read
                                 } catch {
-                                    collected.fail(error)
+                                    collected.fail(
+                                        DatabaseError("Couldn't read the dump: \(error.localizedDescription)")
+                                    )
                                     clean = false
                                     break
                                 }
-                                carry = Data(carry[start...])
-                                chunk = checked
+                                let size = chunk.count
+                                if first {
+                                    first = false
+                                    for line in dropFromHeader {
+                                        if let range = chunk.range(of: line, in: 0..<min(chunk.count, 1 << 16)) {
+                                            chunk.replaceSubrange(range, with: Data("\n".utf8))
+                                        }
+                                    }
+                                }
+                                if scanner != nil {
+                                    // Only whole lines that passed the check reach the tool.
+                                    carry.append(chunk)
+                                    var start = carry.startIndex
+                                    var checked = Data()
+                                    do {
+                                        while let newline = carry[start...].firstIndex(of: UInt8(ascii: "\n")) {
+                                            try scanner?.line(carry[start..<newline])
+                                            checked.append(carry[start...newline])
+                                            start = carry.index(after: newline)
+                                        }
+                                    } catch {
+                                        collected.fail(error)
+                                        clean = false
+                                        break
+                                    }
+                                    carry = Data(carry[start...])
+                                    chunk = checked
+                                }
+                                guard write(chunk) else {
+                                    clean = false
+                                    break
+                                }
+                                sent += Int64(size)
+                                onRead?(sent)
                             }
-                            guard write(chunk) else { clean = false; break }
-                            sent += Int64(size)
-                            onRead?(sent)
+                            if clean, !carry.isEmpty, !collected.cancelled {
+                                do {
+                                    try scanner?.line(carry[...])
+                                    clean = write(carry)
+                                } catch {
+                                    collected.fail(error)
+                                    clean = false
+                                }
+                            }
+                            if clean, !collected.cancelled, let ending = trailer?() { _ = write(ending) }
+                            if case .file = input { try? reader.close() }
+                            try? stdin.fileHandleForWriting.close()
                         }
-                        if clean, !carry.isEmpty, !collected.cancelled {
-                            do { try scanner?.line(carry[...]); clean = write(carry) } catch { collected.fail(error); clean = false }
-                        }
-                        if clean, !collected.cancelled, let ending = trailer?() { _ = write(ending) }
-                        if case .file = input { try? reader.close() }
-                        try? stdin.fileHandleForWriting.close()
-                    }
                 }
                 if let output, let onRead {
-                    DispatchQueue.global().async {
-                        while process.isRunning {
-                            if let size = try? FileManager.default.attributesOfItem(atPath: output.path)[.size] as? Int { onRead(Int64(size)) }
-                            Thread.sleep(forTimeInterval: 0.25)
+                    DispatchQueue.global()
+                        .async {
+                            while process.isRunning {
+                                if let size = try? FileManager.default.attributesOfItem(atPath: output.path)[.size]
+                                    as? Int
+                                {
+                                    onRead(Int64(size))
+                                }
+                                Thread.sleep(forTimeInterval: 0.25)
+                            }
                         }
-                    }
                 }
                 if let timeout {
                     DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { collected.stop() }
@@ -750,7 +994,9 @@ public enum DatabaseDump {
         private let lock = NSLock()
         private var processes: [ObjectIdentifier: Process] = [:]
         func insert(_ process: Process) { lock.withLock { processes[ObjectIdentifier(process)] = process } }
-        func remove(_ process: Process) { _ = lock.withLock { processes.removeValue(forKey: ObjectIdentifier(process)) } }
+        func remove(_ process: Process) {
+            _ = lock.withLock { processes.removeValue(forKey: ObjectIdentifier(process)) }
+        }
         var all: [Process] { lock.withLock { Array(processes.values) } }
     }
 
@@ -763,7 +1009,10 @@ public enum DatabaseDump {
         private let onLine: (@Sendable (String) -> Void)?
         var process: Process? {
             get { lock.withLock { storedProcess } }
-            set { lock.withLock { storedProcess = newValue }; if cancelled { stop() } }
+            set {
+                lock.withLock { storedProcess = newValue }
+                if cancelled { stop() }
+            }
         }
         private var storedProcess: Process?
 
@@ -794,17 +1043,23 @@ public enum DatabaseDump {
                 if partial.count > 4096 { partial = Data() }
                 return complete
             }
-            if let onLine { for line in lines where !line.trimmingCharacters(in: .whitespaces).isEmpty { onLine(line) } }
+            if let onLine {
+                for line in lines where !line.trimmingCharacters(in: .whitespaces).isEmpty { onLine(line) }
+            }
         }
 
         /// SIGTERM, then SIGKILL for a tool that doesn't stop.
         func stop() {
-            let process: Process? = lock.withLock { stopped = true; return storedProcess }
+            let process: Process? = lock.withLock {
+                stopped = true
+                return storedProcess
+            }
             guard let process, process.isRunning else { return }
             process.terminate()
-            DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
-                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            }
+            DispatchQueue.global()
+                .asyncAfter(deadline: .now() + 3) {
+                    if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                }
         }
     }
 }

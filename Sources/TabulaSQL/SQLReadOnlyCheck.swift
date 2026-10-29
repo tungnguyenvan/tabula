@@ -5,12 +5,15 @@ import TabulaFoundation
 /// own connection is also read-only where the server supports it (`DatabaseCatalog.prepareReadOnlySession`).
 public enum SQLReadOnlyCheck {
 
-    private static let firstWords: Set<String> = ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC", "VALUES", "TABLE"]
+    private static let firstWords: Set<String> = [
+        "SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC", "VALUES", "TABLE",
+    ]
     private static let writingWords: Set<String> = [
         "INSERT", "UPDATE", "DELETE", "MERGE", "UPSERT", "CREATE", "DROP", "ALTER", "TRUNCATE", "RENAME",
         "GRANT", "REVOKE", "COPY", "CALL", "DO", "LOCK", "UNLOCK", "VACUUM", "ANALYZE", "REINDEX", "CLUSTER", "ATTACH",
         "DETACH", "SET", "RESET", "PRAGMA", "LOAD", "HANDLER", "PREPARE", "EXECUTE", "DEALLOCATE",
-        "LISTEN", "NOTIFY", "REFRESH", "IMPORT", "OUTFILE", "DUMPFILE", "KILL", "SHUTDOWN", "BEGIN", "COMMIT", "ROLLBACK",
+        "LISTEN", "NOTIFY", "REFRESH", "IMPORT", "OUTFILE", "DUMPFILE", "KILL", "SHUTDOWN", "BEGIN", "COMMIT",
+        "ROLLBACK",
         "SAVEPOINT", "RELEASE", "START",
     ]
     /// Functions that act on the server or read its files, even in a read-only transaction.

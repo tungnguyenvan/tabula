@@ -28,7 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// they wait for the next connection to be ready.
     func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated {
-            if let (session, window) = WorkspaceRegistry.frontmostSession, case .sql(let model) = session.active, model.driver != nil {
+            if let (session, window) = WorkspaceRegistry.frontmostSession, case .sql(let model) = session.active,
+                model.driver != nil
+            {
                 window.makeKeyAndOrderFront(nil)
                 urls.forEach(model.openSQLFile)
             } else {
@@ -177,7 +179,11 @@ enum WorkspaceRegistry {
         refresh()
         DispatchQueue.main.async(execute: refresh)
         if observer == nil {
-            observer = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: nil,
+                queue: .main
+            ) { note in
                 let number = (note.object as? NSWindow)?.windowNumber
                 MainActor.assumeIsolated {
                     // Non-workspace windows (Connections, Shortcuts) clear it, so workspace commands disable.
@@ -217,7 +223,8 @@ enum WorkspaceRegistry {
     /// Shortcuts that menus can't express (⌃Tab / ⌃⇧Tab). Returns true when handled.
     static func handle(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        guard event.keyCode == KeyCode.tab, flags == [.control] || flags == [.control, .shift], let workspace = key else { return false }
+        guard event.keyCode == KeyCode.tab, flags == [.control] || flags == [.control, .shift], let workspace = key
+        else { return false }
         workspace.selectAdjacentTab(flags.contains(.shift) ? -1 : 1)
         return true
     }
@@ -245,8 +252,8 @@ struct WorkspaceCommands: Commands {
             Button(redis != nil ? "Console" : "New Query Tab") {
                 if let redis { redis.mode = .console } else { workspace?.newQueryTab() }
             }
-                .keyboardShortcut("t", modifiers: .command)
-                .disabled(noWorkspace)
+            .keyboardShortcut("t", modifiers: .command)
+            .disabled(noWorkspace)
             Button("Reopen Closed Tab") { workspace?.reopenClosedTab() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
@@ -359,25 +366,36 @@ struct WorkspaceCommands: Commands {
                     await redis?.refresh()
                 }
             }
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(noWorkspace)
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(noWorkspace)
             Divider()
             // On ⌘S and ⇧⌘S in a table tab, through File > Save and Save As.
             Button("Commit Changes") { workspace?.commitSelectedTable() }
                 .disabled(noWorkspace)
             Button("Preview Changes…") {
-                if let query, query.resultEditor?.hasChanges == true { query.showResultPreview = true } else { table?.showPreviewRequest += 1 }
+                if let query, query.resultEditor?.hasChanges == true {
+                    query.showResultPreview = true
+                } else {
+                    table?.showPreviewRequest += 1
+                }
             }
-                .disabled(noWorkspace)
+            .disabled(noWorkspace)
             Button("Discard Changes") {
-                if let editor = query?.resultEditor, editor.hasChanges { editor.discard() } else { table?.discardChanges() }
+                if let editor = query?.resultEditor, editor.hasChanges {
+                    editor.discard()
+                } else {
+                    table?.discardChanges()
+                }
             }
-                .keyboardShortcut("z", modifiers: [.command, .option])
-                .disabled(noWorkspace)
+            .keyboardShortcut("z", modifiers: [.command, .option])
+            .disabled(noWorkspace)
             Divider()
-            Button("Add Row") { table?.mode = .data; table?.addRow() }
-                .keyboardShortcut("i", modifiers: .command)
-                .disabled(noWorkspace)
+            Button("Add Row") {
+                table?.mode = .data
+                table?.addRow()
+            }
+            .keyboardShortcut("i", modifiers: .command)
+            .disabled(noWorkspace)
             Button("Duplicate Row") {
                 if let rows = workspace?.inspectedRows, !rows.isEmpty { table?.duplicateRows(rows) }
             }
@@ -401,7 +419,7 @@ struct WorkspaceCommands: Commands {
                     await redis?.reconnect()
                 }
             }
-                .disabled(noWorkspace)
+            .disabled(noWorkspace)
         }
 
         CommandMenu("Query") {
@@ -441,7 +459,7 @@ struct WorkspaceCommands: Commands {
                 WindowRequests.request(WindowID.shortcuts)
                 openWindow(id: WindowID.shortcuts)
             }
-                .keyboardShortcut("/", modifiers: [.command, .shift])
+            .keyboardShortcut("/", modifiers: [.command, .shift])
         }
     }
 }

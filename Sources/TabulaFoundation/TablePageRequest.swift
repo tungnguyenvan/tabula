@@ -10,7 +10,14 @@ public struct TablePageRequest: Sendable, Hashable {
     /// Raw SQL condition placed after WHERE, typed by the user.
     public var filter: String?
 
-    public init(table: TableRef, limit: Int = Defaults.pageSize, offset: Int = 0, orderBy: String? = nil, ascending: Bool = true, filter: String? = nil) {
+    public init(
+        table: TableRef,
+        limit: Int = Defaults.pageSize,
+        offset: Int = 0,
+        orderBy: String? = nil,
+        ascending: Bool = true,
+        filter: String? = nil
+    ) {
         self.table = table
         self.limit = limit
         self.offset = offset

@@ -17,7 +17,9 @@ enum MongoSRV {
     static func resolve(_ seed: String, timeout: Double) async throws -> [Target] {
         let host = normalized(seed)
         guard host.split(separator: ".").count >= Defaults.Mongo.srvMinimumLabels else {
-            throw DatabaseError("“\(seed)” isn't a DNS seed list name; it needs at least \(Defaults.Mongo.srvMinimumLabels) parts, like cluster0.example.net.")
+            throw DatabaseError(
+                "“\(seed)” isn't a DNS seed list name; it needs at least \(Defaults.Mongo.srvMinimumLabels) parts, like cluster0.example.net."
+            )
         }
         let targets = try await Task.detached { try lookup("_mongodb._tcp." + host, timeout: timeout) }.value
         guard !targets.isEmpty else { throw DatabaseError("DNS has no MongoDB servers for \(host).") }
@@ -31,8 +33,10 @@ enum MongoSRV {
         for target in targets {
             let name = normalized(target.host)
             guard name.hasSuffix("." + parent), name != parent else {
-                throw DatabaseError("DNS for \(seed) points to \(target.host), outside \(parent). Tabula refuses it, since that "
-                    + "could be a spoofed answer.")
+                throw DatabaseError(
+                    "DNS for \(seed) points to \(target.host), outside \(parent). Tabula refuses it, since that "
+                        + "could be a spoofed answer."
+                )
             }
         }
     }
@@ -57,19 +61,28 @@ enum MongoSRV {
         let answers = Answers()
         var reference: DNSServiceRef?
         let context = Unmanaged.passUnretained(answers).toOpaque()
-        let status = DNSServiceQueryRecord(&reference, 0, 0, name, UInt16(kDNSServiceType_SRV), UInt16(kDNSServiceClass_IN), { _, flags, _, error, _, _, _, length, data, _, context in
-            guard let context else { return }
-            let answers = Unmanaged<Answers>.fromOpaque(context).takeUnretainedValue()
-            if error != kDNSServiceErr_NoError {
-                answers.error = error
-                answers.done = true
-                return
-            }
-            if let data, let target = MongoSRV.parse(UnsafeRawBufferPointer(start: data, count: Int(length))) {
-                answers.targets.append(target)
-            }
-            if flags & DNSServiceFlags(kDNSServiceFlagsMoreComing) == 0 { answers.done = true }
-        }, context)
+        let status = DNSServiceQueryRecord(
+            &reference,
+            0,
+            0,
+            name,
+            UInt16(kDNSServiceType_SRV),
+            UInt16(kDNSServiceClass_IN),
+            { _, flags, _, error, _, _, _, length, data, _, context in
+                guard let context else { return }
+                let answers = Unmanaged<Answers>.fromOpaque(context).takeUnretainedValue()
+                if error != kDNSServiceErr_NoError {
+                    answers.error = error
+                    answers.done = true
+                    return
+                }
+                if let data, let target = MongoSRV.parse(UnsafeRawBufferPointer(start: data, count: Int(length))) {
+                    answers.targets.append(target)
+                }
+                if flags & DNSServiceFlags(kDNSServiceFlagsMoreComing) == 0 { answers.done = true }
+            },
+            context
+        )
         guard status == kDNSServiceErr_NoError, let reference else {
             throw DatabaseError("DNS lookup for \(name) couldn't start (error \(status)).")
         }
@@ -85,11 +98,15 @@ enum MongoSRV {
             guard ready >= 0 else { throw DatabaseError("DNS lookup for \(name) failed.") }
             if ready > 0 {
                 let processed = DNSServiceProcessResult(reference)
-                guard processed == kDNSServiceErr_NoError else { throw DatabaseError("DNS lookup for \(name) failed (error \(processed)).") }
+                guard processed == kDNSServiceErr_NoError else {
+                    throw DatabaseError("DNS lookup for \(name) failed (error \(processed)).")
+                }
             }
         }
         if answers.error == kDNSServiceErr_NoSuchRecord || answers.error == kDNSServiceErr_NoSuchName { return [] }
-        guard answers.error == kDNSServiceErr_NoError else { throw DatabaseError("DNS lookup for \(name) failed (error \(answers.error)).") }
+        guard answers.error == kDNSServiceErr_NoError else {
+            throw DatabaseError("DNS lookup for \(name) failed (error \(answers.error)).")
+        }
         return answers.targets
     }
 

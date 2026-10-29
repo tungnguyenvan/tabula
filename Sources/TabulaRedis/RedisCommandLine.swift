@@ -17,12 +17,19 @@ public enum RedisCommandLine {
         while let scalar = scalars.popFirst() {
             switch scalar {
             case " ", "\t", "\n", "\r":
-                if inArgument { arguments.append(current); current = []; inArgument = false }
+                if inArgument {
+                    arguments.append(current)
+                    current = []
+                    inArgument = false
+                }
             case "\"":
                 inArgument = true
                 var closed = false
                 while let next = scalars.popFirst() {
-                    if next == "\"" { closed = true; break }
+                    if next == "\"" {
+                        closed = true
+                        break
+                    }
                     if next == "\\", let escaped = scalars.popFirst() {
                         switch escaped {
                         case "n": current.append(0x0A)
@@ -45,17 +52,28 @@ public enum RedisCommandLine {
                     }
                 }
                 guard closed else { throw DatabaseError("Unbalanced double quotes") }
-                if let next = scalars.first, next != " " && next != "\t" { throw DatabaseError("Closing quote must be followed by a space") }
+                if let next = scalars.first, next != " " && next != "\t" {
+                    throw DatabaseError("Closing quote must be followed by a space")
+                }
             case "'":
                 inArgument = true
                 var closed = false
                 while let next = scalars.popFirst() {
-                    if next == "'" { closed = true; break }
-                    if next == "\\", scalars.first == "'" { scalars = scalars.dropFirst(); append("'"); continue }
+                    if next == "'" {
+                        closed = true
+                        break
+                    }
+                    if next == "\\", scalars.first == "'" {
+                        scalars = scalars.dropFirst()
+                        append("'")
+                        continue
+                    }
                     append(next)
                 }
                 guard closed else { throw DatabaseError("Unbalanced single quotes") }
-                if let next = scalars.first, next != " " && next != "\t" { throw DatabaseError("Closing quote must be followed by a space") }
+                if let next = scalars.first, next != " " && next != "\t" {
+                    throw DatabaseError("Closing quote must be followed by a space")
+                }
             default:
                 inArgument = true
                 append(scalar)
@@ -96,21 +114,27 @@ public enum RedisCommandLine {
         let first = bytes[index]
         let length = first >= 0xF0 ? 4 : first >= 0xE0 ? 3 : first >= 0xC2 ? 2 : 0
         guard length > 0, index + length <= bytes.count,
-              let string = String(bytes: bytes[index..<index + length], encoding: .utf8),
-              let scalar = string.unicodeScalars.first, string.unicodeScalars.count == 1 else { return nil }
+            let string = String(bytes: bytes[index..<index + length], encoding: .utf8),
+            let scalar = string.unicodeScalars.first, string.unicodeScalars.count == 1
+        else { return nil }
         return (scalar, length)
     }
 
     /// Commands the console refuses because they would block this connection indefinitely.
     public static func refusal(for arguments: [[UInt8]]) -> String? {
-        guard let first = arguments.first, let name = String(bytes: first, encoding: .utf8)?.uppercased() else { return nil }
+        guard let first = arguments.first, let name = String(bytes: first, encoding: .utf8)?.uppercased() else {
+            return nil
+        }
         switch name {
         case "SUBSCRIBE", "PSUBSCRIBE", "SSUBSCRIBE", "MONITOR", "SYNC", "PSYNC":
             return "\(name) would take over this connection and is not supported in the console. Use redis-cli for it."
-        case "BLPOP", "BRPOP", "BLMOVE", "BRPOPLPUSH", "BZPOPMIN", "BZPOPMAX", "BLMPOP", "BZMPOP", "XREAD", "XREADGROUP", "WAIT", "WAITAOF":
+        case "BLPOP", "BRPOP", "BLMOVE", "BRPOPLPUSH", "BZPOPMIN", "BZPOPMAX", "BLMPOP", "BZMPOP", "XREAD",
+            "XREADGROUP", "WAIT", "WAITAOF":
             // A zero timeout blocks forever.
             if let timeoutIndex = blockingTimeoutIndex(name, arguments),
-               timeoutIndex < arguments.count, let timeout = Double(String(decoding: arguments[timeoutIndex], as: UTF8.self)), timeout == 0 {
+                timeoutIndex < arguments.count,
+                let timeout = Double(String(decoding: arguments[timeoutIndex], as: UTF8.self)), timeout == 0
+            {
                 return "\(name) with timeout 0 would block forever. Give it a timeout in seconds."
             }
             return nil
@@ -137,13 +161,19 @@ public enum RedisCommandLine {
     /// Commands known to only read. On production connections everything else asks first, so a command
     /// missing here costs a confirmation rather than an unconfirmed write.
     private static let readOnlyCommands: Set<String> = [
-        "GET", "MGET", "GETRANGE", "STRLEN", "EXISTS", "TYPE", "TTL", "PTTL", "EXPIRETIME", "PEXPIRETIME", "KEYS", "SCAN", "RANDOMKEY",
+        "GET", "MGET", "GETRANGE", "STRLEN", "EXISTS", "TYPE", "TTL", "PTTL", "EXPIRETIME", "PEXPIRETIME", "KEYS",
+        "SCAN", "RANDOMKEY",
         "DBSIZE", "HGET", "HMGET", "HGETALL", "HKEYS", "HVALS", "HLEN", "HEXISTS", "HSTRLEN", "HSCAN", "HRANDFIELD",
-        "LRANGE", "LINDEX", "LLEN", "LPOS", "SMEMBERS", "SISMEMBER", "SMISMEMBER", "SCARD", "SSCAN", "SRANDMEMBER", "SINTER", "SUNION",
-        "SDIFF", "SINTERCARD", "ZRANGE", "ZRANGEBYSCORE", "ZRANGEBYLEX", "ZREVRANGE", "ZREVRANGEBYSCORE", "ZREVRANGEBYLEX", "ZSCORE",
-        "ZMSCORE", "ZRANK", "ZREVRANK", "ZCARD", "ZCOUNT", "ZLEXCOUNT", "ZSCAN", "ZRANDMEMBER", "XRANGE", "XREVRANGE", "XLEN", "XINFO",
-        "XPENDING", "XREAD", "PFCOUNT", "GETBIT", "BITCOUNT", "BITPOS", "GEOPOS", "GEODIST", "GEOHASH", "GEOSEARCH", "OBJECT", "MEMORY",
-        "DUMP", "INFO", "PING", "ECHO", "TIME", "SELECT", "CLIENT", "CONFIG", "COMMAND", "SLOWLOG", "LATENCY", "LASTSAVE", "ROLE",
+        "LRANGE", "LINDEX", "LLEN", "LPOS", "SMEMBERS", "SISMEMBER", "SMISMEMBER", "SCARD", "SSCAN", "SRANDMEMBER",
+        "SINTER", "SUNION",
+        "SDIFF", "SINTERCARD", "ZRANGE", "ZRANGEBYSCORE", "ZRANGEBYLEX", "ZREVRANGE", "ZREVRANGEBYSCORE",
+        "ZREVRANGEBYLEX", "ZSCORE",
+        "ZMSCORE", "ZRANK", "ZREVRANK", "ZCARD", "ZCOUNT", "ZLEXCOUNT", "ZSCAN", "ZRANDMEMBER", "XRANGE", "XREVRANGE",
+        "XLEN", "XINFO",
+        "XPENDING", "XREAD", "PFCOUNT", "GETBIT", "BITCOUNT", "BITPOS", "GEOPOS", "GEODIST", "GEOHASH", "GEOSEARCH",
+        "OBJECT", "MEMORY",
+        "DUMP", "INFO", "PING", "ECHO", "TIME", "SELECT", "CLIENT", "CONFIG", "COMMAND", "SLOWLOG", "LATENCY",
+        "LASTSAVE", "ROLE",
         "HELLO", "AUTH", "SUBSCRIBE", "PSUBSCRIBE", "PUBSUB", "MONITOR",
     ]
 
@@ -152,16 +182,23 @@ public enum RedisCommandLine {
         if name == "CONFIG" || name == "CLIENT" || name == "OBJECT" || name == "MEMORY" {
             // Only their inspection subcommands.
             let sub = arguments.count > 1 ? String(decoding: arguments[1], as: UTF8.self).uppercased() : ""
-            return ["GET", "LIST", "INFO", "ENCODING", "FREQ", "IDLETIME", "REFCOUNT", "USAGE", "STATS", "GETNAME", "ID", "HELP"].contains(sub)
+            return [
+                "GET", "LIST", "INFO", "ENCODING", "FREQ", "IDLETIME", "REFCOUNT", "USAGE", "STATS", "GETNAME", "ID",
+                "HELP",
+            ]
+            .contains(sub)
         }
         return readOnlyCommands.contains(name)
     }
 
     /// Commands that need an explicit confirmation in the console.
     public static func isDestructive(_ arguments: [[UInt8]]) -> Bool {
-        guard let first = arguments.first, let name = String(bytes: first, encoding: .utf8)?.uppercased() else { return false }
+        guard let first = arguments.first, let name = String(bytes: first, encoding: .utf8)?.uppercased() else {
+            return false
+        }
         return ["FLUSHALL", "FLUSHDB", "SHUTDOWN", "SWAPDB"].contains(name)
-            || (name == "CONFIG" && arguments.count > 1 && String(decoding: arguments[1], as: UTF8.self).uppercased() == "SET")
+            || (name == "CONFIG" && arguments.count > 1
+                && String(decoding: arguments[1], as: UTF8.self).uppercased() == "SET")
     }
 }
 
@@ -185,11 +222,13 @@ public indirect enum RedisReply: Equatable, Sendable {
         case .array(let items):
             if items.isEmpty { return "(empty array)" }
             let width = String(items.count).count
-            return items.enumerated().map { index, item in
-                let number = String(repeating: " ", count: width - String(index + 1).count) + "\(index + 1)) "
-                let prefix = index == 0 ? "" : String(repeating: " ", count: indent)
-                return prefix + number + item.formatted(indent: indent + number.count)
-            }.joined(separator: "\n")
+            return items.enumerated()
+                .map { index, item in
+                    let number = String(repeating: " ", count: width - String(index + 1).count) + "\(index + 1)) "
+                    let prefix = index == 0 ? "" : String(repeating: " ", count: indent)
+                    return prefix + number + item.formatted(indent: indent + number.count)
+                }
+                .joined(separator: "\n")
         }
     }
 
@@ -256,9 +295,13 @@ public enum RedisTTL {
     public static func format(milliseconds: Int?) -> String {
         guard let milliseconds else { return "" }
         var seconds = max(1, milliseconds / 1000)
-        let days = seconds / 86_400; seconds %= 86_400
-        let hours = seconds / 3600; seconds %= 3600
-        let minutes = seconds / 60; seconds %= 60
-        return [(days, "d"), (hours, "h"), (minutes, "m"), (seconds, "s")].filter { $0.0 > 0 }.prefix(2).map { "\($0.0)\($0.1)" }.joined(separator: " ")
+        let days = seconds / 86_400
+        seconds %= 86_400
+        let hours = seconds / 3600
+        seconds %= 3600
+        let minutes = seconds / 60
+        seconds %= 60
+        return [(days, "d"), (hours, "h"), (minutes, "m"), (seconds, "s")].filter { $0.0 > 0 }.prefix(2)
+            .map { "\($0.0)\($0.1)" }.joined(separator: " ")
     }
 }

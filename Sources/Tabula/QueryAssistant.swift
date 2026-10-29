@@ -25,7 +25,11 @@ final class QueryAssistant {
 
     /// Builds the request (which may wait for the schema), sends it and hands the cleaned-up SQL to
     /// `apply`, unless the connection may not use AI.
-    func run(for connection: ConnectionConfig, request: @escaping () async -> AIRequest, apply: @escaping (String) -> Void) {
+    func run(
+        for connection: ConnectionConfig,
+        request: @escaping () async -> AIRequest,
+        apply: @escaping (String) -> Void
+    ) {
         if let refusal = AIService.shared.refusal(for: connection) {
             error = refusal
             showPrompt = true
@@ -38,12 +42,20 @@ final class QueryAssistant {
         current = id
         task = Task {
             // A newer request owns `busy`; an older one finishing late must not clear it.
-            defer { if current == id { busy = false; progress = nil } }
+            defer {
+                if current == id {
+                    busy = false
+                    progress = nil
+                }
+            }
             do {
                 let reply = try await receive(AIService.shared.stream(await request()), id: id)
                 let sql = SQLPrompts.cleanSQL(reply)
                 guard !Task.isCancelled else { return }
-                guard !sql.isEmpty else { error = "The model returned nothing to insert."; return }
+                guard !sql.isEmpty else {
+                    error = "The model returned nothing to insert."
+                    return
+                }
                 apply(sql)
                 prompt = ""
                 showPrompt = false
@@ -61,11 +73,22 @@ final class QueryAssistant {
         let id = UUID()
         current = id
         task = Task {
-            defer { if current == id { busy = false; progress = nil } }
+            defer {
+                if current == id {
+                    busy = false
+                    progress = nil
+                }
+            }
             let stream = AIStream { continuation in
                 Task {
-                    for word in thinking.split(separator: " ") { try await Task.sleep(for: piece); continuation.yield(.thinking(word + " ")) }
-                    for word in answer.split(separator: " ") { try await Task.sleep(for: piece); continuation.yield(.text(word + " ")) }
+                    for word in thinking.split(separator: " ") {
+                        try await Task.sleep(for: piece)
+                        continuation.yield(.thinking(word + " "))
+                    }
+                    for word in answer.split(separator: " ") {
+                        try await Task.sleep(for: piece)
+                        continuation.yield(.text(word + " "))
+                    }
                     continuation.finish()
                 }
             }
@@ -76,14 +99,17 @@ final class QueryAssistant {
 
     /// Collects the answer, showing the reasoning and the SQL as they arrive (a few times a second).
     private func receive(_ stream: AIStream, id: UUID) async throws -> String {
-        var text = "", thinking = ""
+        var text = ""
+        var thinking = ""
         var lastRefresh = Date.distantPast
         for try await event in stream {
             switch event {
             case .text(let piece): text += piece
             case .thinking(let piece): thinking += piece
             }
-            guard current == id, Date().timeIntervalSince(lastRefresh) >= Defaults.AI.streamRefreshInterval else { continue }
+            guard current == id, Date().timeIntervalSince(lastRefresh) >= Defaults.AI.streamRefreshInterval else {
+                continue
+            }
             lastRefresh = Date()
             progress = text.isEmpty ? .thinking(Self.tail(thinking)) : .writing(Self.tail(text))
         }
@@ -128,18 +154,23 @@ struct AIPromptBar: View {
         }
         .barBackground()
         .onAppear { focused = true }
-        .onExitCommand { assistant.cancel(); assistant.showPrompt = false }
+        .onExitCommand {
+            assistant.cancel()
+            assistant.showPrompt = false
+        }
     }
 
     private var bar: some View {
         HStack(spacing: Layout.barPadding) {
             Image(systemName: "sparkles").foregroundStyle(.secondary)
-            TextField(hasSelection ? "How should the selected \(language) change?" : "Describe the query you want",
-                      text: $assistant.prompt)
-                .textFieldStyle(.plain)
-                .focused($focused)
-                .onSubmit(submit)
-                .disabled(assistant.busy)
+            TextField(
+                hasSelection ? "How should the selected \(language) change?" : "Describe the query you want",
+                text: $assistant.prompt
+            )
+            .textFieldStyle(.plain)
+            .focused($focused)
+            .onSubmit(submit)
+            .disabled(assistant.busy)
             if assistant.busy {
                 ProgressView().controlSize(.small)
                 Button("Stop") { assistant.cancel() }
@@ -148,7 +179,10 @@ struct AIPromptBar: View {
                     .disabled(assistant.prompt.trimmingCharacters(in: .whitespaces).isEmpty)
                     .keyboardShortcut(.defaultAction)
             }
-            BarButton(symbol: "xmark", help: "Close (⎋)") { assistant.cancel(); assistant.showPrompt = false }
+            BarButton(symbol: "xmark", help: "Close (⎋)") {
+                assistant.cancel()
+                assistant.showPrompt = false
+            }
         }
         .controlSize(.small)
         .padding(.horizontal, Layout.barPadding)

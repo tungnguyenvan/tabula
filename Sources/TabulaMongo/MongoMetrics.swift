@@ -12,7 +12,9 @@ actor MongoCatalog: DatabaseCatalog {
     nonisolated var routines: (any RoutineCatalog)? { nil }
 
     func serverVersion(on driver: any DatabaseDriver) async throws -> String {
-        guard let version = try await driver.value("db.version()") else { throw DatabaseError("The server didn't report its version.") }
+        guard let version = try await driver.value("db.version()") else {
+            throw DatabaseError("The server didn't report its version.")
+        }
         return "MongoDB " + version
     }
 
@@ -41,7 +43,8 @@ actor MongoCatalog: DatabaseCatalog {
         func number(_ document: Document?, _ path: String...) -> Double {
             var current: Primitive? = document
             for key in path { current = (current as? Document)?[key] }
-            return current.flatMap(MongoShellParser.double) ?? (current as? Decimal128).flatMap { Double(MongoDecimal.string($0)) } ?? 0
+            return current.flatMap(MongoShellParser.double) ?? (current as? Decimal128)
+                .flatMap { Double(MongoDecimal.string($0)) } ?? 0
         }
         let connections = status["connections"] as? Document
         let operations = status["opcounters"] as? Document
@@ -49,65 +52,106 @@ actor MongoCatalog: DatabaseCatalog {
         let memory = status["mem"] as? Document
         let cache = (status["wiredTiger"] as? Document)?["cache"] as? Document
         let replication = status["repl"] as? Document
-        let current = number(connections, "current"), available = number(connections, "available")
+        let current = number(connections, "current")
+        let available = number(connections, "available")
         let operationNames = ["insert", "query", "update", "delete", "getmore", "command"]
 
         let tables = try await largestCollections(in: database, on: driver)
 
         var sample = MetricsSample(
             groups: [
-                .init("Server", [
-                    .init("Version", (status["version"] as? String).map { "MongoDB " + $0 } ?? ""),
-                    .init("Host", status["host"] as? String ?? ""),
-                    .init("Uptime", MetricFormat.duration(seconds: number(status, "uptime"))),
-                    .init("Storage engine", ((status["storageEngine"] as? Document)?["name"] as? String) ?? ""),
-                    .init("Replica set", (replication?["setName"] as? String).map { name in
-                        "\(name) (\(replication?["isWritablePrimary"] as? Bool == true ? "primary" : "secondary"))"
-                    } ?? "standalone"),
-                ]),
-                .init("Connections & memory", [
-                    .init("Open", "\(Int(current)) of \(Int(current + available))"),
-                    .init("Active", MetricFormat.number(number(connections, "active"))),
-                    .init("Resident memory", MetricFormat.bytes(number(memory, "resident") * Units.mebibyte)),
-                    .init("Cache used", cache.map { cache in
-                        let used = number(cache, "bytes currently in the cache"), limit = number(cache, "maximum bytes configured")
-                        return "\(MetricFormat.bytes(used)) of \(MetricFormat.bytes(limit))"
-                    } ?? ""),
-                ]),
-                .init("Operations (since start)", operationNames.map { .init($0, MetricFormat.number(number(operations, $0))) }),
-                .init("Database \(database)", [
-                    .init("Collections", MetricFormat.number(number(stats, "collections"))),
-                    .init("Views", MetricFormat.number(number(stats, "views"))),
-                    .init("Documents", MetricFormat.number(number(stats, "objects"))),
-                    .init("Data size", MetricFormat.bytes(number(stats, "dataSize"))),
-                    .init("Storage size", MetricFormat.bytes(number(stats, "storageSize"))),
-                    .init("Indexes", "\(MetricFormat.number(number(stats, "indexes"))) · \(MetricFormat.bytes(number(stats, "indexSize")))"),
-                ]),
+                .init(
+                    "Server",
+                    [
+                        .init("Version", (status["version"] as? String).map { "MongoDB " + $0 } ?? ""),
+                        .init("Host", status["host"] as? String ?? ""),
+                        .init("Uptime", MetricFormat.duration(seconds: number(status, "uptime"))),
+                        .init("Storage engine", ((status["storageEngine"] as? Document)?["name"] as? String) ?? ""),
+                        .init(
+                            "Replica set",
+                            (replication?["setName"] as? String)
+                                .map { name in
+                                    "\(name) (\(replication?["isWritablePrimary"] as? Bool == true ? "primary" : "secondary"))"
+                                } ?? "standalone"
+                        ),
+                    ]
+                ),
+                .init(
+                    "Connections & memory",
+                    [
+                        .init("Open", "\(Int(current)) of \(Int(current + available))"),
+                        .init("Active", MetricFormat.number(number(connections, "active"))),
+                        .init("Resident memory", MetricFormat.bytes(number(memory, "resident") * Units.mebibyte)),
+                        .init(
+                            "Cache used",
+                            cache.map { cache in
+                                let used = number(cache, "bytes currently in the cache")
+                                let limit = number(cache, "maximum bytes configured")
+                                return "\(MetricFormat.bytes(used)) of \(MetricFormat.bytes(limit))"
+                            } ?? ""
+                        ),
+                    ]
+                ),
+                .init(
+                    "Operations (since start)",
+                    operationNames.map { .init($0, MetricFormat.number(number(operations, $0))) }
+                ),
+                .init(
+                    "Database \(database)",
+                    [
+                        .init("Collections", MetricFormat.number(number(stats, "collections"))),
+                        .init("Views", MetricFormat.number(number(stats, "views"))),
+                        .init("Documents", MetricFormat.number(number(stats, "objects"))),
+                        .init("Data size", MetricFormat.bytes(number(stats, "dataSize"))),
+                        .init("Storage size", MetricFormat.bytes(number(stats, "storageSize"))),
+                        .init(
+                            "Indexes",
+                            "\(MetricFormat.number(number(stats, "indexes"))) · \(MetricFormat.bytes(number(stats, "indexSize")))"
+                        ),
+                    ]
+                ),
             ],
-            counters: ["Operations/s": operationNames.reduce(0) { $0 + number(operations, $1) },
-                       "Network in KB/s": number(network, "bytesIn") / Units.kibibyte,
-                       "Network out KB/s": number(network, "bytesOut") / Units.kibibyte],
+            counters: [
+                "Operations/s": operationNames.reduce(0) { $0 + number(operations, $1) },
+                "Network in KB/s": number(network, "bytesIn") / Units.kibibyte,
+                "Network out KB/s": number(network, "bytesOut") / Units.kibibyte,
+            ],
             gauges: ["Connections": current, "Memory MB": number(memory, "resident")],
-            tables: tables)
+            tables: tables
+        )
         sample.tablesAreCollections = true
         return sample
     }
 
     /// The largest collections by data plus index size, measured for up to `statsCollectionLimit` collections and
     /// reused for `statsRefreshInterval` seconds.
-    private func largestCollections(in database: String, on driver: any DatabaseDriver) async throws -> [MetricsSample.TableStat] {
+    private func largestCollections(
+        in database: String,
+        on driver: any DatabaseDriver
+    ) async throws -> [MetricsSample.TableStat] {
         if let cached = collectionStats, cached.database == database,
-           Date().timeIntervalSince(cached.time) < Defaults.Mongo.statsRefreshInterval {
+            Date().timeIntervalSince(cached.time) < Defaults.Mongo.statsRefreshInterval
+        {
             return cached.stats
         }
         var stats: [MetricsSample.TableStat] = []
-        for table in try await driver.tables(in: database).filter({ $0.kind == .table }).prefix(Defaults.Mongo.statsCollectionLimit) {
+        for table in try await driver.tables(in: database).filter({ $0.kind == .table })
+            .prefix(Defaults.Mongo.statsCollectionLimit)
+        {
             // A collection the account may not read the stats of is left out of the ranking.
             guard let result = try? await driver.execute(MongoDialect.collection(table) + ".stats()"),
-                  let text = result.documents?.first, let stat = try? MongoShell.parseDocument(text),
-                  let storage = stat["storageStats"] as? Document else { continue }
+                let text = result.documents?.first, let stat = try? MongoShell.parseDocument(text),
+                let storage = stat["storageStats"] as? Document
+            else { continue }
             func number(_ key: String) -> Int { storage[key].flatMap(MongoShellParser.double).map { Int($0) } ?? 0 }
-            stats.append(.init(name: table.name, rows: number("count"), dataBytes: number("size"), indexBytes: number("totalIndexSize")))
+            stats.append(
+                .init(
+                    name: table.name,
+                    rows: number("count"),
+                    dataBytes: number("size"),
+                    indexBytes: number("totalIndexSize")
+                )
+            )
         }
         stats.sort { ($0.totalBytes ?? 0) > ($1.totalBytes ?? 0) }
         let largest = Array(stats.prefix(Defaults.Metrics.tableLimit))

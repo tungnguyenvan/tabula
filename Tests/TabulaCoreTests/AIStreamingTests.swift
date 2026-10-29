@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaAI
 
 final class ThinkTagSplitterTests: XCTestCase {
@@ -7,7 +8,8 @@ final class ThinkTagSplitterTests: XCTestCase {
         var splitter = ThinkTagSplitter()
         var events = chunks.flatMap { splitter.feed($0) }
         events += splitter.finish()
-        var thinking = "", text = ""
+        var thinking = ""
+        var text = ""
         for event in events {
             switch event {
             case .thinking(let piece): thinking += piece
@@ -41,7 +43,8 @@ final class AIStreamingTests: XCTestCase {
     private let request = AIRequest(purpose: .generate, instructions: "Be brief.", prompt: "SELECT?")
 
     private func collect(_ stream: AIStream) async throws -> (thinking: String, text: String) {
-        var thinking = "", text = ""
+        var thinking = ""
+        var text = ""
         for try await event in stream {
             switch event {
             case .thinking(let piece): thinking += piece
@@ -52,7 +55,9 @@ final class AIStreamingTests: XCTestCase {
     }
 
     func testAnthropicStreamsThinkingAndText() async throws {
-        StubProtocol.response = (200, """
+        StubProtocol.response = (
+            200,
+            """
             event: message_start
             data: {"type":"message_start","message":{"id":"msg_1"}}
 
@@ -80,7 +85,8 @@ final class AIStreamingTests: XCTestCase {
             event: message_stop
             data: {"type":"message_stop"}
 
-            """)
+            """
+        )
         let endpoint = AIEndpoint(kind: .anthropic, model: "claude-opus-5-5", apiKey: "k", effort: "high")
         let result = try await collect(AnthropicProvider(endpoint).stream(request))
         XCTAssertEqual(result.thinking, "The user wants a count.")
@@ -94,11 +100,17 @@ final class AIStreamingTests: XCTestCase {
     func testAnthropicStreamErrors() async {
         let endpoint = AIEndpoint(kind: .anthropic, model: "claude-opus-5-5", apiKey: "k")
         StubProtocol.response = (200, "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\"}}\n\n")
-        do { _ = try await collect(AnthropicProvider(endpoint).stream(request)); XCTFail("expected a refusal") } catch {
+        do {
+            _ = try await collect(AnthropicProvider(endpoint).stream(request))
+            XCTFail("expected a refusal")
+        } catch {
             XCTAssertEqual(error as? AIError, .refused)
         }
         StubProtocol.response = (529, #"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#)
-        do { _ = try await collect(AnthropicProvider(endpoint).stream(request)); XCTFail("expected an error") } catch {
+        do {
+            _ = try await collect(AnthropicProvider(endpoint).stream(request))
+            XCTFail("expected an error")
+        } catch {
             XCTAssertEqual(error as? AIError, .server("Claude API: Overloaded"))
         }
     }
@@ -106,12 +118,15 @@ final class AIStreamingTests: XCTestCase {
     func testInlineRequestsDoNotAskForThinking() async throws {
         StubProtocol.response = (200, #"{"stop_reason":"end_turn","content":[{"type":"text","text":"1"}]}"#)
         let inline = AIRequest(purpose: .inline, instructions: "x", prompt: "y")
-        _ = try await AnthropicProvider(AIEndpoint(kind: .anthropic, model: "claude-haiku-5-5", apiKey: "k")).complete(inline)
+        _ = try await AnthropicProvider(AIEndpoint(kind: .anthropic, model: "claude-haiku-5-5", apiKey: "k"))
+            .complete(inline)
         XCTAssertNil(StubProtocol.lastBody?["thinking"])
     }
 
     func testOpenAICompatibleStreamsReasoningFields() async throws {
-        StubProtocol.response = (200, """
+        StubProtocol.response = (
+            200,
+            """
             data: {"choices":[{"delta":{"role":"assistant","content":""}}]}
 
             data: {"choices":[{"delta":{"reasoning_content":"Think "}}]}
@@ -122,7 +137,8 @@ final class AIStreamingTests: XCTestCase {
 
             data: [DONE]
 
-            """)
+            """
+        )
         let endpoint = AIEndpoint(kind: .openAICompatible, baseURL: "http://localhost:4000/v1", model: "m")
         let result = try await collect(OpenAICompatibleProvider(endpoint).stream(request))
         XCTAssertEqual(result.thinking, "Think more.")
@@ -131,14 +147,17 @@ final class AIStreamingTests: XCTestCase {
     }
 
     func testOpenAICompatibleSplitsThinkTags() async throws {
-        StubProtocol.response = (200, """
+        StubProtocol.response = (
+            200,
+            """
             data: {"choices":[{"delta":{"content":"<think>Which"}}]}
 
             data: {"choices":[{"delta":{"content":" table?</think>\\n\\nSELECT 3"}}]}
 
             data: [DONE]
 
-            """)
+            """
+        )
         let endpoint = AIEndpoint(kind: .openAICompatible, baseURL: "http://localhost:4000/v1", model: "m")
         let result = try await collect(OpenAICompatibleProvider(endpoint).stream(request))
         XCTAssertEqual(result.thinking, "Which table?")
@@ -150,17 +169,24 @@ final class AIStreamingTests: XCTestCase {
     }
 
     func testAdaptiveThinkingOnlyForModelsThatTakeIt() {
-        for model in ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-opus-4-6",
-                      "claude-sonnet-4-6-20260115", "anthropic/claude-opus-5", "claude-opus-5-20260301"] {
+        for model in [
+            "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-opus-4-6",
+            "claude-sonnet-4-6-20260115", "anthropic/claude-opus-5", "claude-opus-5-20260301",
+        ] {
             XCTAssertTrue(AnthropicProvider.takesAdaptiveThinking(model), model)
         }
-        for model in ["claude-haiku-4-5", "claude-sonnet-4-5-20250929", "claude-3-7-sonnet", "claude-opus-4-1", "gpt-5", ""] {
+        for model in [
+            "claude-haiku-4-5", "claude-sonnet-4-5-20250929", "claude-3-7-sonnet", "claude-opus-4-1", "gpt-5", "",
+        ] {
             XCTAssertFalse(AnthropicProvider.takesAdaptiveThinking(model), model)
         }
     }
 
     func testCleanSQLDropsLeftoverReasoning() {
-        XCTAssertEqual(SQLPrompts.cleanSQL("Okay, the user wants a count.</think>\n\nSELECT count(*) FROM t"), "SELECT count(*) FROM t")
+        XCTAssertEqual(
+            SQLPrompts.cleanSQL("Okay, the user wants a count.</think>\n\nSELECT count(*) FROM t"),
+            "SELECT count(*) FROM t"
+        )
         XCTAssertEqual(SQLPrompts.cleanSQL("<think>hm</think>```sql\nSELECT 1\n```"), "SELECT 1")
     }
 
@@ -175,7 +201,10 @@ final class AIStreamingTests: XCTestCase {
 }
 
 final class CLIEventsTests: XCTestCase {
-    private func run(_ lines: [String], _ feed: (CLIEvents, String) -> Void) async throws -> (thinking: String, text: String, events: CLIEvents) {
+    private func run(
+        _ lines: [String],
+        _ feed: (CLIEvents, String) -> Void
+    ) async throws -> (thinking: String, text: String, events: CLIEvents) {
         var captured: CLIEvents!
         let stream = AIStream { continuation in
             let events = CLIEvents(continuation)
@@ -183,7 +212,8 @@ final class CLIEventsTests: XCTestCase {
             lines.forEach { feed(events, $0) }
             continuation.finish()
         }
-        var thinking = "", text = ""
+        var thinking = ""
+        var text = ""
         for try await event in stream {
             switch event {
             case .thinking(let piece): thinking += piece
@@ -242,11 +272,20 @@ final class CLIEventsTests: XCTestCase {
 
     /// Runs the installed Codex (TABULA_TEST_CODEX=1), which costs a small request.
     func testCodexStreamsLive() async throws {
-        guard ProcessInfo.processInfo.environment["TABULA_TEST_CODEX"] != nil else { throw XCTSkip("TABULA_TEST_CODEX not set") }
+        guard ProcessInfo.processInfo.environment["TABULA_TEST_CODEX"] != nil else {
+            throw XCTSkip("TABULA_TEST_CODEX not set")
+        }
         let provider = CLIProvider(tool: .codex, effort: "high")
-        var thinking = "", text = ""
-        for try await event in provider.stream(AIRequest(purpose: .generate, instructions: "Reply with SQL only.",
-                                                        prompt: "Tables: customers(id, name), orders(id, customer_id, total, status). Think it through, then write the top 5 customers by paid order value.")) {
+        var thinking = ""
+        var text = ""
+        for try await event in provider.stream(
+            AIRequest(
+                purpose: .generate,
+                instructions: "Reply with SQL only.",
+                prompt:
+                    "Tables: customers(id, name), orders(id, customer_id, total, status). Think it through, then write the top 5 customers by paid order value."
+            )
+        ) {
             switch event {
             case .thinking(let piece): thinking += piece
             case .text(let piece): text += piece
@@ -254,20 +293,33 @@ final class CLIEventsTests: XCTestCase {
         }
         XCTAssertTrue(text.uppercased().contains("SELECT"), text)
         XCTAssertFalse(thinking.isEmpty, "expected Codex's reasoning summary")
-        let reply = try await provider.complete(AIRequest(purpose: .generate, instructions: "Reply with SQL only.", prompt: "Count the rows of table t."))
+        let reply = try await provider.complete(
+            AIRequest(purpose: .generate, instructions: "Reply with SQL only.", prompt: "Count the rows of table t.")
+        )
         XCTAssertTrue(reply.uppercased().contains("COUNT"), reply)
     }
 
     /// Runs the installed Claude Code (TABULA_TEST_CLAUDE_CODE=1), which costs a small request.
     func testClaudeCodeStreamsLive() async throws {
-        guard ProcessInfo.processInfo.environment["TABULA_TEST_CLAUDE_CODE"] != nil else { throw XCTSkip("TABULA_TEST_CLAUDE_CODE not set") }
+        guard ProcessInfo.processInfo.environment["TABULA_TEST_CLAUDE_CODE"] != nil else {
+            throw XCTSkip("TABULA_TEST_CLAUDE_CODE not set")
+        }
         let provider = CLIProvider(tool: .claude, model: "claude-haiku-5-5")
-        var thinking = "", text = "", pieces = 0
-        for try await event in provider.stream(AIRequest(purpose: .generate, instructions: "Answer in one short sentence.",
-                                                        prompt: "Think it through, then say what SQL's COUNT(*) does.")) {
+        var thinking = ""
+        var text = ""
+        var pieces = 0
+        for try await event in provider.stream(
+            AIRequest(
+                purpose: .generate,
+                instructions: "Answer in one short sentence.",
+                prompt: "Think it through, then say what SQL's COUNT(*) does."
+            )
+        ) {
             switch event {
             case .thinking(let piece): thinking += piece
-            case .text(let piece): text += piece; pieces += 1
+            case .text(let piece):
+                text += piece
+                pieces += 1
             }
         }
         XCTAssertFalse(text.isEmpty)

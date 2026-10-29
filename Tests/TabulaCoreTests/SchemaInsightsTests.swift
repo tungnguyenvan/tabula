@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
@@ -39,9 +40,16 @@ final class SchemaInsightsTests: XCTestCase {
     }
 
     func testPostgres() async throws {
-        guard let port = env["TABULA_TEST_PG_PORT"].flatMap(Int.init) else { throw XCTSkip("TABULA_TEST_PG_PORT not set") }
-        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"), password: "tabula")
-        _ = try await driver.executeScript("DROP SCHEMA IF EXISTS fk_test CASCADE; CREATE SCHEMA fk_test; SET search_path = fk_test;" + schemaSQL)
+        guard let port = env["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_PG_PORT not set")
+        }
+        let driver = try await DriverFactory.connect(
+            ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"),
+            password: "tabula"
+        )
+        _ = try await driver.executeScript(
+            "DROP SCHEMA IF EXISTS fk_test CASCADE; CREATE SCHEMA fk_test; SET search_path = fk_test;" + schemaSQL
+        )
         check(try await driver.foreignKeys(in: "fk_test"))
         let first = try await driver.metrics(schema: "fk_test")
         _ = try await driver.execute("SELECT 1")
@@ -57,8 +65,13 @@ final class SchemaInsightsTests: XCTestCase {
     }
 
     func testMySQL() async throws {
-        guard let port = env["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else { throw XCTSkip("TABULA_TEST_MYSQL_PORT not set") }
-        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .mysql, port: port, user: "tabula", database: "tabula", tls: .require), password: "tabula")
+        guard let port = env["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MYSQL_PORT not set")
+        }
+        let driver = try await DriverFactory.connect(
+            ConnectionConfig(kind: .mysql, port: port, user: "tabula", database: "tabula", tls: .require),
+            password: "tabula"
+        )
         _ = try await driver.executeScript("DROP TABLE IF EXISTS copies, editions, books, authors;" + schemaSQL)
         check(try await driver.foreignKeys(in: "tabula"))
         let metrics = try await driver.metrics(schema: "tabula")
@@ -72,10 +85,18 @@ final class SchemaInsightsTests: XCTestCase {
     }
 
     func testRedis() async throws {
-        guard let port = env["TABULA_TEST_REDIS_PORT"].flatMap(Int.init) else { throw XCTSkip("TABULA_TEST_REDIS_PORT not set") }
-        let redis = try await RedisDriver.connect(ConnectionConfig(kind: .redis, port: port, user: "tabula"), password: "tabula")
+        guard let port = env["TABULA_TEST_REDIS_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_REDIS_PORT not set")
+        }
+        let redis = try await RedisDriver.connect(
+            ConnectionConfig(kind: .redis, port: port, user: "tabula"),
+            password: "tabula"
+        )
         let metrics = try await redis.metrics()
-        let items = Dictionary(metrics.groups.flatMap(\.items).map { ($0.label, $0.value) }, uniquingKeysWith: { a, _ in a })
+        let items = Dictionary(
+            metrics.groups.flatMap(\.items).map { ($0.label, $0.value) },
+            uniquingKeysWith: { a, _ in a }
+        )
         XCTAssertTrue(items["Version"]?.hasPrefix("Redis 7") == true)
         XCTAssertNotNil(items["Used"])
         XCTAssertGreaterThan(metrics.gauges["Clients"] ?? 0, 0)

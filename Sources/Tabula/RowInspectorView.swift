@@ -13,17 +13,24 @@ struct RowInspectorView: View {
                 } else {
                     placeholder("Select a row to see its fields")
                 }
-            } else if case .query(let query) = model.selectedTab, let result = query.currentResult, result.hasResultSet {
+            } else if case .query(let query) = model.selectedTab, let result = query.currentResult, result.hasResultSet
+            {
                 if let row = model.inspectedRows.first, row < result.rows.count {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(Array(result.columns.enumerated()), id: \.offset) { index, name in
                                 let editor = query.resultEditor
                                 let info = editor?.target.columns[safe: index]
-                                FieldView(name: name, type: info?.typeName, isKey: info?.isKey ?? false,
-                                          cell: (editor != nil ? editor!.value(row: row, column: index) : result.rows[row][index]).map(GridCell.value) ?? .null,
-                                          edited: editor?.state(row: row, column: index) == .edited,
-                                          editable: editor?.isEditable(row: row, column: index) == true) { value in
+                                FieldView(
+                                    name: name,
+                                    type: info?.typeName,
+                                    isKey: info?.isKey ?? false,
+                                    cell: (editor != nil
+                                        ? editor!.value(row: row, column: index) : result.rows[row][index])
+                                        .map(GridCell.value) ?? .null,
+                                    edited: editor?.state(row: row, column: index) == .edited,
+                                    editable: editor?.isEditable(row: row, column: index) == true
+                                ) { value in
                                     editor?.setValue(value, row: row, column: index)
                                 }
                             }
@@ -64,10 +71,14 @@ private struct TableRowInspector: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(Array(table.resultColumns.enumerated()), id: \.offset) { index, name in
                         let info = table.columnInfo(name)
-                        FieldView(name: name, type: info?.dataType, isKey: info?.isPrimaryKey ?? false,
-                                  cell: table.cell(row: row, column: index),
-                                  edited: table.state(row: row, column: index) == .edited,
-                                  editable: table.isEditable(row: row)) { value in
+                        FieldView(
+                            name: name,
+                            type: info?.dataType,
+                            isKey: info?.isPrimaryKey ?? false,
+                            cell: table.cell(row: row, column: index),
+                            edited: table.state(row: row, column: index) == .edited,
+                            editable: table.isEditable(row: row)
+                        ) { value in
                             table.setValue(value, row: row, column: index)
                         }
                     }
@@ -102,14 +113,22 @@ private struct FieldView: View {
                 Spacer()
                 if editable {
                     Menu {
-                        Button("Set NULL") { text = ""; onChange(nil) }
-                        Button("Set Empty String") { text = ""; onChange("") }
-                    } label: { Image(systemName: "ellipsis").help("Set NULL or an empty string") }
-                        .help("Set NULL or an empty string")
-                        .accessibilityLabel("Set value for \(name)")
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
+                        Button("Set NULL") {
+                            text = ""
+                            onChange(nil)
+                        }
+                        Button("Set Empty String") {
+                            text = ""
+                            onChange("")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis").help("Set NULL or an empty string")
+                    }
+                    .help("Set NULL or an empty string")
+                    .accessibilityLabel("Set value for \(name)")
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
             }
             Group {

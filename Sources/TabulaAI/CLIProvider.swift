@@ -25,9 +25,13 @@ public struct CLIProvider: AIProvider {
     /// The tool's path: as the login shell resolves it, else from the usual install locations (an npm
     /// install under another nvm Node version isn't on the PATH). Nil when it isn't installed.
     public static func locate(_ tool: Tool) async -> String? {
-        if let output = try? await ShellCommand.run(script: #"command -v "$0""#, arguments: [tool.rawValue],
-                                                    timeout: Defaults.AI.inlineTimeout),
-           let path = output.stdout.split(whereSeparator: \.isNewline).last.map(String.init), path.hasPrefix("/") {
+        if let output = try? await ShellCommand.run(
+            script: #"command -v "$0""#,
+            arguments: [tool.rawValue],
+            timeout: Defaults.AI.inlineTimeout
+        ),
+            let path = output.stdout.split(whereSeparator: \.isNewline).last.map(String.init), path.hasPrefix("/")
+        {
             return path
         }
         return installLocations(for: tool).first { FileManager.default.isExecutableFile(atPath: $0) }
@@ -40,7 +44,9 @@ public struct CLIProvider: AIProvider {
         let nodeVersions = ((try? FileManager.default.contentsOfDirectory(atPath: nvm)) ?? [])
             .sorted { $0.compare($1, options: .numeric) == .orderedDescending }
             .map { "\(nvm)/\($0)/bin" }
-        let directories = [home + "/.local/bin", home + "/.claude/local", "/opt/homebrew/bin", "/usr/local/bin", home + "/.bun/bin"] + nodeVersions
+        let directories =
+            [home + "/.local/bin", home + "/.claude/local", "/opt/homebrew/bin", "/usr/local/bin", home + "/.bun/bin"]
+            + nodeVersions
         return directories.map { "\($0)/\(tool.rawValue)" }
     }
 
@@ -51,25 +57,39 @@ public struct CLIProvider: AIProvider {
     /// The agent's output as it works: Claude Code's partial messages (thinking and text), Codex's reasoning and
     /// answer events. A tool that prints no events (an old version) still gives its final answer at the end.
     public func stream(_ request: AIRequest) -> AIStream {
-        let tool = tool, model = model, effort = effort
+        let tool = tool
+        let model = model
+        let effort = effort
         return AIStream.run { continuation in
             guard let executable = await Self.locate(tool) else {
-                throw AIError.unavailable("\(tool == .claude ? "Claude Code" : "Codex") isn't installed, or isn't on your shell's PATH.")
+                throw AIError.unavailable(
+                    "\(tool == .claude ? "Claude Code" : "Codex") isn't installed, or isn't on your shell's PATH."
+                )
             }
-            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("TabulaAI-\(UUID().uuidString)", isDirectory: true)
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+                "TabulaAI-\(UUID().uuidString)",
+                isDirectory: true
+            )
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: directory) }
             let events = CLIEvents(continuation)
 
             switch tool {
             case .claude:
-                var arguments = ["-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "stream-json",
-                                 "--verbose", "--include-partial-messages"]
+                var arguments = [
+                    "-p", "--system-prompt", request.instructions, "--tools", "", "--output-format", "stream-json",
+                    "--verbose", "--include-partial-messages",
+                ]
                 if !model.isEmpty { arguments += ["--model", model] }
                 if let effort { arguments += ["--effort", effort] }
-                let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
-                                                        input: request.prompt, directory: directory, timeout: Defaults.AI.generateTimeout,
-                                                        onLine: { events.claude($0) })
+                let output = try await ShellCommand.run(
+                    script: #"exec "$0" "$@""#,
+                    arguments: [executable] + arguments,
+                    input: request.prompt,
+                    directory: directory,
+                    timeout: Defaults.AI.generateTimeout,
+                    onLine: { events.claude($0) }
+                )
                 if let failure = events.failure { throw AIError.server(failure) }
                 if !events.sentText {
                     guard let result = events.result else { throw AIError.server(Self.failure("Claude Code", output)) }
@@ -77,17 +97,27 @@ public struct CLIProvider: AIProvider {
                 }
             case .codex:
                 let answer = directory.appendingPathComponent("answer.txt")
-                var arguments = ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--json", "--output-last-message", answer.path]
+                var arguments = [
+                    "exec", "--skip-git-repo-check", "--sandbox", "read-only", "--json", "--output-last-message",
+                    answer.path,
+                ]
                 // Codex shares a summary of its reasoning only when asked; suggestions while typing don't show it.
                 if request.purpose != .inline { arguments += ["-c", "model_reasoning_summary=\"detailed\""] }
                 if !model.isEmpty { arguments += ["--model", model] }
                 if let effort { arguments += ["-c", "model_reasoning_effort=\"\(effort)\""] }
                 arguments.append("-")
-                let output = try await ShellCommand.run(script: #"exec "$0" "$@""#, arguments: [executable] + arguments,
-                                                        input: request.instructions + "\n\n" + request.prompt, directory: directory,
-                                                        timeout: Defaults.AI.generateTimeout, onLine: { events.codex($0) })
+                let output = try await ShellCommand.run(
+                    script: #"exec "$0" "$@""#,
+                    arguments: [executable] + arguments,
+                    input: request.instructions + "\n\n" + request.prompt,
+                    directory: directory,
+                    timeout: Defaults.AI.generateTimeout,
+                    onLine: { events.codex($0) }
+                )
                 // Codex writes status messages between steps; the answer is the last message (also in the file).
-                let final = (try? String(contentsOf: answer, encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 } ?? events.lastMessage
+                let final =
+                    (try? String(contentsOf: answer, encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? events.lastMessage
                 if !events.sentText {
                     guard let final else {
                         throw AIError.server(events.failure.map { "Codex: \($0)" } ?? Self.failure("Codex", output))
@@ -100,8 +130,11 @@ public struct CLIProvider: AIProvider {
 
     private static func failure(_ name: String, _ output: ShellCommand.Output) -> String {
         let detail = output.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        if output.status == ShellCommand.notFoundStatus { return "\(name) isn't installed, or isn't on your shell's PATH." }
-        return detail.isEmpty ? "\(name) exited with status \(output.status)." : "\(name): \(detail.suffix(Defaults.AI.errorLength))"
+        if output.status == ShellCommand.notFoundStatus {
+            return "\(name) isn't installed, or isn't on your shell's PATH."
+        }
+        return detail.isEmpty
+            ? "\(name) exited with status \(output.status)." : "\(name): \(detail.suffix(Defaults.AI.errorLength))"
     }
 }
 
@@ -137,7 +170,9 @@ final class CLIEvents: @unchecked Sendable {
         switch json["type"] as? String {
         case "stream_event":
             let event = json["event"] as? [String: Any] ?? [:]
-            guard event["type"] as? String == "content_block_delta", let delta = event["delta"] as? [String: Any] else { return }
+            guard event["type"] as? String == "content_block_delta", let delta = event["delta"] as? [String: Any] else {
+                return
+            }
             switch delta["type"] as? String {
             case "thinking_delta": if let text = delta["thinking"] as? String { yield(.thinking(text)) }
             case "text_delta": if let text = delta["text"] as? String { yield(.text(text)) }
@@ -146,7 +181,11 @@ final class CLIEvents: @unchecked Sendable {
         case "result":
             let text = json["result"] as? String
             lock.withLock {
-                if json["is_error"] as? Bool == true { error = text ?? "Claude Code failed." } else { finalResult = text }
+                if json["is_error"] as? Bool == true {
+                    error = text ?? "Claude Code failed."
+                } else {
+                    finalResult = text
+                }
             }
         default:
             break
@@ -164,7 +203,10 @@ final class CLIEvents: @unchecked Sendable {
             case "reasoning": if let text = item["text"] as? String { yield(.thinking(text + "\n\n")) }
             case "agent_message":
                 guard let text = item["text"] as? String else { return }
-                let previous = lock.withLock { () -> String? in defer { message = text }; return message }
+                let previous = lock.withLock { () -> String? in
+                    defer { message = text }
+                    return message
+                }
                 if let previous { yield(.thinking(previous + "\n\n")) }
             default: break
             }
@@ -185,4 +227,3 @@ final class CLIEvents: @unchecked Sendable {
         }
     }
 }
-

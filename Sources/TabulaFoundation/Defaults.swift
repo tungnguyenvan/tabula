@@ -31,9 +31,4 @@ public enum Defaults {
     /// Characters of a command-line tool's error output shown in a message.
     public static let toolErrorLength = 400
 
-
-
-
-
-
 }

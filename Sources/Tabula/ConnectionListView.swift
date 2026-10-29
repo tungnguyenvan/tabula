@@ -38,7 +38,8 @@ struct ConnectionListView: View {
     private var filtered: [ConnectionConfig] {
         guard !search.isEmpty else { return appState.connections }
         return appState.connections.filter {
-            $0.displayName.localizedCaseInsensitiveContains(search) || $0.subtitle.localizedCaseInsensitiveContains(search)
+            $0.displayName.localizedCaseInsensitiveContains(search)
+                || $0.subtitle.localizedCaseInsensitiveContains(search)
         }
     }
 
@@ -66,7 +67,10 @@ struct ConnectionListView: View {
             #endif
         }
         .sheet(item: $editing) { request in
-            ConnectionFormView(config: request.config, isNew: request.isNew, password: request.password) { saved, password, connect in
+            ConnectionFormView(config: request.config, isNew: request.isNew, password: request.password) {
+                saved,
+                password,
+                connect in
                 appState.save(saved, password: password)
                 editing = nil
                 if connect { open(saved.id) }
@@ -78,14 +82,21 @@ struct ConnectionListView: View {
             ConnectionStringSheet(text: request.text) { config, password in
                 connectionString = nil
                 // The form opens once this sheet has gone; two sheets can't show at once.
-                DispatchQueue.main.async { editing = EditRequest(config: config, isNew: true, password: password ?? "") }
+                DispatchQueue.main.async {
+                    editing = EditRequest(config: config, isNew: true, password: password ?? "")
+                }
             } onCancel: {
                 connectionString = nil
             }
         }
-        .confirmationDialog("Delete “\(pendingDelete?.displayName ?? "")”?", isPresented: Binding(
-            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
-        ), titleVisibility: .visible) {
+        .confirmationDialog(
+            "Delete “\(pendingDelete?.displayName ?? "")”?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
             Button("Delete", role: .destructive) {
                 if let id = pendingDelete?.id { appState.delete(id) }
                 pendingDelete = nil
@@ -111,7 +122,10 @@ struct ConnectionListView: View {
             }
             if DebugHooks.showAbout { AboutPanel.show() }
             if DebugHooks.showSettings {
-                UserDefaults.standard.set(ProcessInfo.processInfo.environment["TABULA_DEBUG_SETTINGS"], forKey: "TabulaSettingsTab")
+                UserDefaults.standard.set(
+                    ProcessInfo.processInfo.environment["TABULA_DEBUG_SETTINGS"],
+                    forKey: "TabulaSettingsTab"
+                )
                 openSettings()
             }
         }
@@ -167,9 +181,11 @@ struct ConnectionListView: View {
 
             if appState.connections.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: "cylinder.split.1x2").font(.system(size: 30, weight: .light)).foregroundStyle(.tertiary)
+                    Image(systemName: "cylinder.split.1x2").font(.system(size: 30, weight: .light))
+                        .foregroundStyle(.tertiary)
                     Text("No connections yet").font(.headline)
-                    Text("PostgreSQL · MySQL / MariaDB · SQLite · MongoDB · Redis").font(.callout).foregroundStyle(.secondary)
+                    Text("PostgreSQL · MySQL / MariaDB · SQLite · MongoDB · Redis").font(.callout)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -183,7 +199,8 @@ struct ConnectionListView: View {
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
-                .contextMenu(forSelectionType: UUID.self) { _ in } primaryAction: { ids in
+                .contextMenu(forSelectionType: UUID.self) { _ in
+                } primaryAction: { ids in
                     if let id = ids.first { open(id) }
                 }
                 // Edit > Paste with the list focused: a copied connection string becomes a new connection.
@@ -200,7 +217,9 @@ struct ConnectionListView: View {
                     if let config = appState.connection(selection) { edit(config) }
                 }
                 .disabled(selection == nil)
-                BarButton(symbol: "plus", help: "New connection") { editing = EditRequest(config: ConnectionConfig(), isNew: true) }
+                BarButton(symbol: "plus", help: "New connection") {
+                    editing = EditRequest(config: ConnectionConfig(), isNew: true)
+                }
             }
             .padding(.horizontal, 10)
             .frame(height: 28)
@@ -267,7 +286,8 @@ private struct ConnectionRow: View {
                             .foregroundStyle(.white)
                     }
                 }
-                Text(config.subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                Text(config.subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    .truncationMode(.middle)
             }
             Spacer()
             Text(config.kind.displayName).font(.system(size: 10)).foregroundStyle(.tertiary)

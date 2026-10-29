@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import TabulaSQL
 
 final class EditableSelectTests: XCTestCase {
@@ -161,7 +162,8 @@ final class EditableSelectTests: XCTestCase {
     func testRejectsNonWhitelistClausesAndMultipleStatements() {
         rejects([
             "", "-- comment only", "SELECT", "SELECT FROM t", "SELECT *", "SELECT * FROM", "SELECT *, FROM t",
-            "SELECT id id_alias extra FROM t", "SELECT * FROM t AS", "SELECT * FROM t WHERE", "SELECT * FROM t WHERE ()",
+            "SELECT id id_alias extra FROM t", "SELECT * FROM t AS", "SELECT * FROM t WHERE",
+            "SELECT * FROM t WHERE ()",
             "SELECT DISTINCT id FROM t",
             "SELECT ALL id FROM t",
             "SELECT DISTINCT ON (id) id FROM t",
@@ -231,14 +233,20 @@ final class EditableSelectTests: XCTestCase {
         XCTAssertEqual(EditableSelect.source("SELECT \"A\".id FROM \"Table\" AS \"A\""), ["Table"])
         XCTAssertNil(EditableSelect.source("SELECT * FROM t JOIN t b ON TRUE"))
         XCTAssertNil(EditableSelect.source("SELECT count(*) FROM t"))
-        rejects(["SELECT * FROM \"" + String(repeating: "a", count: 64) + "\"",
-                 "SELECT * FROM " + String(repeating: "a", count: 64)])
+        rejects([
+            "SELECT * FROM \"" + String(repeating: "a", count: 64) + "\"",
+            "SELECT * FROM " + String(repeating: "a", count: 64),
+        ])
     }
 
     func testDeepPredicatesRemainReadOnlyRatherThanOverflowingStack() {
-        let sql = "SELECT * FROM t WHERE " + String(repeating: "(", count: 1000) + "id = 1" + String(repeating: ")", count: 1000)
+        let sql =
+            "SELECT * FROM t WHERE " + String(repeating: "(", count: 1000) + "id = 1"
+            + String(repeating: ")", count: 1000)
         XCTAssertFalse(EditableSelect.accepts(sql))
-        XCTAssertFalse(EditableSelect.accepts("SELECT * FROM t WHERE " + String(repeating: "NOT ", count: 1000) + "active"))
+        XCTAssertFalse(
+            EditableSelect.accepts("SELECT * FROM t WHERE " + String(repeating: "NOT ", count: 1000) + "active")
+        )
     }
 
     private func accepts(_ queries: [String], file: StaticString = #filePath, line: UInt = #line) {

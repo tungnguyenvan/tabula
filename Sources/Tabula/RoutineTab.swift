@@ -54,8 +54,15 @@ final class RoutineTabModel {
     /// Runs the edited definition (creating, or replacing the routine) and reloads what the server now has.
     func save() async {
         guard !saving, hasChanges, let workspace else { return }
-        if workspace.config.tag == .production, !Confirmation.ask(
-            "Save \(title) on a PRODUCTION connection?", detail: "The new definition takes effect immediately.", action: "Save") { return }
+        if workspace.config.tag == .production,
+            !Confirmation.ask(
+                "Save \(title) on a PRODUCTION connection?",
+                detail: "The new definition takes effect immediately.",
+                action: "Save"
+            )
+        {
+            return
+        }
         saving = true
         defer { saving = false }
         do {
@@ -67,7 +74,11 @@ final class RoutineTabModel {
             error = nil
             await workspace.loadRoutines()
             // Re-read the saved routine; a new one is found by matching the name it was created with.
-            if routine == nil { routine = workspace.routines.first { text.localizedCaseInsensitiveContains($0.name) && $0.kind == newKind } }
+            if routine == nil {
+                routine = workspace.routines.first {
+                    text.localizedCaseInsensitiveContains($0.name) && $0.kind == newKind
+                }
+            }
             notice = "Saved."
             if routine != nil { await load() } else { original = text }
         } catch {
@@ -82,8 +93,16 @@ final class RoutineTabModel {
 
     func delete() async -> Bool {
         guard let routine, let workspace else { return false }
-        let detail = workspace.config.tag == .production ? "This is a PRODUCTION connection. This cannot be undone." : "This cannot be undone."
-        guard Confirmation.ask("Delete \(routine.kind.displayName.lowercased()) “\(routine.displayName)”?", detail: detail, action: "Delete") else {
+        let detail =
+            workspace.config.tag == .production
+            ? "This is a PRODUCTION connection. This cannot be undone." : "This cannot be undone."
+        guard
+            Confirmation.ask(
+                "Delete \(routine.kind.displayName.lowercased()) “\(routine.displayName)”?",
+                detail: detail,
+                action: "Delete"
+            )
+        else {
             return false
         }
         guard let routines = driver.routineCatalog else { return false }
@@ -110,19 +129,25 @@ struct RoutineTabView: View {
             if let error = model.error {
                 ErrorBanner(message: error) { model.error = nil }
             }
-            SQLEditorView(text: $model.text, handle: handle, dialect: model.driver.dialect,
-                          suggest: { _, caret in (NSRange(location: caret, length: 0), []) },
-                          undoManager: model.undoManager) { _ in Task { await model.save() } }
-                .overlay { if model.loading { ProgressView().controlSize(.small) } }
+            SQLEditorView(
+                text: $model.text,
+                handle: handle,
+                dialect: model.driver.dialect,
+                suggest: { _, caret in (NSRange(location: caret, length: 0), []) },
+                undoManager: model.undoManager
+            ) { _ in Task { await model.save() } }
+            .overlay { if model.loading { ProgressView().controlSize(.small) } }
         }
         .task { if model.original == nil, model.routine != nil { await model.load() } }
     }
 
     private var bar: some View {
         HStack(spacing: Layout.barPadding) {
-            Label(model.routine?.kind.displayName ?? model.newKind.displayName,
-                  systemImage: RoutineRow.symbol(model.routine?.kind ?? model.newKind))
-                .font(Layout.Font.smallBold)
+            Label(
+                model.routine?.kind.displayName ?? model.newKind.displayName,
+                systemImage: RoutineRow.symbol(model.routine?.kind ?? model.newKind)
+            )
+            .font(Layout.Font.smallBold)
             if let detail = model.routine?.detail, !detail.isEmpty {
                 Text(detail).font(Layout.Font.small).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -140,7 +165,9 @@ struct RoutineTabView: View {
             if model.routine != nil {
                 Button(role: .destructive) {
                     Task { if await model.delete() { workspace.close(model.id) } }
-                } label: { Image(systemName: "trash") }
+                } label: {
+                    Image(systemName: "trash")
+                }
                 .help("Delete")
             }
         }

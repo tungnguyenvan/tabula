@@ -19,8 +19,14 @@ public enum ShellCommand {
     public static let notFoundStatus: Int32 = 127
 
     /// `onLine` receives each line of standard output as soon as it is complete.
-    public static func run(script: String, arguments: [String], input: String? = nil, directory: URL? = nil, timeout: Double,
-                    onLine: (@Sendable (String) -> Void)? = nil) async throws -> Output {
+    public static func run(
+        script: String,
+        arguments: [String],
+        input: String? = nil,
+        directory: URL? = nil,
+        timeout: Double,
+        onLine: (@Sendable (String) -> Void)? = nil
+    ) async throws -> Output {
         let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/zsh"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
@@ -29,7 +35,8 @@ public enum ShellCommand {
         if let directory { process.currentDirectoryURL = directory }
         let stdin = Pipe()
         process.standardInput = input == nil ? FileHandle.nullDevice : stdin
-        let stdout = Pipe(), stderr = Pipe()
+        let stdout = Pipe()
+        let stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
 
@@ -41,21 +48,32 @@ public enum ShellCommand {
                 // Empty data is the end of the pipe.
                 stdout.fileHandleForReading.readabilityHandler = { handle in
                     let data = handle.availableData
-                    if data.isEmpty { handle.readabilityHandler = nil; collected.closed(stdout: true) } else { collected.append(out: data) }
+                    if data.isEmpty {
+                        handle.readabilityHandler = nil
+                        collected.closed(stdout: true)
+                    } else {
+                        collected.append(out: data)
+                    }
                 }
                 stderr.fileHandleForReading.readabilityHandler = { handle in
                     let data = handle.availableData
-                    if data.isEmpty { handle.readabilityHandler = nil; collected.closed(stdout: false) } else { collected.append(err: data) }
+                    if data.isEmpty {
+                        handle.readabilityHandler = nil
+                        collected.closed(stdout: false)
+                    } else {
+                        collected.append(err: data)
+                    }
                 }
                 process.terminationHandler = { finished in
                     collected.exited(finished.terminationStatus)
                     // A background process the command started may hold the pipes open long after it finished
                     // (with the shell gone, it isn't stopped on timeout); don't wait for it.
-                    DispatchQueue.global().asyncAfter(deadline: .now() + Defaults.processTerminateGrace) {
-                        stdout.fileHandleForReading.readabilityHandler = nil
-                        stderr.fileHandleForReading.readabilityHandler = nil
-                        collected.complete()
-                    }
+                    DispatchQueue.global()
+                        .asyncAfter(deadline: .now() + Defaults.processTerminateGrace) {
+                            stdout.fileHandleForReading.readabilityHandler = nil
+                            stderr.fileHandleForReading.readabilityHandler = nil
+                            collected.complete()
+                        }
                 }
                 do {
                     try process.run()
@@ -67,17 +85,19 @@ public enum ShellCommand {
                 }
                 if let input {
                     // Written from a background queue so a large prompt can't block on a full pipe.
-                    DispatchQueue.global().async {
-                        try? stdin.fileHandleForWriting.write(contentsOf: Data(input.utf8))
-                        try? stdin.fileHandleForWriting.close()
-                    }
+                    DispatchQueue.global()
+                        .async {
+                            try? stdin.fileHandleForWriting.write(contentsOf: Data(input.utf8))
+                            try? stdin.fileHandleForWriting.close()
+                        }
                 }
                 // Stop the tool itself on timeout; abandoning it would leave it running in the background.
-                DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                    guard process.isRunning else { return }
-                    collected.timedOut = true
-                    stop(process)
-                }
+                DispatchQueue.global()
+                    .asyncAfter(deadline: .now() + timeout) {
+                        guard process.isRunning else { return }
+                        collected.timedOut = true
+                        stop(process)
+                    }
             }
         } onCancel: {
             stop(process)
@@ -93,9 +113,10 @@ public enum ShellCommand {
         kill(shell, SIGKILL)
         for child in children { kill(child, SIGTERM) }
         // Whatever ignores SIGTERM is killed shortly after.
-        DispatchQueue.global().asyncAfter(deadline: .now() + Defaults.processTerminateGrace) {
-            for child in children where kill(child, 0) == 0 { kill(child, SIGKILL) }
-        }
+        DispatchQueue.global()
+            .asyncAfter(deadline: .now() + Defaults.processTerminateGrace) {
+                for child in children where kill(child, 0) == 0 { kill(child, SIGKILL) }
+            }
     }
 
     private static func childProcesses(of pid: pid_t) -> [pid_t] {
@@ -123,7 +144,10 @@ public enum ShellCommand {
         private var partialLine = Data()
 
         private let timeout: Double
-        init(timeout: Double, onLine: (@Sendable (String) -> Void)?) { self.timeout = timeout; self.onLine = onLine }
+        init(timeout: Double, onLine: (@Sendable (String) -> Void)?) {
+            self.timeout = timeout
+            self.onLine = onLine
+        }
 
         var timedOut: Bool {
             get { lock.withLock { expired } }
@@ -147,10 +171,19 @@ public enum ShellCommand {
                 guard !completed else { return nil }
                 if onlyIfDrained && (status == nil || !stdoutClosed || !stderrClosed) { return nil }
                 completed = true
-                if !partialLine.isEmpty { onLine?(String(decoding: partialLine, as: UTF8.self)); partialLine = Data() }
+                if !partialLine.isEmpty {
+                    onLine?(String(decoding: partialLine, as: UTF8.self))
+                    partialLine = Data()
+                }
                 if let error { return .failure(error) }
                 if expired { return .failure(TimedOut(seconds: timeout)) }
-                return .success(Output(stdout: String(decoding: out, as: UTF8.self), stderr: String(decoding: err, as: UTF8.self), status: status ?? -1))
+                return .success(
+                    Output(
+                        stdout: String(decoding: out, as: UTF8.self),
+                        stderr: String(decoding: err, as: UTF8.self),
+                        status: status ?? -1
+                    )
+                )
             }
             if let result { onDone?(result) }
         }

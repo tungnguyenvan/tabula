@@ -93,7 +93,10 @@ package final class QueryExecutionGate: @unchecked Sendable {
     package func acquire() async {
         await withCheckedContinuation { continuation in
             let ready: Bool = lock.withLock {
-                if busy { waiters.append(continuation); return false }
+                if busy {
+                    waiters.append(continuation)
+                    return false
+                }
                 busy = true
                 return true
             }
@@ -103,7 +106,10 @@ package final class QueryExecutionGate: @unchecked Sendable {
 
     package func release() {
         let next: CheckedContinuation<Void, Never>? = lock.withLock {
-            if waiters.isEmpty { busy = false; return nil }
+            if waiters.isEmpty {
+                busy = false
+                return nil
+            }
             return waiters.removeFirst()
         }
         next?.resume()

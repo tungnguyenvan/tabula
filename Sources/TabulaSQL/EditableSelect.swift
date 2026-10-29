@@ -23,7 +23,9 @@ import TabulaFoundation
 /// (`SELECT t FROM t`) or `ref.name` attribute notation for a function, so the caller should confirm through
 /// result metadata (table OID and column number) that every result column really is a column of the table.
 public struct EditableSelect: Sendable {
-    public static func accepts(_ sql: String, flavor: SQLFlavor = .postgres) -> Bool { source(sql, flavor: flavor) != nil }
+    public static func accepts(_ sql: String, flavor: SQLFlavor = .postgres) -> Bool {
+        source(sql, flavor: flavor) != nil
+    }
 
     /// The FROM relation of an accepted query, decoded to the names PostgreSQL resolves (unquoted folded to lower
     /// case, quoted taken verbatim): `[table]` or `[schema, table]`. Nil whenever `accepts` is false. The caller
@@ -38,7 +40,9 @@ public struct EditableSelect: Sendable {
     }
 
     public static func relation(_ sql: String, flavor: SQLFlavor = .postgres) -> Relation? {
-        guard flavor == .postgres || flavor == .mysql, let tokens = significantTokens(sql, flavor: flavor) else { return nil }
+        guard flavor == .postgres || flavor == .mysql, let tokens = significantTokens(sql, flavor: flavor) else {
+            return nil
+        }
         var parser = Parser(tokens: tokens, flavor: flavor)
         do {
             try parser.statement()
@@ -62,8 +66,10 @@ public struct EditableSelect: Sendable {
     }
 
     private static let whitespace: Set<Unicode.Scalar> = [" ", "\t", "\n", "\r", "\u{0C}"]
-    private static let punctuation: Set<String> = [",", ".", ";", "(", ")", "*", "=", "<", ">", "<=", ">=", "<>", "!=",
-                                                   "+", "-", "/", "%"]
+    private static let punctuation: Set<String> = [
+        ",", ".", ";", "(", ")", "*", "=", "<", ">", "<=", ">=", "<>", "!=",
+        "+", "-", "/", "%",
+    ]
     /// Tokens made of PostgreSQL operator characters; adjacent ones would lex as one longer operator.
     private static let operators: Set<String> = ["*", "=", "<", ">", "<=", ">=", "<>", "!=", "+", "-", "/", "%"]
     static let comparisons: Set<String> = ["=", "<", ">", "<=", ">=", "<>", "!="]
@@ -81,7 +87,9 @@ public struct EditableSelect: Sendable {
             guard !scalars.contains("\r") else { return false }
             if flavor == .mysql {
                 // MySQL requires whitespace after --; # comments are unambiguous. Never executable /*! */.
-                return token.text.hasPrefix("#") || (token.text.hasPrefix("--") && token.text.dropFirst(2).first.map { $0 == " " || $0 == "\t" || $0 == "\n" } == true)
+                return token.text.hasPrefix("#")
+                    || (token.text.hasPrefix("--")
+                        && token.text.dropFirst(2).first.map { $0 == " " || $0 == "\t" || $0 == "\n" } == true)
             }
             return token.text.hasPrefix("--")
         case .string:
@@ -105,7 +113,8 @@ public struct EditableSelect: Sendable {
         // reads differently from the lexer.
         if atoms.contains(left.kind) && atoms.contains(right.kind) { return false }
         if left.kind == .punctuation && right.kind == .punctuation
-            && operators.contains(left.text) && operators.contains(right.text) {
+            && operators.contains(left.text) && operators.contains(right.text)
+        {
             // PostgreSQL reads a run of operator characters as one operator, trimming a trailing + or - only
             // when the run has none of ~ ! @ # % ^ & | ` ?. So `a=-1` is `=` then `-1`, but `a!=-1` is `!=-`.
             return ["=", "<", ">", "<=", ">=", "<>"].contains(left.text) && (right.text == "-" || right.text == "+")
@@ -115,7 +124,9 @@ public struct EditableSelect: Sendable {
 
     private static func isDecimal(_ text: String) -> Bool {
         let parts = text.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count <= 2, let whole = parts.first, !whole.isEmpty, whole.allSatisfy(\.isASCIIDigit) else { return false }
+        guard parts.count <= 2, let whole = parts.first, !whole.isEmpty, whole.allSatisfy(\.isASCIIDigit) else {
+            return false
+        }
         return parts.count == 1 || parts[1].allSatisfy(\.isASCIIDigit)
     }
 
@@ -148,8 +159,9 @@ public struct EditableSelect: Sendable {
     /// A PostgreSQL "..." identifier's name. Backticks are MySQL's and refused.
     private static func quotedName(_ text: String, flavor: SQLFlavor = .postgres) -> String? {
         guard text.hasPrefix(flavor == .mysql ? "`" : "\""),
-              flavor != .mysql || !text.contains("\\"),
-              let name = quotedBody(text), !name.isEmpty, fitsNameLength(name, flavor: flavor) else { return nil }
+            flavor != .mysql || !text.contains("\\"),
+            let name = quotedBody(text), !name.isEmpty, fitsNameLength(name, flavor: flavor)
+        else { return nil }
         return name
     }
 
@@ -164,7 +176,10 @@ public struct EditableSelect: Sendable {
         case .quotedIdentifier:
             return quotedName(token.text, flavor: flavor)
         case .word:
-            guard isPlainWord(token.text), !reservedWords.contains(token.keyword), !mysqlReservedWords.contains(flavor == .mysql ? token.keyword : ""), fitsNameLength(token.text, flavor: flavor) else { return nil }
+            guard isPlainWord(token.text), !reservedWords.contains(token.keyword),
+                !mysqlReservedWords.contains(flavor == .mysql ? token.keyword : ""),
+                fitsNameLength(token.text, flavor: flavor)
+            else { return nil }
             return flavor == .mysql ? token.text : token.text.lowercased()
         default:
             return nil
@@ -174,7 +189,13 @@ public struct EditableSelect: Sendable {
     /// Words never taken as a bare identifier: PostgreSQL's reserved, type/function-name and column-name keywords
     /// (some of which are functions without parentheses, like CURRENT_USER), plus clause words this grammar
     /// steers by. A column with one of these names must be written quoted.
-    private static let mysqlReservedWords: Set<String> = ["STRAIGHT_JOIN", "SQL_CALC_FOUND_ROWS", "SQL_NO_CACHE", "SQL_CACHE", "HIGH_PRIORITY", "DELAYED", "DISTINCTROW", "PARTITION", "FORCE", "USE", "IGNORE", "INDEX", "KEY", "DIV", "MOD", "XOR", "REGEXP", "RLIKE", "SOUNDS", "MATCH", "AGAINST", "DATABASE", "SCHEMA", "CURRENT_USER", "CURRENT_ROLE", "SYSTEM_USER", "SESSION_USER", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "LOCALTIME", "LOCALTIMESTAMP", "UTC_DATE", "UTC_TIME", "UTC_TIMESTAMP"]
+    private static let mysqlReservedWords: Set<String> = [
+        "STRAIGHT_JOIN", "SQL_CALC_FOUND_ROWS", "SQL_NO_CACHE", "SQL_CACHE", "HIGH_PRIORITY", "DELAYED", "DISTINCTROW",
+        "PARTITION", "FORCE", "USE", "IGNORE", "INDEX", "KEY", "DIV", "MOD", "XOR", "REGEXP", "RLIKE", "SOUNDS",
+        "MATCH", "AGAINST", "DATABASE", "SCHEMA", "CURRENT_USER", "CURRENT_ROLE", "SYSTEM_USER", "SESSION_USER",
+        "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "LOCALTIME", "LOCALTIMESTAMP", "UTC_DATE", "UTC_TIME",
+        "UTC_TIMESTAMP",
+    ]
 
     static let reservedWords: Set<String> = [
         // Reserved
@@ -242,7 +263,9 @@ private struct Parser {
     var atIdentifier: Bool { current.map { EditableSelect.identifierName($0, flavor: flavor) != nil } ?? false }
 
     mutating func identifier() throws -> String {
-        guard let token = current, let name = EditableSelect.identifierName(token, flavor: flavor) else { throw Rejected() }
+        guard let token = current, let name = EditableSelect.identifierName(token, flavor: flavor) else {
+            throw Rejected()
+        }
         index += 1
         return name
     }
@@ -261,7 +284,8 @@ private struct Parser {
             try expect("BY")
             repeat { try orderItem() } while acceptPunctuation(",")
         }
-        var sawLimit = false, sawOffset = false
+        var sawLimit = false
+        var sawOffset = false
         while true {
             if !sawLimit && accept("LIMIT") {
                 try integer()
@@ -323,7 +347,8 @@ private struct Parser {
 
     mutating func integer() throws {
         guard let token = current, token.kind == .number, token.text.count <= 18,
-              token.text.allSatisfy(\.isASCIIDigit) else { throw Rejected() }
+            token.text.allSatisfy(\.isASCIIDigit)
+        else { throw Rejected() }
         index += 1
     }
 

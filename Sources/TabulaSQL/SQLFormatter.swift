@@ -11,7 +11,8 @@ public enum SQLKeywords {
         INTERSECT EXCEPT FETCH FOR USING NATURAL INTERVAL CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP EXTRACT ANY
         TRIGGER FUNCTION PROCEDURE REPLACE RETURNS RETURN LANGUAGE BEFORE AFTER INSTEAD EACH ROW EXECUTE DECLARE
         LOOP WHILE DO CALL DEFINER DETERMINISTIC
-        """.split(whereSeparator: \.isWhitespace).map(String.init)
+        """
+        .split(whereSeparator: \.isWhitespace).map(String.init)
 
     public static let set = Set(all)
     /// Keywords written like functions: no space before their "(".
@@ -24,17 +25,21 @@ public enum SQLFormatter {
     public static let indentUnit = "  "
 
     /// Clauses whose contents go on the following lines, indented.
-    private static let blockClauses: Set<String> = ["SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "HAVING", "SET", "VALUES", "RETURNING"]
+    private static let blockClauses: Set<String> = [
+        "SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "HAVING", "SET", "VALUES", "RETURNING",
+    ]
     /// Clauses that start a line but keep their contents on it.
     private static let lineClauses: Set<String> = [
-        "LIMIT", "OFFSET", "FETCH", "UNION", "UNION ALL", "INTERSECT", "EXCEPT", "INSERT INTO", "UPDATE", "DELETE FROM", "WITH",
+        "LIMIT", "OFFSET", "FETCH", "UNION", "UNION ALL", "INTERSECT", "EXCEPT", "INSERT INTO", "UPDATE", "DELETE FROM",
+        "WITH",
         "JOIN", "INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "FULL JOIN", "CROSS JOIN", "NATURAL JOIN",
         "LEFT OUTER JOIN", "RIGHT OUTER JOIN", "FULL OUTER JOIN",
     ]
     private static let compounds: [[String]] = [
         ["LEFT", "OUTER", "JOIN"], ["RIGHT", "OUTER", "JOIN"], ["FULL", "OUTER", "JOIN"],
         ["GROUP", "BY"], ["ORDER", "BY"], ["UNION", "ALL"], ["INSERT", "INTO"], ["DELETE", "FROM"],
-        ["INNER", "JOIN"], ["LEFT", "JOIN"], ["RIGHT", "JOIN"], ["FULL", "JOIN"], ["CROSS", "JOIN"], ["NATURAL", "JOIN"],
+        ["INNER", "JOIN"], ["LEFT", "JOIN"], ["RIGHT", "JOIN"], ["FULL", "JOIN"], ["CROSS", "JOIN"],
+        ["NATURAL", "JOIN"],
     ]
 
     private struct Frame {
@@ -77,7 +82,10 @@ public enum SQLFormatter {
             if token.text == "(" {
                 // Function calls and table(column) lists hug their parenthesis; keywords like IN and VALUES don't.
                 if previous.kind == .quotedIdentifier { return false }
-                if previous.kind == .word { return SQLKeywords.set.contains(previous.keyword) && !SQLKeywords.functions.contains(previous.keyword) }
+                if previous.kind == .word {
+                    return SQLKeywords.set.contains(previous.keyword)
+                        && !SQLKeywords.functions.contains(previous.keyword)
+                }
             }
             return true
         }
@@ -158,7 +166,9 @@ public enum SQLFormatter {
                 index += 1
                 continue
             }
-            if frame.parens == 0 && (token.keyword == "AND" || token.keyword == "OR") && ["WHERE", "HAVING"].contains(frame.clause) {
+            if frame.parens == 0 && (token.keyword == "AND" || token.keyword == "OR")
+                && ["WHERE", "HAVING"].contains(frame.clause)
+            {
                 // BETWEEN x AND y keeps its AND.
                 if token.keyword == "AND" && betweenPending {
                     betweenPending = false
@@ -171,7 +181,9 @@ public enum SQLFormatter {
                 }
             }
             if token.keyword == "BETWEEN" { betweenPending = true }
-            let text = token.kind == .word && SQLKeywords.set.contains(token.keyword) && previous?.text != "." ? token.keyword : token.text
+            let text =
+                token.kind == .word && SQLKeywords.set.contains(token.keyword) && previous?.text != "."
+                ? token.keyword : token.text
             write(text, spaced: needsSpace(before: token))
             previous = token
             index += 1

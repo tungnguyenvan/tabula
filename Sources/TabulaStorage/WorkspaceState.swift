@@ -19,7 +19,13 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     /// Query history, newest first.
     public var history: [String]
 
-    public init(database: String? = nil, schema: String? = nil, tabs: [Tab] = [], selected: Int? = nil, history: [String] = []) {
+    public init(
+        database: String? = nil,
+        schema: String? = nil,
+        tabs: [Tab] = [],
+        selected: Int? = nil,
+        history: [String] = []
+    ) {
         self.database = database
         self.schema = schema
         self.tabs = tabs
@@ -34,7 +40,9 @@ public struct WorkspaceStateStore: Sendable {
 
     /// `base` is the folder that holds connections.json (nil: Application Support/Tabula).
     public init(base: URL? = nil) {
-        let root = base ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let root =
+            base
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Tabula", isDirectory: true)
         directory = root.appendingPathComponent("Workspaces", isDirectory: true)
     }

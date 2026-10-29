@@ -70,11 +70,27 @@ extension Defaults {
 
         /// Light models that run well on a Mac, offered for download in Settings, smallest first.
         public static let recommendedLocalModels = [
-            LocalModel(name: "qwen2.5-coder:0.5b", summary: "Fastest, about 0.4 GB. Good for suggestions while typing.", forTyping: true),
-            LocalModel(name: "qwen2.5-coder:1.5b", summary: "About 1 GB. Fast suggestions that know SQL better.", forTyping: true),
+            LocalModel(
+                name: "qwen2.5-coder:0.5b",
+                summary: "Fastest, about 0.4 GB. Good for suggestions while typing.",
+                forTyping: true
+            ),
+            LocalModel(
+                name: "qwen2.5-coder:1.5b",
+                summary: "About 1 GB. Fast suggestions that know SQL better.",
+                forTyping: true
+            ),
             LocalModel(name: "deepseek-coder:1.3b", summary: "About 0.8 GB. Another fast code model.", forTyping: true),
-            LocalModel(name: "qwen2.5-coder:3b", summary: "About 2 GB. Writes whole queries well on most Macs.", forTyping: false),
-            LocalModel(name: "qwen2.5-coder:7b", summary: "About 5 GB, 16 GB of memory recommended. Best local queries.", forTyping: false),
+            LocalModel(
+                name: "qwen2.5-coder:3b",
+                summary: "About 2 GB. Writes whole queries well on most Macs.",
+                forTyping: false
+            ),
+            LocalModel(
+                name: "qwen2.5-coder:7b",
+                summary: "About 5 GB, 16 GB of memory recommended. Best local queries.",
+                forTyping: false
+            ),
             LocalModel(name: "sqlcoder:7b", summary: "About 4 GB. Tuned for SQL from a question.", forTyping: false),
         ]
     }

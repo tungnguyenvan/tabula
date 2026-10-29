@@ -28,20 +28,38 @@ public actor SSHTunnel {
 
     /// Runs "$@" (ssh and its arguments, never parsed by the shell) and stops it when standard input closes.
     /// The watcher exits with ssh's status, and its reader goes with it.
-    static let watcher = #"exec 3<&0; "$@" </dev/null 3<&- & child=$!; (read -r _ <&3; kill "$child") >/dev/null 2>&1 & reader=$!; wait "$child"; status=$?; kill "$reader" 2>/dev/null; exit "$status""#
+    static let watcher =
+        #"exec 3<&0; "$@" </dev/null 3<&- & child=$!; (read -r _ <&3; kill "$child") >/dev/null 2>&1 & reader=$!; wait "$child"; status=$?; kill "$reader" 2>/dev/null; exit "$status""#
 
     /// Opens a tunnel from 127.0.0.1 to `targetHost:targetPort` as seen from the SSH server.
-    public static func open(_ ssh: SSHConfig, targetHost: String, targetPort: Int, timeout: Double) async throws -> SSHTunnel {
+    public static func open(
+        _ ssh: SSHConfig,
+        targetHost: String,
+        targetPort: Int,
+        timeout: Double
+    ) async throws -> SSHTunnel {
         var knownHosts: String?
         #if DEBUG
         // TABULA_DEBUG_SSH_KNOWN_HOSTS: a throwaway server's host key, so checks don't touch ~/.ssh/known_hosts.
         knownHosts = ProcessInfo.processInfo.environment["TABULA_DEBUG_SSH_KNOWN_HOSTS"]
         #endif
-        return try await open(ssh, targetHost: targetHost, targetPort: targetPort, timeout: timeout, knownHosts: knownHosts)
+        return try await open(
+            ssh,
+            targetHost: targetHost,
+            targetPort: targetPort,
+            timeout: timeout,
+            knownHosts: knownHosts
+        )
     }
 
     /// `knownHosts` replaces ~/.ssh/known_hosts, for tests against a throwaway server.
-    static func open(_ ssh: SSHConfig, targetHost: String, targetPort: Int, timeout: Double, knownHosts: String?) async throws -> SSHTunnel {
+    static func open(
+        _ ssh: SSHConfig,
+        targetHost: String,
+        targetPort: Int,
+        timeout: Double,
+        knownHosts: String?
+    ) async throws -> SSHTunnel {
         if let problem = ssh.problem { throw DatabaseError(problem) }
         guard SSHConfig.isSafeName(targetHost), (1...65535).contains(targetPort) else {
             throw DatabaseError("The database host isn't valid for an SSH tunnel.")
@@ -52,8 +70,14 @@ public actor SSHTunnel {
         for _ in 0..<3 {
             let port = try freeLocalPort()
             do {
-                return try await start(ssh, port: port, targetHost: targetHost, targetPort: targetPort, timeout: timeout,
-                                       knownHosts: knownHosts)
+                return try await start(
+                    ssh,
+                    port: port,
+                    targetHost: targetHost,
+                    targetPort: targetPort,
+                    timeout: timeout,
+                    knownHosts: knownHosts
+                )
             } catch let error as TunnelError where error.retryable {
                 lastError = DatabaseError(error.message)
             } catch {
@@ -69,10 +93,16 @@ public actor SSHTunnel {
         var errorDescription: String? { message }
     }
 
-    static func arguments(_ ssh: SSHConfig, localPort: Int, targetHost: String, targetPort: Int, timeout: Double,
-                          knownHosts: String? = nil) -> [String] {
+    static func arguments(
+        _ ssh: SSHConfig,
+        localPort: Int,
+        targetHost: String,
+        targetPort: Int,
+        timeout: Double,
+        knownHosts: String? = nil
+    ) -> [String] {
         var arguments = [
-            "-F", "/dev/null", // the user's ssh config can run commands and add forwards
+            "-F", "/dev/null",  // the user's ssh config can run commands and add forwards
             "-N", "-T",
             "-o", "BatchMode=yes",
             "-o", "StrictHostKeyChecking=yes",
@@ -89,7 +119,9 @@ public actor SSHTunnel {
             "-p", String(ssh.port),
             "-l", ssh.user,
         ]
-        if let knownHosts { arguments += ["-o", "UserKnownHostsFile=\(knownHosts)", "-o", "GlobalKnownHostsFile=/dev/null"] }
+        if let knownHosts {
+            arguments += ["-o", "UserKnownHostsFile=\(knownHosts)", "-o", "GlobalKnownHostsFile=/dev/null"]
+        }
         if let identityFile = ssh.identityFile {
             arguments += ["-i", (identityFile as NSString).expandingTildeInPath, "-o", "IdentitiesOnly=yes"]
         }
@@ -97,12 +129,26 @@ public actor SSHTunnel {
         return arguments + ["--", ssh.host]
     }
 
-    private static func start(_ ssh: SSHConfig, port: Int, targetHost: String, targetPort: Int, timeout: Double,
-                              knownHosts: String?) async throws -> SSHTunnel {
+    private static func start(
+        _ ssh: SSHConfig,
+        port: Int,
+        targetHost: String,
+        targetPort: Int,
+        timeout: Double,
+        knownHosts: String?
+    ) async throws -> SSHTunnel {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", watcher, "sh", "/usr/bin/ssh"]
-            + arguments(ssh, localPort: port, targetHost: targetHost, targetPort: targetPort, timeout: timeout, knownHosts: knownHosts)
+        process.arguments =
+            ["-c", watcher, "sh", "/usr/bin/ssh"]
+            + arguments(
+                ssh,
+                localPort: port,
+                targetHost: targetHost,
+                targetPort: targetPort,
+                timeout: timeout,
+                knownHosts: knownHosts
+            )
         var environment = ProcessInfo.processInfo.environment
         // Never pop up a password prompt; keys come from the agent (SSH_AUTH_SOCK) or the identity file.
         environment.removeValue(forKey: "SSH_ASKPASS")
@@ -140,7 +186,10 @@ public actor SSHTunnel {
                 if isListening(port: port) { return tunnel }
                 try await Task.sleep(for: .milliseconds(100))
             }
-            throw TunnelError(message: "The SSH server \(ssh.host) didn't answer within \(Int(timeout)) seconds.", retryable: false)
+            throw TunnelError(
+                message: "The SSH server \(ssh.host) didn't answer within \(Int(timeout)) seconds.",
+                retryable: false
+            )
         } catch {
             await tunnel.close()
             throw error
@@ -151,10 +200,12 @@ public actor SSHTunnel {
     static func describe(_ stderr: String, ssh: SSHConfig) -> String {
         let text = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.contains("Host key verification failed") || text.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") {
-            return "SSH: the host key of \(ssh.host) isn't trusted. Connect once with ssh in Terminal to check and save it, then try again."
+            return
+                "SSH: the host key of \(ssh.host) isn't trusted. Connect once with ssh in Terminal to check and save it, then try again."
         }
         if text.contains("Permission denied") {
-            return "SSH: \(ssh.user)@\(ssh.host) refused the key. Add the key to ssh-agent (ssh-add) or choose the key file."
+            return
+                "SSH: \(ssh.user)@\(ssh.host) refused the key. Add the key to ssh-agent (ssh-add) or choose the key file."
         }
         let last = text.split(whereSeparator: \.isNewline).last.map(String.init) ?? "ssh exited."
         return "SSH: \(last.prefix(Defaults.toolErrorLength))"
@@ -168,9 +219,10 @@ public actor SSHTunnel {
         process.terminate()
         let process = process
         // ssh exits on SIGTERM; one that doesn't is killed shortly after.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-        }
+        DispatchQueue.global()
+            .asyncAfter(deadline: .now() + 2) {
+                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            }
     }
 
     public var isAlive: Bool { process.isRunning }
@@ -267,12 +319,30 @@ public actor TunneledDriver: DatabaseDriver {
         guard await tunnel.isAlive else { throw DatabaseError("The SSH tunnel closed. Reconnect to continue.") }
     }
 
-    public func schemas() async throws -> [String] { try await checkTunnel(); return try await inner.schemas() }
-    public func defaultSchema() async throws -> String { try await checkTunnel(); return try await inner.defaultSchema() }
-    public func tables(in schema: String) async throws -> [TableRef] { try await checkTunnel(); return try await inner.tables(in: schema) }
-    public func columns(of table: TableRef) async throws -> [ColumnInfo] { try await checkTunnel(); return try await inner.columns(of: table) }
-    public func indexes(of table: TableRef) async throws -> [IndexInfo] { try await checkTunnel(); return try await inner.indexes(of: table) }
-    public func execute(_ sql: String) async throws -> QueryResult { try await checkTunnel(); return try await inner.execute(sql) }
+    public func schemas() async throws -> [String] {
+        try await checkTunnel()
+        return try await inner.schemas()
+    }
+    public func defaultSchema() async throws -> String {
+        try await checkTunnel()
+        return try await inner.defaultSchema()
+    }
+    public func tables(in schema: String) async throws -> [TableRef] {
+        try await checkTunnel()
+        return try await inner.tables(in: schema)
+    }
+    public func columns(of table: TableRef) async throws -> [ColumnInfo] {
+        try await checkTunnel()
+        return try await inner.columns(of: table)
+    }
+    public func indexes(of table: TableRef) async throws -> [IndexInfo] {
+        try await checkTunnel()
+        return try await inner.indexes(of: table)
+    }
+    public func execute(_ sql: String) async throws -> QueryResult {
+        try await checkTunnel()
+        return try await inner.execute(sql)
+    }
     public func queryEditTarget(for result: QueryResult) async throws -> QueryEditTarget? {
         try await checkTunnel()
         return try await inner.queryEditTarget(for: result)

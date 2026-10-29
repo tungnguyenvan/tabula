@@ -1,5 +1,6 @@
 import Security
 import XCTest
+
 @testable import TabulaStorage
 
 /// Opt-in integration tests. Each test owns a uniquely named, disposable item, never a connection's credentials.
@@ -10,7 +11,11 @@ final class KeychainItemTests: XCTestCase {
         guard ProcessInfo.processInfo.environment["TABULA_TEST_KEYCHAIN"] == "1" else {
             throw XCTSkip("Set TABULA_TEST_KEYCHAIN=1 to test disposable Keychain items.")
         }
-        item = KeychainItem(service: "app.tabula.tests.\(UUID().uuidString)", account: "test", label: "Tabula test item")
+        item = KeychainItem(
+            service: "app.tabula.tests.\(UUID().uuidString)",
+            account: "test",
+            label: "Tabula test item"
+        )
     }
 
     override func tearDownWithError() throws {
@@ -21,7 +26,10 @@ final class KeychainItemTests: XCTestCase {
         try item.write("first test value")
         let original = try persistentReference()
         // Keychain can reuse a persistent reference after deletion, so also mark the existing item's metadata.
-        let marked = SecItemUpdate(query as CFDictionary, [kSecAttrComment as String: "Keep existing metadata"] as CFDictionary)
+        let marked = SecItemUpdate(
+            query as CFDictionary,
+            [kSecAttrComment as String: "Keep existing metadata"] as CFDictionary
+        )
         XCTAssertEqual(marked, errSecSuccess)
         XCTAssertEqual(item.read(), "first test value")
 
@@ -51,7 +59,10 @@ final class KeychainItemTests: XCTestCase {
     }
 
     private var query: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: item.service, kSecAttrAccount as String: item.account]
+        [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: item.service,
+            kSecAttrAccount as String: item.account,
+        ]
     }
 
     private func persistentReference() throws -> Data {

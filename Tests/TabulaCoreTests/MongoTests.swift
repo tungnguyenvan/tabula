@@ -1,5 +1,6 @@
 import BSON
 import XCTest
+
 @testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
@@ -34,15 +35,20 @@ final class MongoShellTests: XCTestCase {
         XCTAssertTrue(written.contains("ts: Timestamp({ t: 1700000000, i: 3 })"), written)
         // Reading the written text gives the same document, byte for byte.
         XCTAssertEqual(try MongoShell.parseDocument(written).makeData(), document.makeData())
-        XCTAssertEqual(try MongoShell.parseDocument(MongoShell.format(document, pretty: true)).makeData(), document.makeData())
+        XCTAssertEqual(
+            try MongoShell.parseDocument(MongoShell.format(document, pretty: true)).makeData(),
+            document.makeData()
+        )
     }
 
     func testExtendedJSONAndJavaScriptLeniency() throws {
-        let document = try MongoShell.parseDocument("""
+        let document = try MongoShell.parseDocument(
+            """
             {"_id": {"$oid": "65f1a2b3c4d5e6f708091a2b"}, "n": {"$numberLong": "7"}, "d": {"$date": {"$numberLong": "1000"}},
              'single': 'quoted', trailing: [1, 2,], // comment
              /* block */ "op": {"$gt": 5}, "dec": {"$numberDecimal": "0.1"}, "bin": {"$binary": {"base64": "AQ==", "subType": "04"}}}
-            """)
+            """
+        )
         XCTAssertTrue(document["_id"] is ObjectId)
         XCTAssertEqual(document["n"] as? Int, 7)
         XCTAssertEqual((document["d"] as? Date)?.timeIntervalSince1970, 1)
@@ -64,7 +70,9 @@ final class MongoShellTests: XCTestCase {
     }
 
     func testCellsArePlainText() throws {
-        let document = try MongoShell.parseDocument(#"{ s: "x", i: NumberLong(5), d: 2.0, f: 2.5, id: ObjectId("65f1a2b3c4d5e6f708091a2b"), when: ISODate("2024-05-06T07:08:09Z"), n: null }"#)
+        let document = try MongoShell.parseDocument(
+            #"{ s: "x", i: NumberLong(5), d: 2.0, f: 2.5, id: ObjectId("65f1a2b3c4d5e6f708091a2b"), when: ISODate("2024-05-06T07:08:09Z"), n: null }"#
+        )
         XCTAssertEqual(MongoShell.cell(document["s"]!), "x")
         XCTAssertEqual(MongoShell.cell(document["i"]!), "5")
         XCTAssertEqual(MongoShell.cell(document["d"]!), "2")
@@ -75,25 +83,33 @@ final class MongoShellTests: XCTestCase {
     }
 
     func testDecimal128() throws {
-        for text in ["0", "1", "-1", "1234.5600", "0.000001", "1E-7", "1.5E+20", "-0.1", "9999999999999999999999999999999999", "NaN", "Infinity", "-Infinity"] {
+        for text in [
+            "0", "1", "-1", "1234.5600", "0.000001", "1E-7", "1.5E+20", "-0.1", "9999999999999999999999999999999999",
+            "NaN", "Infinity", "-Infinity",
+        ] {
             let decimal = try XCTUnwrap(MongoDecimal.parse(text), text)
             XCTAssertEqual(MongoDecimal.string(decimal), text)
         }
         XCTAssertEqual(MongoDecimal.string(try XCTUnwrap(MongoDecimal.parse("12e3"))), "1.2E+4")
         XCTAssertEqual(MongoDecimal.string(try XCTUnwrap(MongoDecimal.parse(".5"))), "0.5")
-        XCTAssertNil(MongoDecimal.parse("12345678901234567890123456789012345")) // 35 digits needs rounding
+        XCTAssertNil(MongoDecimal.parse("12345678901234567890123456789012345"))  // 35 digits needs rounding
         XCTAssertNil(MongoDecimal.parse("abc"))
     }
 }
 
 final class MongoStatementTests: XCTestCase {
     func testParsesShellStatements() throws {
-        let find = try MongoStatement.parse("db.users.find({ age: { $gt: 30 } }, { name: 1 }).sort({ name: -1 }).limit(5);")
+        let find = try MongoStatement.parse(
+            "db.users.find({ age: { $gt: 30 } }, { name: 1 }).sort({ name: -1 }).limit(5);"
+        )
         XCTAssertEqual(find.collection, "users")
         XCTAssertEqual(find.calls.map(\.name), ["find", "sort", "limit"])
         XCTAssertEqual(find.modifier("limit")?.arguments.first as? Int32, 5)
 
-        XCTAssertEqual(try MongoStatement.parse("db.getCollection('my orders').countDocuments()").collection, "my orders")
+        XCTAssertEqual(
+            try MongoStatement.parse("db.getCollection('my orders').countDocuments()").collection,
+            "my orders"
+        )
         XCTAssertEqual(try MongoStatement.parse("db[\"a-b\"].find()").collection, "a-b")
         XCTAssertEqual(try MongoStatement.parse("db.system.profile.find()").collection, "system.profile")
         let sibling = try MongoStatement.parse("db.getSiblingDB(\"shop\").orders.drop()")
@@ -110,20 +126,36 @@ final class MongoStatementTests: XCTestCase {
         let statement = try MongoStatement.parse("db.users.find({a:1,b:{$in:[1,2]}}).sort({a:1})")
         XCTAssertEqual(statement.formatted(pretty: false), "db.users.find({ a: 1, b: { $in: [1, 2] } }).sort({ a: 1 })")
         XCTAssertEqual(statement.formatted(), "db.users.find({ a: 1, b: { $in: [1, 2] } }).sort({ a: 1 })")
-        let long = try MongoStatement.parse("db.orders.aggregate([{$match:{status:'paid',total:{$gte:100}}},{$group:{_id:'$customer',n:{$sum:1}}}])")
-        XCTAssertEqual(long.formatted(), """
+        let long = try MongoStatement.parse(
+            "db.orders.aggregate([{$match:{status:'paid',total:{$gte:100}}},{$group:{_id:'$customer',n:{$sum:1}}}])"
+        )
+        XCTAssertEqual(
+            long.formatted(),
+            """
             db.orders.aggregate([
               { $match: { status: "paid", total: { $gte: 100 } } },
               { $group: { _id: "$customer", n: { $sum: 1 } } }
             ])
-            """)
-        XCTAssertEqual(MongoQueryDialect().beautify("db.a.find({x:1})\n// note\ndb.b.find( {} ) // why"),
-                       "db.a.find({ x: 1 })\n// note\ndb.b.find( {} ) // why")
+            """
+        )
+        XCTAssertEqual(
+            MongoQueryDialect().beautify("db.a.find({x:1})\n// note\ndb.b.find( {} ) // why"),
+            "db.a.find({ x: 1 })\n// note\ndb.b.find( {} ) // why"
+        )
         XCTAssertEqual(MongoStatement.collectionAccessor("stats"), ".getCollection(\"stats\")")
 
-        XCTAssertEqual(MongoStatement.applyingRowLimit("db.users.find({});", limit: 300), "db.users.find({}).limit(300)")
-        XCTAssertEqual(MongoStatement.applyingRowLimit("db.users.find().limit(5)", limit: 300), "db.users.find().limit(5)")
-        XCTAssertEqual(MongoStatement.applyingRowLimit("db.users.aggregate([])", limit: 10), "db.users.aggregate([]).limit(10)")
+        XCTAssertEqual(
+            MongoStatement.applyingRowLimit("db.users.find({});", limit: 300),
+            "db.users.find({}).limit(300)"
+        )
+        XCTAssertEqual(
+            MongoStatement.applyingRowLimit("db.users.find().limit(5)", limit: 300),
+            "db.users.find().limit(5)"
+        )
+        XCTAssertEqual(
+            MongoStatement.applyingRowLimit("db.users.aggregate([])", limit: 10),
+            "db.users.aggregate([]).limit(10)"
+        )
         XCTAssertEqual(MongoStatement.applyingRowLimit("db.users.find().count()", limit: 10), "db.users.find().count()")
         XCTAssertEqual(MongoStatement.applyingRowLimit("db.users.deleteMany({})", limit: 10), "db.users.deleteMany({})")
     }
@@ -154,23 +186,51 @@ final class MongoDialectTests: XCTestCase {
     private let dialect = MongoQueryDialect()
 
     func testPagingAndCounting() {
-        let page = dialect.selectPage(TablePageRequest(table: table, limit: 50, offset: 100, orderBy: "created at", ascending: false, filter: "{ a: 1 }"))
-        XCTAssertEqual(page, "db.getSiblingDB(\"shop\").users.find({ a: 1 }).sort({ \"created at\": -1 }).skip(100).limit(50)")
+        let page = dialect.selectPage(
+            TablePageRequest(
+                table: table,
+                limit: 50,
+                offset: 100,
+                orderBy: "created at",
+                ascending: false,
+                filter: "{ a: 1 }"
+            )
+        )
+        XCTAssertEqual(
+            page,
+            "db.getSiblingDB(\"shop\").users.find({ a: 1 }).sort({ \"created at\": -1 }).skip(100).limit(50)"
+        )
         XCTAssertNoThrow(try MongoStatement.parse(page))
         XCTAssertEqual(dialect.countRows(table, filter: ""), "db.getSiblingDB(\"shop\").users.estimatedDocumentCount()")
-        XCTAssertEqual(dialect.countRows(TableRef(schema: "shop", name: "v", kind: .view), filter: nil),
-                       "db.getSiblingDB(\"shop\").v.countDocuments({})")
+        XCTAssertEqual(
+            dialect.countRows(TableRef(schema: "shop", name: "v", kind: .view), filter: nil),
+            "db.getSiblingDB(\"shop\").v.countDocuments({})"
+        )
         XCTAssertEqual(dialect.drop(table), "db.getSiblingDB(\"shop\").users.drop()")
         XCTAssertEqual(dialect.selectSample(table, limit: 100), "db.users.find({}).limit(100)")
     }
 
     func testFilterRules() throws {
-        XCTAssertEqual(dialect.condition([FilterRule(column: "age", op: .equals, value: "30")]), "{ age: { $in: [30, \"30\"] } }")
-        XCTAssertEqual(dialect.condition([FilterRule(column: "age", op: .greater, value: "30")]), "{ age: { $gt: 30 } }")
-        XCTAssertEqual(dialect.condition([FilterRule(column: "_id", op: .equals, value: "65f1a2b3c4d5e6f708091a2b")]),
-                       "{ _id: { $in: [ObjectId(\"65f1a2b3c4d5e6f708091a2b\"), \"65f1a2b3c4d5e6f708091a2b\"] } }")
-        XCTAssertEqual(dialect.condition([FilterRule(column: "name", op: .contains, value: "a.b")]), "{ name: /a\\.b/i }")
-        XCTAssertEqual(dialect.condition([FilterRule(column: "name", op: .equals, value: "\"30\"")]), "{ name: \"30\" }")
+        XCTAssertEqual(
+            dialect.condition([FilterRule(column: "age", op: .equals, value: "30")]),
+            "{ age: { $in: [30, \"30\"] } }"
+        )
+        XCTAssertEqual(
+            dialect.condition([FilterRule(column: "age", op: .greater, value: "30")]),
+            "{ age: { $gt: 30 } }"
+        )
+        XCTAssertEqual(
+            dialect.condition([FilterRule(column: "_id", op: .equals, value: "65f1a2b3c4d5e6f708091a2b")]),
+            "{ _id: { $in: [ObjectId(\"65f1a2b3c4d5e6f708091a2b\"), \"65f1a2b3c4d5e6f708091a2b\"] } }"
+        )
+        XCTAssertEqual(
+            dialect.condition([FilterRule(column: "name", op: .contains, value: "a.b")]),
+            "{ name: /a\\.b/i }"
+        )
+        XCTAssertEqual(
+            dialect.condition([FilterRule(column: "name", op: .equals, value: "\"30\"")]),
+            "{ name: \"30\" }"
+        )
         let combined = dialect.condition([
             FilterRule(column: "a", op: .isNull), FilterRule(column: "b", op: .equals, value: "x"),
             FilterRule(column: "c", op: .isNotNull, conjunction: .or),
@@ -180,20 +240,40 @@ final class MongoDialectTests: XCTestCase {
     }
 
     func testEditsKeepFieldTypes() throws {
-        let original = #"{ _id: ObjectId("65f1a2b3c4d5e6f708091a2b"), n: NumberLong(5), d: 1.5, s: "x", when: ISODate("2024-01-01T00:00:00Z") }"#
-        let update = try MongoChanges.update(table, row: .init(document: original, changes: ["n": "6", "d": "2", "s": "42", "when": "2025-02-03"]))
-        XCTAssertEqual(update, #"db.getSiblingDB("shop").users.updateOne({ _id: ObjectId("65f1a2b3c4d5e6f708091a2b") }, { $set: { d: 2.0, n: NumberLong(6), s: "42", when: ISODate("2025-02-03T00:00:00.000Z") } })"#)
+        let original =
+            #"{ _id: ObjectId("65f1a2b3c4d5e6f708091a2b"), n: NumberLong(5), d: 1.5, s: "x", when: ISODate("2024-01-01T00:00:00Z") }"#
+        let update = try MongoChanges.update(
+            table,
+            row: .init(document: original, changes: ["n": "6", "d": "2", "s": "42", "when": "2025-02-03"])
+        )
+        XCTAssertEqual(
+            update,
+            #"db.getSiblingDB("shop").users.updateOne({ _id: ObjectId("65f1a2b3c4d5e6f708091a2b") }, { $set: { d: 2.0, n: NumberLong(6), s: "42", when: ISODate("2025-02-03T00:00:00.000Z") } })"#
+        )
         XCTAssertThrowsError(try MongoChanges.update(table, row: .init(document: original, changes: ["n": "six"])))
-        XCTAssertEqual(try MongoChanges.update(table, row: .init(document: original, changes: ["s": nil])),
-                       #"db.getSiblingDB("shop").users.updateOne({ _id: ObjectId("65f1a2b3c4d5e6f708091a2b") }, { $set: { s: null } })"#)
-        XCTAssertEqual(try MongoChanges.delete(table, document: original),
-                       #"db.getSiblingDB("shop").users.deleteOne({ _id: ObjectId("65f1a2b3c4d5e6f708091a2b") })"#)
-        XCTAssertEqual(MongoChanges.insert(table, values: [("name", "Ann"), ("age", "31"), ("note", nil)]),
-                       #"db.getSiblingDB("shop").users.insertOne({ name: "Ann", age: 31, note: null })"#)
+        XCTAssertEqual(
+            try MongoChanges.update(table, row: .init(document: original, changes: ["s": nil])),
+            #"db.getSiblingDB("shop").users.updateOne({ _id: ObjectId("65f1a2b3c4d5e6f708091a2b") }, { $set: { s: null } })"#
+        )
+        XCTAssertEqual(
+            try MongoChanges.delete(table, document: original),
+            #"db.getSiblingDB("shop").users.deleteOne({ _id: ObjectId("65f1a2b3c4d5e6f708091a2b") })"#
+        )
+        XCTAssertEqual(
+            MongoChanges.insert(table, values: [("name", "Ann"), ("age", "31"), ("note", nil)]),
+            #"db.getSiblingDB("shop").users.insertOne({ name: "Ann", age: 31, note: null })"#
+        )
     }
 
     func testConnectionURL() {
-        var config = ConnectionConfig(kind: .mongodb, host: "db.example.com", user: "app", database: "shop", tls: .verifyFull, authSource: "admin")
+        var config = ConnectionConfig(
+            kind: .mongodb,
+            host: "db.example.com",
+            user: "app",
+            database: "shop",
+            tls: .verifyFull,
+            authSource: "admin"
+        )
         XCTAssertEqual(config.url(), "mongodb://app@db.example.com:27017/shop?tls=true&authSource=admin")
         config.srv = true
         config.host = "cluster0.abcde.mongodb.net"
@@ -208,9 +288,17 @@ final class MongoDialectTests: XCTestCase {
 final class MongoIntegrationTests: XCTestCase {
     private let env = ProcessInfo.processInfo.environment
 
-    private func connect(password: String = "tabula", database: String = "tabula_test") async throws -> any DatabaseDriver {
-        guard let port = env["TABULA_TEST_MONGO_PORT"].flatMap(Int.init) else { throw XCTSkip("TABULA_TEST_MONGO_PORT not set") }
-        return try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, port: port, user: "tabula", database: database), password: password)
+    private func connect(
+        password: String = "tabula",
+        database: String = "tabula_test"
+    ) async throws -> any DatabaseDriver {
+        guard let port = env["TABULA_TEST_MONGO_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MONGO_PORT not set")
+        }
+        return try await DriverFactory.connect(
+            ConnectionConfig(kind: .mongodb, port: port, user: "tabula", database: database),
+            password: password
+        )
     }
 
     func testWrongPasswordFails() async throws {
@@ -229,13 +317,15 @@ final class MongoIntegrationTests: XCTestCase {
         let driver = try await connect()
         defer { Task { await driver.close() } }
         _ = try await driver.execute("db.people.drop()")
-        let inserted = try await driver.execute("""
+        let inserted = try await driver.execute(
+            """
             db.people.insertMany([
               { name: "Ann", age: 31, joined: ISODate("2024-01-02T00:00:00Z"), tags: ["a"], balance: NumberDecimal("10.50") },
               { name: "Bình", age: NumberLong(45), address: { city: "Hà Nội" } },
               { name: "Chi" }
             ])
-            """)
+            """
+        )
         XCTAssertEqual(inserted.affectedRows, 3)
 
         let value1 = try await driver.schemas().contains("tabula_test")
@@ -251,7 +341,9 @@ final class MongoIntegrationTests: XCTestCase {
         // Paging, sorting, filtering and counting go through the dialect, as the table tab does.
         let dialect = driver.dialect
         let filter = dialect.condition([FilterRule(column: "age", op: .greaterOrEqual, value: "31")])
-        let page = try await driver.fetchPage(TablePageRequest(table: people, limit: 10, orderBy: "age", ascending: false, filter: filter))
+        let page = try await driver.fetchPage(
+            TablePageRequest(table: people, limit: 10, orderBy: "age", ascending: false, filter: filter)
+        )
         XCTAssertEqual(page.rows.count, 2)
         XCTAssertEqual(page.rows.first?[page.columns.firstIndex(of: "name")!], "Bình")
         let value2 = try await driver.countRows(people, filter: filter)
@@ -261,10 +353,16 @@ final class MongoIntegrationTests: XCTestCase {
 
         // Edit a cell: the long stays a long.
         let row = try XCTUnwrap(page.documents?.first)
-        let update = try MongoChanges.update(people, row: .init(document: row, changes: ["age": "46", "name": "Bình B"]))
+        let update = try MongoChanges.update(
+            people,
+            row: .init(document: row, changes: ["age": "46", "name": "Bình B"])
+        )
         try await driver.applyInTransaction([update])
         let after = try await driver.execute("db.people.find({ name: \"Bình B\" })")
-        XCTAssertTrue(after.documents?.first?.contains("age: NumberLong(46)") == true, after.documents.map { Array($0).description } ?? "")
+        XCTAssertTrue(
+            after.documents?.first?.contains("age: NumberLong(46)") == true,
+            after.documents.map { Array($0).description } ?? ""
+        )
 
         // Replace and delete by _id.
         let replaced = try MongoChanges.replace(people, original: row, with: "{ name: \"Replaced\", n: 1 }")
@@ -300,7 +398,8 @@ final class MongoIntegrationTests: XCTestCase {
         _ = try await driver.execute("db.many.insertMany([\(docs)])")
         let value6 = try await driver.execute("db.many.find({})").rows.count
         XCTAssertEqual(value6, 1200)
-        let value7 = try await driver.execute(driver.dialect.applyingRowLimit("db.many.find({})", limit: 700)).rows.count
+        let value7 = try await driver.execute(driver.dialect.applyingRowLimit("db.many.find({})", limit: 700)).rows
+            .count
         XCTAssertEqual(value7, 700)
         let value8 = try await driver.execute("db.many.find({ i: { $gte: 1000 } }).count()").rows.first?.first
         XCTAssertEqual(value8, "200")
@@ -335,7 +434,9 @@ final class MongoIntegrationTests: XCTestCase {
     }
 
     func testStandaloneWithoutAuthentication() async throws {
-        guard let port = env["TABULA_TEST_MONGO_PLAIN_PORT"].flatMap(Int.init) else { throw XCTSkip("TABULA_TEST_MONGO_PLAIN_PORT not set") }
+        guard let port = env["TABULA_TEST_MONGO_PLAIN_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_MONGO_PLAIN_PORT not set")
+        }
         let driver = try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, port: port), password: nil)
         _ = try await driver.execute("db.t.insertOne({ x: 1 })")
         let value12 = try await driver.defaultSchema()
@@ -350,7 +451,10 @@ final class MongoIntegrationTests: XCTestCase {
     /// test1.test.build.10gen.cc (MongoDB's test records, pointing at localhost:27017/27018).
     func testSeedListConnection() async throws {
         guard let seed = env["TABULA_TEST_MONGO_SRV_SEED"] else { throw XCTSkip("TABULA_TEST_MONGO_SRV_SEED not set") }
-        let driver = try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, host: seed, tls: .disable, srv: true), password: nil)
+        let driver = try await DriverFactory.connect(
+            ConnectionConfig(kind: .mongodb, host: seed, tls: .disable, srv: true),
+            password: nil
+        )
         let version = try await driver.serverVersion()
         XCTAssertTrue(version.hasPrefix("MongoDB"), version)
         await driver.close()
@@ -358,18 +462,28 @@ final class MongoIntegrationTests: XCTestCase {
 
     func testUnreachableMembersGiveAReadableError() async throws {
         do {
-            _ = try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, host: "127.0.0.1:1,127.0.0.1:2", connectTimeout: 5), password: nil)
+            _ = try await DriverFactory.connect(
+                ConnectionConfig(kind: .mongodb, host: "127.0.0.1:1,127.0.0.1:2", connectTimeout: 5),
+                password: nil
+            )
             XCTFail("expected a connection error")
         } catch {
             let message = error.localizedDescription
-            XCTAssertTrue(message.contains("127.0.0.1:1: Connection refused") && message.contains("127.0.0.1:2: Connection refused"), message)
+            XCTAssertTrue(
+                message.contains("127.0.0.1:1: Connection refused")
+                    && message.contains("127.0.0.1:2: Connection refused"),
+                message
+            )
         }
     }
 
     func testUnreachableServerTimesOut() async throws {
         let started = Date()
         do {
-            _ = try await DriverFactory.connect(ConnectionConfig(kind: .mongodb, host: "127.0.0.1", port: 1, connectTimeout: 3), password: nil)
+            _ = try await DriverFactory.connect(
+                ConnectionConfig(kind: .mongodb, host: "127.0.0.1", port: 1, connectTimeout: 3),
+                password: nil
+            )
             XCTFail("expected a connection error")
         } catch {
             XCTAssertLessThan(Date().timeIntervalSince(started), 10)
@@ -381,8 +495,14 @@ final class MongoCompletionTests: XCTestCase {
     private func items(_ text: String) -> [String] {
         let caret = (text as NSString).range(of: "|").location
         let clean = text.replacingOccurrences(of: "|", with: "")
-        return MongoCompletion.suggestions(in: clean, caret: caret, collections: ["users", "orders"],
-                                           fields: { $0 == "users" ? ["_id", "name", "nickname", "age"] : nil }).items
+        return
+            MongoCompletion.suggestions(
+                in: clean,
+                caret: caret,
+                collections: ["users", "orders"],
+                fields: { $0 == "users" ? ["_id", "name", "nickname", "age"] : nil }
+            )
+            .items
     }
 
     func testContexts() {
@@ -412,7 +532,10 @@ final class MongoReviewFixTests: XCTestCase {
 
     func testDecimalAndUntypedValuesKeepEveryDigit() throws {
         let original = #"{ _id: 1, price: NumberDecimal("1.00") }"#
-        let update = try MongoChanges.update(table, row: .init(document: original, changes: ["price": "12345678901234567.89"]))
+        let update = try MongoChanges.update(
+            table,
+            row: .init(document: original, changes: ["price": "12345678901234567.89"])
+        )
         XCTAssertTrue(update.contains(#"NumberDecimal("12345678901234567.89")"#), update)
         XCTAssertEqual(MongoChanges.typed("02134") as? String, "02134")
         XCTAssertEqual(MongoChanges.typed("12345678901234567890") as? String, "12345678901234567890")
@@ -422,8 +545,11 @@ final class MongoReviewFixTests: XCTestCase {
 
     func testSeedListHonorsTLSModeAndResolvedMembers() throws {
         let config = ConnectionConfig(kind: .mongodb, host: "cluster0.example.net", tls: .require, srv: true)
-        let settings = try MongoDriver.settings(for: config, password: nil,
-                                                members: [.init(hostname: "shard-00.example.net", port: 27017)])
+        let settings = try MongoDriver.settings(
+            for: config,
+            password: nil,
+            members: [.init(hostname: "shard-00.example.net", port: 27017)]
+        )
         XCTAssertTrue(settings.useSSL)
         XCTAssertFalse(settings.verifySSLCertificates)
         XCTAssertFalse(settings.isSRV)
@@ -434,7 +560,10 @@ final class MongoReviewFixTests: XCTestCase {
         let good = [MongoSRV.Target(host: "cluster0-shard-00-00.abcde.mongodb.net.", port: 27017)]
         XCTAssertNoThrow(try MongoSRV.validate(good, seed: "cluster0.abcde.mongodb.net"))
         for bad in ["evil.attacker.com", "abcde.mongodb.net", "xabcde.mongodb.net", "mongodb.net"] {
-            XCTAssertThrowsError(try MongoSRV.validate([.init(host: bad, port: 27017)], seed: "cluster0.abcde.mongodb.net"), bad)
+            XCTAssertThrowsError(
+                try MongoSRV.validate([.init(host: bad, port: 27017)], seed: "cluster0.abcde.mongodb.net"),
+                bad
+            )
         }
     }
 
@@ -450,7 +579,9 @@ final class MongoReviewFixTests: XCTestCase {
     }
 
     func testSystemResolverFindsSRVRecords() async throws {
-        guard ProcessInfo.processInfo.environment["TABULA_TEST_NETWORK"] != nil else { throw XCTSkip("TABULA_TEST_NETWORK not set") }
+        guard ProcessInfo.processInfo.environment["TABULA_TEST_NETWORK"] != nil else {
+            throw XCTSkip("TABULA_TEST_NETWORK not set")
+        }
         // MongoDB's public test records for the SRV specification.
         let members = try await MongoSRV.resolve("test1.test.build.10gen.cc", timeout: 10)
         XCTAssertEqual(Set(members.map(\.port)), [27017, 27018])
@@ -467,13 +598,18 @@ final class MongoReviewFixTests: XCTestCase {
             _ = try await MongoSRV.resolve("nothing-here.example.com", timeout: 5)
             XCTFail("expected no records")
         } catch {
-            XCTAssertTrue(error.localizedDescription.contains("no MongoDB servers") || error.localizedDescription.contains("DNS"),
-                          error.localizedDescription)
+            XCTAssertTrue(
+                error.localizedDescription.contains("no MongoDB servers") || error.localizedDescription.contains("DNS"),
+                error.localizedDescription
+            )
         }
     }
 
     func testReplicaSetURLKeepsPorts() {
-        XCTAssertEqual(ConnectionConfig(kind: .mongodb, host: "a,b:27019", port: 27018).url(), "mongodb://a:27018,b:27019")
+        XCTAssertEqual(
+            ConnectionConfig(kind: .mongodb, host: "a,b:27019", port: 27018).url(),
+            "mongodb://a:27018,b:27019"
+        )
     }
 }
 

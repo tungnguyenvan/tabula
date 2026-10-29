@@ -23,7 +23,9 @@ extension ConnectionConfig {
         return nil
     }
 
-    private static let hostKeys: Set = ["host", "hostaddr", "server", "datasource", "address", "addr", "networkaddress"]
+    private static let hostKeys: Set = [
+        "host", "hostaddr", "server", "datasource", "address", "addr", "networkaddress",
+    ]
     private static let databaseKeys: Set = ["dbname", "database", "initialcatalog"]
     private static let userKeys: Set = ["user", "userid", "uid", "username", "usr"]
     private static let passwordKeys: Set = ["password", "pwd"]
@@ -33,20 +35,27 @@ extension ConnectionConfig {
         key.lowercased().filter { !$0.isWhitespace && $0 != "_" }
     }
 
-    private static func keyValueConnection(_ pairs: [(key: String, value: String)], libpq: Bool) -> (config: ConnectionConfig, password: String?)? {
+    private static func keyValueConnection(
+        _ pairs: [(key: String, value: String)],
+        libpq: Bool
+    ) -> (config: ConnectionConfig, password: String?)? {
         var values: [String: String] = [:]
         for pair in pairs { values[normalized(pair.key)] = pair.value }
         let host = values.first { hostKeys.contains($0.key) }?.value
         // A host never holds spaces; one that does is text that only looks like key=value pairs.
         // Without a host, only a libpq string still names a connection (to the local server).
-        guard !(host ?? "").contains(where: \.isWhitespace), host != nil || (libpq && values.keys.contains { databaseKeys.contains($0) || userKeys.contains($0) }) else { return nil }
+        guard !(host ?? "").contains(where: \.isWhitespace),
+            host != nil || (libpq && values.keys.contains { databaseKeys.contains($0) || userKeys.contains($0) })
+        else { return nil }
 
         var port = values["port"].flatMap(Int.init).flatMap { ports.contains($0) ? $0 : nil }
         var hostName = host ?? Defaults.host
         // A port written with the host: db:3306, or db,1433 as ODBC writes it.
         if port == nil, let separator = hostName.lastIndex(where: { $0 == "," || $0 == ":" }),
-           hostName.filter({ $0 == ":" }).count <= 1, let embedded = Int(hostName[hostName.index(after: separator)...]),
-           ports.contains(embedded) {
+            hostName.filter({ $0 == ":" }).count <= 1,
+            let embedded = Int(hostName[hostName.index(after: separator)...]),
+            ports.contains(embedded)
+        {
             port = embedded
             hostName = String(hostName[..<separator])
         }
@@ -92,7 +101,11 @@ extension ConnectionConfig {
             var closed = !quoted
             while index < text.endIndex {
                 let character = text[index]
-                if quoted, character == "'" { closed = true; index = text.index(after: index); break }
+                if quoted, character == "'" {
+                    closed = true
+                    index = text.index(after: index)
+                    break
+                }
                 if !quoted, character.isWhitespace { break }
                 if character == "\\", text.index(after: index) < text.endIndex {
                     index = text.index(after: index)
@@ -115,10 +128,16 @@ extension ConnectionConfig {
     /// Nil without at least two pairs, so a lone `a=b` isn't taken for a connection.
     private static func semicolonPairs(_ text: String) -> [(key: String, value: String)]? {
         var pairs: [(key: String, value: String)] = []
-        var key: String?, field = "", quoted = false
+        var key: String?
+        var field = ""
+        var quoted = false
         var quote: Character?
         func finish() -> Bool {
-            defer { key = nil; field = ""; quoted = false }
+            defer {
+                key = nil
+                field = ""
+                quoted = false
+            }
             guard let name = key?.trimmingCharacters(in: .whitespaces) else {
                 return field.trimmingCharacters(in: .whitespaces).isEmpty
             }
@@ -132,9 +151,17 @@ extension ConnectionConfig {
             let character = characters[index]
             index += 1
             if let open = quote {
-                guard character == open else { field.append(character); continue }
+                guard character == open else {
+                    field.append(character)
+                    continue
+                }
                 // A doubled quote is one quote inside the value.
-                if index < characters.count, characters[index] == open { field.append(character); index += 1 } else { quote = nil }
+                if index < characters.count, characters[index] == open {
+                    field.append(character)
+                    index += 1
+                } else {
+                    quote = nil
+                }
             } else if character == ";" {
                 guard finish() else { return nil }
             } else if key == nil, character == "=" {

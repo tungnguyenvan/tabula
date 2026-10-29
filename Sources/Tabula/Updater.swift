@@ -50,7 +50,9 @@ final class Updater {
 
     private var feedURL: URL? {
         #if DEBUG
-        if let override = ProcessInfo.processInfo.environment["TABULA_UPDATE_FEED"], let url = URL(string: override) { return url }
+        if let override = ProcessInfo.processInfo.environment["TABULA_UPDATE_FEED"], let url = URL(string: override) {
+            return url
+        }
         #endif
         return Self.repository.flatMap(UpdateFeed.latestReleaseURL)
     }
@@ -69,7 +71,10 @@ final class Updater {
     }
 
     func check(userInitiated: Bool) async {
-        if case .downloading = state { showWindow = true; return }
+        if case .downloading = state {
+            showWindow = true
+            return
+        }
         state = .checking
         if userInitiated { showWindow = true }
         do {
@@ -115,19 +120,24 @@ final class Updater {
             if values?.volumeIsReadOnly == true { return .failure(.readOnlyVolume) }
         }
         guard FileManager.default.isWritableFile(atPath: bundle.deletingLastPathComponent().path),
-              FileManager.default.isWritableFile(atPath: bundle.path) else { return .failure(.notWritable(bundle.deletingLastPathComponent().path)) }
+            FileManager.default.isWritableFile(atPath: bundle.path)
+        else { return .failure(.notWritable(bundle.deletingLastPathComponent().path)) }
         return .success(bundle)
     }
 
     enum InstallError: LocalizedError, Equatable {
-        case notABundle, translocated, readOnlyVolume, notWritable(String)
+        case notABundle, translocated, readOnlyVolume
+        case notWritable(String)
 
         var errorDescription: String? {
             switch self {
             case .notABundle: "Tabula isn't running from an app bundle, so it can't update itself."
-            case .translocated: "macOS is running Tabula from a temporary location. Move Tabula to Applications, open it from there and try again."
-            case .readOnlyVolume: "Tabula is running from the disk image. Drag it to Applications, open it from there and try again."
-            case .notWritable(let folder): "Tabula can't replace itself because “\(folder)” isn't writable by your account."
+            case .translocated:
+                "macOS is running Tabula from a temporary location. Move Tabula to Applications, open it from there and try again."
+            case .readOnlyVolume:
+                "Tabula is running from the disk image. Drag it to Applications, open it from there and try again."
+            case .notWritable(let folder):
+                "Tabula can't replace itself because “\(folder)” isn't writable by your account."
             }
         }
     }
@@ -155,13 +165,20 @@ final class Updater {
     }
 
     /// Downloads and verifies the release; returns the extracted Tabula.app.
-    nonisolated static func prepare(_ update: AvailableUpdate, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
-        let work = FileManager.default.temporaryDirectory.appendingPathComponent("TabulaUpdate-\(UUID().uuidString)", isDirectory: true)
+    nonisolated static func prepare(
+        _ update: AvailableUpdate,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "TabulaUpdate-\(UUID().uuidString)",
+            isDirectory: true
+        )
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
 
         let (sumsData, sumsResponse) = try await URLSession.shared.data(from: update.checksumsURL)
         guard (sumsResponse as? HTTPURLResponse)?.statusCode == 200, let sums = String(data: sumsData, encoding: .utf8),
-              let expected = UpdateFeed.checksum(for: update.archiveName, in: sums) else {
+            let expected = UpdateFeed.checksum(for: update.archiveName, in: sums)
+        else {
             throw DatabaseError("The release has no checksum for \(update.archiveName).")
         }
 
@@ -177,15 +194,21 @@ final class Updater {
         try run("/usr/bin/ditto", ["-x", "-k", archive.path, extracted.path])
         let app = extracted.appendingPathComponent("Tabula.app")
         guard let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
-              info["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier ?? "app.tabula.Tabula",
-              (info["CFBundleShortVersionString"] as? String).flatMap(SemanticVersion.init) == update.version else {
+            info["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier ?? "app.tabula.Tabula",
+            (info["CFBundleShortVersionString"] as? String).flatMap(SemanticVersion.init) == update.version
+        else {
             throw DatabaseError("The downloaded app isn't Tabula \(update.version).")
         }
         try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app.path])
         return app
     }
 
-    nonisolated private static func download(_ url: URL, to destination: URL, expectedSize: Int, progress: @escaping @Sendable (Double) -> Void) async throws {
+    nonisolated private static func download(
+        _ url: URL,
+        to destination: URL,
+        expectedSize: Int,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
         let (bytes, response) = try await URLSession.shared.bytes(from: url)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw DatabaseError("Download failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)).")
@@ -238,7 +261,9 @@ final class Updater {
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
             let message = String(data: output, encoding: .utf8) ?? ""
-            throw DatabaseError("\((tool as NSString).lastPathComponent) failed: \(message.trimmingCharacters(in: .whitespacesAndNewlines))")
+            throw DatabaseError(
+                "\((tool as NSString).lastPathComponent) failed: \(message.trimmingCharacters(in: .whitespacesAndNewlines))"
+            )
         }
     }
 
@@ -246,23 +271,25 @@ final class Updater {
     /// (restoring the old one if the copy fails) and opens the new version.
     private static func replaceAndRelaunch(target: URL, with newApp: URL) throws {
         let script = """
-        pid="$1"; target="$2"; new="$3"; work="$4"
-        while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
-        backup="$target.previous-$$"
-        if mv "$target" "$backup"; then
-          if ditto "$new" "$target"; then
-            rm -rf "$backup"
-          else
-            rm -rf "$target"; mv "$backup" "$target"
-          fi
-        fi
-        rm -rf "$work"
-        open "$target"
-        """
+            pid="$1"; target="$2"; new="$3"; work="$4"
+            while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
+            backup="$target.previous-$$"
+            if mv "$target" "$backup"; then
+              if ditto "$new" "$target"; then
+                rm -rf "$backup"
+              else
+                rm -rf "$target"; mv "$backup" "$target"
+              fi
+            fi
+            rm -rf "$work"
+            open "$target"
+            """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", script, "tabula-update", String(ProcessInfo.processInfo.processIdentifier), target.path, newApp.path,
-                             newApp.deletingLastPathComponent().deletingLastPathComponent().path]
+        process.arguments = [
+            "-c", script, "tabula-update", String(ProcessInfo.processInfo.processIdentifier), target.path, newApp.path,
+            newApp.deletingLastPathComponent().deletingLastPathComponent().path,
+        ]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()

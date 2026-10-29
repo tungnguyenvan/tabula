@@ -40,46 +40,56 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             header
             // Arrow keys / single click browse in a reusable preview tab; Return or double-click opens for good.
-            List(selection: Binding(
-                get: { () -> SidebarItem? in
-                    switch model.selectedTab {
-                    case .table(let table): return .table(table.table)
-                    case .routine(let routine): return routine.routine.map(SidebarItem.routine)
-                    default: return nil
+            List(
+                selection: Binding(
+                    get: { () -> SidebarItem? in
+                        switch model.selectedTab {
+                        case .table(let table): return .table(table.table)
+                        case .routine(let routine): return routine.routine.map(SidebarItem.routine)
+                        default: return nil
+                        }
+                    },
+                    set: { item in
+                        switch item {
+                        case .table(let table): model.open(table, preview: true)
+                        case .routine(let routine): model.openRoutine(routine)
+                        case nil: break
+                        }
                     }
-                },
-                set: { item in
-                    switch item {
-                    case .table(let table): model.open(table, preview: true)
-                    case .routine(let routine): model.openRoutine(routine)
-                    case nil: break
-                    }
-                }
-            )) {
+                )
+            ) {
                 // Selection mirrors the active tab, so switching tabs moves the highlight too.
                 let tables = model.filteredTables.filter { $0.kind == .table }
                 let views = model.filteredTables.filter { $0.kind == .view }
                 if !tables.isEmpty {
                     Section {
                         if isExpanded(.tables) { ForEach(tables) { row($0) } }
-                    } header: { groupHeader(.tables, title: model.config.kind.tablesTitle, count: tables.count) }
+                    } header: {
+                        groupHeader(.tables, title: model.config.kind.tablesTitle, count: tables.count)
+                    }
                 }
                 if !views.isEmpty {
                     Section {
                         if isExpanded(.views) { ForEach(views) { row($0) } }
-                    } header: { groupHeader(.views, title: "Views", count: views.count) }
+                    } header: {
+                        groupHeader(.views, title: "Views", count: views.count)
+                    }
                 }
                 let functions = model.filteredRoutines.filter { $0.kind != .trigger }
                 let triggers = model.filteredRoutines.filter { $0.kind == .trigger }
                 if !functions.isEmpty {
                     Section {
                         if isExpanded(.functions) { ForEach(functions) { routineRow($0) } }
-                    } header: { groupHeader(.functions, title: "Functions", count: functions.count) }
+                    } header: {
+                        groupHeader(.functions, title: "Functions", count: functions.count)
+                    }
                 }
                 if !triggers.isEmpty {
                     Section {
                         if isExpanded(.triggers) { ForEach(triggers) { routineRow($0) } }
-                    } header: { groupHeader(.triggers, title: "Triggers", count: triggers.count) }
+                    } header: {
+                        groupHeader(.triggers, title: "Triggers", count: triggers.count)
+                    }
                 }
                 if model.filteredTables.isEmpty && !model.loadingTables {
                     Text(model.tableSearch.isEmpty ? "No \(model.config.kind.tablesTitle.lowercased())" : "No matches")
@@ -100,24 +110,39 @@ struct SidebarView: View {
             footer
         }
         .onChange(of: model.sidebarFilterFocusRequest) { _, _ in filterFocused = true }
-        .confirmationDialog(dialogTitle, isPresented: Binding(get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }),
-                            titleVisibility: .visible, presenting: pendingAction) { action in
+        .confirmationDialog(
+            dialogTitle,
+            isPresented: Binding(get: { pendingAction != nil }, set: { if !$0 { pendingAction = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingAction
+        ) { action in
             Button(action.kind == .drop ? "Drop" : model.config.kind.truncateTitle, role: .destructive) {
                 Task { await run(action) }
             }
         } message: { action in
-            Text(model.config.tag == .production
-                 ? "This is a PRODUCTION connection. This cannot be undone."
-                 : "This cannot be undone.")
+            Text(
+                model.config.tag == .production
+                    ? "This is a PRODUCTION connection. This cannot be undone."
+                    : "This cannot be undone."
+            )
         }
-        .confirmationDialog("Open “\(pendingDatabase ?? "")”?", isPresented: Binding(
-            get: { pendingDatabase != nil }, set: { if !$0 { pendingDatabase = nil } }
-        ), titleVisibility: .visible, presenting: pendingDatabase) { name in
+        .confirmationDialog(
+            "Open “\(pendingDatabase ?? "")”?",
+            isPresented: Binding(
+                get: { pendingDatabase != nil },
+                set: { if !$0 { pendingDatabase = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDatabase
+        ) { name in
             Button("Discard Changes and Open") { Task { await model.openDatabase(name) } }
         } message: { _ in
             Text("Tabs with unsaved changes close when the window moves to another database.")
         }
-        .alert("Operation failed", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+        .alert(
+            "Operation failed",
+            isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })
+        ) {
             Button("OK") { actionError = nil }
         } message: {
             Text(actionError ?? "")
@@ -131,16 +156,28 @@ struct SidebarView: View {
         }
         VStack(spacing: Layout.Sidebar.pickerSpacing) {
             if !model.databases.isEmpty {
-                picker(model.databases, selected: model.openingDatabase ?? model.currentDatabase ?? "", icon: "cylinder", help: "Database") { name in
-                    if model.hasUnsavedChanges { pendingDatabase = name } else { Task { await model.openDatabase(name) } }
+                picker(
+                    model.databases,
+                    selected: model.openingDatabase ?? model.currentDatabase ?? "",
+                    icon: "cylinder",
+                    help: "Database"
+                ) { name in
+                    if model.hasUnsavedChanges {
+                        pendingDatabase = name
+                    } else {
+                        Task { await model.openDatabase(name) }
+                    }
                 }
                 // One switch at a time: the window keeps the old database until the new one is open.
                 .disabled(model.openingDatabase != nil)
             }
             if model.config.kind != .sqlite || model.schemas.count > 1 {
-                picker(model.schemas, selected: model.selectedSchema,
-                       icon: model.config.kind.schemaNoun == "Database" ? "cylinder" : "folder",
-                       help: model.config.kind.schemaNoun) { schema in
+                picker(
+                    model.schemas,
+                    selected: model.selectedSchema,
+                    icon: model.config.kind.schemaNoun == "Database" ? "cylinder" : "folder",
+                    help: model.config.kind.schemaNoun
+                ) { schema in
                     Task { await model.selectSchema(schema) }
                 }
             }
@@ -148,8 +185,13 @@ struct SidebarView: View {
         .padding(.vertical, Layout.Sidebar.pickerPadding)
     }
 
-    private func picker(_ items: [String], selected: String, icon: String, help: String,
-                        choose: @escaping (String) -> Void) -> some View {
+    private func picker(
+        _ items: [String],
+        selected: String,
+        icon: String,
+        help: String,
+        choose: @escaping (String) -> Void
+    ) -> some View {
         Menu {
             ForEach(items, id: \.self) { item in
                 Button {
@@ -180,7 +222,9 @@ struct SidebarView: View {
     /// own, so the count beside it doesn't move.
     private func groupHeader(_ group: Group, title: String, count: Int) -> some View {
         let open = isExpanded(group)
-        return Button { toggle(group) } label: {
+        return Button {
+            toggle(group)
+        } label: {
             HStack {
                 Text(title)
                 Spacer()
@@ -218,29 +262,33 @@ struct SidebarView: View {
                 .foregroundStyle(table.kind == .view ? Color.purple : Color.accentColor)
         }
         .tag(SidebarItem.table(table))
-            .contextMenu {
-                Button("Open Data") { model.open(table, mode: .data) }
-                Button("Open Structure") { model.open(table, mode: .structure) }
-                Button("New Query") {
-                    model.newQueryTab(sql: model.driver?.dialect.selectSample(table, limit: Defaults.sampleQueryLimit) ?? "")
-                }
-                Divider()
-                Button("Copy Name") {
-                    Clipboard.copy(table.name)
-                }
-                if table.kind == .table, model.supportsDumps {
-                    Button("Dump Table…") { model.startDump(tables: [table]) }
-                }
-                Divider()
-                if table.kind == .table {
-                    Button("\(model.config.kind.truncateTitle)…", role: .destructive) { pendingAction = PendingAction(kind: .truncate, table: table) }
-                }
-                Button("Drop…", role: .destructive) { pendingAction = PendingAction(kind: .drop, table: table) }
-                if table.kind == .table, model.config.kind.supportsRoutines {
-                    Divider()
-                    Button("New Trigger on \(table.name)…") { model.newRoutine(.trigger, table: table.name) }
+        .contextMenu {
+            Button("Open Data") { model.open(table, mode: .data) }
+            Button("Open Structure") { model.open(table, mode: .structure) }
+            Button("New Query") {
+                model.newQueryTab(
+                    sql: model.driver?.dialect.selectSample(table, limit: Defaults.sampleQueryLimit) ?? ""
+                )
+            }
+            Divider()
+            Button("Copy Name") {
+                Clipboard.copy(table.name)
+            }
+            if table.kind == .table, model.supportsDumps {
+                Button("Dump Table…") { model.startDump(tables: [table]) }
+            }
+            Divider()
+            if table.kind == .table {
+                Button("\(model.config.kind.truncateTitle)…", role: .destructive) {
+                    pendingAction = PendingAction(kind: .truncate, table: table)
                 }
             }
+            Button("Drop…", role: .destructive) { pendingAction = PendingAction(kind: .drop, table: table) }
+            if table.kind == .table, model.config.kind.supportsRoutines {
+                Divider()
+                Button("New Trigger on \(table.name)…") { model.newRoutine(.trigger, table: table.name) }
+            }
+        }
     }
 
     private func routineRow(_ routine: RoutineInfo) -> some View {
@@ -272,19 +320,27 @@ struct SidebarView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .focused($filterFocused)
-                    .onExitCommand { model.tableSearch = ""; filterFocused = false }
+                    .onExitCommand {
+                        model.tableSearch = ""
+                        filterFocused = false
+                    }
                     .onSubmit {
                         // Return in the filter opens the first match.
                         if let first = model.filteredTables.first { model.open(first) }
                     }
                 if model.loadingTables { ProgressView().controlSize(.mini) }
                 if let error = model.tablesError {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.system(size: 11)).help(error)
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.system(size: 11))
+                        .help(error)
                 }
-                Button { Task { await model.loadTables() } } label: { Image(systemName: "arrow.clockwise").font(.system(size: 11)) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .help("Reload \(model.config.kind.tablesTitle.lowercased())")
+                Button {
+                    Task { await model.loadTables() }
+                } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Reload \(model.config.kind.tablesTitle.lowercased())")
             }
             .padding(.horizontal, 10)
             .frame(height: 28)

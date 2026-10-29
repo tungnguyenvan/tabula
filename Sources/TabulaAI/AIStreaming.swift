@@ -89,7 +89,8 @@ struct ThinkTagSplitter {
                     state = .text
                     trimLeading = true
                 } else {
-                    let keep = (1..<Self.close.count).reversed().first { buffer.hasSuffix(String(Self.close.prefix($0))) } ?? 0
+                    let keep =
+                        (1..<Self.close.count).reversed().first { buffer.hasSuffix(String(Self.close.prefix($0))) } ?? 0
                     let reasoning = String(buffer.dropLast(keep))
                     if !reasoning.isEmpty { events.append(.thinking(reasoning)) }
                     buffer = String(buffer.suffix(keep))
@@ -137,7 +138,11 @@ final class ThinkTagStream: @unchecked Sendable {
 /// Server-sent events: the `data:` payload of each event, as lines arrive.
 enum ServerSentEvents {
     /// Sends `request` and calls `handle` with each `data:` payload. A non-200 answer is thrown with its body.
-    static func stream(_ request: URLRequest, describeError: (Data) -> String, handle: (String) throws -> Void) async throws {
+    static func stream(
+        _ request: URLRequest,
+        describeError: (Data) -> String,
+        handle: (String) throws -> Void
+    ) async throws {
         let (bytes, response) = try await URLSession.shared.bytes(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             var body = Data()

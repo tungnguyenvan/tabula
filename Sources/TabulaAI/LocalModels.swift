@@ -31,24 +31,80 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
 
     /// Light models offered for download, smallest first. Sizes and hashes are those Hugging Face publishes.
     public static let catalog: [LocalModel] = [
-        hf("Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF", "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf", "Qwen2.5 Coder 0.5B",
-           "Fastest. Good for suggestions while typing.", 491_400_064, "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32", typing: true),
-        hf("bartowski/Llama-3.2-1B-Instruct-GGUF", "Llama-3.2-1B-Instruct-Q4_K_M.gguf", "Llama 3.2 1B",
-           "Fast general model (Llama 3.2 Community License).", 807_694_464, "6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83", typing: true),
-        hf("Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF", "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf", "Qwen2.5 Coder 1.5B",
-           "Fast suggestions that know SQL better.", 1_117_320_768, "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046", typing: true),
-        hf("bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "Llama 3.2 3B",
-           "Writes whole queries; general knowledge (Llama 3.2 Community License).", 2_019_377_696, "6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff", typing: false),
-        hf("Qwen/Qwen2.5-Coder-3B-Instruct-GGUF", "qwen2.5-coder-3b-instruct-q4_k_m.gguf", "Qwen2.5 Coder 3B",
-           "Writes whole queries well on most Macs.", 2_104_932_800, "724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7", typing: false),
-        hf("Qwen/Qwen2.5-Coder-7B-Instruct-GGUF", "qwen2.5-coder-7b-instruct-q4_k_m.gguf", "Qwen2.5 Coder 7B",
-           "Best local queries; 16 GB of memory recommended.", 4_683_073_536, "509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c", typing: false),
+        hf(
+            "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+            "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+            "Qwen2.5 Coder 0.5B",
+            "Fastest. Good for suggestions while typing.",
+            491_400_064,
+            "1d9614638d18024d0fbb36575a15f1302a3adf044df10345688ec4f6e1c4ff32",
+            typing: true
+        ),
+        hf(
+            "bartowski/Llama-3.2-1B-Instruct-GGUF",
+            "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+            "Llama 3.2 1B",
+            "Fast general model (Llama 3.2 Community License).",
+            807_694_464,
+            "6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83",
+            typing: true
+        ),
+        hf(
+            "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+            "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+            "Qwen2.5 Coder 1.5B",
+            "Fast suggestions that know SQL better.",
+            1_117_320_768,
+            "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046",
+            typing: true
+        ),
+        hf(
+            "bartowski/Llama-3.2-3B-Instruct-GGUF",
+            "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+            "Llama 3.2 3B",
+            "Writes whole queries; general knowledge (Llama 3.2 Community License).",
+            2_019_377_696,
+            "6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff",
+            typing: false
+        ),
+        hf(
+            "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF",
+            "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+            "Qwen2.5 Coder 3B",
+            "Writes whole queries well on most Macs.",
+            2_104_932_800,
+            "724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7",
+            typing: false
+        ),
+        hf(
+            "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+            "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+            "Qwen2.5 Coder 7B",
+            "Best local queries; 16 GB of memory recommended.",
+            4_683_073_536,
+            "509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c",
+            typing: false
+        ),
     ]
 
-    private static func hf(_ repo: String, _ file: String, _ name: String, _ summary: String, _ size: Int64,
-                           _ sha256: String, typing: Bool) -> LocalModel {
-        LocalModel(id: file, name: name, summary: summary, url: URL(string: "https://huggingface.co/\(repo)/resolve/main/\(file)"),
-                   size: size, sha256: sha256, forTyping: typing)
+    private static func hf(
+        _ repo: String,
+        _ file: String,
+        _ name: String,
+        _ summary: String,
+        _ size: Int64,
+        _ sha256: String,
+        typing: Bool
+    ) -> LocalModel {
+        LocalModel(
+            id: file,
+            name: name,
+            summary: summary,
+            url: URL(string: "https://huggingface.co/\(repo)/resolve/main/\(file)"),
+            size: size,
+            sha256: sha256,
+            forTyping: typing
+        )
     }
 }
 
@@ -57,7 +113,9 @@ public struct LocalModelStore: Sendable {
     public let directory: URL
 
     public init(directory: URL? = nil) {
-        self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        self.directory =
+            directory
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Tabula/Models", isDirectory: true)
     }
 
@@ -65,7 +123,9 @@ public struct LocalModelStore: Sendable {
 
     /// Model files present, with their sizes.
     public func installed() -> [(id: String, size: Int64)] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        let files =
+            (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey]))
+            ?? []
         return files.filter { $0.pathExtension.lowercased() == "gguf" }
             .map { ($0.lastPathComponent, Int64((try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)) }
             .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
@@ -99,8 +159,18 @@ public struct LocalModelStore: Sendable {
     /// A model from any link (e.g. a Hugging Face "resolve" URL to a .gguf file).
     public func model(from link: URL) throws -> LocalModel {
         let name = link.lastPathComponent
-        guard name.lowercased().hasSuffix(".gguf") else { throw AIError.notConfigured("The link must point to a .gguf file.") }
-        return LocalModel(id: name, name: name, summary: link.host ?? "", url: link, size: 0, sha256: nil, forTyping: false)
+        guard name.lowercased().hasSuffix(".gguf") else {
+            throw AIError.notConfigured("The link must point to a .gguf file.")
+        }
+        return LocalModel(
+            id: name,
+            name: name,
+            summary: link.host ?? "",
+            url: link,
+            size: 0,
+            sha256: nil,
+            forTyping: false
+        )
     }
 
     /// Adds a model file from disk. On APFS the copy is a clone, so it takes no extra space.
@@ -147,8 +217,13 @@ private final class DownloadProgress: NSObject, URLSessionDownloadDelegate, @unc
         self.report = report
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
         let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : expected
         guard total > 0 else { return }
         let fraction = min(1, Double(totalBytesWritten) / Double(total))
@@ -158,7 +233,8 @@ private final class DownloadProgress: NSObject, URLSessionDownloadDelegate, @unc
         }
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+    }
 }
 
 /// Runs a model file from the store with llama.cpp, inside the app.
@@ -178,14 +254,22 @@ public struct BuiltInProvider: AIProvider {
         }
         let path = store.path(for: endpoint.model).path
         if request.purpose == .inline, let fill = request.fill,
-           let completion = try await LocalModelRunner.shared.fill(path: path, prefix: fill.prefix, suffix: fill.suffix,
-                                                                   maxTokens: Defaults.AI.localInlineTokens) {
+            let completion = try await LocalModelRunner.shared.fill(
+                path: path,
+                prefix: fill.prefix,
+                suffix: fill.suffix,
+                maxTokens: Defaults.AI.localInlineTokens
+            )
+        {
             return completion
         }
         return try await LocalModelRunner.shared.generate(
-            path: path, instructions: request.instructions, prompt: request.prompt,
+            path: path,
+            instructions: request.instructions,
+            prompt: request.prompt,
             maxTokens: request.purpose == .inline ? Defaults.AI.localInlineTokens : Defaults.AI.localGenerateTokens,
-            stopAtNewline: request.purpose == .inline)
+            stopAtNewline: request.purpose == .inline
+        )
     }
 
     /// Tokens as the model writes them; models that reason in <think> tags (Qwen3, DeepSeek-R1) show it as thinking.
@@ -194,14 +278,20 @@ public struct BuiltInProvider: AIProvider {
             return AIStream.run { continuation in continuation.yield(.text(try await complete(request))) }
         }
         return AIStream.run { continuation in
-            guard !endpoint.model.isEmpty else { throw AIError.notConfigured("Download or add a model in Settings › AI.") }
+            guard !endpoint.model.isEmpty else {
+                throw AIError.notConfigured("Download or add a model in Settings › AI.")
+            }
             guard store.isInstalled(endpoint.model) else {
                 throw AIError.notConfigured("\(endpoint.model) isn't downloaded yet. Download it in Settings › AI.")
             }
             let splitter = ThinkTagStream(continuation)
             _ = try await LocalModelRunner.shared.generate(
-                path: store.path(for: endpoint.model).path, instructions: request.instructions, prompt: request.prompt,
-                maxTokens: Defaults.AI.localGenerateTokens, onText: { splitter.feed($0) })
+                path: store.path(for: endpoint.model).path,
+                instructions: request.instructions,
+                prompt: request.prompt,
+                maxTokens: Defaults.AI.localGenerateTokens,
+                onText: { splitter.feed($0) }
+            )
             splitter.finish()
         }
     }

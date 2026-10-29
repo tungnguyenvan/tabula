@@ -9,7 +9,10 @@ final class AppState {
     /// TABULA_DATA_DIR points the app at a separate store (used for testing).
     let store: ConnectionStore = {
         guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else { return ConnectionStore() }
-        return ConnectionStore(directory: URL(fileURLWithPath: directory), keychainService: "app.tabula.connections.test")
+        return ConnectionStore(
+            directory: URL(fileURLWithPath: directory),
+            keychainService: "app.tabula.connections.test"
+        )
     }()
     /// Saved AI conversations, next to the connections (in TABULA_DATA_DIR when that is set).
     nonisolated static let chatStore: ChatStore = {
@@ -40,7 +43,8 @@ final class AppState {
     /// With TABULA_DATA_DIR, debug builds read passwords from passwords.json there, so test runs never touch the Keychain.
     static let testPasswords: [String: String]? = {
         guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"],
-              let data = try? Data(contentsOf: URL(fileURLWithPath: directory).appendingPathComponent("passwords.json")) else { return nil }
+            let data = try? Data(contentsOf: URL(fileURLWithPath: directory).appendingPathComponent("passwords.json"))
+        else { return nil }
         return try? JSONDecoder().decode([String: String].self, from: data)
     }()
     #endif
