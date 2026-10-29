@@ -449,17 +449,38 @@ final class TableTabModel {
     /// Copies the selected rows into new rows, leaving primary-key columns to their defaults.
     func duplicateRows(_ indices: IndexSet) {
         guard canInsert, !indices.isEmpty else { return }
-        registerUndo("Duplicate Rows")
         let keyNames = Set(columns.filter(\.isPrimaryKey).map(\.name))
+        var copies: [[Int: String?]] = []
         for row in indices.sorted() where row < displayRowCount {
             var copy: [Int: String?] = [:]
-            for column in resultColumns.indices where !keyNames.contains(resultColumns[column]) {
-                switch cell(row: row, column: column) {
-                case .value(let text): copy[column] = .some(text)
-                case .null: copy[column] = .some(nil)
-                case .defaultValue: break
+            if let documents, row < rows.count {
+                // MongoDB: from the stored document, so decimals, dates and longs stay what they are; the row's
+                // pending edits go on top.
+                do {
+                    copy = try MongoChanges.cellsForCopy(of: documents[row], columns: resultColumns)
+                } catch {
+                    self.error = "Row \(row + 1) couldn't be copied: \(error.localizedDescription)"
+                    return
+                }
+                for (column, value) in changes.edits[row] ?? [:] {
+                    copy[column] = .some(value)
+                }
+            } else {
+                for column in resultColumns.indices {
+                    switch cell(row: row, column: column) {
+                    case .value(let text): copy[column] = .some(text)
+                    case .null: copy[column] = .some(nil)
+                    case .defaultValue: break
+                    }
                 }
             }
+            for column in resultColumns.indices where keyNames.contains(resultColumns[column]) {
+                copy[column] = nil
+            }
+            copies.append(copy)
+        }
+        registerUndo("Duplicate Rows")
+        for copy in copies {
             changes.appendRow(copy)
         }
         version += 1
@@ -568,9 +589,16 @@ final class TableTabModel {
     // MARK: Export
 
     func exportText(_ format: ExportFormat) throws -> String {
-        try ResultExporter.export(
+        // MongoDB INSERTs are written from the documents, so every value keeps its type.
+        let exported =
+            if format == .sqlInsert, let documents {
+                try MongoChanges.rowsForCopy(of: documents, columns: resultColumns)
+            } else {
+                rows
+            }
+        return try ResultExporter.export(
             columns: resultColumns,
-            rows: rows,
+            rows: exported,
             format: format,
             table: table,
             binaryColumns: binaryColumns,
