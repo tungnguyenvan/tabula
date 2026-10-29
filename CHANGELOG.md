@@ -41,6 +41,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **MySQL: a query that returns no rows still shows its columns**, instead of an empty grid without headers ([#152](https://github.com/tungnguyenvan/tabula/issues/152)).
 - An update download that fails its checks, or is cancelled, no longer leaves the archive and the app it held in the temporary folder.
 - The command palette (⌘P) ranks a table whose name has the typed text at a word start higher: “ord” puts `work_order_lines` ahead of `coordinates`.
+- Pasting a connection string for another port on the same host no longer keeps the saved password, so it isn't sent to a different server ([#162](https://github.com/tungnguyenvan/tabula/issues/162)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 
