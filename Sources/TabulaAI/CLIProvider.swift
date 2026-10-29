@@ -44,6 +44,7 @@ public struct CLIProvider: AIProvider {
     }
 
     private static func search(_ tool: Tool) async -> String? {
+        // A shell that can't run falls back to the usual install locations below.
         if let output = try? await ShellCommand.run(
             script: #"command -v "$0""#,
             arguments: [tool.rawValue],

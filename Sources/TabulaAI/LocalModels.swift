@@ -153,6 +153,7 @@ public struct LocalModelStore: Sendable {
             }
         }
         let target = path(for: model.id)
+        // Nothing to replace the first time; a real problem shows in moveItem below.
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: temporary, to: target)
     }

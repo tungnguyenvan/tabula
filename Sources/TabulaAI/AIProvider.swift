@@ -208,6 +208,7 @@ public struct AISettings: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        // A provider this build no longer has falls back to the default; the other settings are kept.
         provider = (try? c.decodeIfPresent(AIProviderKind.self, forKey: .provider)) ?? .appleIntelligence
         inlineSuggestions = try c.decodeIfPresent(Bool.self, forKey: .inlineSuggestions) ?? true
         inlineProvider = try? c.decodeIfPresent(AIProviderKind.self, forKey: .inlineProvider)

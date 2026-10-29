@@ -127,6 +127,7 @@ public enum DatabaseDump {
     static func candidateDirectories(for tool: Tool) -> [String] {
         let fm = FileManager.default
         func versions(_ parent: String, prefix: String, suffix: String = "/bin") -> [String] {
+            // Install folders that don't exist have no tools; required() reports a tool found nowhere.
             ((try? fm.contentsOfDirectory(atPath: parent)) ?? [])
                 .filter { $0.hasPrefix(prefix) }
                 .sorted { $0.compare($1, options: .numeric) == .orderedDescending }
@@ -157,6 +158,7 @@ public enum DatabaseDump {
         var paths: [String] = []
         for name in [tool.rawValue] + tool.alternatives {
             paths += candidateDirectories(for: tool).map { "\($0)/\(name)" }
+            // Not on the shell's PATH: the install folders above are searched.
             if let output = try? await ShellCommand.run(script: #"command -v "$0""#, arguments: [name], timeout: 10),
                 let path = output.stdout.split(whereSeparator: \.isNewline).last.map(String.init), path.hasPrefix("/")
             {
@@ -177,6 +179,7 @@ public enum DatabaseDump {
     }
 
     static func describe(_ path: String) async -> Located? {
+        // A tool that can't report its version is skipped in favour of one that can.
         guard let result = try? await run(path, ["--version"], environment: [:], timeout: 10), result.status == 0 else {
             return nil
         }

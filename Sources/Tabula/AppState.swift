@@ -56,6 +56,7 @@ final class AppState {
         guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"],
             let data = try? Data(contentsOf: URL(fileURLWithPath: directory).appendingPathComponent("passwords.json"))
         else { return nil }
+        // Debug test store only: without passwords.json the Keychain is used.
         return try? JSONDecoder().decode([String: String].self, from: data)
     }()
     #endif

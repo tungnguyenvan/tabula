@@ -455,6 +455,7 @@ struct QueryTabView: View {
                 kind: kind,
                 instructions: AIService.shared.settings.instructions(.inline)
             )
+            // Suggestions while typing are best effort: a failed request shows no grey text.
             guard let reply = try? await AIService.shared.complete(request) else { return nil }
             let continuation = SQLPrompts.cleanContinuation(reply, before: before)
             return continuation.isEmpty ? nil : continuation

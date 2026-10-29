@@ -347,6 +347,7 @@ final class AIChatModel {
                     continuation.finish()
                 }
             }
+            // A made-up demo stream (debug builds) that can't fail.
             try? await receive(stream, into: reply.id)
         }
     }

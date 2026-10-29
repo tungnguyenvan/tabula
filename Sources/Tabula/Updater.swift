@@ -128,6 +128,7 @@ final class Updater {
         }
         if bundle.path.contains("/AppTranslocation/") { return .failure(.translocated) }
         if bundle.path.hasPrefix("/Volumes/") {
+            // Unknown: the check for a writable location below decides.
             let values = try? bundle.resourceValues(forKeys: [.volumeIsReadOnlyKey])
             if values?.volumeIsReadOnly == true {
                 return .failure(.readOnlyVolume)

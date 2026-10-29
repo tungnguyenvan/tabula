@@ -365,6 +365,7 @@ final class WorkspaceModel {
         defer { choosingRestore = false }
         var major: Int?
         if config.kind == .postgres,
+            // Unknown version: counted as older (RestoreOptions.serverHasTransactionTimeout), which works on every server.
             let text = try? await driver.execute("SHOW server_version_num").rows.first?.first ?? nil
         {
             major = Int(text).map { $0 / 10000 }

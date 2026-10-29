@@ -435,5 +435,10 @@ for section in sections {
 }
 print("\n" + report)
 if let output = environment["TABULA_BENCH_OUTPUT"] {
-    try? report.write(toFile: output, atomically: true, encoding: .utf8)
+    do {
+        try report.write(toFile: output, atomically: true, encoding: .utf8)
+    } catch {
+        // The report is printed above; only the copy in a file is missing.
+        FileHandle.standardError.write(Data("Couldn't write \(output): \(error.localizedDescription)\n".utf8))
+    }
 }

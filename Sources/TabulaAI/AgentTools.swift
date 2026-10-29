@@ -238,6 +238,7 @@ public struct AgentToolbox: Sendable {
             }
             lines.append(line)
         }
+        // Indexes and foreign keys are extra detail for the model; the columns above are what it needs.
         let indexes = (try? await driver.indexes(of: table)) ?? []
         if !indexes.isEmpty {
             lines.append("Indexes:")

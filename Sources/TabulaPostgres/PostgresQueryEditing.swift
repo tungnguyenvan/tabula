@@ -162,6 +162,7 @@ extension PostgresDriver {
             _ = try await execute("COMMIT")
             return returned
         } catch {
+            // The commit's own error is reported; a failed ROLLBACK ends with this connection.
             _ = try? await execute("ROLLBACK")
             throw error
         }

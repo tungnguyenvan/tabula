@@ -23,6 +23,7 @@ final class AIService {
     private init() {
         var loaded =
             UserDefaults.standard.data(forKey: Self.settingsKey)
+            // Settings saved in a format this version can't read start over from the defaults.
             .flatMap { try? JSONDecoder().decode(AISettings.self, from: $0) } ?? AISettings()
         #if DEBUG
         // Applied before the single assignment below: mutating `settings` afterwards, even here in init,
@@ -45,6 +46,7 @@ final class AIService {
     }
 
     private func save() {
+        // AISettings holds plain values, which always encode.
         if let data = try? JSONEncoder().encode(settings) {
             defaults.set(data, forKey: Self.settingsKey)
         }
