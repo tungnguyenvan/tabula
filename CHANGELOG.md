@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-29
+
 ### Added
 - **Dump and restore PostgreSQL and MySQL databases** ([#93](https://github.com/tungnguyenvan/tabula/issues/93)).
   - **File › Dump Database…**, **Dump Table…** in the sidebar, and **File › Restore from Dump…**, with progress and Stop.
@@ -12,6 +14,10 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ### Fixed
 - An SSH tunnel no longer keeps running after Tabula is force-quit or crashes ([#95](https://github.com/tungnguyenvan/tabula/issues/95)).
+- When a MongoDB document change fails after an earlier one was saved, the message now reads "The change before it was saved." instead of "The 1 change before it were saved."
+
+### Changed
+- The code is split into focused modules (connection models, SQL tooling, one module per database, dump and restore, AI, updates), with no change to how the app behaves ([#98](https://github.com/tungnguyenvan/tabula/issues/98)).
 
 ## [0.6.0] - 2026-10-28
 
