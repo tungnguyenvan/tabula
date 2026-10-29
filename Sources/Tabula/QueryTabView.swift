@@ -8,6 +8,13 @@ struct QueryTabView: View {
     let workspace: WorkspaceModel
     @State private var handle = EditorHandle()
     @State private var selection = IndexSet()
+    /// The SQL being saved to the library, while the sheet asks for its keyword.
+    @State private var librarySQL: LibrarySQL?
+
+    struct LibrarySQL: Identifiable {
+        let id = UUID()
+        let text: String
+    }
 
     var body: some View {
         VerticalSplit(
@@ -31,6 +38,7 @@ struct QueryTabView: View {
                     aiSuggest: aiSuggest,
                     aiSuggestDelay: AIService.shared.settings.provider(for: .inline).runsLocally
                         ? Defaults.AI.localInlineDelay : Defaults.AI.inlineDelay,
+                    savedQueries: QueryLibraryModel.shared.queries,
                     completionVersion: workspace.completionVersion,
                     undoManager: model.undoManager,
                     onRun: { all in run(all: all) },
@@ -52,6 +60,16 @@ struct QueryTabView: View {
             model.assistant.showPrompt = true
         }
         .onChange(of: model.assistant.submitRequest) { _, _ in askAI() }
+        .onChange(of: model.saveToLibraryRequest) { _, _ in
+            // The selection when there is one, as Run does; otherwise the whole editor.
+            let sql = handle.selectedText ?? model.sql
+            if !sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                librarySQL = LibrarySQL(text: sql)
+            }
+        }
+        .sheet(item: $librarySQL) { item in
+            SaveToLibrarySheet(sql: item.text) { librarySQL = nil }
+        }
         .onChange(of: model.insertRequest?.id) { _, _ in
             if let sql = model.insertRequest?.sql {
                 handle.insertReplacingSelection(sql)

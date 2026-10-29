@@ -4,6 +4,13 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **A library of saved queries** ([#94](https://github.com/tungnguyenvan/tabula/issues/94)).
+  - **Query › Save to Library…** (⌥⌘S) saves the selection, or the whole editor, under a keyword and an optional folder. Each query is a `.sql` file in `~/Library/Application Support/Tabula/Queries`, so you can also add and arrange them in Finder; subfolders are groups.
+  - **View › Saved Queries** (⌥⌘L) opens the Queries panel: search by keyword, folder or SQL (accents ignored, “đ” matching “d”), double-click to insert at the caret, or Open to edit the file.
+  - Type a keyword in the editor and press ⌃Space: the saved query is in the completion list, and choosing it inserts its SQL.
+  - The AI chat can search the library too (`search_saved_queries`), so “find my revenue query” works.
+
 ## [0.9.0] - 2026-10-29
 
 ### Added

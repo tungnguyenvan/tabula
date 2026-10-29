@@ -131,6 +131,9 @@ struct SQLEditorView: NSViewRepresentable {
     var aiSuggest: AISuggest?
     /// Pause before asking: short for models on this Mac, longer for remote ones.
     var aiSuggestDelay: Double = Defaults.AI.inlineDelay
+    /// Saved queries (#94): typing a keyword offers its query in the completion list (⌃Space), and choosing it
+    /// inserts the SQL.
+    var savedQueries: [SavedQuery] = []
     /// Changes when completion has learned new names; the editor then refreshes its suggestion.
     var completionVersion = 0
     /// Each query tab keeps its own undo history.
@@ -222,14 +225,29 @@ struct SQLEditorView: NSViewRepresentable {
             (notification.object as? SQLTextView)?.dropInlineSuggestionIfMoved()
         }
 
-        /// The native completion list (⎋, ⌃Space).
+        /// The native completion list (⎋, ⌃Space): names and keywords, then saved queries whose keyword starts
+        /// with the word typed.
         func textView(
             _ textView: NSTextView,
             completions words: [String],
             forPartialWordRange charRange: NSRange,
             indexOfSelectedItem index: UnsafeMutablePointer<Int>?
         ) -> [String] {
-            parent.suggest(textView.string, NSMaxRange(charRange)).items
+            let names = parent.suggest(textView.string, NSMaxRange(charRange)).items
+            let partial = (textView.string as NSString).substring(with: charRange)
+            let saved = parent.savedQueries.filter { query in
+                query.keyword.range(of: partial, options: [.caseInsensitive, .anchored]) != nil
+            }
+            return names + saved.map(Self.label)
+        }
+
+        /// How a saved query reads in the completion list; never a name the database could have.
+        static func label(_ query: SavedQuery) -> String {
+            "\(query.keyword) — saved query"
+        }
+
+        func savedQuery(labelled label: String) -> SavedQuery? {
+            parent.savedQueries.first { Self.label($0) == label }
         }
     }
 }
@@ -372,6 +390,20 @@ final class SQLTextView: NSTextView {
     /// is empty right after a dot (NSTextView's default would take the whole `alias.` text).
     override var rangeForUserCompletion: NSRange {
         coordinator?.parent.suggest(string, selectedRange().location).range ?? super.rangeForUserCompletion
+    }
+
+    /// A saved query shows as its keyword while the list is browsed, and becomes its SQL once chosen.
+    override func insertCompletion(
+        _ word: String,
+        forPartialWordRange charRange: NSRange,
+        movement: Int,
+        isFinal flag: Bool
+    ) {
+        guard let saved = coordinator?.savedQuery(labelled: word) else {
+            return super.insertCompletion(word, forPartialWordRange: charRange, movement: movement, isFinal: flag)
+        }
+        let text = flag ? saved.sql : saved.keyword
+        super.insertCompletion(text, forPartialWordRange: charRange, movement: movement, isFinal: flag)
     }
 
     override func complete(_ sender: Any?) {

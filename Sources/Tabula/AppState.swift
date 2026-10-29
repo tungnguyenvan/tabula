@@ -23,6 +23,13 @@ final class AppState {
         }
         return ChatStore(base: URL(fileURLWithPath: directory))
     }()
+    /// The saved query library, next to the connections (in TABULA_DATA_DIR when that is set).
+    nonisolated static let queryLibrary: QueryLibrary = {
+        guard let directory = ProcessInfo.processInfo.environment["TABULA_DATA_DIR"] else {
+            return QueryLibrary()
+        }
+        return QueryLibrary(base: URL(fileURLWithPath: directory))
+    }()
     private(set) var connections: [ConnectionConfig] = []
     var lastError: String?
     /// Keychain calls run here, in order, and off the main thread: macOS may block them while it asks

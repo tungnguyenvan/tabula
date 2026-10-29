@@ -373,6 +373,9 @@ struct WorkspaceCommands: Commands {
             Button("Row Details") { workspace?.toggleRightPanel(.rowDetails) }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(noWorkspace)
+            Button("Saved Queries") { workspace?.toggleRightPanel(.queries) }
+                .keyboardShortcut("l", modifiers: [.command, .option])
+                .disabled(noWorkspace)
             Divider()
             Button("Show Next Tab") { workspace?.selectAdjacentTab(1) }
                 .keyboardShortcut("]", modifiers: [.command, .shift])
@@ -479,6 +482,10 @@ struct WorkspaceCommands: Commands {
             Button("Ask AI…") { query?.askAIRequest += 1 }
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(noWorkspace)
+            Divider()
+            Button("Save to Library…") { query?.saveToLibraryRequest += 1 }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+                .disabled(query == nil)
         }
 
         CommandGroup(replacing: .appInfo) {
