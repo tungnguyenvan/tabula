@@ -259,7 +259,19 @@ enum MongoDialect {
         func literal(_ item: Primitive) -> Document { ["$literal": item] }
         func expression(_ body: Document) -> Document { ["$expr": body] }
         func isAny(_ items: [Primitive]) -> Document {
-            ["$in": MongoDriver.array([value, MongoDriver.array(items.map(literal))])]
+            let candidates = MongoDriver.array(items.map(literal))
+            // As a query matches an array: the whole value, or any of its elements.
+            let wholeValue: Document = ["$in": MongoDriver.array([value, candidates])]
+            let elements: Document = [
+                "$cond": MongoDriver.array([["$isArray": value] as Document, value, MongoDriver.array([])])
+            ]
+            let anyElement: Document = [
+                "$gt": MongoDriver.array([
+                    ["$size": ["$setIntersection": MongoDriver.array([elements, candidates])] as Document] as Document,
+                    0,
+                ])
+            ]
+            return ["$or": MongoDriver.array([wholeValue, anyElement])]
         }
         // A query reads a missing field as null too.
         let orNull: Document = ["$ifNull": MongoDriver.array([value, Null()])]
