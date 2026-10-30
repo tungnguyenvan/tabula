@@ -712,6 +712,23 @@ final class MongoCompletionTests: XCTestCase {
         XCTAssertTrue(items("// old\ndb.|").contains("users"), "a comment on an earlier line has ended")
         XCTAssertTrue(items("db.users.find({ /* note */ n|").starts(with: ["name", "nickname"]))
         XCTAssertTrue(items("db[\"odd.name\"].f|").starts(with: ["find", "findOne"]))
+        // A regex ending in \/ is a regex, not a // comment, so completion goes on after it (#273).
+        XCTAssertTrue(items(#"db.users.find({ u: /https?:\/\// }).|"#).contains("sort"))
+    }
+
+    /// The shell lexer reads regex literals where a value can start, and division and comments elsewhere (#273).
+    func testRegexLiteralsAreStrings() {
+        func kinds(_ text: String) -> [String] {
+            SQLLexer.tokens(text, rules: MongoQueryDialect().lexicalRules)
+                .filter { $0.kind == .comment || $0.kind == .string }
+                .map { "\($0.kind == .comment ? "comment" : "string") \($0.text)" }
+        }
+        XCTAssertEqual(kinds(#"db.t.find({ u: /https?:\/\// }); db.t.find({})"#), [#"string /https?:\/\//"#])
+        XCTAssertEqual(kinds("db.t.find({ u: /a[/]b/i, n: 4 / 2 })"), ["string /a[/]b/i"])
+        XCTAssertEqual(
+            kinds("db.t.find({ a: [/x/, /y/g] }) // note"),
+            ["string /x/", "string /y/g", "comment // note"]
+        )
     }
 }
 

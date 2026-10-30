@@ -20,7 +20,8 @@ public struct MongoQueryDialect: QueryDialect {
             escapeStrings: false,
             doubledQuotes: false,
             dollarQuotes: false,
-            quotedIdentifiers: false
+            quotedIdentifiers: false,
+            regexLiterals: true
         )
     }
 
