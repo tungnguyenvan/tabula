@@ -29,6 +29,25 @@ final class AgentProtocolTests: XCTestCase {
         XCTAssertNil(AgentProtocol.call(in: "```tool\nnot json\n```"))
     }
 
+    /// A query may hold ``` itself; a block Tabula can't read stays visible; the fence's case doesn't matter (#252).
+    func testFencesInsideAndAroundTheRequest() {
+        let inside = "Here:\n```tool\n{\"tool\": \"run_query\", \"query\": \"SELECT '```' AS x\"}\n```"
+        XCTAssertEqual(AgentProtocol.call(in: inside), AgentToolCall(tool: .runQuery, query: "SELECT '```' AS x"))
+        XCTAssertEqual(AgentProtocol.visibleText(inside), "Here:")
+        let unreadable = "Let me look.\n```tool\n{tool: \"list_tables\"}\n```"
+        XCTAssertNil(AgentProtocol.call(in: unreadable))
+        XCTAssertEqual(AgentProtocol.visibleText(unreadable), unreadable, "nothing ran, so nothing is hidden")
+        let upper = "```TOOL\n{\"tool\": \"list_tables\"}\n```"
+        XCTAssertEqual(AgentProtocol.call(in: upper), AgentToolCall(tool: .listTables))
+        XCTAssertEqual(AgentProtocol.visibleText(upper), "")
+        XCTAssertEqual(AgentProtocol.streamingText("Checking\n```To"), "Checking\n")
+        // Unclosed, as when the reply stops at the token limit.
+        XCTAssertEqual(
+            AgentProtocol.call(in: "```tool\n{\"tool\": \"list_tables\"}"),
+            AgentToolCall(tool: .listTables)
+        )
+    }
+
     func testStreamingTextHoldsBackAToolFence() {
         XCTAssertEqual(AgentProtocol.streamingText("Checking`"), "Checking")
         XCTAssertEqual(AgentProtocol.streamingText("Checking\n```to"), "Checking\n")
