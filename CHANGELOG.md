@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+- **Pasting one column goes into the selected column**: values copied from a single spreadsheet column went into the table's first column (usually `id`) and the commit failed; a one-column header is read as a header too ([#281](https://github.com/tungnguyenvan/tabula/issues/281)).
+
 ## [0.12.0] - 2026-10-30
 
 ### Added
