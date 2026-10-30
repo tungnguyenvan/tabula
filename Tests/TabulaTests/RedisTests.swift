@@ -57,6 +57,11 @@ final class RedisCommandLineTests: XCTestCase {
     func testTTLParsing() throws {
         XCTAssertEqual(try RedisTTL.parse("3600"), 3600)
         XCTAssertEqual(try RedisTTL.parse("1h 30m"), 5400)
+        // Too long to fit: an error, where the arithmetic used to overflow and stop the app.
+        for text in ["9999999999999999w", "9223372036854775807", "\(Int.max)s 1s"] {
+            XCTAssertThrowsError(try RedisTTL.parse(text), text)
+        }
+        XCTAssertEqual(try RedisTTL.parse(String(RedisTTL.maxSeconds)), RedisTTL.maxSeconds)
         XCTAssertEqual(try RedisTTL.parse("2d"), 172_800)
         XCTAssertEqual(try RedisTTL.parse("90S"), 90)
         XCTAssertNil(try RedisTTL.parse(""))
