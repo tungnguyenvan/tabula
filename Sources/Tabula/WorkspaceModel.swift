@@ -767,6 +767,28 @@ final class WorkspaceModel {
         selectedTabID = tabs[(current + offset + tabs.count) % tabs.count].id
     }
 
+    /// Puts a tab where another one is (dragged onto it in the tab bar); the others shift over.
+    func moveTab(_ id: UUID, to target: UUID) {
+        guard id != target, let from = tabs.firstIndex(where: { $0.id == id }),
+            let to = tabs.firstIndex(where: { $0.id == target })
+        else { return }
+        let tab = tabs.remove(at: from)
+        tabs.insert(tab, at: to)
+    }
+
+    /// Window › Move Tab Left / Right: the selected tab one place over, not past either end.
+    func moveSelectedTab(by offset: Int) {
+        guard let current = tabs.firstIndex(where: { $0.id == selectedTabID }) else { return }
+        let destination = current + offset
+        guard tabs.indices.contains(destination) else { return }
+        tabs.swapAt(current, destination)
+    }
+
+    func canMoveSelectedTab(by offset: Int) -> Bool {
+        guard let current = tabs.firstIndex(where: { $0.id == selectedTabID }) else { return false }
+        return tabs.indices.contains(current + offset)
+    }
+
     func recordHistory(_ sql: String) {
         history.removeAll { $0 == sql }
         history.insert(sql, at: 0)

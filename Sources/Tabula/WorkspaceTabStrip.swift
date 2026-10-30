@@ -26,9 +26,30 @@ struct TabStrip: View {
                                         for other in model.tabs where other.id != tab.id {
                                             model.requestClose(other.id)
                                         }
+                                    },
+                                    move: { offset in
+                                        model.selectedTabID = tab.id
+                                        model.moveSelectedTab(by: offset)
+                                    },
+                                    canMove: { offset in
+                                        guard let index = model.tabs.firstIndex(where: { $0.id == tab.id }) else {
+                                            return false
+                                        }
+                                        return model.tabs.indices.contains(index + offset)
                                     }
                                 )
                                 .frame(width: width)
+                                // Drag a tab onto another to put it there, as in Safari and Finder.
+                                .draggable(tab.id.uuidString) {
+                                    Label(tab.title, systemImage: "doc").padding(6)
+                                }
+                                .dropDestination(for: String.self) { items, _ in
+                                    guard let id = items.first.flatMap(UUID.init(uuidString:)),
+                                        model.tabs.contains(where: { $0.id == id })
+                                    else { return false }
+                                    withAnimation(.easeOut(duration: 0.15)) { model.moveTab(id, to: tab.id) }
+                                    return true
+                                }
                                 .id(tab.id)
                                 Divider().frame(height: 14)
                             }
@@ -69,6 +90,8 @@ private struct TabButton: View {
     let pin: () -> Void
     let close: () -> Void
     let closeOthers: () -> Void
+    let move: (Int) -> Void
+    let canMove: (Int) -> Bool
     @State private var hovering = false
 
     private var background: Color {
@@ -152,6 +175,11 @@ private struct TabButton: View {
             }
             Button("Close Tab", action: close)
             Button("Close Other Tabs", action: closeOthers)
+            Divider()
+            Button("Move Tab Left") { move(-1) }
+                .disabled(!canMove(-1))
+            Button("Move Tab Right") { move(1) }
+                .disabled(!canMove(1))
         }
     }
 }
