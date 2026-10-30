@@ -13,7 +13,8 @@ public struct ScriptStatement: Equatable, Sendable {
 }
 
 /// Splits a SQL script into statements on top-level semicolons, ignoring semicolons inside quotes, comments,
-/// PostgreSQL dollar-quoted bodies and the BEGIN … END bodies of MySQL and SQLite routines and triggers.
+/// PostgreSQL dollar-quoted and BEGIN ATOMIC bodies, and the BEGIN … END bodies of MySQL and SQLite routines and
+/// triggers.
 public enum SQLSplitter {
     public static func split(_ script: String, flavor: SQLFlavor) -> [String] {
         statements(in: script, flavor: flavor).map(\.text)
@@ -54,9 +55,16 @@ public enum SQLSplitter {
         func note(_ word: String) {
             let word = word.uppercased()
             words.append(word)
-            guard flavor != .postgres, words.first == "CREATE",
-                words.contains(where: { ["TRIGGER", "PROCEDURE", "FUNCTION", "EVENT"].contains($0) })
-            else { return }
+            guard words.first == "CREATE" else {
+                return
+            }
+            if flavor == .postgres {
+                notePostgres(word)
+                return
+            }
+            guard words.contains(where: { ["TRIGGER", "PROCEDURE", "FUNCTION", "EVENT"].contains($0) }) else {
+                return
+            }
             let afterEnd = words.dropLast().last == "END"
             switch word {
             case "BEGIN", "CASE":
@@ -69,6 +77,24 @@ public enum SQLSplitter {
                 if afterEnd {
                     blockDepth += 1
                 }
+            case "END":
+                blockDepth = max(0, blockDepth - 1)
+            default:
+                break
+            }
+        }
+
+        /// PostgreSQL 14's SQL-standard bodies, `BEGIN ATOMIC … END`, hold statements and their CASE … END
+        /// expressions; other bodies are quoted, and BEGIN alone starts a transaction.
+        func notePostgres(_ word: String) {
+            guard words.contains(where: { $0 == "FUNCTION" || $0 == "PROCEDURE" }) else {
+                return
+            }
+            switch word {
+            case "ATOMIC" where words.dropLast().last == "BEGIN":
+                blockDepth += 1
+            case "CASE":
+                blockDepth += 1
             case "END":
                 blockDepth = max(0, blockDepth - 1)
             default:

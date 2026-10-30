@@ -126,6 +126,48 @@ final class RoutineSplittingTests: XCTestCase {
         // Ordinary BEGIN (a transaction) still ends at its semicolon.
         XCTAssertEqual(SQLSplitter.split("BEGIN; UPDATE t SET v = 1; COMMIT;", flavor: .sqlite).count, 3)
     }
+
+    /// PostgreSQL 14's SQL-standard bodies hold their own semicolons, and CASE … END inside them.
+    func testPostgresAtomicBodiesStayWhole() {
+        let script = """
+            CREATE FUNCTION f(n int) RETURNS text LANGUAGE sql
+            BEGIN ATOMIC
+                SELECT CASE WHEN n > 1 THEN 'big' ELSE 'small' END;
+            END;
+            CREATE OR REPLACE PROCEDURE p() LANGUAGE sql BEGIN ATOMIC INSERT INTO t VALUES (1); DELETE FROM u; END;
+            BEGIN; SELECT 1; END;
+            SELECT 3
+            """
+        let statements = SQLSplitter.split(script, flavor: .postgres)
+        XCTAssertEqual(statements.count, 6, statements.joined(separator: "\n---\n"))
+        XCTAssertTrue(statements[0].hasSuffix("END"))
+        XCTAssertTrue(statements[1].hasSuffix("DELETE FROM u; END"))
+        XCTAssertEqual(Array(statements[2...]), ["BEGIN", "SELECT 1", "END", "SELECT 3"])
+    }
+
+    func testAPostgresAtomicFunctionScriptRuns() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_PG_PORT not set")
+        }
+        let driver = try await DriverFactory.connect(
+            ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"),
+            password: "tabula"
+        )
+        let name = "f_" + UUID().uuidString.prefix(8).lowercased()
+        try await runThenClean(driver, cleanup: ["DROP FUNCTION IF EXISTS \(name)(int)"]) {
+            let results = try await driver.executeScript(
+                """
+                CREATE FUNCTION \(name)(n int) RETURNS text LANGUAGE sql
+                BEGIN ATOMIC
+                    SELECT CASE WHEN n > 1 THEN 'big' ELSE 'small' END;
+                END;
+                SELECT \(name)(5), \(name)(0);
+                """
+            )
+            XCTAssertEqual(results.count, 2)
+            XCTAssertEqual(results.last?.rows, [["big", "small"]])
+        }
+    }
 }
 
 final class MySQLDelimiterTests: XCTestCase {
