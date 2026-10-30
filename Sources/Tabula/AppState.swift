@@ -40,11 +40,21 @@ final class AppState {
 
     init() {
         do {
-            connections = try store.load()
+            let loaded = try store.load()
+            connections = loaded.connections
+            if let aside = loaded.setAside {
+                lastError =
+                    "Some saved connections couldn't be read (perhaps saved by a newer Tabula). The file as it was is kept at \(aside.path)."
+            }
         } catch {
+            // Nothing was read and nothing could be copied aside: saving now would erase the file.
             lastError = "Could not read saved connections: \(error.localizedDescription)"
+            readOnly = true
         }
     }
+
+    /// Set when the connections file could be neither read nor copied aside, so a save doesn't replace it.
+    private var readOnly = false
 
     func connection(_ id: UUID?) -> ConnectionConfig? {
         connections.first { $0.id == id }
@@ -130,6 +140,11 @@ final class AppState {
     }
 
     private func persist() {
+        guard !readOnly else {
+            lastError =
+                "Connections aren't saved while the saved file can't be read: \(store.fileURL.path). Move it away and reopen Tabula."
+            return
+        }
         do {
             try store.save(connections)
         } catch {

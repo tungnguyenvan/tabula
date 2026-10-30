@@ -16,9 +16,40 @@ public struct ConnectionStore: Sendable {
         self.keychainService = keychainService
     }
 
-    public func load() throws -> [ConnectionConfig] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
-        return try JSONDecoder().decode([ConnectionConfig].self, from: Data(contentsOf: fileURL))
+    /// The saved connections, and where a copy of the file went when some of it couldn't be read.
+    public struct Loaded: Sendable {
+        public var connections: [ConnectionConfig]
+        public var setAside: URL?
+    }
+
+    /// Reads every connection it can. When the file, or one of its connections, can't be read (damaged, or
+    /// written by a newer Tabula with a kind this one doesn't know), the file is first copied aside: the next
+    /// save writes only what was read, and would otherwise erase the rest.
+    public func load() throws -> Loaded {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return Loaded(connections: [], setAside: nil)
+        }
+        let data = try Data(contentsOf: fileURL)
+        let entries = try? JSONDecoder().decode([LossyConnection].self, from: data)
+        let connections = entries?.compactMap(\.value) ?? []
+        guard entries == nil || connections.count != entries?.count else {
+            return Loaded(connections: connections, setAside: nil)
+        }
+        let folder = fileURL.deletingLastPathComponent()
+        // Until something is saved every launch finds the same file; one copy of it is enough.
+        let earlier = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        if let copy = earlier.first(where: {
+            $0.lastPathComponent.hasPrefix("connections.unreadable-") && (try? Data(contentsOf: $0)) == data
+        }) {
+            return Loaded(connections: connections, setAside: copy)
+        }
+        let aside =
+            folder
+            .appendingPathComponent(
+                "connections.unreadable-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8)).json"
+            )
+        try FileManager.default.copyItem(at: fileURL, to: aside)
+        return Loaded(connections: connections, setAside: aside)
     }
 
     public func save(_ connections: [ConnectionConfig]) throws {
@@ -114,5 +145,14 @@ public struct KeychainError: LocalizedError {
     public var errorDescription: String? {
         let reason = SecCopyErrorMessageString(status, nil) as String? ?? "error \(status)"
         return "Keychain: \(reason)"
+    }
+}
+
+/// One saved connection, or nil when this version can't read it.
+private struct LossyConnection: Decodable {
+    let value: ConnectionConfig?
+
+    init(from decoder: Decoder) throws {
+        value = try? ConnectionConfig(from: decoder)
     }
 }
