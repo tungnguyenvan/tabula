@@ -45,6 +45,14 @@ public enum SQLReadOnlyCheck {
         "PG_REPLICATION_ORIGIN_SESSION_SETUP",
         "SLEEP", "BENCHMARK", "SOURCE_POS_WAIT", "MASTER_POS_WAIT", "WAIT_FOR_EXECUTED_GTID_SET",
         "LOAD_EXTENSION", "FTS3_TOKENIZER",
+        // Index maintenance and WAL records, which a read-only transaction still allows.
+        "BRIN_SUMMARIZE_NEW_VALUES", "BRIN_SUMMARIZE_RANGE", "BRIN_DESUMMARIZE_RANGE", "GIN_CLEAN_PENDING_LIST",
+        "PG_LOG_STANDBY_SNAPSHOT",
+        // PostgreSQL 18's planner statistics and per-backend counters.
+        "PG_RESTORE_RELATION_STATS", "PG_RESTORE_ATTRIBUTE_STATS", "PG_CLEAR_RELATION_STATS",
+        "PG_CLEAR_ATTRIBUTE_STATS", "PG_STAT_RESET_BACKEND_STATS",
+        // Sequences move on whether or not the transaction commits.
+        "NEXTVAL", "SETVAL",
     ]
 
     /// Read or write files on the database server's machine.
@@ -76,6 +84,8 @@ public enum SQLReadOnlyCheck {
         // runs /*! … */ and doesn't take --x as one) and backslashes (escape rules differ by server and setting).
         if tokens.contains(where: { $0.kind == .comment }) { return "Write the statement without comments." }
         if statement.contains("\\") { return "Write the statement without backslashes." }
+        // U&"…" names with their own escape character (PostgreSQL) spell a name without writing it out.
+        if tokens.contains(where: { $0.keyword == "UESCAPE" }) { return "Write names without Unicode escapes." }
         let words = tokens.filter { $0.kind == .word }
         guard let first = words.first?.keyword, firstWords.contains(first) else {
             return "Only SELECT, WITH, EXPLAIN, SHOW and DESCRIBE statements can run; this one may change data."
