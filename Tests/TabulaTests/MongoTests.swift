@@ -341,6 +341,62 @@ final class MongoIntegrationTests: XCTestCase {
         XCTAssertTrue(plain.hasSuffix("updateOne({ _id: 1 }, { $set: { n: 4 } })"), plain)
     }
 
+    /// Filters and sorting on fields named "a.b" or "$p" read those fields, not the path a → b (#226).
+    func testFilteringAndSortingDottedAndDollarFields() async throws {
+        let driver = try await connect()
+        let table = TableRef(schema: "tabula_test", name: "dotted_" + UUID().uuidString.prefix(8).lowercased())
+        let collection = MongoDialect.collection(table)
+        let dialect = MongoQueryDialect()
+        try await runThenClean(driver, cleanup: ["\(collection).drop()"]) {
+            _ = try await driver.execute(
+                #"\#(collection).insertMany([{ _id: 1, "a.b": 1, a: { b: 5 }, "$p": "x" }, { _id: 2, "a.b": 5, a: { b: 1 }, "$p": "y" }, { _id: 3 }])"#
+            )
+            func ids(_ rule: FilterRule) async throws -> [String?] {
+                let filter = dialect.condition([rule])
+                let page = dialect.selectPage(TablePageRequest(table: table, orderBy: "_id", filter: filter))
+                return try await driver.execute(page).rows.map { $0[0] }
+            }
+            let cases: [(FilterRule, [String?])] = [
+                (FilterRule(column: "a.b", op: .equals, value: "5"), ["2"]),
+                (FilterRule(column: "a.b", op: .notEquals, value: "1"), ["2", "3"]),
+                (FilterRule(column: "a.b", op: .greater, value: "2"), ["2"]),
+                (FilterRule(column: "a.b", op: .lessOrEqual, value: "1"), ["1"]),
+                (FilterRule(column: "a.b", op: .contains, value: "5"), ["2"]),
+                (FilterRule(column: "a.b", op: .inList, value: "5, 7"), ["2"]),
+                (FilterRule(column: "a.b", op: .isNull), ["3"]),
+                (FilterRule(column: "$p", op: .equals, value: "x"), ["1"]),
+                (FilterRule(column: "$p", op: .greater, value: "x"), ["2"]),
+                (FilterRule(column: "$p", op: .notContains, value: "x"), ["2", "3"]),
+                (FilterRule(column: "$p", op: .isNotNull), ["1", "2"]),
+            ]
+            for (rule, expected) in cases {
+                let found = try await ids(rule)
+                XCTAssertEqual(found, expected, "\(rule.column) \(rule.op.rawValue) \(rule.value)")
+            }
+            let count = try await driver.countRows(
+                table,
+                filter: dialect.condition([FilterRule(column: "$p", op: .isNotNull)])
+            )
+            XCTAssertEqual(count, 2)
+            // Sorted by a.b, largest first, second page of one: the row whose own a.b is 1.
+            let sorted = try await driver.execute(
+                dialect.selectPage(
+                    TablePageRequest(
+                        table: table,
+                        limit: 1,
+                        offset: 1,
+                        orderBy: "a.b",
+                        ascending: false,
+                        filter: dialect.condition([FilterRule(column: "$p", op: .isNotNull)])
+                    )
+                )
+            )
+            XCTAssertEqual(sorted.rows.map { $0[0] }, ["1"])
+            XCTAssertFalse(sorted.columns.contains("__tabula_sort"))
+            XCTAssertEqual(sorted.documents?.count, 1, "the page still carries its documents, for editing")
+        }
+    }
+
     func testWrongPasswordFails() async throws {
         do {
             let driver = try await connect(password: "wrong")
