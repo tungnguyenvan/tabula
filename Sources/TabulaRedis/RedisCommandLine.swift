@@ -200,12 +200,12 @@ public enum RedisCommandLine {
 
     public static func isReadOnly(_ arguments: [[UInt8]]) -> Bool {
         guard let name = arguments.first.map({ String(decoding: $0, as: UTF8.self).uppercased() }) else { return true }
-        if name == "CONFIG" || name == "CLIENT" || name == "OBJECT" || name == "MEMORY" {
-            // Only their inspection subcommands.
+        if ["CONFIG", "CLIENT", "OBJECT", "MEMORY", "SLOWLOG", "LATENCY"].contains(name) {
+            // Only their inspection subcommands: SLOWLOG RESET and LATENCY RESET clear what the server recorded.
             let sub = arguments.count > 1 ? String(decoding: arguments[1], as: UTF8.self).uppercased() : ""
             return [
                 "GET", "LIST", "INFO", "ENCODING", "FREQ", "IDLETIME", "REFCOUNT", "USAGE", "STATS", "GETNAME", "ID",
-                "HELP",
+                "HELP", "LEN", "DOCTOR", "GRAPH", "HISTOGRAM", "HISTORY", "LATEST",
             ]
             .contains(sub)
         }
@@ -217,9 +217,24 @@ public enum RedisCommandLine {
         guard let first = arguments.first, let name = String(bytes: first, encoding: .utf8)?.uppercased() else {
             return false
         }
-        return ["FLUSHALL", "FLUSHDB", "SHUTDOWN", "SWAPDB"].contains(name)
-            || (name == "CONFIG" && arguments.count > 1
-                && String(decoding: arguments[1], as: UTF8.self).uppercased() == "SET")
+        let rest = arguments.dropFirst().map { String(decoding: $0, as: UTF8.self).uppercased() }
+        let sub = rest.first ?? ""
+        switch name {
+        case "FLUSHALL", "FLUSHDB", "SHUTDOWN", "SWAPDB", "FAILOVER", "DEBUG":
+            return true
+        // A server that becomes a replica drops its whole dataset for the primary's; NO ONE keeps it.
+        case "REPLICAOF", "SLAVEOF":
+            return rest != ["NO", "ONE"]
+        case "CONFIG":
+            return sub == "SET"
+        // Every library, or every slot's keys, goes.
+        case "FUNCTION":
+            return sub == "FLUSH"
+        case "CLUSTER":
+            return sub == "RESET" || sub == "FLUSHSLOTS"
+        default:
+            return false
+        }
     }
 }
 
