@@ -613,7 +613,7 @@ final class TableTabModel {
         )
     }
 
-    func copyText(rows indices: IndexSet) -> String {
+    func copyRows(_ indices: IndexSet) -> [[String]] {
         indices.filter { $0 < displayRowCount }
             .map { row in
                 (0..<resultColumns.count)
@@ -623,8 +623,6 @@ final class TableTabModel {
                         }
                         return cell(row: row, column: column) == .null ? "NULL" : ""
                     }
-                    .joined(separator: "\t")
             }
-            .joined(separator: "\n")
     }
 }

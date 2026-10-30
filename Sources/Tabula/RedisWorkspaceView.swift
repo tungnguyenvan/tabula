@@ -217,9 +217,8 @@ private struct RedisKeysPane: View {
                         cell: { row, column in cell(row: row, column: column) },
                         isEditable: { row in model.keys.indices.contains(row) },
                         isColumnEditable: { column in column != 1 && column != 3 },
-                        copyText: { rows in
-                            rows.filter { model.keys.indices.contains($0) }.map { model.keys[$0].key.display }
-                                .joined(separator: "\n")
+                        copyRows: { rows in
+                            rows.filter { model.keys.indices.contains($0) }.map { [model.keys[$0].key.display] }
                         }
                     ),
                     selection: $model.keySelection,
