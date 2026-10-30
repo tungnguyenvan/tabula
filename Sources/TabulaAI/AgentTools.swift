@@ -107,11 +107,33 @@ public enum AgentProtocol {
             """
     }
 
+    /// Where the first tool request starts: the fence, in any case (some models write ```Tool).
+    static func fenceRange(in reply: String) -> Range<String.Index>? {
+        reply.range(of: fence, options: .caseInsensitive)
+    }
+
     /// The first tool call in a reply; nil when the reply is an answer.
     public static func call(in reply: String) -> AgentToolCall? {
-        guard let open = reply.range(of: fence) else { return nil }
-        var body = reply[open.upperBound...]
-        if let close = body.range(of: "```") { body = body[..<close.lowerBound] }
+        guard let open = fenceRange(in: reply) else { return nil }
+        let rest = reply[open.upperBound...]
+        // The request ends at a closing fence, but its query may hold ``` itself: each one is tried in turn, then
+        // the rest of the reply when the fence was never closed.
+        var ends: [String.Index] = []
+        var searchFrom = rest.startIndex
+        while let close = rest.range(of: "```", range: searchFrom..<rest.endIndex) {
+            ends.append(close.lowerBound)
+            searchFrom = close.upperBound
+        }
+        ends.append(rest.endIndex)
+        for end in ends {
+            if let call = parse(rest[..<end]) {
+                return call
+            }
+        }
+        return nil
+    }
+
+    private static func parse(_ body: Substring) -> AgentToolCall? {
         guard let data = body.trimmingCharacters(in: .whitespacesAndNewlines).data(using: .utf8),
             var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return nil }
@@ -134,26 +156,29 @@ public enum AgentProtocol {
         )
     }
 
-    /// The reply as the user sees it: anything before a tool request.
+    /// The reply as the user sees it: anything before a tool request. A fence that holds no request Tabula can
+    /// read stays, so the user sees what the model wrote rather than an empty answer.
     public static func visibleText(_ reply: String) -> String {
-        guard let open = reply.range(of: fence) else {
+        guard let open = fenceRange(in: reply), call(in: reply) != nil else {
             return reply
         }
         return String(reply[..<open.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// What a reply still streaming shows: `visibleText`, without a trailing fence that may be the start of a
-    /// tool request ("`", "``", "```", "```to"…). Once the fence turns out to be something else, it shows.
+    /// What a reply still streaming shows: the text before a tool request, which may not be complete yet, and
+    /// without a trailing fence that may be the start of one ("`", "``", "```", "```to"…). Once the fence turns
+    /// out to be something else, it shows.
     public static func streamingText(_ reply: String) -> String {
-        let text = visibleText(reply)
-        guard text.count == reply.count else {
-            return text
+        if let open = fenceRange(in: reply) {
+            return String(reply[..<open.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        if let start = text.range(of: "```", options: .backwards), fence.hasPrefix(text[start.lowerBound...]) {
-            return String(text[..<start.lowerBound])
+        if let start = reply.range(of: "```", options: .backwards),
+            fence.hasPrefix(reply[start.lowerBound...].lowercased())
+        {
+            return String(reply[..<start.lowerBound])
         }
-        let ticks = text.reversed().prefix { $0 == "`" }.count
-        return ticks > 0 ? String(text.dropLast(ticks)) : text
+        let ticks = reply.reversed().prefix { $0 == "`" }.count
+        return ticks > 0 ? String(reply.dropLast(ticks)) : reply
     }
 }
 
