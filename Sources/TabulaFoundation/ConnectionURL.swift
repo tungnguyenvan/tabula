@@ -9,9 +9,12 @@ extension ConnectionConfig {
         }
         var components = URLComponents()
         components.scheme = urlScheme
-        // An IPv6 address goes in brackets, or URLComponents gives no URL at all.
-        if resolvedHost.contains(":"), !resolvedHost.contains(","), !resolvedHost.hasPrefix("[") {
-            components.percentEncodedHost = "[\(resolvedHost)]"
+        // An IPv6 address goes in brackets, or URLComponents gives no URL at all. Everything a host can't hold is
+        // percent-encoded, the % before a zone (fe80::1%en0) as %25 (RFC 6874): an unencoded one stops the app.
+        if resolvedHost.contains(":"), !resolvedHost.contains(","), !resolvedHost.hasPrefix("["),
+            let encoded = resolvedHost.addingPercentEncoding(withAllowedCharacters: Self.bracketedHostCharacters)
+        {
+            components.percentEncodedHost = "[\(encoded)]"
         } else {
             components.host = resolvedHost
         }
@@ -50,6 +53,9 @@ extension ConnectionConfig {
     }
 
     private static let userCharacters = CharacterSet.urlUserAllowed.subtracting(CharacterSet(charactersIn: ":@"))
+    private static let bracketedHostCharacters = CharacterSet.urlHostAllowed.subtracting(
+        CharacterSet(charactersIn: "%[]")
+    )
 
     private var urlScheme: String {
         switch kind {

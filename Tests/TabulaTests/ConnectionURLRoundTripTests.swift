@@ -17,6 +17,8 @@ final class ConnectionURLRoundTripTests: XCTestCase {
             ),
             ConnectionConfig(kind: .mysql, host: "10.0.0.5", port: 3307, user: "o'brien", database: "sales"),
             ConnectionConfig(kind: .postgres, host: "::1", port: 5432, user: "me@corp", database: "x"),
+            // A link-local address with its zone: written %25en0, which used to stop the app (#234).
+            ConnectionConfig(kind: .mysql, host: "fe80::1%en0", port: 3306, user: "u", database: "x"),
             ConnectionConfig(kind: .mongodb, host: "mongo.local", port: 27018, user: "root", database: "app"),
             ConnectionConfig(kind: .redis, host: "cache", port: 6380, user: "default", database: "3"),
         ]
@@ -31,6 +33,19 @@ final class ConnectionURLRoundTripTests: XCTestCase {
                 XCTAssertEqual(parsed.config.user, config.user, url)
                 XCTAssertEqual(parsed.config.database, config.database, url)
             }
+        }
+    }
+
+    func testZoneWrittenAsSomeToolsDo() throws {
+        let parsed = try XCTUnwrap(ConnectionConfig.parse(connectionString: "postgresql://u@[fe80::1%en0]:5433/d"))
+        XCTAssertEqual(parsed.config.host, "fe80::1%en0")
+        XCTAssertEqual(parsed.config.port, 5433)
+        let config = ConnectionConfig(kind: .postgres, host: "fe80::1%en0", port: 5432, user: "u", database: "d")
+        XCTAssertEqual(config.url(), "postgresql://u@[fe80::1%25en0]:5432/d")
+        // A zone with characters a host can't hold is encoded too, rather than stopping the app.
+        for host in ["fe80::1%en 0", "fe80::1%zoneé", "fe80::1%a/b"] {
+            let url = ConnectionConfig(kind: .postgres, host: host, port: 5432, user: "u", database: "d").url()
+            XCTAssertEqual(ConnectionConfig.parse(connectionString: url)?.config.host, host, url)
         }
     }
 }

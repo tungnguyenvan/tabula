@@ -65,8 +65,9 @@ extension ConnectionConfig {
         if config.kind == .mongodb && authority.contains(",") {
             config.host = authority
         } else if authority.hasPrefix("["), let close = authority.firstIndex(of: "]") {
-            // An IPv6 address: [::1]:5432
-            config.host = String(authority[authority.index(after: authority.startIndex)..<close])
+            // An IPv6 address: [::1]:5432. A zone is written %25en0 (RFC 6874) or, by some tools, %en0.
+            let address = String(authority[authority.index(after: authority.startIndex)..<close])
+            config.host = address.removingPercentEncoding ?? address
             let after = authority[authority.index(after: close)...]
             if after.hasPrefix(":"), let port = Int(after.dropFirst()), Self.ports.contains(port) { config.port = port }
         } else if let colon = authority.lastIndex(of: ":"), let port = Int(authority[authority.index(after: colon)...]),
