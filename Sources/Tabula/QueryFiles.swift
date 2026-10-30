@@ -11,6 +11,15 @@ enum SQLFile {
     static func read(_ url: URL) throws -> (text: String, encoding: String.Encoding) {
         var detected = String.Encoding.utf8
         if let text = try? String(contentsOf: url, usedEncoding: &detected) {
+            // Foundation says .utf16 for either byte order; the byte order mark tells which, so saving keeps it.
+            if detected == .utf16, let head = try? FileHandle(forReadingFrom: url).read(upToCount: 2) {
+                if head == Data([0xFE, 0xFF]) {
+                    return (text, .utf16BigEndian)
+                }
+                if head == Data([0xFF, 0xFE]) {
+                    return (text, .utf16LittleEndian)
+                }
+            }
             return (text, detected)
         }
         let data = try Data(contentsOf: url)
@@ -25,7 +34,15 @@ enum SQLFile {
     /// The bytes to save: in the encoding the file was read in, or UTF-8 once the text holds characters that
     /// encoding can't.
     static func data(_ text: String, encoding: String.Encoding) -> Data {
-        text.data(using: encoding, allowLossyConversion: false) ?? Data(text.utf8)
+        guard let encoded = text.data(using: encoding, allowLossyConversion: false) else {
+            return Data(text.utf8)
+        }
+        // A file read with a byte order mark in a set byte order is written with the same mark.
+        switch encoding {
+        case .utf16BigEndian: return Data([0xFE, 0xFF]) + encoded
+        case .utf16LittleEndian: return Data([0xFF, 0xFE]) + encoded
+        default: return encoded
+        }
     }
 }
 

@@ -45,6 +45,15 @@ final class SQLFileEncodingTests: XCTestCase {
         let original: [UInt8] = Array("SELECT 'caf".utf8) + [0xE9] + Array("';".utf8)
         let (text, encoding) = try SQLFile.read(try file(original))
         XCTAssertEqual([UInt8](SQLFile.data(text, encoding: encoding)), original, "unchanged text saves the same bytes")
+        // UTF-16 keeps its byte order and mark, big- or little-endian (#271).
+        for mark in [[UInt8(0xFE), 0xFF], [0xFF, 0xFE]] {
+            let bigEndian = mark[0] == 0xFE
+            let body = "SELECT 'Hà Nội';".utf16
+                .flatMap { bigEndian ? [UInt8($0 >> 8), UInt8($0 & 0xFF)] : [UInt8($0 & 0xFF), UInt8($0 >> 8)] }
+            let (text16, encoding16) = try SQLFile.read(try file(mark + body))
+            XCTAssertEqual(text16, "SELECT 'Hà Nội';")
+            XCTAssertEqual([UInt8](SQLFile.data(text16, encoding: encoding16)), mark + body, "byte order \(mark)")
+        }
         let edited = text + "\n-- tiếng Việt"
         XCTAssertEqual(
             SQLFile.data(edited, encoding: encoding),
