@@ -119,9 +119,36 @@ enum MongoDialect {
     static func selectPage(_ request: TablePageRequest) -> String {
         var text = collection(request.table) + ".find(\(filterText(request.filter)))"
         if let orderBy = request.orderBy {
+            if readsAsPath(orderBy) {
+                return sortedByName(request, field: orderBy)
+            }
             text += ".sort({ \(MongoShell.key(orderBy)): \(request.ascending ? 1 : -1) })"
         }
         return text + ".skip(\(request.offset)).limit(\(request.limit))"
+    }
+
+    /// A field named "a.b" or "$p": as a query key or a "$…" path it would mean the path a → b, or an operator.
+    static func readsAsPath(_ field: String) -> Bool {
+        field.contains(".") || field.hasPrefix("$")
+    }
+
+    /// The field's value read by its name.
+    static func fieldByName(_ field: String) -> Document {
+        ["$getField": ["field": ["$literal": field] as Document, "input": "$$ROOT"] as Document]
+    }
+
+    /// find() can only sort by a path, so a page sorted by such a field is an aggregation with a sort key.
+    private static func sortedByName(_ request: TablePageRequest, field: String) -> String {
+        let key = "__tabula_sort"
+        let stages: [Document] = [
+            ["$set": [key: fieldByName(field)] as Document],
+            ["$sort": [key: Int32(request.ascending ? 1 : -1)] as Document],
+            ["$skip": Int32(clamping: request.offset)],
+            ["$limit": Int32(clamping: request.limit)],
+            ["$unset": key],
+        ]
+        let rest = stages.map { MongoShell.format($0) }.joined(separator: ", ")
+        return collection(request.table) + ".aggregate([{ $match: \(filterText(request.filter)) }, \(rest)])"
     }
 
     static func countRows(_ table: TableRef, filter: String?) -> String {
@@ -174,6 +201,9 @@ enum MongoDialect {
         func pattern(_ prefix: String, _ suffix: String) -> String {
             prefix + NSRegularExpression.escapedPattern(for: rule.value) + suffix
         }
+        if readsAsPath(field) {
+            return conditionByName(rule, candidates: candidates, pattern: pattern)
+        }
         /// Text matching as the SQL engines do it: strings (and arrays of strings, element by element) by the regex
         /// itself, and numbers, dates or ids by their text, which a regex alone never matches.
         func textMatch(_ pattern: String) -> Document {
@@ -214,6 +244,59 @@ enum MongoDialect {
             let items = rule.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
             return [field: ["$in": MongoDriver.array(items.flatMap { Self.candidates($0) })] as Document]
+        }
+    }
+
+    /// The same rule in $expr, for a field `readsAsPath`: its value is read with $getField, and every value
+    /// compared with it is a $literal, so a "$x" string isn't read as a path either.
+    private static func conditionByName(
+        _ rule: FilterRule,
+        candidates: [Primitive],
+        pattern: (String, String) -> String
+    ) -> Document {
+        let value = fieldByName(rule.column)
+        func literal(_ item: Primitive) -> Document { ["$literal": item] }
+        func expression(_ body: Document) -> Document { ["$expr": body] }
+        func isAny(_ items: [Primitive]) -> Document {
+            ["$in": MongoDriver.array([value, MongoDriver.array(items.map(literal))])]
+        }
+        // A query reads a missing field as null too.
+        let orNull: Document = ["$ifNull": MongoDriver.array([value, Null()])]
+        func compare(_ op: String) -> Document {
+            let operand = candidates.first ?? rule.value
+            // A query's range compares within one type (numbers of any type together); $expr compares across types.
+            let isNumber = operand is Int32 || operand is Int || operand is Double || operand is Decimal128
+            let sameType: Document =
+                isNumber
+                ? ["$isNumber": value]
+                : ["$eq": MongoDriver.array([["$type": value] as Document, ["$type": literal(operand)] as Document])]
+            let comparison: Document = [op: MongoDriver.array([value, literal(operand)])]
+            return expression(["$and": MongoDriver.array([sameType, comparison])])
+        }
+        func textMatch(_ regex: String) -> Document {
+            let asText: Document = [
+                "$convert": ["input": value, "to": "string", "onError": Null(), "onNull": Null()] as Document
+            ]
+            let input: Document = ["$ifNull": MongoDriver.array([asText, ""])]
+            return expression(["$regexMatch": ["input": input, "regex": regex, "options": "i"] as Document])
+        }
+        switch rule.op {
+        case .equals: return expression(isAny(candidates))
+        case .notEquals: return expression(["$not": MongoDriver.array([isAny(candidates)])])
+        case .less: return compare("$lt")
+        case .greater: return compare("$gt")
+        case .lessOrEqual: return compare("$lte")
+        case .greaterOrEqual: return compare("$gte")
+        case .contains: return textMatch(pattern("", ""))
+        case .notContains: return ["$nor": MongoDriver.array([textMatch(pattern("", ""))])]
+        case .startsWith: return textMatch(pattern("^", ""))
+        case .endsWith: return textMatch(pattern("", "$"))
+        case .isNull: return expression(["$eq": MongoDriver.array([orNull, Null()])])
+        case .isNotNull: return expression(["$ne": MongoDriver.array([orNull, Null()])])
+        case .inList:
+            let items = rule.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            return expression(isAny(items.flatMap { Self.candidates($0) }))
         }
     }
 
