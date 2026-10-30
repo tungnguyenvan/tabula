@@ -664,10 +664,10 @@ struct MongoShellParser {
                 }
                 return date
             case let value?:
-                guard let milliseconds = Self.double(value) else {
+                guard let milliseconds = Self.double(value), let whole = Int64(exactly: milliseconds.rounded()) else {
                     throw error("Date needs a string or milliseconds")
                 }
-                return Date(timeIntervalSince1970: milliseconds / 1000)
+                return MongoDates.date(milliseconds: whole)
             }
         case "NumberLong", "Long", "Long.fromString", "Long.fromNumber":
             if let int = argument(0) as? Int {
@@ -818,12 +818,16 @@ enum MongoExtendedJSON {
                 guard let text = wrapped["$numberLong"] as? String, let milliseconds = Int64(text) else {
                     throw fail()
                 }
-                return Date(timeIntervalSince1970: Double(milliseconds) / 1000)
+                return MongoDates.date(milliseconds: milliseconds)
             default:
                 guard let milliseconds = MongoShellParser.double(value) else {
                     throw fail()
                 }
-                return Date(timeIntervalSince1970: milliseconds / 1000)
+                // BSON dates are whole milliseconds.
+                guard let whole = Int64(exactly: milliseconds.rounded()) else {
+                    throw fail()
+                }
+                return MongoDates.date(milliseconds: whole)
             }
         case "$numberLong":
             guard let text = value as? String, let int = Int(text) else {
@@ -902,11 +906,20 @@ enum MongoExtendedJSON {
 }
 
 enum MongoDates {
+    /// The date a BSON document stores as exactly `milliseconds`. BSON writes `Int(timeIntervalSince1970 * 1000)`,
+    /// which truncates toward zero, and `Double(ms) / 1000` can land a hair short of the whole millisecond (a date
+    /// before 1970 then saves one millisecond later). A quarter millisecond away from zero survives the truncation,
+    /// and the shell text, rounded to the millisecond, reads the same.
+    static func date(milliseconds: Int64) -> Date {
+        let nudge = milliseconds >= 0 ? 0.25 : -0.25
+        return Date(timeIntervalSince1970: (Double(milliseconds) + nudge) / 1000)
+    }
+
     /// ISO 8601 dates as the shell accepts them: with or without time, fraction and zone (no zone means UTC).
     static func parse(_ text: String) -> Date? {
         let text = text.trimmingCharacters(in: .whitespaces)
         if let milliseconds = CivilTime.milliseconds(iso: text) {
-            return Date(timeIntervalSince1970: Double(milliseconds) / 1000)
+            return date(milliseconds: milliseconds)
         }
         let formatter = ISO8601DateFormatter()
         formatter.timeZone = TimeZone(identifier: "UTC")
