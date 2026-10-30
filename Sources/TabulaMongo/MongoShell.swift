@@ -301,6 +301,10 @@ struct MongoShellParser {
     private(set) var sawComment = false
     /// Set when a value was made at parse time (`ObjectId()`, `new Date()`, `UUID()`); re-printing would freeze it.
     private(set) var madeValue = false
+    /// Documents and arrays open around the value being read. Each level is a call, so text nested deeper than any
+    /// server takes (MongoDB stops at 100) is refused before it can exhaust the stack.
+    private var depth = 0
+    static let maxDepth = 200
 
     init(_ text: String) {
         bytes = Array(text.utf8)
@@ -392,6 +396,11 @@ struct MongoShellParser {
         skipSpace()
         guard let byte = peek() else {
             throw error("Expected a value")
+        }
+        depth += 1
+        defer { depth -= 1 }
+        guard depth <= Self.maxDepth else {
+            throw error("Documents and arrays are nested more than \(Self.maxDepth) levels deep")
         }
         switch byte {
         case UInt8(ascii: "{"):
