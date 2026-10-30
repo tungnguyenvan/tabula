@@ -9,9 +9,10 @@ extension ConnectionConfig {
         }
         var components = URLComponents()
         components.scheme = urlScheme
-        // An IPv6 address goes in brackets, or URLComponents gives no URL at all.
+        // An IPv6 address goes in brackets, or URLComponents gives no URL at all; the % before a zone (fe80::1%en0)
+        // is written %25 (RFC 6874), as an unencoded one stops the app.
         if resolvedHost.contains(":"), !resolvedHost.contains(","), !resolvedHost.hasPrefix("[") {
-            components.percentEncodedHost = "[\(resolvedHost)]"
+            components.percentEncodedHost = "[\(resolvedHost.replacingOccurrences(of: "%", with: "%25"))]"
         } else {
             components.host = resolvedHost
         }
