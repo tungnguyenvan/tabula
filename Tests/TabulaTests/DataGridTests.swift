@@ -111,6 +111,19 @@ final class DataGridTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "2\tBình\t{\"b\":1,\"a\":[2]}")
     }
 
+    /// Paste reads rows as Copy writes them and as spreadsheets put them on the pasteboard.
+    func testPastedTextReadsBackAsCopied() {
+        let rows = [["1", "line one\nline \"two\"", "a\tb"], ["2", "\"start", ""], ["3", "NULL", "{\"k\":1}"]]
+        XCTAssertEqual(TabSeparated.rows(TabSeparated.text(rows)), rows)
+        XCTAssertEqual(
+            TabSeparated.rows("a\tb\r\nc\td\n"),
+            [["a", "b"], ["c", "d"]],
+            "Windows line ends; a trailing one"
+        )
+        XCTAssertEqual(TabSeparated.rows("x"), [["x"]])
+        XCTAssertEqual(TabSeparated.rows("\t"), [["", ""]])
+    }
+
     func testDeleteAndSetNullFollowWhatCanBeEdited() {
         tableView.selectRowIndexes([0, 1], byExtendingSelection: false)
         coordinator.deleteSelection()

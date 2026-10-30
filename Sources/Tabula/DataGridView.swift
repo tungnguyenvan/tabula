@@ -23,6 +23,57 @@ enum TabSeparated {
         }
         return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
+
+    /// Rows read back as `text` writes them, and as spreadsheets put them on the pasteboard: a quoted field may
+    /// hold tabs, line breaks and doubled quotes. A trailing line break ends the last row rather than adding one.
+    static func rows(_ text: String) -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var quoted = false
+        var atFieldStart = true
+        var characters = text.makeIterator()
+        var pending = characters.next()
+        while let character = pending {
+            pending = characters.next()
+            if quoted {
+                if character == "\"" {
+                    if pending == "\"" {
+                        field.append("\"")
+                        pending = characters.next()
+                    } else {
+                        quoted = false
+                    }
+                } else {
+                    field.append(character)
+                }
+                continue
+            }
+            switch character {
+            case "\"" where atFieldStart:
+                quoted = true
+                atFieldStart = false
+            case "\t":
+                row.append(field)
+                field = ""
+                atFieldStart = true
+            case "\n", "\r\n", "\r":
+                row.append(field)
+                rows.append(row)
+                row = []
+                field = ""
+                atFieldStart = true
+            default:
+                field.append(character)
+                atFieldStart = false
+            }
+        }
+        if !field.isEmpty || !row.isEmpty || quoted {
+            row.append(field)
+            rows.append(row)
+        }
+        return rows
+    }
 }
 
 /// Everything the grid needs to draw; closures read straight from the owning model.
@@ -62,6 +113,8 @@ struct DataGridView: NSViewRepresentable {
     var onDuplicate: ((IndexSet) -> Void)?
     /// Double-clicking the empty space below the last row adds a row, like the bar's + button.
     var onAddRow: (() -> Void)?
+    /// Paste (⌘V): the pasteboard's text, and the cell that has focus.
+    var onPaste: ((_ text: String, _ row: Int?, _ column: Int?) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -471,6 +524,18 @@ struct DataGridView: NSViewRepresentable {
             }
             Clipboard.copy(TabSeparated.text(lines), to: pasteboard)
         }
+
+        /// Hands the pasteboard's text to the owner, with the focused cell; beeps where nothing can be pasted.
+        func paste() {
+            guard let onPaste = parent.onPaste, let text = pasteboard.string(forType: .string), !text.isEmpty else {
+                NSSound.beep()
+                return
+            }
+            let row = tableView.map(\.selectedRow).flatMap { $0 >= 0 ? $0 : nil }
+            onPaste(text, row, row == nil ? nil : dataColumn(focusedColumn))
+        }
+
+        var canPaste: Bool { parent.onPaste != nil && pasteboard.string(forType: .string) != nil }
 
         func copyFocusedCell() {
             guard let tableView, tableView.selectedRow >= 0, let column = dataColumn(focusedColumn) else { return }

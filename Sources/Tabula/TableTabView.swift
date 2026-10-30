@@ -58,7 +58,9 @@ struct TableTabView: View {
                         Task { await model.filter(equalTo: value, column: column) }
                     },
                     onDuplicate: model.canInsert ? { model.duplicateRows($0) } : nil,
-                    onAddRow: model.canInsert ? { model.addRow() } : nil
+                    onAddRow: model.canInsert ? { model.addRow() } : nil,
+                    onPaste: model.canInsert || model.canEditExisting
+                        ? { text, row, column in model.paste(text, row: row, column: column) } : nil
                 )
                 .overlay { if model.loading && model.rows.isEmpty { ProgressView().controlSize(.small) } }
             case .structure:

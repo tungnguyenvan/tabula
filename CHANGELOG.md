@@ -4,6 +4,12 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Paste into a table** (⌘V): rows copied from Tabula, Numbers, Excel or Google Sheets become new rows, committed with ⌘S like any other change. When the first line is the header that Copy with Header writes, columns are matched by name; otherwise in order. `NULL` pastes as NULL, and generated columns are left to the server. A single value pasted with a cell selected goes into that cell.
+
+### Fixed
+- MongoDB: for a field named like `a.b`, the filter bar's `=`, `≠` and "in" match an element of an array, as a query does ([#276](https://github.com/tungnguyenvan/tabula/issues/276)).
+
 ## [0.11.1] - 2026-10-30
 
 ### Fixed
