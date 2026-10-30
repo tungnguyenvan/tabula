@@ -18,12 +18,36 @@ enum SeasonalIcon {
     /// The tile fills this share of the image; the rest is the margin macOS icons keep around their shape.
     static let tileShare: CGFloat = 0.8
 
-    static let halloween = NSImage(size: NSSize(width: 1024, height: 1024), flipped: true) { rect in
-        guard let context = NSGraphicsContext.current?.cgContext else {
-            return false
+    static let halloween = halloweenImage(side: 1024)
+
+    /// The season's icon drawn at `side` points, for marks shown small. A view showing the 1024-point image keeps a
+    /// full-size bitmap of it (16 MB at 2x) however small it is drawn; several of those were 64 MB.
+    @MainActor
+    static func image(for season: AppSeason, side: CGFloat) -> NSImage? {
+        switch season {
+        case .regular:
+            return nil
+        case .halloween:
+            if let cached = sized[side] {
+                return cached
+            }
+            let image = halloweenImage(side: side)
+            sized[side] = image
+            return image
         }
-        HalloweenArtwork(context: context, canvas: rect).draw()
-        return true
+    }
+
+    @MainActor
+    private static var sized: [CGFloat: NSImage] = [:]
+
+    private static func halloweenImage(side: CGFloat) -> NSImage {
+        NSImage(size: NSSize(width: side, height: side), flipped: true) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else {
+                return false
+            }
+            HalloweenArtwork(context: context, canvas: rect).draw()
+            return true
+        }
     }
 
     /// Shows the current season's icon in the Dock, now and whenever the day changes.
@@ -46,7 +70,39 @@ enum SeasonalIcon {
     @MainActor
     private static func updateDockIcon() {
         // Without a bundle (swift run) there is no regular icon file; nil keeps the executable's default.
-        NSApp.applicationIconImage = image(for: AppSeason.on(Date())) ?? regular
+        NSApp.applicationIconImage = image(for: AppSeason.on(Date())).flatMap(bitmap) ?? regular
+    }
+
+    /// The icon as finished bitmaps at the sizes the Dock and the app switcher show, up to 512 pixels (the Dock's
+    /// largest tile, 256 points at 2x). Given an image that draws itself, AppKit keeps its own rendering for every
+    /// size and scale it is asked for: 64 MB for the Halloween icon.
+    @MainActor
+    static func bitmap(_ image: NSImage) -> NSImage? {
+        let finished = NSImage(size: NSSize(width: 512, height: 512))
+        for side in [32, 64, 128, 256, 512] {
+            guard
+                let rep = NSBitmapImageRep(
+                    bitmapDataPlanes: nil,
+                    pixelsWide: side,
+                    pixelsHigh: side,
+                    bitsPerSample: 8,
+                    samplesPerPixel: 4,
+                    hasAlpha: true,
+                    isPlanar: false,
+                    colorSpaceName: .deviceRGB,
+                    bytesPerRow: 0,
+                    bitsPerPixel: 0
+                ),
+                let context = NSGraphicsContext(bitmapImageRep: rep)
+            else { return nil }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = context
+            image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+            NSGraphicsContext.restoreGraphicsState()
+            rep.size = NSSize(width: 512, height: 512)
+            finished.addRepresentation(rep)
+        }
+        return finished
     }
 }
 

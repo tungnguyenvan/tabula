@@ -63,9 +63,9 @@ struct AppMark: View {
     var size: CGFloat = 64
 
     var body: some View {
-        if let seasonal = SeasonalIcon.image(for: AppSeason.on(Date())) {
-            // The image keeps the margin macOS icons have around their tile; that margin overflows the frame.
-            let side = size / SeasonalIcon.tileShare
+        // The image keeps the margin macOS icons have around their tile; that margin overflows the frame.
+        let side = size / SeasonalIcon.tileShare
+        if let seasonal = SeasonalIcon.image(for: AppSeason.on(Date()), side: side) {
             Image(nsImage: seasonal)
                 .resizable()
                 .frame(width: side, height: side)
