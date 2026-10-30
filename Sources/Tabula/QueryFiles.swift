@@ -5,6 +5,28 @@ import UniformTypeIdentifiers
 enum SQLFile {
     /// Apps that edit SQL each declare their own type for .sql, so it is looked up by extension.
     static let type = UTType(filenameExtension: "sql", conformingTo: .plainText) ?? .plainText
+
+    /// A file's text and the encoding it was read in: the one detected (a byte order mark, UTF-8), otherwise
+    /// Windows-1252, as older dumps and Windows tools write, and Latin-1, which reads any bytes.
+    static func read(_ url: URL) throws -> (text: String, encoding: String.Encoding) {
+        var detected = String.Encoding.utf8
+        if let text = try? String(contentsOf: url, usedEncoding: &detected) {
+            return (text, detected)
+        }
+        let data = try Data(contentsOf: url)
+        for encoding in [String.Encoding.windowsCP1252, .isoLatin1] {
+            if let text = String(data: data, encoding: encoding) {
+                return (text, encoding)
+            }
+        }
+        throw CocoaError(.fileReadInapplicableStringEncoding)
+    }
+
+    /// The bytes to save: in the encoding the file was read in, or UTF-8 once the text holds characters that
+    /// encoding can't.
+    static func data(_ text: String, encoding: String.Encoding) -> Data {
+        text.data(using: encoding, allowLossyConversion: false) ?? Data(text.utf8)
+    }
 }
 
 /// Files opened from Finder before any connection was ready; the next one to connect opens them.
@@ -42,13 +64,15 @@ extension QueryTabModel {
 
     private func write(to url: URL) -> Bool {
         let text = sql
+        let data = SQLFile.data(text, encoding: fileEncoding)
         do {
-            try text.write(to: url, atomically: true, encoding: .utf8)
+            try data.write(to: url, options: .atomic)
         } catch {
             Confirmation.report("Couldn’t save “\(url.lastPathComponent)”.", error: error)
             return false
         }
-        attach(url, savedText: text)
+        let saved = String(data: data, encoding: fileEncoding) == text ? fileEncoding : .utf8
+        attach(url, savedText: text, encoding: saved)
         return true
     }
 
@@ -94,9 +118,9 @@ extension WorkspaceModel {
             return
         }
         let text: String
+        let encoding: String.Encoding
         do {
-            var encoding = String.Encoding.utf8
-            text = try String(contentsOf: url, usedEncoding: &encoding)
+            (text, encoding) = try SQLFile.read(url)
         } catch {
             Confirmation.report("Couldn’t open “\(url.lastPathComponent)”.", error: error)
             return
@@ -106,11 +130,11 @@ extension WorkspaceModel {
             current.sql.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             current.sql = text
-            current.attach(url, savedText: text)
+            current.attach(url, savedText: text, encoding: encoding)
         } else {
             newQueryTab(sql: text)
             if case .query(let model) = selectedTab {
-                model.attach(url, savedText: text)
+                model.attach(url, savedText: text, encoding: encoding)
             }
         }
     }

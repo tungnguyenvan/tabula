@@ -108,8 +108,8 @@ extension WorkspaceModel {
             switch saved {
             case .query(let title, let sql, let file):
                 let model = QueryTabModel(title: title, sql: sql, driver: driver, workspace: self)
-                if let file, let text = Self.contents(of: file) {
-                    model.attach(file, savedText: text)
+                if let file, let (text, encoding) = try? SQLFile.read(file) {
+                    model.attach(file, savedText: text, encoding: encoding)
                 }
                 tab = .query(model)
             case .table(let schema, let name, let kind, let mode):
@@ -162,10 +162,5 @@ extension WorkspaceModel {
                 self.saveState()
             }
         }
-    }
-
-    private static func contents(of file: URL) -> String? {
-        var encoding = String.Encoding.utf8
-        return try? String(contentsOf: file, usedEncoding: &encoding)
     }
 }
