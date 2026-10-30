@@ -155,7 +155,7 @@ final class WorkspaceModel {
         guard !tableSearch.isEmpty else {
             return tables
         }
-        return tables.filter { $0.name.localizedCaseInsensitiveContains(tableSearch) }
+        return tables.filter { SearchText.matches($0.name, tableSearch) }
     }
 
     /// Functions, procedures and triggers of the selected schema.
@@ -166,8 +166,7 @@ final class WorkspaceModel {
             return routines
         }
         return routines.filter {
-            $0.name.localizedCaseInsensitiveContains(tableSearch)
-                || ($0.table?.localizedCaseInsensitiveContains(tableSearch) ?? false)
+            SearchText.matches($0.name, tableSearch) || ($0.table.map { SearchText.matches($0, tableSearch) } ?? false)
         }
     }
 

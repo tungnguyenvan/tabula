@@ -92,4 +92,17 @@ final class QueryAssistantAndPaletteTests: XCTestCase {
         XCTAssertEqual(ranked.last, "coordinates", "a match inside a word comes last")
         XCTAssertEqual(CommandPaletteView.score("ORDERS", "orders"), CommandPaletteView.score("orders", "ORDERS"))
     }
+
+    /// Names are found without their accents, Vietnamese đ included, and the other way round (#248).
+    func testSearchIgnoresAccents() {
+        for (name, typed) in [
+            ("khách_hàng", "khach"), ("đơn_hàng", "don"), ("Đơn Hàng", "don hang"), ("café", "CAFE"),
+            ("orders", "ỏrd"), ("ＡＢＣ", "abc"),
+        ] {
+            XCTAssertTrue(SearchText.matches(name, typed), "\(name) ~ \(typed)")
+            XCTAssertNotNil(CommandPaletteView.score(name, typed), "\(name) ~ \(typed)")
+        }
+        XCTAssertFalse(SearchText.matches("orders", "users"))
+        XCTAssertNil(CommandPaletteView.score("khách_hàng", "hk"), "letters must still come in order")
+    }
 }
