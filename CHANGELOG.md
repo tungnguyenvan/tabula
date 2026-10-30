@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-30
+
 ### Added
 - **Paste into a table** (⌘V): rows copied from Tabula, Numbers, Excel or Google Sheets become new rows, committed with ⌘S like any other change. When the first line is the header that Copy with Header writes, columns are matched by name; otherwise in order. `NULL` pastes as NULL, and generated columns are left to the server. A single value pasted with a cell selected goes into that cell.
 
