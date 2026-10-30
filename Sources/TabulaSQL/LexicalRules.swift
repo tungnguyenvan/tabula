@@ -38,6 +38,9 @@ public struct LexicalRules: Sendable, Equatable {
     public var quotedIdentifiers: Bool
     /// `[name]` is a name (SQLite, as in SQL Server).
     public var bracketIdentifiers: Bool
+    /// Characters that start a parameter or variable written against its name: `:name` (psql, SQLite), `@v`
+    /// (MySQL, SQLite), `?1` (SQLite). After an operator (`id=:id`) they begin the name, not the operator.
+    public var prefixes: String
 
     public init(
         dashDashComments: Bool,
@@ -49,7 +52,8 @@ public struct LexicalRules: Sendable, Equatable {
         dollarQuotes: Bool,
         quotedIdentifiers: Bool,
         bracketIdentifiers: Bool = false,
-        dashDashNeedsSpace: Bool = false
+        dashDashNeedsSpace: Bool = false,
+        prefixes: String = ""
     ) {
         self.dashDashComments = dashDashComments
         self.dashDashNeedsSpace = dashDashNeedsSpace
@@ -61,6 +65,7 @@ public struct LexicalRules: Sendable, Equatable {
         self.dollarQuotes = dollarQuotes
         self.quotedIdentifiers = quotedIdentifiers
         self.bracketIdentifiers = bracketIdentifiers
+        self.prefixes = prefixes
     }
 }
 
@@ -80,7 +85,8 @@ public enum SQLFlavor: Sendable, Equatable, CaseIterable {
             dollarQuotes: self == .postgres,
             quotedIdentifiers: true,
             bracketIdentifiers: self == .sqlite,
-            dashDashNeedsSpace: self == .mysql
+            dashDashNeedsSpace: self == .mysql,
+            prefixes: self == .postgres ? ":" : self == .mysql ? "@" : ":@?"
         )
     }
 
