@@ -313,6 +313,31 @@ final class RedisIntegrationTests: XCTestCase {
         await redis.close()
     }
 
+    /// An empty string is a value, not a missing one: the console shows "", previews keep it, and pages keep
+    /// each hash field with its own value (#258).
+    func testEmptyStringsAreValues() async throws {
+        let redis = try await connect(database: "11")
+        _ = try await redis.send("FLUSHDB")
+        _ = try await redis.send("SET", "empty", "")
+        _ = try await redis.send("RPUSH", "list", "a", "", "c")
+        _ = try await redis.send("HSET", "hash", "blank", "", "name", "Ann")
+        let get = try await redis.send("GET", "empty")
+        XCTAssertEqual(get.formatted(), "\"\"")
+        let missing = try await redis.send("GET", "nothing")
+        XCTAssertEqual(missing.formatted(), "(nil)")
+        let range = try await redis.send("LRANGE", "list", "0", "-1")
+        XCTAssertEqual(range.formatted(), "1) \"a\"\n2) \"\"\n3) \"c\"")
+        let summaries = try await redis.summaries(of: [RedisBytes("list"), RedisBytes("hash")])
+        XCTAssertEqual(summaries.map(\.preview).sorted(), ["[a, , c]", "{blank: , name: Ann}"].sorted())
+        let page = try await redis.page(RedisBytes("hash"), type: .hash, after: nil)
+        let pairs = Dictionary(uniqueKeysWithValues: page.rows.map { ($0[0].display, $0[1].display) })
+        XCTAssertEqual(pairs, ["blank": "", "name": "Ann"])
+        let items = try await redis.page(RedisBytes("list"), type: .list, after: nil)
+        XCTAssertEqual(items.rows.map { $0.last?.display }, ["a", "", "c"])
+        _ = try await redis.send("FLUSHDB")
+        await redis.close()
+    }
+
     func testLargeCollectionsPage() async throws {
         let redis = try await connect(database: "10")
         _ = try await redis.send("FLUSHDB")
