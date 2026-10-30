@@ -28,14 +28,25 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
 }
 
 public enum ResultExporter {
-    /// JSON keys must be unique, but joins often repeat a column name: "id", "id_2", ...
+    /// JSON keys must be unique, but joins often repeat a column name: "id", "id_2", ... A suffixed name skips any
+    /// name another column already has.
     static func uniqueNames(_ columns: [String]) -> [String] {
-        var seen: [String: Int] = [:]
-        return columns.map { name in
-            let count = (seen[name] ?? 0) + 1
-            seen[name] = count
-            return count == 1 ? name : "\(name)_\(count)"
+        var taken: Set<String> = []
+        var names: [String] = []
+        for name in columns {
+            guard taken.contains(name) else {
+                taken.insert(name)
+                names.append(name)
+                continue
+            }
+            var number = 2
+            while taken.contains("\(name)_\(number)") || columns.contains("\(name)_\(number)") {
+                number += 1
+            }
+            taken.insert("\(name)_\(number)")
+            names.append("\(name)_\(number)")
         }
+        return names
     }
 
     /// `dialect` writes the INSERT statements of `.sqlInsert`; the other formats don't depend on the database.

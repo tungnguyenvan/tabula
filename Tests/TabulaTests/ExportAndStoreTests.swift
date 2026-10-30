@@ -29,6 +29,22 @@ final class ExportAndStoreTests: XCTestCase {
         XCTAssertTrue(parsed[0]["b"] is NSNull)
     }
 
+    /// A repeated name gets a suffix no other column has, so every value keeps its own key (#232).
+    func testJSONKeysStayUniqueAgainstRealNames() throws {
+        XCTAssertEqual(ResultExporter.uniqueNames(["id", "id", "id_2"]), ["id", "id_3", "id_2"])
+        XCTAssertEqual(ResultExporter.uniqueNames(["a", "a", "a", "a_2"]), ["a", "a_3", "a_4", "a_2"])
+        XCTAssertEqual(ResultExporter.uniqueNames(["x", "y"]), ["x", "y"])
+        let json = try ResultExporter.export(
+            columns: ["id", "id", "id_2"],
+            rows: [["1", "2", "3"]],
+            format: .json,
+            binaryColumns: [],
+            dialect: SQLDialect(flavor: .postgres)
+        )
+        let parsed = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: String]])
+        XCTAssertEqual(parsed, [["id": "1", "id_3": "2", "id_2": "3"]])
+    }
+
     func testSQLInsertExport() throws {
         let sql = try ResultExporter.export(
             columns: ["id"],
