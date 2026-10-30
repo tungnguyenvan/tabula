@@ -62,6 +62,19 @@ final class ConnectionURLParserTests: XCTestCase {
         XCTAssertEqual(ConnectionConfig.parse(url: "postgres://u@h/db?sslmode=disable")?.config.tls, .disable)
     }
 
+    /// Only a value that says "off" turns TLS off; a value Tabula doesn't know still asks for TLS (#242).
+    func testSSLValuesThatAskForTLS() {
+        let cases: [(String, TLSMode)] = [
+            ("ssl=required", .require), ("ssl=REQUIRE", .require), ("ssl=true", .verifyFull), ("ssl=1", .verifyFull),
+            ("ssl=Amazon%20RDS", .verifyFull), ("ssl=%7B%22rejectUnauthorized%22%3Atrue%7D", .verifyFull),
+            ("ssl", .verifyFull), ("ssl=false", .disable), ("ssl=0", .disable), ("tls=off", .disable),
+            ("ssl=disabled", .disable),
+        ]
+        for (query, expected) in cases {
+            XCTAssertEqual(ConnectionConfig.parse(url: "mysql://u@h/d?\(query)")?.config.tls, expected, query)
+        }
+    }
+
     func testRoundTripKeepsTLSAndOddNames() throws {
         let cases = [
             ConnectionConfig(kind: .redis, host: "cache", tls: .require),
