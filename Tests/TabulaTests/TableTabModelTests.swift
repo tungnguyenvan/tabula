@@ -55,7 +55,9 @@ final class TableTabModelTests: XCTestCase {
         let name = try XCTUnwrap(model.resultColumns.firstIndex(of: "name"))
         model.paste("city\tname\nĐà Lạt\tPasted 1\nNULL\tPasted 2", row: nil, column: nil)
         model.paste("999\tPasted 3\tHuế", row: nil, column: nil)
-        XCTAssertEqual(model.displayRowCount, model.rows.count + 3)
+        // One column without a header goes into the selected column, not the first (#281).
+        model.paste("Pasted 4\nPasted 5", row: 0, column: name)
+        XCTAssertEqual(model.displayRowCount, model.rows.count + 5)
         model.paste("Renamed", row: 0, column: name)
         await model.commit()
         XCTAssertNil(model.error)
@@ -69,7 +71,7 @@ final class TableTabModelTests: XCTestCase {
             added,
             [
                 ["999", "Pasted 3", "Huế"], ["26", "Pasted 1", "Đà Lạt"], ["27", "Pasted 2", nil],
-                ["1", "Renamed", nil],
+                ["1000", "Pasted 4", "Huế"], ["1001", "Pasted 5", "Huế"], ["1", "Renamed", nil],
             ]
             .sorted { ($0[1] ?? "") < ($1[1] ?? "") }
         )

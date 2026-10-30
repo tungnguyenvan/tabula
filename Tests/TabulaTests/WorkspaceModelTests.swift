@@ -142,6 +142,28 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertTrue(workspace.hasUnsavedChanges(model.id))
     }
 
+    /// ⌘S (File › Save) in a table tab commits its edits and pasted rows, as the Commit button does.
+    func testSaveInATableTabCommits() async throws {
+        let workspace = try await connect(ConnectionConfig(kind: .sqlite, filePath: path))
+        workspace.open(table("alpha"))
+        let model = try XCTUnwrap(workspace.selectedTableTab)
+        for _ in 0..<200 where model.rows.isEmpty || model.loading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        model.setValue("edited", row: 0, column: 1)
+        model.paste("v\npasted", row: nil, column: nil)
+        workspace.saveSelectedTab(choosingLocation: false)
+        for _ in 0..<200 where model.hasChanges {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNil(model.error)
+        XCTAssertFalse(model.hasChanges)
+        let check = try SQLiteDriver(path: path)
+        let rows = try await check.execute("SELECT v FROM alpha ORDER BY id").rows
+        XCTAssertEqual(rows, [["edited"], ["b"], ["pasted"]])
+        await check.close()
+    }
+
     /// What one window had open comes back in the next one for the same connection.
     func testStateIsSavedAndRestored() async throws {
         let config = ConnectionConfig(kind: .sqlite, filePath: path)

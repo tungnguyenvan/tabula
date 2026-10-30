@@ -504,11 +504,18 @@ final class TableTabModel {
             error = "Rows can't be added to \(table.name). Paste one value into a cell instead."
             return
         }
+        // A header line, as Copy with Header writes it: every field a column name, with rows after it.
         let header = lines[0]
-        let named = header.count > 1 && Set(header).count == header.count && header.allSatisfy(resultColumns.contains)
+        let named =
+            lines.count > 1 && Set(header).count == header.count && header.allSatisfy(resultColumns.contains)
+        // Without one, rows narrower than the table start at the selected column, as in a spreadsheet; full rows
+        // (Tabula's own Copy) start at the first.
+        let width = lines.map(\.count).max() ?? 0
+        let first = width < resultColumns.count ? min(column ?? 0, resultColumns.count - width) : 0
         let targets: [Int?] =
             named
-            ? header.map { resultColumns.firstIndex(of: $0) } : resultColumns.indices.map { Optional($0) }
+            ? header.map { resultColumns.firstIndex(of: $0) }
+            : (0..<width).map { first + $0 < resultColumns.count ? first + $0 : nil }
         let generated = Set(columns.filter(\.isGenerated).map(\.name))
         var added: [[Int: String?]] = []
         for line in named ? Array(lines.dropFirst()) : lines {
