@@ -68,13 +68,16 @@ final class QueryTabModel {
     private(set) var fileURL: URL?
     /// The text as last read from or written to `fileURL`.
     private var savedSQL = ""
+    /// What `fileURL` is written in; saving keeps it.
+    private(set) var fileEncoding = String.Encoding.utf8
     /// Edited since it was last read or saved. Tabs without a file aren't tracked, as in a scratch editor.
     var isEdited: Bool { fileURL != nil && sql != savedSQL }
 
     /// Ties the tab to a file holding `text`, naming the tab after it.
-    func attach(_ url: URL, savedText text: String) {
+    func attach(_ url: URL, savedText text: String, encoding: String.Encoding = .utf8) {
         fileURL = url.standardizedFileURL
         savedSQL = text
+        fileEncoding = encoding
         title = url.lastPathComponent
     }
 
@@ -83,6 +86,7 @@ final class QueryTabModel {
         let copy = QueryTabModel(title: title, sql: sql, driver: driver, workspace: workspace)
         copy.fileURL = fileURL
         copy.savedSQL = savedSQL
+        copy.fileEncoding = fileEncoding
         return copy
     }
 
