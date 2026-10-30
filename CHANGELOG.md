@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-30
+
 ### Changed
 - **One Keychain entry for every connection's password**, so macOS asks once and one **Always Allow** covers all of them; each connection used to have its own entry, and its own prompt. An existing entry moves over the first time it is read, which may ask one last time ([#266](https://github.com/tungnguyenvan/tabula/issues/266)).
 
