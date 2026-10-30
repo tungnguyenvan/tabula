@@ -169,17 +169,19 @@ enum MongoDecimal {
     /// The 113-bit significand as decimal digits.
     private static func decimalDigits(_ value: (high: UInt64, low: UInt64)) -> String {
         var (high, low) = value
-        guard high != 0 || low != 0 else {
-            return "0"
+        // Almost every real value fits in 64 bits, which the standard library writes directly.
+        guard high != 0 else {
+            return String(low)
         }
-        var digits: [Character] = []
+        var digits: [UInt8] = []
+        digits.reserveCapacity(34)
         while high != 0 || low != 0 {
             let (quotientHigh, remainderHigh) = high.quotientAndRemainder(dividingBy: 10)
             let (quotientLow, remainder) = UInt64(10).dividingFullWidth((remainderHigh, low))
             high = quotientHigh
             low = quotientLow
-            digits.append(Character(String(remainder)))
+            digits.append(UInt8(ascii: "0") + UInt8(remainder))
         }
-        return String(digits.reversed())
+        return String(decoding: digits.reversed(), as: UTF8.self)
     }
 }
