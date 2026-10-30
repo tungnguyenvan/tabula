@@ -22,7 +22,7 @@ public struct SSHConfig: Codable, Hashable, Sendable {
         if host.isEmpty {
             return "Enter the SSH host."
         }
-        if !Self.isSafeName(host) {
+        if !Self.isSafeName(host) && !Self.isIPv6Address(host) {
             return "The SSH host isn't valid."
         }
         if !(1...65535).contains(port) {
@@ -52,5 +52,17 @@ public struct SSHConfig: Codable, Hashable, Sendable {
         guard let first = text.unicodeScalars.first, first != "-" else { return false }
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
         return text.unicodeScalars.allSatisfy { $0.isASCII && allowed.contains($0) }
+    }
+
+    /// An IPv6 address as written without brackets (`fd00::1`), without a zone. Its colons are no option or host
+    /// for ssh, and it goes in brackets inside a forward specification.
+    package static func isIPv6Address(_ text: String) -> Bool {
+        // macOS's inet_pton also takes a zone (%en0); only hex digits, ":" and "." are let through.
+        let allowed = CharacterSet(charactersIn: "0123456789abcdefABCDEF:.")
+        guard text.contains(":"), text.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return false
+        }
+        var address = in6_addr()
+        return text.withCString { inet_pton(AF_INET6, $0, &address) } == 1
     }
 }
