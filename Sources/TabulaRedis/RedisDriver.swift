@@ -719,30 +719,32 @@ public actor RedisDriver {
 
     /// Runs commands in MULTI/EXEC; any error discards the whole block.
     func transaction(_ commands: [[RedisArgument]]) async throws {
-        try await run([.text("MULTI")])
+        // Written back to back, before any reply is awaited: an await in between would let another command of this
+        // actor (a key scan, a row refresh) reach the connection inside MULTI, where Redis queues it with the
+        // transaction instead of answering it.
+        let multi = connection.send(command: "MULTI", with: [])
+        let queued = commands.map { connection.send(command: $0[0].text, with: $0.dropFirst().map(\.resp)) }
+        let exec = connection.send(command: "EXEC", with: [])
         do {
-            for command in commands {
-                let reply = try await send(command.map(\.bytes))
-                if case .error(let message) = reply {
-                    throw DatabaseError(message)
+            _ = try await multi.get()
+            for reply in queued {
+                // A command Redis refused to queue makes EXEC fail (EXECABORT); that error is the one reported.
+                _ = try? await reply.get()
+            }
+            let results = Self.convert(try await exec.get())
+            if results == .null {
+                throw DatabaseError("The transaction was aborted; nothing was changed.")
+            }
+            if let failure = results.array.first(where: {
+                if case .error = $0 {
+                    return true
                 }
+                return false
+            }), case .error(let message) = failure {
+                throw DatabaseError(message)
             }
-        } catch {
-            // The command's own error is reported; DISCARD only clears the transaction it left.
-            _ = try? await send(["DISCARD"].map { Array($0.utf8) })
-            throw error
-        }
-        let results = try await run([.text("EXEC")])
-        if results == .null {
-            throw DatabaseError("The transaction was aborted; nothing was changed.")
-        }
-        if let failure = results.array.first(where: {
-            if case .error = $0 {
-                return true
-            }
-            return false
-        }), case .error(let message) = failure {
-            throw DatabaseError(message)
+        } catch let error as RedisError {
+            throw DatabaseError(Self.describe(error))
         }
     }
 }
