@@ -293,10 +293,10 @@ public actor MySQLDriver: DatabaseDriver {
         return result
     }
 
-    /// The string and BIT types that hold bytes: BINARY, VARBINARY, the BLOBs and BIT have the binary character
-    /// set. (Numbers, dates and JSON report it too, but aren't these types.)
+    /// The string and BIT types that hold bytes: BINARY, VARBINARY, the BLOBs, BIT and the spatial types (their
+    /// SRID and WKB) have the binary character set. (Numbers, dates and JSON report it too, but aren't these types.)
     private static let byteTypes: Set<UInt8> = [
-        MySQLProtocol.DataType.tinyBlob, .mediumBlob, .longBlob, .blob, .varString, .string, .varchar, .bit,
+        MySQLProtocol.DataType.tinyBlob, .mediumBlob, .longBlob, .blob, .varString, .string, .varchar, .bit, .geometry,
     ]
     .map(\.rawValue)
     .reduce(into: []) { $0.insert($1) }
