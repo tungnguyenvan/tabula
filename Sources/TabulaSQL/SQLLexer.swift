@@ -34,6 +34,18 @@ public enum SQLLexer {
             guard let scalar = Unicode.Scalar(u) else { return true }  // surrogate halves belong to words
             return CharacterSet.alphanumerics.contains(scalar) || scalar == "_" || scalar == "$"
         }
+        func isOperatorUnit(_ u: UInt16) -> Bool {
+            guard let scalar = Unicode.Scalar(u) else { return false }
+            return "+-*/<>=~!@#%^&|?:".unicodeScalars.contains(scalar)
+        }
+        func startsComment(at index: Int) -> Bool {
+            let c = chars[index]
+            let next = at(index + 1)
+            return rules.startsDashDashComment(chars, at: index)
+                || (c == unit("/") && next == unit("*"))
+                || (c == unit("#") && rules.hashComments)
+                || (c == unit("/") && next == unit("/") && rules.slashSlashComments)
+        }
         func emit(_ kind: SQLToken.Kind, from start: Int) {
             let text = String(utf16CodeUnits: Array(chars[start..<i]), count: i - start)
             tokens.append(SQLToken(kind: kind, text: text, range: NSRange(location: start, length: i - start)))
@@ -43,7 +55,7 @@ public enum SQLLexer {
             let start = i
             let c = chars[i]
             let next = at(i + 1)
-            if (c == unit("-") && next == unit("-") && rules.dashDashComments) || (c == unit("#") && rules.hashComments)
+            if rules.startsDashDashComment(chars, at: i) || (c == unit("#") && rules.hashComments)
                 || (c == unit("/") && next == unit("/") && rules.slashSlashComments)
             {
                 while let u = at(i), u != unit("\n") { i += 1 }
@@ -64,6 +76,14 @@ public enum SQLLexer {
                     start = last.range.location
                     escapes = true
                 }
+                // U&'…' and U&"…" (PostgreSQL's Unicode escapes): the U& belongs to the string or name.
+                if rules.escapeStrings, tokens.count >= 2, let amp = tokens.last, amp.text == "&",
+                    NSMaxRange(amp.range) == i, case let u = tokens[tokens.count - 2], u.kind == .word,
+                    u.text == "U" || u.text == "u", NSMaxRange(u.range) == amp.range.location
+                {
+                    tokens.removeLast(2)
+                    start = u.range.location
+                }
                 i += 1
                 while i < chars.count {
                     if chars[i] == unit("\\") && escapes {
@@ -83,6 +103,12 @@ public enum SQLLexer {
                 i = min(i, chars.count)
                 // Without quoted identifiers (the shell) every quote is a string.
                 emit(c == unit("'") || !rules.quotedIdentifiers ? .string : .quotedIdentifier, from: start)
+            } else if c == unit("[") && rules.bracketIdentifiers {
+                // [name] runs to the next "]", spaces and all.
+                i += 1
+                while let u = at(i), u != unit("]") { i += 1 }
+                i = min(chars.count, i + 1)
+                emit(.quotedIdentifier, from: start)
             } else if c == unit("$") && rules.dollarQuotes, let tag = dollarTag(chars, at: i) {
                 i += tag.count
                 while i < chars.count
@@ -99,6 +125,29 @@ public enum SQLLexer {
                 while let u = at(i), let s = Unicode.Scalar(u), CharacterSet.decimalDigits.contains(s) || s == "." {
                     i += 1
                 }
+                // 0x1F, 0b101, 0o17 and 1_000: the letters and underscores belong to the number.
+                if let u = at(i), let s = Unicode.Scalar(u),
+                    s == "_" || (i - start == 1 && "xXbBoO".unicodeScalars.contains(s) && c == unit("0"))
+                {
+                    while let u = at(i), let s = Unicode.Scalar(u), CharacterSet.alphanumerics.contains(s) || s == "_" {
+                        i += 1
+                    }
+                    emit(.number, from: start)
+                    continue
+                }
+                // An exponent is part of the number: 1.5e-3, 2E10.
+                if let e = at(i), e == unit("e") || e == unit("E") {
+                    var j = i + 1
+                    if let sign = at(j), sign == unit("+") || sign == unit("-") {
+                        j += 1
+                    }
+                    if let d = at(j), let s = Unicode.Scalar(d), CharacterSet.decimalDigits.contains(s) {
+                        i = j
+                        while let u = at(i), let s = Unicode.Scalar(u), CharacterSet.decimalDigits.contains(s) {
+                            i += 1
+                        }
+                    }
+                }
                 emit(.number, from: start)
             } else if isWordUnit(c) {
                 while let u = at(i), isWordUnit(u) {
@@ -106,12 +155,21 @@ public enum SQLLexer {
                 }
                 emit(.word, from: start)
             } else {
-                // Two-character operators stay together so the formatter keeps them intact.
+                // A run of operator characters is one operator (<<, ->>, @>, !~*, :=, ::), as the servers read it,
+                // up to a comment's start.
                 i += 1
-                if let n = at(i),
-                    ["<=", ">=", "<>", "!=", "::", "||", "->"].contains(String(utf16CodeUnits: [c, n], count: 2))
-                {
-                    i += 1
+                if isOperatorUnit(c) {
+                    while let u = at(i), isOperatorUnit(u), !startsComment(at: i) {
+                        i += 1
+                    }
+                    // As PostgreSQL reads it: a trailing + or - is a sign of what follows (a=-1 is a = -1), unless
+                    // the operator holds one of ~ ! @ # % ^ & | ? (@- stays one operator).
+                    let run = String(utf16CodeUnits: Array(chars[start..<i]), count: i - start)
+                    if !run.contains(where: { "~!@#%^&|?".contains($0) }) {
+                        while i - start > 1, chars[i - 1] == unit("+") || chars[i - 1] == unit("-") {
+                            i -= 1
+                        }
+                    }
                 }
                 emit(.punctuation, from: start)
             }
