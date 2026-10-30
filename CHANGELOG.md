@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+- **Reorder tabs**: drag a tab onto another to put it there, as in Safari and Finder, or use **Window › Move Tab Left / Move Tab Right** or the tab's context menu. The order is kept with the window's tabs for the next time the connection opens ([#293](https://github.com/tungnguyenvan/tabula/issues/293)).
+
 ## [0.12.3] - 2026-10-30
 
 ### Fixed

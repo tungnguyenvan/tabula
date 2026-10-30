@@ -115,6 +115,31 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertFalse(workspace.canReopenTab)
     }
 
+    /// Tabs move by dragging one onto another, or one place at a time from the Window menu (#293).
+    func testTabsCanBeReordered() async throws {
+        let workspace = try await connect(ConnectionConfig(kind: .sqlite, filePath: path))
+        for name in ["alpha", "beta", "gamma"] {
+            workspace.open(table(name))
+            workspace.pin(try XCTUnwrap(workspace.selectedTabID))
+        }
+        XCTAssertEqual(titles(workspace), ["Query 1", "alpha", "beta", "gamma"])
+        let gamma = try XCTUnwrap(workspace.selectedTabID)
+        workspace.moveTab(gamma, to: workspace.tabs[0].id)
+        XCTAssertEqual(titles(workspace), ["gamma", "Query 1", "alpha", "beta"], "dropped on the first tab")
+        XCTAssertEqual(workspace.selectedTabID, gamma, "the moved tab stays selected")
+        workspace.moveTab(gamma, to: workspace.tabs[3].id)
+        XCTAssertEqual(titles(workspace), ["Query 1", "alpha", "beta", "gamma"], "and back to the end")
+        workspace.moveSelectedTab(by: -1)
+        XCTAssertEqual(titles(workspace), ["Query 1", "alpha", "gamma", "beta"])
+        XCTAssertFalse(workspace.canMoveSelectedTab(by: 3))
+        workspace.selectTab(number: 1)
+        XCTAssertFalse(workspace.canMoveSelectedTab(by: -1), "the first tab can't move left")
+        workspace.moveSelectedTab(by: -1)
+        XCTAssertEqual(titles(workspace), ["Query 1", "alpha", "gamma", "beta"])
+        workspace.moveSelectedTab(by: 1)
+        XCTAssertEqual(titles(workspace), ["alpha", "Query 1", "gamma", "beta"])
+    }
+
     func testHistoryKeepsTheLatestOnce() async throws {
         let workspace = try await connect(ConnectionConfig(kind: .sqlite, filePath: path))
         workspace.recordHistory("SELECT 1")

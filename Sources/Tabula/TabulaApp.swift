@@ -385,6 +385,10 @@ struct WorkspaceCommands: Commands {
             Button("Show Previous Tab") { workspace?.selectAdjacentTab(-1) }
                 .keyboardShortcut("[", modifiers: [.command, .shift])
                 .disabled(noWorkspace)
+            Button("Move Tab Left") { workspace?.moveSelectedTab(by: -1) }
+                .disabled(workspace?.canMoveSelectedTab(by: -1) != true)
+            Button("Move Tab Right") { workspace?.moveSelectedTab(by: 1) }
+                .disabled(workspace?.canMoveSelectedTab(by: 1) != true)
             Menu("Go to Tab") {
                 ForEach(1...9, id: \.self) { number in
                     Button(number == 9 ? "Last Tab" : "Tab \(number)") { workspace?.selectTab(number: number) }
