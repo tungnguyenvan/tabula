@@ -107,6 +107,13 @@ final class AppState {
     }
 
     func save(_ config: ConnectionConfig, password: String?) {
+        var config = config
+        // Spaces around a host or SSH server are never part of its name; user names may hold spaces, so stay.
+        config.host = config.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        if var ssh = config.ssh {
+            ssh.host = ssh.host.trimmingCharacters(in: .whitespacesAndNewlines)
+            config.ssh = ssh
+        }
         if let index = connections.firstIndex(where: { $0.id == config.id }) {
             connections[index] = config
         } else {

@@ -65,7 +65,7 @@ public actor PostgresDriver: DatabaseDriver {
         do {
             let connection = try await withTimeout(
                 seconds: config.timeout,
-                "Connecting to \(config.host):\(config.port)",
+                "Connecting to \(config.resolvedHost):\(config.port)",
                 discard: { _ = $0.close() as EventLoopFuture<Void> }
             ) { [configuration, logger] in
                 try await PostgresConnection.connect(configuration: configuration, id: 1, logger: logger)
