@@ -446,10 +446,10 @@ final class TableTabModel {
         return 1
     }
 
-    /// Copies the selected rows into new rows, leaving primary-key columns to their defaults.
+    /// Copies the selected rows into new rows, leaving primary-key and generated columns to the server.
     func duplicateRows(_ indices: IndexSet) {
         guard canInsert, !indices.isEmpty else { return }
-        let keyNames = Set(columns.filter(\.isPrimaryKey).map(\.name))
+        let keyNames = Set(columns.filter { $0.isPrimaryKey || $0.isGenerated }.map(\.name))
         var copies: [[Int: String?]] = []
         for row in indices.sorted() where row < displayRowCount {
             var copy: [Int: String?] = [:]

@@ -181,6 +181,9 @@ public struct ColumnInfo: Hashable, Sendable, Identifiable {
     public var defaultValue: String?
     public var isPrimaryKey: Bool
     public var comment: String?
+    /// The server computes the value (a generated column, or PostgreSQL's GENERATED ALWAYS AS IDENTITY): a row
+    /// can't be given one, so copied rows leave it out.
+    public var isGenerated: Bool
 
     public init(
         name: String,
@@ -188,7 +191,8 @@ public struct ColumnInfo: Hashable, Sendable, Identifiable {
         isNullable: Bool,
         defaultValue: String?,
         isPrimaryKey: Bool,
-        comment: String? = nil
+        comment: String? = nil,
+        isGenerated: Bool = false
     ) {
         self.name = name
         self.dataType = dataType
@@ -196,6 +200,7 @@ public struct ColumnInfo: Hashable, Sendable, Identifiable {
         self.defaultValue = defaultValue
         self.isPrimaryKey = isPrimaryKey
         self.comment = comment
+        self.isGenerated = isGenerated
     }
 
     public var id: String { name }

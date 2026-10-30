@@ -376,20 +376,25 @@ public actor MySQLDriver: DatabaseDriver {
         let d = dialect
         return try await records(
             """
-            SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, COLUMN_COMMENT
+            SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, COLUMN_COMMENT, EXTRA
             FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = \(d.literal(table.schema)) AND TABLE_NAME = \(d.literal(table.name))
             ORDER BY ORDINAL_POSITION
             """
         )
         .map { row in
-            ColumnInfo(
+            // EXTRA: "VIRTUAL GENERATED" or "STORED GENERATED" (MariaDB: "PERSISTENT GENERATED"); a default that is
+            // an expression says DEFAULT_GENERATED, and that column still takes values.
+            let extra = (row["EXTRA"] ?? "").uppercased()
+            let isGenerated = extra.contains("GENERATED") && !extra.contains("DEFAULT_GENERATED")
+            return ColumnInfo(
                 name: row["COLUMN_NAME"] ?? "",
                 dataType: row["COLUMN_TYPE"] ?? "",
                 isNullable: row["IS_NULLABLE"] == "YES",
-                defaultValue: row["COLUMN_DEFAULT"],
+                defaultValue: isGenerated ? row["EXTRA"] : row["COLUMN_DEFAULT"],
                 isPrimaryKey: row["COLUMN_KEY"] == "PRI",
-                comment: (row["COLUMN_COMMENT"]?.isEmpty ?? true) ? nil : row["COLUMN_COMMENT"]
+                comment: (row["COLUMN_COMMENT"]?.isEmpty ?? true) ? nil : row["COLUMN_COMMENT"],
+                isGenerated: isGenerated
             )
         }
     }
