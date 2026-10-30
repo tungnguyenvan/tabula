@@ -56,6 +56,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - The Redis console refuses `MULTI` and `WATCH`, which would hold the connection it shares with the key browser; `EVAL` runs several commands at once ([#192](https://github.com/tungnguyenvan/tabula/issues/192)).
 - **Redis: a very long TTL no longer quits Tabula**; it's refused as too long ([#197](https://github.com/tungnguyenvan/tabula/issues/197)).
 - **A table edit that can't reach its row fails instead of vanishing**: committing an edit or delete of a row someone else deleted meanwhile, or of a MySQL row whose FLOAT key can't be matched exactly, used to report success and save nothing. Now the commit names the row and rolls back ([#203](https://github.com/tungnguyenvan/tabula/issues/203)).
+- **The seasonal Dock icon uses 12 MB instead of 64 MB**: Tabula's footprint with a table open is back to about 95 MB during the Halloween season ([#205](https://github.com/tungnguyenvan/tabula/issues/205)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 

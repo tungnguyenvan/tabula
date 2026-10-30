@@ -63,6 +63,23 @@ final class ConnectionSessionAndIconTests: XCTestCase {
         XCTAssertNil(session.active)
     }
 
+    /// The Dock gets finished bitmaps, not an image that draws itself, which AppKit cached at 64 MB.
+    func testDockIconIsAFewFinishedBitmaps() throws {
+        let icon = try XCTUnwrap(SeasonalIcon.image(for: .halloween))
+        let dock = try XCTUnwrap(SeasonalIcon.bitmap(icon))
+        let bitmaps = dock.representations.compactMap { $0 as? NSBitmapImageRep }
+        XCTAssertEqual(bitmaps.map(\.pixelsWide), [32, 64, 128, 256, 512])
+        XCTAssertEqual(bitmaps.count, dock.representations.count)
+        let largest = try XCTUnwrap(bitmaps.last)
+        XCTAssertGreaterThan(try XCTUnwrap(largest.colorAt(x: 256, y: 256)).alphaComponent, 0.9)
+        XCTAssertLessThan(try XCTUnwrap(largest.colorAt(x: 0, y: 0)).alphaComponent, 0.1)
+        // Small marks are drawn at their own size, and the same image is reused.
+        let mark = try XCTUnwrap(SeasonalIcon.image(for: .halloween, side: 80))
+        XCTAssertEqual(mark.size, NSSize(width: 80, height: 80))
+        XCTAssertTrue(SeasonalIcon.image(for: .halloween, side: 80) === mark)
+        XCTAssertNil(SeasonalIcon.image(for: .regular, side: 80))
+    }
+
     func testHalloweenIconIsDrawnAtAnySize() throws {
         XCTAssertNil(SeasonalIcon.image(for: .regular), "outside a season the bundle's icon is used")
         let icon = try XCTUnwrap(SeasonalIcon.image(for: .halloween))
