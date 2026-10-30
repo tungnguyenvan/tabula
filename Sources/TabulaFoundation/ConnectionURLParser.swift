@@ -122,8 +122,16 @@ extension ConnectionConfig {
             // decides, as for values Tabula doesn't know.
             default: break
             }
+        // Only a value that says "off" turns TLS off; anything else asks for it: true, required, a provider's
+        // profile ("Amazon RDS"), JSON options, or the bare option.
         case "ssl", "tls":
-            if !on { config.tls = .disable } else if config.tls == .disable { config.tls = .verifyFull }
+            if ["0", "false", "no", "off", "disable", "disabled"].contains(lowered) {
+                config.tls = .disable
+            } else if lowered == "require" || lowered == "required" {
+                config.tls = .require
+            } else if config.tls == .disable {
+                config.tls = .verifyFull
+            }
         case "tlsallowinvalidcertificates", "tlsinsecure":
             options.insecure = on
         case "sslverify":
