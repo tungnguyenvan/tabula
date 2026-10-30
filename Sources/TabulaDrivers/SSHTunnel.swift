@@ -63,7 +63,8 @@ public actor SSHTunnel {
         if let problem = ssh.problem {
             throw DatabaseError(problem)
         }
-        guard SSHConfig.isSafeName(targetHost), (1...65535).contains(targetPort) else {
+        guard SSHConfig.isSafeName(targetHost) || SSHConfig.isIPv6Address(targetHost), (1...65535).contains(targetPort)
+        else {
             throw DatabaseError("The database host isn't valid for an SSH tunnel.")
         }
         var lastError: Error = DatabaseError("Couldn't open the SSH tunnel.")
@@ -103,6 +104,8 @@ public actor SSHTunnel {
         timeout: Double,
         knownHosts: String? = nil
     ) -> [String] {
+        // ssh reads an IPv6 target's colons as separators unless it is in brackets.
+        let target = SSHConfig.isIPv6Address(targetHost) ? "[\(targetHost)]" : targetHost
         var arguments = [
             "-F", "/dev/null",  // the user's ssh config can run commands and add forwards
             "-N", "-T",
@@ -117,7 +120,7 @@ public actor SSHTunnel {
             "-o", "ConnectTimeout=\(max(1, Int(timeout.rounded(.up))))",
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3",
-            "-L", "127.0.0.1:\(localPort):\(targetHost):\(targetPort)",
+            "-L", "127.0.0.1:\(localPort):\(target):\(targetPort)",
             "-p", String(ssh.port),
             "-l", ssh.user,
         ]

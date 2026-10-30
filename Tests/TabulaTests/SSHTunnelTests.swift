@@ -13,6 +13,26 @@ final class SSHTunnelTests: XCTestCase {
         }
         XCTAssertNotNil(SSHConfig(host: "bastion", port: 0, user: "app").problem)
         XCTAssertNotNil(SSHConfig(host: "bastion", user: "").problem)
+        // An IPv6 address is a host; colons that make no address still aren't (#240).
+        for host in ["fd00::1", "::1", "2001:db8:0:0:0:0:0:1"] {
+            XCTAssertNil(SSHConfig(host: host, user: "app").problem, host)
+        }
+        for host in [":::", "fd00::1%en0", "[fd00::1]", "fd00::1:22:x"] {
+            XCTAssertNotNil(SSHConfig(host: host, user: "app").problem, host)
+        }
+    }
+
+    /// ssh reads an IPv6 target only in brackets: 127.0.0.1:5000:[fd00::5]:5432.
+    func testIPv6TargetIsBracketedInTheForward() {
+        let args = SSHTunnel.arguments(
+            SSHConfig(host: "fd00::1", user: "app"),
+            localPort: 5000,
+            targetHost: "fd00::5",
+            targetPort: 5432,
+            timeout: 15
+        )
+        XCTAssertTrue(args.contains("127.0.0.1:5000:[fd00::5]:5432"), "\(args)")
+        XCTAssertEqual(Array(args.suffix(2)), ["--", "fd00::1"])
     }
 
     func testArgumentsUseKeyAuthAndVerifiedHostKeys() {
