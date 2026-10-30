@@ -28,6 +28,13 @@ final class BeautifyTokensTests: XCTestCase {
                 "SELECT\n  @a := 1,\n  @@session.sql_mode,\n  a - - b\nFROM\n  t"
             ),
             (.sqlite, "select ?1, [my col] from [t x]", "SELECT\n  ?1,\n  [my col]\nFROM\n  [t x]"),
+            // A prefix written right after an operator starts its name (#269); "::" and "<@" stay operators.
+            (
+                .postgres, "select * from t where id=:id and a::int=1 and b<@c",
+                "SELECT\n  *\nFROM\n  t\nWHERE\n  id = :id\n  AND a::int = 1\n  AND b <@ c"
+            ),
+            (.mysql, "select x=@v, y=@@session.z from t", "SELECT\n  x = @v,\n  y = @@session.z\nFROM\n  t"),
+            (.sqlite, "select * from t where id=?1 and a=:a", "SELECT\n  *\nFROM\n  t\nWHERE\n  id = ?1\n  AND a = :a"),
             // The ";" stays out of the comment before it.
             (.postgres, "select 1 -- c\n; select 2", "SELECT\n  1 -- c\n;\n\nSELECT\n  2"),
         ]
@@ -46,7 +53,7 @@ final class BeautifyTokensTests: XCTestCase {
             "=", "<>", "::", "->>", "||", "-", "*", ".", "a", "\"Q x\"", "`bt`", "'s;t'", "'it''s'", "$$x;y$$", "1",
             "1.5e-3", "-- c\n", "/* b */", "# h\n", "?", "$1", ":name", "@v", "[x]", "IN", "BETWEEN", "IS", "NULL",
             "\n", "Tên", "n'x'", "x'ff'", "b'01'", "U&\"a\"", "~", "<<", "@@g", ":=", "a[1]", "0x1F", "@>", "#>>", "?1",
-            ":'v'", "x=-1",
+            ":'v'", "x=-1", "x=:name", "x=@v", "x=?1", "a::int",
         ]
         var state: UInt64 = 0x9E37_79B9_7F4A_7C15
         func next(_ bound: Int) -> Int {

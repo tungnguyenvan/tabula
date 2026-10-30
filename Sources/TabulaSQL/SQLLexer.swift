@@ -170,6 +170,20 @@ public enum SQLLexer {
                             i -= 1
                         }
                     }
+                    // A prefix against a name after an operator starts that name: id=:id is "=" then ":id", and
+                    // x=@@g is "=" then "@@g". Not "::", which casts.
+                    if let last = Unicode.Scalar(chars[i - 1]), rules.prefixes.unicodeScalars.contains(last),
+                        let next = at(i), isWordUnit(next) || next == unit("'") || next == unit("\"")
+                    {
+                        var prefixStart = i - 1
+                        while prefixStart > start, chars[prefixStart - 1] == chars[i - 1] {
+                            prefixStart -= 1
+                        }
+                        let isCast = last == ":" && i - prefixStart > 1
+                        if prefixStart > start, !isCast {
+                            i = prefixStart
+                        }
+                    }
                 }
                 emit(.punctuation, from: start)
             }
