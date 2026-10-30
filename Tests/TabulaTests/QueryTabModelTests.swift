@@ -1,6 +1,7 @@
 import XCTest
 
 @testable import Tabula
+@testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
 @testable import TabulaSQLite
@@ -41,6 +42,46 @@ final class QueryTabModelTests: XCTestCase {
         let workspace = WorkspaceModel(config: ConnectionConfig(kind: .sqlite, filePath: path), password: nil)
         let model = QueryTabModel(title: "Query 1", sql: sql, driver: try XCTUnwrap(driver), workspace: workspace)
         return (model, workspace)
+    }
+
+    /// SQL INSERT export writes into the table the query read, else into `results` in the window's schema (#264).
+    func testInsertExportTargetsTheTableTheQueryRead() async throws {
+        let (model, _) = try tab("SELECT x FROM n WHERE x <= 2 ORDER BY x")
+        await model.run()
+        let script = try model.exportText(.sqlInsert)
+        XCTAssertEqual(script, "INSERT INTO \"n\" (\"x\") VALUES ('1');\nINSERT INTO \"n\" (\"x\") VALUES ('2');")
+        let (joined, _) = try tab("SELECT a.x, b.x AS y FROM n a JOIN n b ON a.x = b.x WHERE a.x = 1")
+        await joined.run()
+        XCTAssertTrue(try joined.exportText(.sqlInsert).hasPrefix("INSERT INTO \"results\" "))
+    }
+
+    func testPostgresInsertExportRunsBackIntoItsTable() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_PG_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_PG_PORT not set")
+        }
+        let config = ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula")
+        let driver = try await DriverFactory.connect(config, password: "tabula")
+        let table = "export_back_" + UUID().uuidString.prefix(8).lowercased()
+        try await runThenClean(driver, cleanup: ["DROP TABLE \(table)"]) {
+            _ = try await driver.execute("CREATE TABLE \(table) (id int PRIMARY KEY, note text)")
+            _ = try await driver.execute("INSERT INTO \(table) VALUES (1, 'it''s'), (2, NULL)")
+            let workspace = WorkspaceModel(config: config, password: "tabula")
+            let model = QueryTabModel(
+                title: "Query 1",
+                sql: "SELECT * FROM \(table) ORDER BY id",
+                driver: driver,
+                workspace: workspace
+            )
+            await model.run()
+            let script = try model.exportText(.sqlInsert)
+            XCTAssertTrue(script.hasPrefix("INSERT INTO \"public\".\"\(table)\""), script)
+            _ = try await driver.execute("DELETE FROM \(table)")
+            for statement in driver.dialect.split(script) {
+                _ = try await driver.execute(statement)
+            }
+            let rows = try await driver.execute("SELECT id, note FROM \(table) ORDER BY id").rows
+            XCTAssertEqual(rows, [["1", "it's"], ["2", nil]])
+        }
     }
 
     func testScriptShowsTheLastResultSet() async throws {

@@ -3,6 +3,7 @@ import Observation
 import TabulaDrivers
 import TabulaFoundation
 import TabulaMongo
+import TabulaSQL
 import TabulaTransfer
 
 @MainActor @Observable
@@ -315,8 +316,27 @@ final class QueryTabModel {
             columns: result.columns,
             rows: exported,
             format: format,
+            table: exportTarget(of: result),
             binaryColumns: result.binaryColumns,
             dialect: driver.dialect
         )
+    }
+
+    /// Where SQL INSERT export writes a result's rows: the table a plain SELECT of one table read, the collection a
+    /// MongoDB find read, otherwise `results` in the window's schema (or database).
+    func exportTarget(of result: QueryResult) -> TableRef {
+        let schema = workspace?.selectedSchema ?? ""
+        let fallback = schema.isEmpty ? (driver.kind == .sqlite ? "main" : "public") : schema
+        if let flavor = driver.dialect.sql?.flavor, let names = EditableSelect.source(result.statement, flavor: flavor),
+            let name = names.last
+        {
+            return TableRef(schema: names.count > 1 ? names[0] : fallback, name: name)
+        }
+        if driver.kind == .mongodb, let statement = try? MongoStatement.parse(result.statement),
+            let collection = statement.collection
+        {
+            return TableRef(schema: statement.database ?? fallback, name: collection)
+        }
+        return TableRef(schema: fallback, name: "results")
     }
 }
