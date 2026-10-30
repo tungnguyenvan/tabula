@@ -164,6 +164,18 @@ public actor SQLiteDriver: DatabaseDriver {
             statement: sql
         )
         result.binaryColumns = binaryColumns
+        result.sqliteOrigins = (0..<Int32(columnCount))
+            .map { index in
+                guard let database = sqlite3_column_database_name(statement, index),
+                    let table = sqlite3_column_table_name(statement, index),
+                    let column = sqlite3_column_origin_name(statement, index)
+                else { return nil }
+                return SQLiteColumnOrigin(
+                    database: String(cString: database),
+                    table: String(cString: table),
+                    column: String(cString: column)
+                )
+            }
         return result
     }
 

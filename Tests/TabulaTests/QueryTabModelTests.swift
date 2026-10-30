@@ -77,6 +77,27 @@ final class QueryTabModelTests: XCTestCase {
         XCTAssertEqual(model.sql, "SELECT x FROM n ORDER BY x", "running a selection leaves the editor as it was")
     }
 
+    /// A SQLite query's result can be edited in the tab and committed through the workspace's writer connection.
+    func testEditingASQLiteResult() async throws {
+        _ = try await XCTUnwrap(driver).execute("CREATE TABLE people (id INTEGER PRIMARY KEY, name TEXT)")
+        _ = try await XCTUnwrap(driver).execute("INSERT INTO people (name) VALUES ('Ann'), ('Bình')")
+        // The tab holds its workspace weakly; the commit goes through it.
+        let (model, workspace) = try tab("SELECT id, name FROM people ORDER BY id")
+        await model.run()
+        let editor = try XCTUnwrap(model.resultEditor, "the result is editable")
+        XCTAssertTrue(editor.isEditable(row: 1, column: 1))
+        XCTAssertFalse(editor.isEditable(row: 1, column: 0), "the key stays read-only")
+        editor.setValue("Bình An", row: 1, column: 1)
+        XCTAssertTrue(model.hasResultChanges)
+        await model.commitResult()
+        XCTAssertFalse(model.hasResultChanges)
+        XCTAssertNil(editor.error)
+        let names = try await XCTUnwrap(driver).execute("SELECT name FROM people ORDER BY id").rows
+        XCTAssertEqual(names, [["Ann"], ["Bình An"]])
+        XCTAssertEqual(model.currentResult?.rows.last, ["2", "Bình An"], "the result shows the saved row")
+        withExtendedLifetime(workspace) {}
+    }
+
     func testStopInterruptsAndSkipsTheRest() async throws {
         let (model, _) = try tab(
             "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c; DELETE FROM n"

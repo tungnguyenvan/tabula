@@ -40,7 +40,8 @@ public struct EditableSelect: Sendable {
     }
 
     public static func relation(_ sql: String, flavor: SQLFlavor = .postgres) -> Relation? {
-        guard flavor == .postgres || flavor == .mysql, let tokens = significantTokens(sql, flavor: flavor) else {
+        // SQLite reads names and strings as PostgreSQL does ("…" names, '…' strings without backslash escapes).
+        guard let tokens = significantTokens(sql, flavor: flavor) else {
             return nil
         }
         var parser = Parser(tokens: tokens, flavor: flavor)
