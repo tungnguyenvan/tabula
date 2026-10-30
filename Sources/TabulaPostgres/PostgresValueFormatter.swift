@@ -130,6 +130,11 @@ enum PostgresValueFormatter {
 
     // MARK: Numbers
 
+    /// 10^precision: from there PostgreSQL writes an exponent, while Swift does only from 2^53 (float8).
+    private static func precisionLimit(_ precision: Int) -> Double {
+        precision == 15 ? 1e15 : precision == 6 ? 1e6 : pow(10, Double(precision))
+    }
+
     static func float8(_ buffer: inout ByteBuffer) -> String? {
         buffer.readInteger(as: UInt64.self).map { floatText(Double(bitPattern: $0), precision: 15) }
     }
@@ -147,7 +152,15 @@ enum PostgresValueFormatter {
         if value.isInfinite {
             return sign + "Infinity"
         }
-        // Swift's description is also the shortest round-trip form; only its layout differs.
+        // Swift's description is also the shortest round-trip form; only its layout can differ. Below
+        // 10^precision and with no exponent it is PostgreSQL's already, but for a trailing ".0" (most values, which
+        // skip the work below).
+        if value.magnitude < Value(precisionLimit(precision)) {
+            let plain = value.description
+            if !plain.contains("e") {
+                return plain.hasSuffix(".0") ? String(plain.dropLast(2)) : plain
+            }
+        }
         let description = value.magnitude.description
         var digits: String
         var exponent: Int
