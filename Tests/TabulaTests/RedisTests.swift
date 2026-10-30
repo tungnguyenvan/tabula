@@ -83,6 +83,21 @@ final class RedisCommandLineTests: XCTestCase {
         XCTAssertTrue(RedisCommandLine.isDestructive(try RedisCommandLine.parse("flushall")))
         XCTAssertTrue(RedisCommandLine.isDestructive(try RedisCommandLine.parse("CONFIG set maxmemory 1")))
         XCTAssertFalse(RedisCommandLine.isDestructive(try RedisCommandLine.parse("CONFIG GET maxmemory")))
+        // These wipe data too.
+        for line in [
+            "replicaof 10.0.0.2 6379", "SLAVEOF other 6379", "function flush", "FUNCTION FLUSH ASYNC",
+            "cluster reset hard", "CLUSTER FLUSHSLOTS", "debug reload", "FAILOVER",
+        ] {
+            XCTAssertTrue(RedisCommandLine.isDestructive(try RedisCommandLine.parse(line)), line)
+        }
+        for line in ["REPLICAOF NO ONE", "function list", "CLUSTER INFO", "SLOWLOG GET 10"] {
+            XCTAssertFalse(RedisCommandLine.isDestructive(try RedisCommandLine.parse(line)), line)
+        }
+        // On production every command that isn't read-only is confirmed; RESET clears what the server recorded.
+        XCTAssertTrue(RedisCommandLine.isReadOnly(try RedisCommandLine.parse("SLOWLOG GET 10")))
+        XCTAssertTrue(RedisCommandLine.isReadOnly(try RedisCommandLine.parse("latency latest")))
+        XCTAssertFalse(RedisCommandLine.isReadOnly(try RedisCommandLine.parse("SLOWLOG RESET")))
+        XCTAssertFalse(RedisCommandLine.isReadOnly(try RedisCommandLine.parse("LATENCY RESET")))
     }
 }
 
