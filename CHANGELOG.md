@@ -4,6 +4,13 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-30
+
+### Fixed
+- **Beautify keeps a parameter or variable written right after an operator in one piece**: `id=:id` becomes `id = :id`, `x=@v` becomes `x = @v` and `id=?1` becomes `id = ?1`, instead of `id =: id` ([#269](https://github.com/tungnguyenvan/tabula/issues/269)).
+- **UTF-16 `.sql` files are saved in the byte order they were read in**; a big-endian file used to come back little-endian ([#271](https://github.com/tungnguyenvan/tabula/issues/271)).
+- **MongoDB: a regex ending in `\/`** no longer colours the rest of the line as a comment or stops completion after it ([#273](https://github.com/tungnguyenvan/tabula/issues/273)).
+
 ## [0.11.0] - 2026-10-30
 
 ### Added
