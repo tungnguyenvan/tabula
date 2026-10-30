@@ -112,8 +112,8 @@ struct CommandPaletteView: View {
     /// Each letter is first matched where it first appears, which can miss a better place ("ord" in
     /// work_order_lines would use the "or" of "work"), so the query as one run at its best place counts too.
     static func score(_ text: String, _ query: String) -> Int? {
-        let haystack = Array(text.lowercased())
-        let needle = Array(query.lowercased())
+        let haystack = Array(SearchText.folded(text))
+        let needle = Array(SearchText.folded(query))
         guard let inOrder = scoreInOrder(haystack, needle) else { return nil }
         return max(inOrder, scoreAsRun(haystack, needle) ?? 0) * 100 - haystack.count
     }

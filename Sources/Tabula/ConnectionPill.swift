@@ -90,8 +90,7 @@ struct ConnectionPicker: View {
         search.isEmpty
             ? appState.connections
             : appState.connections.filter {
-                $0.displayName.localizedCaseInsensitiveContains(search)
-                    || $0.subtitle.localizedCaseInsensitiveContains(search)
+                SearchText.matches($0.displayName, search) || SearchText.matches($0.subtitle, search)
             }
     }
 
