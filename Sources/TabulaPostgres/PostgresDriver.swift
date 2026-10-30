@@ -361,8 +361,9 @@ public actor PostgresDriver: DatabaseDriver {
             SELECT a.attname AS name,
                    format_type(a.atttypid, a.atttypmod) AS data_type,
                    NOT a.attnotnull AS nullable,
-                   pg_get_expr(ad.adbin, ad.adrelid) AS default_value, a.attgenerated AS generated,
-                   a.attidentity AS identity,
+                   pg_get_expr(ad.adbin, ad.adrelid) AS default_value,
+                   -- Read through jsonb: attidentity is new in PostgreSQL 10 and attgenerated in 12.
+                   to_jsonb(a) ->> 'attgenerated' AS generated, to_jsonb(a) ->> 'attidentity' AS identity,
                    EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.attrelid AND i.indisprimary AND a.attnum = ANY(i.indkey)) AS primary_key,
                    col_description(a.attrelid, a.attnum) AS comment
             FROM pg_attribute a
@@ -374,8 +375,10 @@ public actor PostgresDriver: DatabaseDriver {
         .map { row in
             // A generated column's expression is kept where defaults are; say which it is.
             var defaultValue = row["default_value"]
-            if row["generated"] == "s", let expression = defaultValue {
-                defaultValue = "GENERATED ALWAYS AS \(expression) STORED"
+            // "s" stored, "v" virtual (PostgreSQL 18, where it is the default).
+            let generated = row["generated"] ?? ""
+            if generated == "s" || generated == "v", let expression = defaultValue {
+                defaultValue = "GENERATED ALWAYS AS \(expression)\(generated == "s" ? " STORED" : " VIRTUAL")"
             } else if row["identity"] == "a" {
                 defaultValue = "GENERATED ALWAYS AS IDENTITY"
             } else if row["identity"] == "d" {
@@ -388,7 +391,7 @@ public actor PostgresDriver: DatabaseDriver {
                 defaultValue: defaultValue,
                 isPrimaryKey: row["primary_key"] == "true",
                 comment: row["comment"],
-                isGenerated: row["generated"] == "s" || row["identity"] == "a"
+                isGenerated: generated == "s" || generated == "v" || row["identity"] == "a"
             )
         }
     }
