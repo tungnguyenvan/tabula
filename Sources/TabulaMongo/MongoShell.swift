@@ -185,7 +185,7 @@ public enum MongoShell {
     private static func binaryText(_ binary: Binary) -> String {
         let data = binary.data
         if case .uuid = binary.subType, data.count == 16 {
-            let hex = data.map { String(format: "%02x", $0) }.joined()
+            let hex = BinaryText.hex(data)
             let parts = [
                 hex.prefix(8), hex.dropFirst(8).prefix(4), hex.dropFirst(12).prefix(4), hex.dropFirst(16).prefix(4),
                 hex.dropFirst(20),

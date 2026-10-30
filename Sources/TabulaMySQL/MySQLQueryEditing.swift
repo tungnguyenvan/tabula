@@ -9,7 +9,7 @@ extension QueryEditTarget {
         guard let value else {
             return "NULL"
         }
-        return "_utf8mb4 X'" + value.utf8.map { String(format: "%02x", $0) }.joined() + "'"
+        return "_utf8mb4 X'" + BinaryText.hex(value.utf8) + "'"
     }
 
     /// A plain exact numeric literal for an index lookup. Quoted numbers compare as DOUBLE in MySQL.
