@@ -16,41 +16,37 @@ final class FilterOperatorsLiveTests: XCTestCase {
         let d = try XCTUnwrap(driver.dialect.sql)
         let table = TableRef(schema: schema, name: "filters_" + UUID().uuidString.prefix(8).lowercased())
         _ = try await driver.execute("CREATE TABLE \(d.qualified(table)) (id INT PRIMARY KEY, v VARCHAR(40))")
-        defer {
-            Task {
-                _ = try? await driver.execute("DROP TABLE \(d.qualified(table))")
-                await driver.close()
+        try await runThenClean(driver, cleanup: ["DROP TABLE \(d.qualified(table))"]) {
+            for (index, value) in (values + [nil]).enumerated() {
+                _ = try await driver.execute(
+                    d.insert(table, values: [("id", String(index)), ("v", value)], binaryColumns: [])
+                )
             }
+            func matches(_ op: FilterRule.Operator, _ value: String) async throws -> [String?] {
+                let condition = d.condition([FilterRule(column: "v", op: op, value: value)])
+                return try await driver.execute("SELECT v FROM \(d.qualified(table)) WHERE \(condition) ORDER BY id")
+                    .rows.map { $0[0] }
+            }
+            let contains = try await matches(.contains, "%")
+            XCTAssertEqual(contains, ["50%"], "% is a character, not a wildcard")
+            let starts = try await matches(.startsWith, "a_")
+            XCTAssertEqual(starts, ["a_b"], "_ is a character, not one-of-anything")
+            let slash = try await matches(.contains, "\\")
+            XCTAssertEqual(slash, ["back\\slash"])
+            let quote = try await matches(.contains, "'s")
+            XCTAssertEqual(quote, ["it's"])
+            let ends = try await matches(.endsWith, "B")
+            XCTAssertEqual(ends, ["a_b", "aXb"], "text matching ignores case")
+            let mixed = try await matches(.contains, "mix")
+            XCTAssertEqual(mixed, ["Mixed"])
+            let list = try await matches(.inList, "500, 50%")
+            XCTAssertEqual(list, ["50%", "500"])
+            let vietnamese = try await matches(.contains, "hà nội")
+            XCTAssertEqual(vietnamese, ["HÀ NỘI"], "case is ignored beyond ASCII too")
+            // "b" has no accented forms, so MySQL's accent-insensitive collations agree with the others.
+            let notContains = try await matches(.notContains, "b")
+            XCTAssertEqual(notContains, ["50%", "500", "it's", "Mixed", "HÀ NỘI"], "NULL is neither, as in SQL")
         }
-        for (index, value) in (values + [nil]).enumerated() {
-            _ = try await driver.execute(
-                d.insert(table, values: [("id", String(index)), ("v", value)], binaryColumns: [])
-            )
-        }
-        func matches(_ op: FilterRule.Operator, _ value: String) async throws -> [String?] {
-            let condition = d.condition([FilterRule(column: "v", op: op, value: value)])
-            return try await driver.execute("SELECT v FROM \(d.qualified(table)) WHERE \(condition) ORDER BY id")
-                .rows.map { $0[0] }
-        }
-        let contains = try await matches(.contains, "%")
-        XCTAssertEqual(contains, ["50%"], "% is a character, not a wildcard")
-        let starts = try await matches(.startsWith, "a_")
-        XCTAssertEqual(starts, ["a_b"], "_ is a character, not one-of-anything")
-        let slash = try await matches(.contains, "\\")
-        XCTAssertEqual(slash, ["back\\slash"])
-        let quote = try await matches(.contains, "'s")
-        XCTAssertEqual(quote, ["it's"])
-        let ends = try await matches(.endsWith, "B")
-        XCTAssertEqual(ends, ["a_b", "aXb"], "text matching ignores case")
-        let mixed = try await matches(.contains, "mix")
-        XCTAssertEqual(mixed, ["Mixed"])
-        let list = try await matches(.inList, "500, 50%")
-        XCTAssertEqual(list, ["50%", "500"])
-        let vietnamese = try await matches(.contains, "hà nội")
-        XCTAssertEqual(vietnamese, ["HÀ NỘI"], "case is ignored beyond ASCII too")
-        // "b" has no accented forms, so MySQL's accent-insensitive collations agree with the others.
-        let notContains = try await matches(.notContains, "b")
-        XCTAssertEqual(notContains, ["50%", "500", "it's", "Mixed", "HÀ NỘI"], "NULL is neither, as in SQL")
     }
 
     func testPostgres() async throws {
