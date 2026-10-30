@@ -230,8 +230,9 @@ public actor RedisDriver {
         switch value {
         case .null: return .null
         case .simpleString(var buffer): return .status(buffer.readString(length: buffer.readableBytes) ?? "")
+        // RediStack reads an empty string ($0) as .bulkString(nil) and a missing value ($-1) as .null.
         case .bulkString(let buffer):
-            guard var buffer else { return .null }
+            guard var buffer else { return .bulk([]) }
             return .bulk(buffer.readBytes(length: buffer.readableBytes) ?? [])
         case .error(let error): return .error(describe(error))
         case .integer(let value): return .integer(value)
