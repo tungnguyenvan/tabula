@@ -50,6 +50,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **Copy URL** works for a connection to an IPv6 address; it used to copy an empty string ([#179](https://github.com/tungnguyenvan/tabula/issues/179)).
 - **MongoDB filter bar** ([#183](https://github.com/tungnguyenvan/tabula/issues/183)): “= true” also finds the string "true", “= 0.1000” finds a NumberDecimal as the grid shows it, and contains / starts with / ends with also match numbers, dates and ids by their text, as on the SQL databases (MongoDB 4.2 or later).
 - **MySQL scripts with `DELIMITER` lines run**: the splitter follows the mysql client's `DELIMITER $$ … DELIMITER ;`, so a procedure body keeps its semicolons ([#186](https://github.com/tungnguyenvan/tabula/issues/186)).
+- **Redis: renaming a set or sorted-set member onto one that exists is refused**, as for hash fields; it used to merge the members or overwrite the score ([#190](https://github.com/tungnguyenvan/tabula/issues/190)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 
