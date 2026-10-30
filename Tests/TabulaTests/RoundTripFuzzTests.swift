@@ -2,9 +2,11 @@ import BSON
 import XCTest
 
 @testable import Tabula
+@testable import TabulaConnections
 @testable import TabulaDrivers
 @testable import TabulaFoundation
 @testable import TabulaMongo
+@testable import TabulaRedis
 @testable import TabulaSQLite
 
 /// Seeded random round trips: what Tabula writes, it reads back as it was.
@@ -99,6 +101,122 @@ final class RoundTripFuzzTests: XCTestCase {
                 )
             }
         }
+    }
+
+    /// The same copy and paste on the servers: quotes, backslashes (MySQL's escapes), comment markers, dollar
+    /// quotes and, on MySQL, NUL. PostgreSQL text can't hold NUL, so it isn't generated there.
+    func testCopiedRowsPasteBackOnServers() async throws {
+        let env = ProcessInfo.processInfo.environment
+        var servers: [(ConnectionConfig, String, Bool)] = []
+        if let port = env["TABULA_TEST_PG_PORT"].flatMap(Int.init) {
+            servers.append(
+                (ConnectionConfig(kind: .postgres, port: port, user: "tabula", database: "tabula"), "public", false)
+            )
+        }
+        if let port = env["TABULA_TEST_MYSQL_PORT"].flatMap(Int.init) {
+            servers.append(
+                (ConnectionConfig(kind: .mysql, port: port, user: "tabula", database: "tabula"), "tabula", true)
+            )
+        }
+        guard !servers.isEmpty else {
+            throw XCTSkip("TABULA_TEST_PG_PORT / TABULA_TEST_MYSQL_PORT not set")
+        }
+        var random = Seeded(state: 0xC0FFEE)
+        for (config, schema, nul) in servers {
+            var pieces = [
+                "", " ", "\t", "\n", "\r\n", "\r", "\"", "\"\"", "'", "\\", "\\'", "null", "Hà Nội", "😀", "%", "_", ";",
+                "\u{2028}", "1e5", "0001", "$$", "--", "/*", "`",
+            ]
+            if nul {
+                pieces.append("\u{0}")
+            }
+            let driver = try await DriverFactory.connect(config, password: "tabula")
+            let d = driver.dialect
+            let suffix = UUID().uuidString.prefix(8).lowercased()
+            let source = TableRef(schema: schema, name: "paste_src_\(suffix)")
+            let target = TableRef(schema: schema, name: "paste_dst_\(suffix)")
+            try await runThenClean(
+                driver,
+                cleanup: ["DROP TABLE \(d.qualified(source))", "DROP TABLE \(d.qualified(target))"]
+            ) {
+                for table in [source, target] {
+                    _ = try await driver.execute(
+                        "CREATE TABLE \(d.qualified(table)) (id INT PRIMARY KEY, a TEXT, b TEXT)"
+                    )
+                }
+                for index in 1...150 {
+                    var row: [String?] = [String(index)]
+                    for _ in 0..<2 {
+                        let length = Int.random(in: 0...4, using: &random)
+                        row.append(
+                            Int.random(in: 0..<8, using: &random) == 0
+                                ? nil : (0..<length).map { _ in pieces.randomElement(using: &random)! }.joined()
+                        )
+                    }
+                    let values = zip(["id", "a", "b"], row).map { (column: $0, value: $1) }
+                    _ = try await driver.execute(d.insert(source, values: values, binaryColumns: []))
+                }
+                let from = TableTabModel(table: source, driver: driver, connectionTag: .local)
+                from.pageSize = 1000
+                await from.reload()
+                let copied = TabSeparated.text([from.resultColumns] + from.copyRows(IndexSet(0..<from.rows.count)))
+                let into = TableTabModel(table: target, driver: driver, connectionTag: .local)
+                await into.reload()
+                into.paste(copied, row: nil, column: nil)
+                await into.commit()
+                XCTAssertNil(into.error, "\(config.kind)")
+                let original = try await driver.execute("SELECT id, a, b FROM \(d.qualified(source)) ORDER BY id").rows
+                let pasted = try await driver.execute("SELECT id, a, b FROM \(d.qualified(target)) ORDER BY id").rows
+                XCTAssertEqual(pasted.count, 150, "\(config.kind)")
+                for (before, after) in zip(original, pasted) where before != after {
+                    XCTFail("\(config.kind): \(before) came back as \(after)")
+                }
+            }
+        }
+    }
+
+    /// Redis values written through the browser's operations read back byte for byte: invalid UTF-8, NUL, CRLF
+    /// and RESP-like text, in strings, hashes, lists and sets.
+    func testRedisBytesReadBackAsWritten() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_REDIS_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_REDIS_PORT not set")
+        }
+        let redis = try await RedisDriver.connect(
+            ConnectionConfig(kind: .redis, port: port, user: "tabula", database: "11"),
+            password: "tabula"
+        )
+        _ = try await redis.send("FLUSHDB")
+        var random = Seeded(state: 0xBEEF)
+        let pool: [[UInt8]] = [
+            [], [0], [0xFF, 0xFE], [0x0D, 0x0A], [0x22], [0x5C], Array("Hà Nội".utf8), Array("😀".utf8), [0xC3], [0x20],
+            Array("$-1\r\n".utf8),
+        ]
+        func bytes() -> RedisBytes {
+            RedisBytes((0..<Int.random(in: 0...4, using: &random)).flatMap { _ in pool.randomElement(using: &random)! })
+        }
+        for index in 0..<150 {
+            let value = bytes()
+            try await redis.setString(RedisBytes("s\(index)"), to: value)
+            let string = try await redis.string(RedisBytes("s\(index)")).value
+            XCTAssertEqual(string, value)
+            let field = RedisBytes(Array("f".utf8) + bytes().bytes)
+            let fieldValue = bytes()
+            try await redis.add(RedisBytes("h\(index)"), type: .hash, values: [field, fieldValue])
+            let hash = try await redis.page(RedisBytes("h\(index)"), type: .hash, after: nil).rows
+            XCTAssertEqual(hash, [[field, fieldValue]])
+            let items = [bytes(), bytes()]
+            for item in items {
+                try await redis.add(RedisBytes("l\(index)"), type: .list, values: [item])
+            }
+            let list = try await redis.page(RedisBytes("l\(index)"), type: .list, after: nil).rows
+            XCTAssertEqual(list.map { $0.last }, items)
+            let member = RedisBytes(Array("m".utf8) + bytes().bytes)
+            try await redis.add(RedisBytes("t\(index)"), type: .set, values: [member])
+            let set = try await redis.page(RedisBytes("t\(index)"), type: .set, after: nil).rows
+            XCTAssertEqual(set, [[member]])
+        }
+        _ = try await redis.send("FLUSHDB")
+        await redis.close()
     }
 
     /// Random documents written as shell text read back byte for byte, compact and pretty.
