@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-30
+
 ### Added
 - **Edit SQLite query results**, as on PostgreSQL and MySQL: double-click a cell in a result from one table that includes its primary key, then Commit (⌘S). A row changed since the query ran is reported, not overwritten, and nothing is saved.
 - **Stop a running MySQL / MariaDB, SQLite or MongoDB query, or a Redis script** with **Stop** or ⌘., as on PostgreSQL. A statement that never ends, such as a recursive query without a stop condition, no longer leaves quitting Tabula as the only way out ([#141](https://github.com/tungnguyenvan/tabula/issues/141)). The Redis console stops a running script or function (`SCRIPT KILL`, `FUNCTION KILL`, once Redis has let it run 5 seconds) and unblocks a waiting `BLPOP` or `XREAD BLOCK`. On MySQL, Stop sends `KILL QUERY` for that statement only, and on MongoDB `killOp` for that command's operations, each from a short-lived second connection.
@@ -60,6 +62,32 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **Saving a connection no longer erases connections Tabula couldn't read**: the ones it can read still appear, and the file as it was is kept next to it (`connections.unreadable-….json`), with a message saying where ([#208](https://github.com/tungnguyenvan/tabula/issues/208)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
+- **Beautify no longer changes what SQL means** ([#244](https://github.com/tungnguyenvan/tabula/issues/244)): numbers such as `1.5e-3`, literals such as `b'01'` and `_utf8mb4'a'`, operators such as `<<`, `->>` and `@>`, parameters and variables (`:name`, `@v`, `?1`) and SQLite's `[my col]` stay as written, and a `;` after a `--` comment no longer ends up inside it.
+- **MySQL servers with `NO_BACKSLASH_ESCAPES`**: edits, inserts and SQL exports no longer store a value's backslashes twice, and the filter bar finds `%`, `_` and `\` ([#220](https://github.com/tungnguyenvan/tabula/issues/220)).
+- **MongoDB fields named like `a.b` or `$p`** ([#224](https://github.com/tungnguyenvan/tabula/issues/224), [#226](https://github.com/tungnguyenvan/tabula/issues/226)): editing one sets that field instead of the nested `a.b`, and filtering or sorting by one reads that field.
+- **Redis: an empty string is a value, not a missing one** ([#258](https://github.com/tungnguyenvan/tabula/issues/258)): the console shows `""` as redis-cli does, previews keep empty items, and the key pane no longer pairs a hash's fields with the wrong values after an empty one.
+- **Redis: editing a value in the keys table** only works where the cell shows the whole value; a value with a line break or bytes that aren't text is edited in the key's pane instead of being saved as its one-line preview ([#236](https://github.com/tungnguyenvan/tabula/issues/236)).
+- **Duplicate Row works on tables with generated columns**, which it used to copy and the server refused; SQLite's generated columns appear in Structure, and PostgreSQL's Default column says `GENERATED ALWAYS AS …` ([#250](https://github.com/tungnguyenvan/tabula/issues/250)).
+- **MySQL spatial values** (GEOMETRY, POINT, …) show as bytes and save back unchanged, instead of garbled text that the server refused ([#230](https://github.com/tungnguyenvan/tabula/issues/230)).
+- **Copied rows paste into Numbers and Excel cell for cell**: a value with a tab or a line break is quoted as spreadsheets expect, instead of spilling into new rows ([#256](https://github.com/tungnguyenvan/tabula/issues/256)).
+- **SQL INSERT export of a query result** writes into the table the query read (or `results` in the current schema), not `main.results`, which only SQLite has ([#264](https://github.com/tungnguyenvan/tabula/issues/264)).
+- **Copy URL no longer quits Tabula** for an IPv6 host with a zone such as `fe80::1%en0` ([#234](https://github.com/tungnguyenvan/tabula/issues/234)).
+- **Deeply nested MongoDB text no longer quits Tabula**; past 200 levels it is refused with an error ([#254](https://github.com/tungnguyenvan/tabula/issues/254)).
+- **A pasted URL with `ssl=required`** (or a provider profile, or JSON options) keeps TLS on; it used to turn it off ([#242](https://github.com/tungnguyenvan/tabula/issues/242)).
+- **The AI assistant's read-only check** refuses PostgreSQL `U&"…" UESCAPE` names and BRIN/GIN index maintenance, which a read-only transaction doesn't stop ([#214](https://github.com/tungnguyenvan/tabula/issues/214)).
+- **The Redis console asks before** `REPLICAOF`, `FUNCTION FLUSH`, `CLUSTER RESET`/`FLUSHSLOTS`, `DEBUG` and `FAILOVER`, and on Production before `SLOWLOG RESET` and `LATENCY RESET` ([#216](https://github.com/tungnguyenvan/tabula/issues/216)).
+- **The row limit** leaves MySQL's `LOCK IN SHARE MODE` queries runnable and no longer skips a query with a column named `top` ([#212](https://github.com/tungnguyenvan/tabula/issues/212)).
+- Running a script keeps a PostgreSQL `BEGIN ATOMIC … END` function body in one statement ([#218](https://github.com/tungnguyenvan/tabula/issues/218)).
+- PostgreSQL index columns are listed by name, and an expression such as `coalesce(a, b)` stays one column ([#222](https://github.com/tungnguyenvan/tabula/issues/222)).
+- MongoDB documents holding an empty regex, or one with `\/` or a line break, can be edited again ([#228](https://github.com/tungnguyenvan/tabula/issues/228)).
+- JSON export keeps every column when a renamed duplicate (`id_2`) matches a real column name ([#232](https://github.com/tungnguyenvan/tabula/issues/232)).
+- `.sql` files in Windows-1252 or Latin-1 open, and every file is saved in the encoding it was read in ([#238](https://github.com/tungnguyenvan/tabula/issues/238)).
+- SSH tunnels accept IPv6 addresses for the SSH server and the database host ([#240](https://github.com/tungnguyenvan/tabula/issues/240)).
+- MongoDB completion offers nothing inside a comment, and offers the collection methods after `db["name"].` ([#246](https://github.com/tungnguyenvan/tabula/issues/246)).
+- Searching tables, connections and the command palette ignores accents: “khach” finds “khách_hàng”, “don” finds “đơn_hàng” ([#248](https://github.com/tungnguyenvan/tabula/issues/248)).
+- The AI chat reads a tool request whose query contains ` ``` `, and shows a request it can't read instead of an empty answer ([#252](https://github.com/tungnguyenvan/tabula/issues/252)).
+- A space or line break around the host no longer makes every connection time out ([#260](https://github.com/tungnguyenvan/tabula/issues/260)).
+- Structure gives Columns the room and Indexes a modest share, instead of three rows of columns above an empty index list ([#262](https://github.com/tungnguyenvan/tabula/issues/262)).
 
 ## [0.10.0] - 2026-10-29
 
