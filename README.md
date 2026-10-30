@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 - [Making a release](#making-a-release)
 - [Development](#development)
 <!-- /source-only -->
-- [Roadmap and known limitations](#roadmap-and-known-limitations)
+- [Known limitations](#known-limitations)
 - [License](#license)
 
 ## Features
@@ -524,15 +524,10 @@ TABULA_DATA_DIR=/tmp/tabula-dev-data swift run Tabula
 
 <!-- /source-only -->
 
-## Roadmap and known limitations
+## Known limitations
 
-Planned:
-- SSH tunnels
-- Cancelling a running query
-
-Known limitations:
-- On MySQL, a `SELECT` that returns zero rows shows no column headers.
-- A running query cannot be cancelled.
+- MySQL / MariaDB: `CALL` of a procedure that returns rows fails with error 1312, because the MySQL driver doesn't ask for multiple result sets ([#185](https://github.com/tungnguyenvan/tabula/issues/185)). Procedures that answer through OUT parameters, or change data, work.
+- Stop ends a MongoDB command on version 4.4 or later, and a Redis script only once it has run for 5 seconds; other Redis commands run to the end.
 - Editing existing rows needs a primary key. Tables without one are read-only, apart from inserting rows.
 - Redis Cluster and Sentinel aren't supported yet; connect to a single node. Pub/Sub and `MONITOR` are not available in the console.
 - MongoDB: the query editor runs shell statements, not JavaScript. Edits from the grid aren't wrapped in a transaction. X.509, LDAP and Kerberos authentication aren't supported. The grid's columns come from the first 100 documents, so a field that appears only later shows up after it is seen on a page.
