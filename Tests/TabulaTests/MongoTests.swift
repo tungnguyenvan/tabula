@@ -47,6 +47,18 @@ final class MongoShellTests: XCTestCase {
         XCTAssertEqual(MongoShell.format(RegularExpression(pattern: "", options: "")), #"RegExp("", "")"#)
     }
 
+    /// Text nested deeper than a server takes is refused with an error, where it used to exhaust the stack (#254).
+    func testDeepNestingIsRefusedNotACrash() throws {
+        let deep =
+            "db.t.find(" + String(repeating: "{a:", count: 50_000) + "1" + String(repeating: "}", count: 50_000) + ")"
+        XCTAssertThrowsError(try MongoStatement.parse(deep))
+        XCTAssertEqual(MongoStatement.beautify(deep), deep, "left as written")
+        XCTAssertThrowsError(try MongoShell.parseValue(String(repeating: "[", count: 50_000)))
+        // A hundred levels, as deep as MongoDB stores, still reads.
+        let ok = String(repeating: "[", count: 100) + "1" + String(repeating: "]", count: 100)
+        XCTAssertNoThrow(try MongoShell.parseValue(ok))
+    }
+
     func testRoundTripKeepsTypes() throws {
         let text = """
             { _id: ObjectId("65f1a2b3c4d5e6f708091a2b"), name: "Hà Nội \\"x\\"", age: 42, big: NumberLong(9007199254740993),
