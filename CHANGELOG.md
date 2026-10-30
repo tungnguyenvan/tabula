@@ -4,6 +4,8 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-10-30
+
 ### Fixed
 - **MongoDB: saving a document keeps a pre-1970 date's millisecond**: editing, saving in the document editor or duplicating a document with a date such as `ISODate("1969-11-04T18:14:04.439Z")` stored `.440` ([#289](https://github.com/tungnguyenvan/tabula/issues/289)).
 
