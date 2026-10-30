@@ -68,6 +68,8 @@ final class RowLimitLiveTests: XCTestCase {
             table: "row_limit_\(UUID().uuidString.prefix(8).lowercased())",
             limited: common + [
                 "SELECT DISTINCT ON (name) name, id FROM $T ORDER BY name, id",
+                // A column may be named lock (MySQL reserves the word); only LOCK IN SHARE MODE locks.
+                "SELECT id AS lock FROM $T ORDER BY id",
                 "SELECT id, sum(top) OVER w FROM $T WINDOW w AS (ORDER BY id) ORDER BY id",
             ],
             unchanged: ["SELECT id FROM $T ORDER BY id OFFSET 1", "SELECT id FROM $T ORDER BY id FOR SHARE"]
@@ -86,7 +88,7 @@ final class RowLimitLiveTests: XCTestCase {
             driver,
             table: "row_limit_\(UUID().uuidString.prefix(8).lowercased())",
             limited: common + [
-                "SELECT name FROM $T GROUP BY name WITH ROLLUP",
+                "SELECT name FROM $T GROUP BY name WITH ROLLUP ORDER BY name",
                 "SELECT id FROM $T ORDER BY id # hash note",
             ],
             unchanged: [
@@ -102,7 +104,10 @@ final class RowLimitLiveTests: XCTestCase {
         try await check(
             try SQLiteDriver(path: path),
             table: "row_limit",
-            limited: common + ["SELECT id, sum(top) OVER w FROM $T WINDOW w AS (ORDER BY id) ORDER BY id"],
+            limited: common + [
+                "SELECT id, sum(top) OVER w FROM $T WINDOW w AS (ORDER BY id) ORDER BY id",
+                "SELECT id AS lock FROM $T ORDER BY id",
+            ],
             unchanged: ["SELECT id FROM $T ORDER BY id LIMIT -1 OFFSET 1"]
         )
     }

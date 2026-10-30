@@ -186,11 +186,14 @@ public struct SQLDialect: QueryDialect, Equatable {
             return statement
         }
         var depth = 0
-        for token in significant {
+        for (index, token) in significant.enumerated() {
             if token.text == "(" { depth += 1 } else if token.text == ")" { depth -= 1 }
             guard depth == 0 else { continue }
-            if ["LIMIT", "FETCH", "FOR", "LOCK", "INTO", "INSERT", "UPDATE", "DELETE", "OFFSET"].contains(token.keyword)
-            {
+            if ["LIMIT", "FETCH", "FOR", "INTO", "INSERT", "UPDATE", "DELETE", "OFFSET"].contains(token.keyword) {
+                return statement
+            }
+            // LOCK IN SHARE MODE; a column may be named lock.
+            if token.keyword == "LOCK", index + 1 < significant.count, significant[index + 1].keyword == "IN" {
                 return statement
             }
         }
