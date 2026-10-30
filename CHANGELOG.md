@@ -4,6 +4,9 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+- MongoDB: for a field named like `a.b`, the filter bar's `<`, `>`, `≤` and `≥` also match an array with an element in range, as a query does ([#284](https://github.com/tungnguyenvan/tabula/issues/284)).
+
 ## [0.12.1] - 2026-10-30
 
 ### Fixed
