@@ -326,9 +326,16 @@ final class QueryTabModel {
     /// MongoDB find read, otherwise `results` in the window's schema (or database).
     func exportTarget(of result: QueryResult) -> TableRef {
         let schema = workspace?.selectedSchema ?? ""
-        let fallback = schema.isEmpty ? (driver.kind == .sqlite ? "main" : "public") : schema
+        // Before a schema is selected: SQLite's main, the connection's MySQL database, PostgreSQL's public.
+        let unselected: String =
+            switch driver.kind {
+            case .sqlite: "main"
+            case .mysql, .mongodb: workspace?.config.database ?? ""
+            default: "public"
+            }
+        let fallback = schema.isEmpty ? unselected : schema
         if let flavor = driver.dialect.sql?.flavor, let names = EditableSelect.source(result.statement, flavor: flavor),
-            let name = names.last
+            let name = names.last, Self.selectsColumnsAsNamed(result.statement, flavor: flavor)
         {
             return TableRef(schema: names.count > 1 ? names[0] : fallback, name: name)
         }
@@ -338,5 +345,31 @@ final class QueryTabModel {
             return TableRef(schema: statement.database ?? fallback, name: collection)
         }
         return TableRef(schema: fallback, name: "results")
+    }
+
+    /// Whether every item of the SELECT list is `*`, `t.*` or a column as it is named in the table: no alias
+    /// (`name AS email` would be written into `email`), expression or value.
+    static func selectsColumnsAsNamed(_ statement: String, flavor: SQLFlavor) -> Bool {
+        let tokens = SQLLexer.tokens(statement, flavor: flavor).filter { $0.kind != .whitespace && $0.kind != .comment }
+        guard let select = tokens.firstIndex(where: { $0.keyword == "SELECT" }),
+            let from = tokens[select...].firstIndex(where: { $0.keyword == "FROM" })
+        else { return false }
+        let list = tokens[(select + 1)..<from]
+        let items = list.split { $0.text == "," }
+        guard !items.isEmpty else { return false }
+        return items.allSatisfy { item in
+            // name, schema.table.name, "Quoted Name" or *, with a dot between every two parts.
+            for (offset, token) in item.enumerated() {
+                let isPart = token.kind == .word || token.kind == .quotedIdentifier || token.text == "*"
+                let isDot = token.text == "."
+                if offset % 2 == 0 ? !isPart : !isDot {
+                    return false
+                }
+                if token.kind == .word, SQLKeywords.set.contains(token.keyword) {
+                    return false
+                }
+            }
+            return item.count % 2 == 1
+        }
     }
 }

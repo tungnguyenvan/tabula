@@ -53,6 +53,17 @@ final class QueryTabModelTests: XCTestCase {
         let (joined, _) = try tab("SELECT a.x, b.x AS y FROM n a JOIN n b ON a.x = b.x WHERE a.x = 1")
         await joined.run()
         XCTAssertTrue(try joined.exportText(.sqlInsert).hasPrefix("INSERT INTO \"results\" "))
+        // A renamed or computed column isn't the table's own, so its values don't go back into the table.
+        let (renamed, _) = try tab("SELECT x AS y FROM n WHERE x = 1")
+        await renamed.run()
+        XCTAssertTrue(try renamed.exportText(.sqlInsert).hasPrefix("INSERT INTO \"results\" "))
+        for (sql, asNamed) in [
+            ("SELECT * FROM n", true), ("SELECT n.x, \"x\" FROM n", true), ("SELECT main.n.* FROM n", true),
+            ("SELECT x y FROM n", false), ("SELECT x + 1 FROM n", false), ("SELECT 1 FROM n", false),
+            ("SELECT count(x) FROM n", false), ("SELECT DISTINCT x FROM n", false),
+        ] {
+            XCTAssertEqual(QueryTabModel.selectsColumnsAsNamed(sql, flavor: .sqlite), asNamed, sql)
+        }
     }
 
     func testPostgresInsertExportRunsBackIntoItsTable() async throws {
