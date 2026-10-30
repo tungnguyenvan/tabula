@@ -335,21 +335,31 @@ final class MongoIntegrationTests: XCTestCase {
 
         let quick = try await driver.execute("db.slow.find({})")
         XCTAssertEqual(quick.rows.count, 1)
-        let started = Date()
+        // Each would sleep 30 s; the 1 s limit ends it within a few, even on a busy machine.
         for statement in [
-            "db.slow.find({ $where: \"sleep(3000) || true\" })",
+            "db.slow.find({ $where: \"sleep(30000) || true\" })",
             // maxTimeMS(0) means no limit to the server; it doesn't lift this one.
-            "db.slow.find({ $where: \"sleep(3000) || true\" }).maxTimeMS(0)",
-            "db.slow.aggregate([{ $match: { $expr: { $function: { body: \"function() { sleep(3000); return true }\", args: [], lang: \"js\" } } } }])",
+            "db.slow.find({ $where: \"sleep(30000) || true\" }).maxTimeMS(0)",
         ] {
+            let started = Date()
             do {
                 _ = try await driver.execute(statement)
                 XCTFail("expected the time limit to stop \(statement)")
             } catch {
                 XCTAssertTrue(error.localizedDescription.contains("time limit"), error.localizedDescription)
             }
+            XCTAssertLessThan(Date().timeIntervalSince(started), 10, statement)
         }
-        XCTAssertLessThan(Date().timeIntervalSince(started), 6)
+        // MongoDB checks the limit only between JavaScript calls: a $function runs its call to the end, then
+        // fails with the limit (the assistant's read-only check refuses $function anyway).
+        do {
+            _ = try await driver.execute(
+                "db.slow.aggregate([{ $match: { $expr: { $function: { body: \"function() { sleep(1500); return true }\", args: [], lang: \"js\" } } } }])"
+            )
+            XCTFail("expected the time limit to fail the aggregation")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("time limit"), error.localizedDescription)
+        }
         _ = try await driver.execute("db.slow.drop()")
     }
 
