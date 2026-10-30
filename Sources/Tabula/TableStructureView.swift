@@ -19,10 +19,14 @@ struct StructureView: View {
     }
 
     var body: some View {
+        // The columns take extra height. The saved position has a new name: the old one kept the columns at their
+        // minimum, a default nobody chose.
         VerticalSplit(
             topMinimum: Layout.Structure.columnsMinHeight,
             bottomMinimum: Layout.Structure.indexesMinHeight,
-            autosaveName: "Structure"
+            bottomIdeal: Layout.Structure.indexesIdealHeight,
+            growing: .top,
+            autosaveName: "StructureColumns"
         ) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(

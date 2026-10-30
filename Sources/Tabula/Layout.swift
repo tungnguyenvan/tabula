@@ -60,6 +60,8 @@ enum Layout {
     enum Structure {
         static let columnsMinHeight: CGFloat = 160
         static let indexesMinHeight: CGFloat = 120
+        /// Indexes start this tall; the columns, which a table has more of, take the rest.
+        static let indexesIdealHeight: CGFloat = 200
     }
 
     enum Console {
