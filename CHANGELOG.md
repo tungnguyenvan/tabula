@@ -52,6 +52,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 - **MySQL scripts with `DELIMITER` lines run**: the splitter follows the mysql client's `DELIMITER $$ … DELIMITER ;`, so a procedure body keeps its semicolons ([#186](https://github.com/tungnguyenvan/tabula/issues/186)).
 - **Redis: renaming a set or sorted-set member onto one that exists is refused**, as for hash fields; it used to merge the members or overwrite the score ([#190](https://github.com/tungnguyenvan/tabula/issues/190)).
 - **Redis: the browser's edits no longer capture other commands**: a key scan or row refresh sent while a rename or list removal was in its transaction was queued inside it and got `QUEUED` back ([#192](https://github.com/tungnguyenvan/tabula/issues/192)).
+- The Redis console refuses `MULTI` and `WATCH`, which would hold the connection it shares with the key browser; `EVAL` runs several commands at once ([#192](https://github.com/tungnguyenvan/tabula/issues/192)).
 - VoiceOver names the icon-only buttons (Copy, Send, Stop, Refresh, Export, New Query Tab, Query History and others) instead of reading their symbol or nothing.
 - The Halloween icon's dates are Gregorian whatever calendar the Mac shows.
 

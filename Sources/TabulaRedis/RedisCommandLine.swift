@@ -144,6 +144,11 @@ public enum RedisCommandLine {
         switch name {
         case "SUBSCRIBE", "PSUBSCRIBE", "SSUBSCRIBE", "MONITOR", "SYNC", "PSYNC":
             return "\(name) would take over this connection and is not supported in the console. Use redis-cli for it."
+        case "MULTI", "WATCH":
+            // The key browser shares the connection: its scans and refreshes would be queued in the transaction,
+            // and a WATCH would abort the browser's own edits.
+            return
+                "\(name) would hold this connection, which the key browser shares. For several commands at once, use EVAL with a script, or redis-cli."
         case "BLPOP", "BRPOP", "BLMOVE", "BRPOPLPUSH", "BZPOPMIN", "BZPOPMAX", "BLMPOP", "BZMPOP", "XREAD",
             "XREADGROUP", "WAIT", "WAITAOF":
             // A zero timeout blocks forever.
