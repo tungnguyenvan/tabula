@@ -64,6 +64,25 @@ final class RedisModelTests: XCTestCase {
         await model.disconnect()
     }
 
+    /// The value column shows one line; a value it can't show exactly (a line break, bytes that aren't text) is
+    /// edited in the key's pane, never by writing that line back over it (#236).
+    func testInlineValueEditOnlyWhereTheCellShowsTheWholeValue() async throws {
+        let model = try await workspace()
+        let seed = try XCTUnwrap(model.driver)
+        _ = try await seed.send("SET", "multi", "a\nb")
+        _ = try await seed.send(["SET", "bin"].map { Array($0.utf8) } + [[0xFF, 0x00, 0x41]])
+        _ = try await seed.send("SET", "cr", "a\rb")
+        await model.reloadKeys()
+        let value = RedisWorkspaceModel.KeyColumn.value.rawValue
+        for name in ["multi", "bin", "cr"] {
+            let row = try XCTUnwrap(model.keys.firstIndex { $0.key.display == name })
+            XCTAssertFalse(model.isEditable(row: row, column: value), "\(name): \(model.keys[row].preview)")
+        }
+        let plain = try XCTUnwrap(model.keys.firstIndex { $0.key.display == "item:1" })
+        XCTAssertTrue(model.isEditable(row: plain, column: value))
+        await model.disconnect()
+    }
+
     func testCreateRefusesAnExistingKeyAndDeleteRemoves() async throws {
         let model = try await workspace()
         do {

@@ -66,6 +66,8 @@ public struct RedisKeySummary: Sendable, Equatable, Identifiable {
     public var length: Int
     /// A short, single-line rendering of the value.
     public var preview: String
+    /// `preview` is a string's whole value as it is: text, without a line break, not cut short.
+    public var previewIsValue = false
     public var id: RedisBytes { key }
 }
 
@@ -381,15 +383,19 @@ public actor RedisDriver {
             }
             // Keys that expired or were deleted since the scan (TYPE "none", PTTL -2) are dropped.
             guard types[index] != .unknown, pttl != RedisDriver.missingKeyTTL else { continue }
-            summaries.append(
-                RedisKeySummary(
-                    key: key,
-                    type: types[index],
-                    ttlMilliseconds: pttl >= 0 ? pttl : nil,
-                    length: length,
-                    preview: Self.preview(type: types[index], reply: value, length: length, limit: previewLength)
-                )
+            var summary = RedisKeySummary(
+                key: key,
+                type: types[index],
+                ttlMilliseconds: pttl >= 0 ? pttl : nil,
+                length: length,
+                preview: Self.preview(type: types[index], reply: value, length: length, limit: previewLength)
             )
+            if types[index] == .string, length <= previewLength, let bytes = value.bytes, bytes.count == length,
+                let text = RedisBytes(bytes).text
+            {
+                summary.previewIsValue = !text.contains(where: \.isNewline) && summary.preview == text
+            }
+            summaries.append(summary)
         }
         return summaries
     }
