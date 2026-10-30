@@ -2,18 +2,47 @@ import Foundation
 import Security
 import TabulaFoundation
 
+/// Generic passwords by account, as the Keychain keeps them; tests use one in memory.
+public protocol PasswordKeychain: Sendable {
+    /// The value, nil when there is none; throws when it exists but can't be read (access denied, locked).
+    func read(account: String) throws -> String?
+    /// Stores the value, or removes the item for nil.
+    func write(_ value: String?, account: String, label: String?) throws
+}
+
+/// The login Keychain, items under one service.
+public struct SystemKeychain: PasswordKeychain {
+    public let service: String
+
+    public init(service: String) {
+        self.service = service
+    }
+
+    public func read(account: String) throws -> String? {
+        try KeychainItem(service: service, account: account).readThrowing()
+    }
+
+    public func write(_ value: String?, account: String, label: String?) throws {
+        try KeychainItem(service: service, account: account, label: label).write(value)
+    }
+}
+
 /// Persists connection settings as JSON in Application Support; passwords go to the Keychain.
 public struct ConnectionStore: Sendable {
     public let fileURL: URL
-    private let keychainService: String
+    private let keychain: any PasswordKeychain
 
     public init(directory: URL? = nil, keychainService: String = "app.tabula.connections") {
+        self.init(directory: directory, keychain: SystemKeychain(service: keychainService))
+    }
+
+    public init(directory: URL? = nil, keychain: any PasswordKeychain) {
         let base =
             directory
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Tabula", isDirectory: true)
         self.fileURL = base.appendingPathComponent("connections.json")
-        self.keychainService = keychainService
+        self.keychain = keychain
     }
 
     /// The saved connections, and where a copy of the file went when some of it couldn't be read.
@@ -64,13 +93,62 @@ public struct ConnectionStore: Sendable {
 
     // MARK: Keychain
 
-    public func password(for id: UUID) -> String? {
-        KeychainItem(service: keychainService, account: id.uuidString).read()
+    // Every connection's password is in one item, so the Keychain asks once and one "Always Allow" covers them
+    // all (#266). Each connection used to have an item of its own; one is moved over the first time it is read.
+
+    static let sharedAccount = "connection-passwords"
+    static let sharedLabel = "Tabula database passwords"
+
+    /// Every password in the shared item, by connection id; empty when there is none yet.
+    public func passwords() throws -> [UUID: String] {
+        guard let text = try keychain.read(account: Self.sharedAccount) else {
+            return [:]
+        }
+        guard let stored = try? JSONDecoder().decode([String: String].self, from: Data(text.utf8)) else {
+            throw DatabaseError("The saved passwords in the Keychain can't be read.")
+        }
+        return Dictionary(
+            uniqueKeysWithValues: stored.compactMap { key, value in UUID(uuidString: key).map { ($0, value) } }
+        )
     }
 
+    public func password(for id: UUID) -> String? {
+        let shared = try? passwords()
+        if let password = shared?[id] {
+            return password
+        }
+        guard let legacy = try? keychain.read(account: id.uuidString), !legacy.isEmpty else {
+            return nil
+        }
+        // Moved only when the shared item could be read, so a refused read never overwrites the others.
+        if var shared {
+            shared[id] = legacy
+            if (try? write(shared)) != nil {
+                try? keychain.write(nil, account: id.uuidString, label: nil)
+            }
+        }
+        return legacy
+    }
+
+    /// Stores (or, for nil or empty, removes) a connection's password. The shared item must be readable first:
+    /// writing it unread would drop every other connection's password.
     public func setPassword(_ password: String?, for id: UUID) throws {
-        try KeychainItem(service: keychainService, account: id.uuidString, label: "Tabula database connection")
-            .write(password)
+        var shared = try passwords()
+        if let password, !password.isEmpty {
+            shared[id] = password
+        } else {
+            shared[id] = nil
+        }
+        try write(shared)
+        try? keychain.write(nil, account: id.uuidString, label: nil)
+    }
+
+    private func write(_ passwords: [UUID: String]) throws {
+        let stored = Dictionary(uniqueKeysWithValues: passwords.map { ($0.key.uuidString, $0.value) })
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let text = String(decoding: try encoder.encode(stored), as: UTF8.self)
+        try keychain.write(stored.isEmpty ? nil : text, account: Self.sharedAccount, label: Self.sharedLabel)
     }
 }
 
@@ -94,12 +172,21 @@ public struct KeychainItem: Sendable {
     }
 
     public func read() -> String? {
+        try? readThrowing()
+    }
+
+    /// The value, nil when there is no item; throws when one exists but can't be read (access denied, locked).
+    public func readThrowing() throws -> String? {
         var item = query
         item[kSecReturnData as String] = true
         item[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
-        guard SecItemCopyMatching(item as CFDictionary, &result) == errSecSuccess, let data = result as? Data else {
+        let status = SecItemCopyMatching(item as CFDictionary, &result)
+        if status == errSecItemNotFound {
             return nil
+        }
+        guard status == errSecSuccess, let data = result as? Data else {
+            throw KeychainError(status: status)
         }
         return String(data: data, encoding: .utf8)
     }
