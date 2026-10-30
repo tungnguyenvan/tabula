@@ -119,8 +119,12 @@ public struct ConnectionConfig: Codable, Identifiable, Hashable, Sendable {
         self.ssh = ssh
     }
 
-    /// The host to connect to: the one entered, or the local machine when it was left blank.
-    public var resolvedHost: String { host.isEmpty ? Defaults.host : host }
+    /// The host to connect to: the one entered, or the local machine when it was left blank. Spaces and line
+    /// breaks around it (a paste often brings one) are no part of any host name.
+    public var resolvedHost: String {
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Defaults.host : trimmed
+    }
 
     /// Seconds to wait while connecting.
     public var timeout: Double { connectTimeout ?? Defaults.connectTimeout }
