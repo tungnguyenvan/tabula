@@ -54,6 +54,24 @@ public struct TableChanges: Sendable {
     }
 }
 
+/// One statement of a commit, with how to tell it reached exactly its row.
+public struct PlannedStatement: Sendable, Equatable {
+    public var sql: String
+    /// The page row it changes or deletes, for the message when it doesn't find that row.
+    public var row: Int?
+    /// A count query that must answer 1 before the statement runs.
+    public var check: String?
+    /// The statement itself must report exactly one affected row.
+    public var mustAffectOne: Bool
+
+    public init(sql: String, row: Int? = nil, check: String? = nil, mustAffectOne: Bool = false) {
+        self.sql = sql
+        self.row = row
+        self.check = check
+        self.mustAffectOne = mustAffectOne
+    }
+}
+
 /// How a highlighted word reads in a query language.
 public enum WordRole: Sendable, Equatable {
     /// A keyword or a method of the language (`SELECT`, `find`).

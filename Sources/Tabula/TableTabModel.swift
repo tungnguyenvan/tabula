@@ -513,18 +513,21 @@ final class TableTabModel {
 
     /// Statements that apply the pending changes, in the order they will run.
     func pendingStatements() throws -> [String] {
-        try driver.dialect.statements(
-            for: TableChanges(
-                table: table,
-                columns: resultColumns,
-                rows: rows,
-                documents: documents,
-                keyColumns: primaryKeyIndices,
-                deleted: changes.deletedRows,
-                edited: changes.edits,
-                inserted: changes.insertedRows,
-                binaryColumns: binaryColumns
-            )
+        try driver.dialect.statements(for: changeSet)
+    }
+
+    /// The pending changes as the dialect writes them.
+    private var changeSet: TableChanges {
+        TableChanges(
+            table: table,
+            columns: resultColumns,
+            rows: rows,
+            documents: documents,
+            keyColumns: primaryKeyIndices,
+            deleted: changes.deletedRows,
+            edited: changes.edits,
+            inserted: changes.insertedRows,
+            binaryColumns: binaryColumns
         )
     }
 
@@ -572,7 +575,11 @@ final class TableTabModel {
         committing = true
         defer { committing = false }
         do {
-            try await driver.applyInTransaction(statements)
+            if let sql = driver.dialect.sql {
+                try await driver.applyInTransaction(try sql.plannedStatements(for: changeSet))
+            } else {
+                try await driver.applyInTransaction(statements)
+            }
             await reload()
         } catch {
             guard driver.kind.isDocument else {
