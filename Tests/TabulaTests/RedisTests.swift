@@ -29,6 +29,16 @@ final class RedisCommandLineTests: XCTestCase {
         XCTAssertEqual(RedisReply.array([]).formatted(), "(empty array)")
     }
 
+    /// The console shares its connection with the key browser, so commands that would hold it are refused.
+    func testCommandsThatWouldHoldTheConnectionAreRefused() throws {
+        for line in ["multi", "WATCH k", "SUBSCRIBE news", "MONITOR"] {
+            XCTAssertNotNil(RedisCommandLine.refusal(for: try RedisCommandLine.parse(line)), line)
+        }
+        for line in ["EXEC", "GET k", "EVAL \"return 1\" 0"] {
+            XCTAssertNil(RedisCommandLine.refusal(for: try RedisCommandLine.parse(line)), line)
+        }
+    }
+
     func testReadOnlyCommands() throws {
         func readOnly(_ line: String) throws -> Bool { RedisCommandLine.isReadOnly(try RedisCommandLine.parse(line)) }
         XCTAssertTrue(try readOnly("get user:1"))
