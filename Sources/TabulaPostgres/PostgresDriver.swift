@@ -388,9 +388,10 @@ public actor PostgresDriver: DatabaseDriver {
             """
             SELECT ic.relname AS name, i.indisunique AS is_unique, i.indisprimary AS is_primary,
                    pg_get_indexdef(i.indexrelid) AS definition,
-                   array_to_string(ARRAY(
-                       SELECT pg_get_indexdef(i.indexrelid, k + 1, true)
-                       FROM generate_subscripts(i.indkey, 1) AS k ORDER BY k), ', ') AS columns
+                   (SELECT json_agg(CASE WHEN i.indkey[k] = 0 THEN pg_get_indexdef(i.indexrelid, k + 1, true)
+                                         ELSE (SELECT attname FROM pg_attribute
+                                               WHERE attrelid = i.indrelid AND attnum = i.indkey[k]) END ORDER BY k)
+                    FROM generate_subscripts(i.indkey, 1) AS k)::text AS columns
             FROM pg_index i
             JOIN pg_class ic ON ic.oid = i.indexrelid
             WHERE i.indrelid = \(d.literal(d.qualified(table)))::regclass
@@ -400,11 +401,22 @@ public actor PostgresDriver: DatabaseDriver {
         .map { row in
             IndexInfo(
                 name: row["name"] ?? "",
-                columns: (row["columns"] ?? "").components(separatedBy: ", ").filter { !$0.isEmpty },
+                columns: Self.indexColumns(row["columns"]),
                 isUnique: row["is_unique"] == "true",
                 isPrimary: row["is_primary"] == "true",
                 definition: row["definition"]
             )
         }
+    }
+
+    /// An index's columns as a JSON array: plain columns by name, expressions as PostgreSQL writes them, which
+    /// can hold ", " themselves (`coalesce(a, b)`).
+    static func indexColumns(_ json: String?) -> [String] {
+        guard let data = json?.data(using: .utf8),
+            let columns = try? JSONDecoder().decode([String].self, from: data)
+        else {
+            return []
+        }
+        return columns
     }
 }
