@@ -37,10 +37,12 @@ public struct SQLDialect: QueryDialect, Equatable {
         guard let value else {
             return "NULL"
         }
-        // MySQL treats backslash as an escape character unless NO_BACKSLASH_ESCAPES is set.
-        let unescaped =
-            flavor.lexicalRules.backslashEscapes ? value.replacingOccurrences(of: "\\", with: "\\\\") : value
-        return "'" + unescaped.replacingOccurrences(of: "'", with: "''") + "'"
+        // MySQL reads a backslash as an escape unless the server's sql_mode has NO_BACKSLASH_ESCAPES, which Tabula
+        // can't know: a value with one is written in hex, which reads the same in either mode.
+        if flavor == .mysql, value.contains("\\") {
+            return "_utf8mb4 X'" + BinaryText.hex(value.utf8) + "'"
+        }
+        return "'" + value.replacingOccurrences(of: "'", with: "''") + "'"
     }
 
     public var beginTransaction: String? {

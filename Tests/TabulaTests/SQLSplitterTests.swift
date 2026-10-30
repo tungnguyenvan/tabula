@@ -41,7 +41,9 @@ final class SQLDialectTests: XCTestCase {
     func testQuotingPerDialect() {
         XCTAssertEqual(SQLDialect(flavor: .mysql).quoteIdentifier("a`b"), "`a``b`")
         XCTAssertEqual(SQLDialect(flavor: .postgres).quoteIdentifier("a\"b"), "\"a\"\"b\"")
-        XCTAssertEqual(SQLDialect(flavor: .mysql).literal("it's \\ ok"), "'it''s \\\\ ok'")
+        XCTAssertEqual(SQLDialect(flavor: .mysql).literal("it's ok"), "'it''s ok'")
+        // A backslash reads differently with NO_BACKSLASH_ESCAPES; hex reads the same in either mode (#220).
+        XCTAssertEqual(SQLDialect(flavor: .mysql).literal("it's \\ ok"), "_utf8mb4 X'69742773205c206f6b'")
         XCTAssertEqual(SQLDialect(flavor: .postgres).literal("it's \\ ok"), "'it''s \\ ok'")
         XCTAssertEqual(SQLDialect(flavor: .sqlite).literal(nil), "NULL")
     }

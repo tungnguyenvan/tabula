@@ -98,13 +98,16 @@ extension SQLDialect {
             }
         let like = flavor == .postgres ? "ILIKE" : "LIKE"
         func pattern(_ prefix: String, _ suffix: String) -> String {
-            let escaped = rule.value.replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_")
+            // MySQL's LIKE has no default escape under NO_BACKSLASH_ESCAPES, and '\\' reads differently there, so
+            // it escapes with "!".
+            let escape = flavor == .mysql ? "!" : "\\"
+            let escaped = rule.value.replacingOccurrences(of: escape, with: escape + escape)
+                .replacingOccurrences(of: "%", with: escape + "%").replacingOccurrences(of: "_", with: escape + "_")
             let text = literal(prefix + escaped + suffix)
             switch flavor {
             case .postgres: return text + " ESCAPE '\\'"
             case .sqlite: return "\(Self.caseFoldFunction)(\(text)) ESCAPE '\\'"
-            case .mysql: return text
+            case .mysql: return text + " ESCAPE '!'"
             }
         }
         switch rule.op {
