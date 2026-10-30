@@ -24,32 +24,30 @@ final class SQLExportRoundTripTests: XCTestCase {
         let source = TableRef(schema: schema, name: "export_src_\(suffix)")
         let copy = TableRef(schema: schema, name: "export_copy_\(suffix)")
         let d = driver.dialect
-        defer {
-            Task {
-                _ = try? await driver.execute("DROP TABLE \(d.qualified(source))")
-                _ = try? await driver.execute("DROP TABLE \(d.qualified(copy))")
-                await driver.close()
+        try await runThenClean(
+            driver,
+            cleanup: ["DROP TABLE \(d.qualified(source))", "DROP TABLE \(d.qualified(copy))"]
+        ) {
+            _ = try await driver.execute(create(d.qualified(source)))
+            _ = try await driver.execute(create(d.qualified(copy)))
+            _ = try await driver.execute(seed(d.qualified(source)))
+            let page = try await driver.execute("SELECT * FROM \(d.qualified(source)) ORDER BY id")
+            let script = try ResultExporter.export(
+                columns: page.columns,
+                rows: page.rows,
+                format: .sqlInsert,
+                table: copy,
+                binaryColumns: page.binaryColumns,
+                dialect: d
+            )
+            for statement in d.split(script) {
+                _ = try await driver.execute(statement)
             }
+            let original = try await driver.execute(compare.replacingOccurrences(of: "$T", with: d.qualified(source)))
+            let copied = try await driver.execute(compare.replacingOccurrences(of: "$T", with: d.qualified(copy)))
+            XCTAssertEqual(copied.rows, original.rows, "the export didn't give the same rows back:\n\(script)")
+            XCTAssertEqual(original.rows.count, 3)
         }
-        _ = try await driver.execute(create(d.qualified(source)))
-        _ = try await driver.execute(create(d.qualified(copy)))
-        _ = try await driver.execute(seed(d.qualified(source)))
-        let page = try await driver.execute("SELECT * FROM \(d.qualified(source)) ORDER BY id")
-        let script = try ResultExporter.export(
-            columns: page.columns,
-            rows: page.rows,
-            format: .sqlInsert,
-            table: copy,
-            binaryColumns: page.binaryColumns,
-            dialect: d
-        )
-        for statement in d.split(script) {
-            _ = try await driver.execute(statement)
-        }
-        let original = try await driver.execute(compare.replacingOccurrences(of: "$T", with: d.qualified(source)))
-        let copied = try await driver.execute(compare.replacingOccurrences(of: "$T", with: d.qualified(copy)))
-        XCTAssertEqual(copied.rows, original.rows, "the export didn't give the same rows back:\n\(script)")
-        XCTAssertEqual(original.rows.count, 3)
     }
 
     func testPostgres() async throws {

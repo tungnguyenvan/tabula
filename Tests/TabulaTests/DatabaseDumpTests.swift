@@ -187,64 +187,67 @@ final class DatabaseDumpTests: XCTestCase {
         _ = try await driver.execute("CREATE TABLE public.\(table) (id int PRIMARY KEY, label text)")
         _ = try await driver.execute("INSERT INTO public.\(table) VALUES (1, 'it''s'), (2, E'back\\\\slash')")
         _ = try await driver.execute("CREATE DATABASE \(target)")
-        defer {
-            Task {
-                _ = try? await driver.execute("DROP TABLE public.\(table)")
-                _ = try? await driver.execute("DROP DATABASE \(target) WITH (FORCE)")
-                await driver.close()
+        try await runThenClean(
+            driver,
+            cleanup: ["DROP TABLE public.\(table)", "DROP DATABASE \(target) WITH (FORCE)"]
+        ) {
+            for format in DatabaseDump.Format.allCases {
+                let file = temporaryFile(format.fileExtension)
+                defer { try? FileManager.default.removeItem(at: file) }
+                var options = DatabaseDump.DumpOptions()
+                options.format = format
+                options.tables = [TableRef(schema: "public", name: table)]
+                options.addDrop = true
+                let reports = Reports()
+                try await DatabaseDump.dump(config, password: "tabula", database: "tabula", options: options, to: file)
+                {
+                    reports.add($0)
+                }
+                XCTAssertGreaterThan(
+                    (try FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0,
+                    0
+                )
+                var restoreOptions = DatabaseDump.RestoreOptions()
+                restoreOptions.serverMajor = 16
+                restoreOptions.dropExisting = format == .custom
+                try await DatabaseDump.restore(
+                    config,
+                    password: "tabula",
+                    database: target,
+                    options: restoreOptions,
+                    from: file
+                ) { reports.add($0) }
+                var restoredConfig = config
+                restoredConfig.database = target
+                let restored = try await PostgresDriver.connect(restoredConfig, password: "tabula")
+                let rows = try await restored.execute("SELECT id::text, label FROM public.\(table) ORDER BY id").rows
+                await restored.close()
+                XCTAssertEqual(rows, [["1", "it's"], ["2", "back\\slash"]], format.rawValue)
             }
-        }
-        for format in DatabaseDump.Format.allCases {
-            let file = temporaryFile(format.fileExtension)
-            defer { try? FileManager.default.removeItem(at: file) }
-            var options = DatabaseDump.DumpOptions()
-            options.format = format
-            options.tables = [TableRef(schema: "public", name: table)]
-            options.addDrop = true
-            let reports = Reports()
-            try await DatabaseDump.dump(config, password: "tabula", database: "tabula", options: options, to: file) {
-                reports.add($0)
+            // Restoring the archive again without dropping fails on the existing table, and says so.
+            let again = temporaryFile("dump")
+            defer { try? FileManager.default.removeItem(at: again) }
+            var archive = DatabaseDump.DumpOptions()
+            archive.format = .custom
+            archive.tables = [TableRef(schema: "public", name: table)]
+            try await DatabaseDump.dump(config, password: "tabula", database: "tabula", options: archive, to: again) {
+                _ in
             }
-            XCTAssertGreaterThan((try FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0, 0)
             var restoreOptions = DatabaseDump.RestoreOptions()
             restoreOptions.serverMajor = 16
-            restoreOptions.dropExisting = format == .custom
-            try await DatabaseDump.restore(
-                config,
-                password: "tabula",
-                database: target,
-                options: restoreOptions,
-                from: file
-            ) { reports.add($0) }
-            var restoredConfig = config
-            restoredConfig.database = target
-            let restored = try await PostgresDriver.connect(restoredConfig, password: "tabula")
-            let rows = try await restored.execute("SELECT id::text, label FROM public.\(table) ORDER BY id").rows
-            await restored.close()
-            XCTAssertEqual(rows, [["1", "it's"], ["2", "back\\slash"]], format.rawValue)
-        }
-        // Restoring the archive again without dropping fails on the existing table, and says so.
-        let again = temporaryFile("dump")
-        defer { try? FileManager.default.removeItem(at: again) }
-        var archive = DatabaseDump.DumpOptions()
-        archive.format = .custom
-        archive.tables = [TableRef(schema: "public", name: table)]
-        try await DatabaseDump.dump(config, password: "tabula", database: "tabula", options: archive, to: again) { _ in
-        }
-        var restoreOptions = DatabaseDump.RestoreOptions()
-        restoreOptions.serverMajor = 16
-        do {
-            try await DatabaseDump.restore(
-                config,
-                password: "tabula",
-                database: target,
-                options: restoreOptions,
-                from: again
-            ) { _ in }
-            XCTFail("The table already exists")
-        } catch {
-            XCTAssertFalse(error is CancellationError)
-            XCTAssertTrue(error.localizedDescription.contains("already exists"), error.localizedDescription)
+            do {
+                try await DatabaseDump.restore(
+                    config,
+                    password: "tabula",
+                    database: target,
+                    options: restoreOptions,
+                    from: again
+                ) { _ in }
+                XCTFail("The table already exists")
+            } catch {
+                XCTAssertFalse(error is CancellationError)
+                XCTAssertTrue(error.localizedDescription.contains("already exists"), error.localizedDescription)
+            }
         }
     }
 
