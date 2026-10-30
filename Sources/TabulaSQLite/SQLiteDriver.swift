@@ -224,15 +224,20 @@ public actor SQLiteDriver: DatabaseDriver {
 
     public func columns(of table: TableRef) throws -> [ColumnInfo] {
         let d = SQLDialect(flavor: .sqlite)
-        return try records("PRAGMA \(d.quoteIdentifier(table.schema)).table_info(\(d.literal(table.name)))")
+        // table_xinfo also lists generated columns (hidden 2 and 3), which SELECT * returns; hidden 1 are a
+        // virtual table's hidden columns, which it doesn't.
+        return try records("PRAGMA \(d.quoteIdentifier(table.schema)).table_xinfo(\(d.literal(table.name)))")
+            .filter { $0["hidden"] != "1" }
             .map { row in
-                ColumnInfo(
+                let isGenerated = row["hidden"] == "2" || row["hidden"] == "3"
+                return ColumnInfo(
                     name: row["name"] ?? "",
                     dataType: row["type"] ?? "",
                     isNullable: row["notnull"] == "0",
-                    defaultValue: row["dflt_value"],
+                    defaultValue: isGenerated ? "GENERATED" : row["dflt_value"],
                     // pk is the column's position in the primary key, 0 when it isn't part of it.
-                    isPrimaryKey: (row.int("pk") ?? 0) > 0
+                    isPrimaryKey: (row.int("pk") ?? 0) > 0,
+                    isGenerated: isGenerated
                 )
             }
     }
