@@ -13,6 +13,8 @@ final class BinaryValuesTests: XCTestCase {
     func testLiteralsForBinaryColumns() {
         XCTAssertEqual(BinaryText.text([0xDE, 0xAD, 0x00]), "\\xdead00")
         XCTAssertEqual(BinaryText.text([]), "\\x")
+        XCTAssertEqual(BinaryText.hex(Array(0...255)).count, 512)
+        XCTAssertEqual(BinaryText.hex([0x00, 0x0f, 0xf0, 0xff]), "000ff0ff", "two lowercase digits per byte")
         XCTAssertEqual(BinaryText.hexDigits("\\xdead00"), "dead00")
         XCTAssertNil(BinaryText.hexDigits("\\xabc"), "an odd number of digits isn't bytes")
         XCTAssertNil(BinaryText.hexDigits("hello"))

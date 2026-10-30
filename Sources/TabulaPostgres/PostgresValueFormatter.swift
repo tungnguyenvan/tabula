@@ -115,7 +115,7 @@ enum PostgresValueFormatter {
     }
 
     private static func hex(_ buffer: inout ByteBuffer) -> String {
-        (buffer.readBytes(length: buffer.readableBytes) ?? []).map { String(format: "%02x", $0) }.joined()
+        BinaryText.hex(buffer.readBytes(length: buffer.readableBytes) ?? [])
     }
 
     private static func uuid(_ buffer: inout ByteBuffer) -> String {
