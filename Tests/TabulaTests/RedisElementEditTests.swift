@@ -116,3 +116,62 @@ final class RedisListAndTTLTests: XCTestCase {
         await driver.close()
     }
 }
+
+/// Streams in the key browser: entries page in order by id, entries with different fields share columns, adding
+/// and deleting work, and a stream's id column can't be edited.
+final class RedisStreamTests: XCTestCase {
+    func testStreamPagesAddsAndDeletes() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_REDIS_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_REDIS_PORT not set")
+        }
+        let driver = try await RedisDriver.connect(
+            ConnectionConfig(kind: .redis, port: port, user: "tabula", database: "13"),
+            password: "tabula"
+        )
+        _ = try await driver.send("FLUSHDB")
+        let key = RedisBytes("events")
+        for index in 0..<(Defaults.Redis.pageSize + 5) {
+            _ = try await driver.send("XADD", "events", "\(index + 1)-0", "n", String(index))
+        }
+        _ = try await driver.send("XADD", "events", "9999999999999-0", "other", "é", "n", "last")
+
+        var page = try await driver.page(key, type: .stream, after: nil)
+        var ids = page.rows.map { $0[0].display }
+        while let next = page.next {
+            page = try await driver.page(key, type: .stream, after: next)
+            ids += page.rows.map { $0[0].display }
+        }
+        XCTAssertEqual(ids.count, Defaults.Redis.pageSize + 6, "every entry once")
+        XCTAssertEqual(ids.first, "1-0")
+        XCTAssertEqual(ids.last, "9999999999999-0")
+        XCTAssertEqual(Set(ids).count, ids.count, "no entry repeated across pages")
+
+        try await driver.add(
+            key,
+            type: .stream,
+            values: [RedisBytes("a"), RedisBytes("1"), RedisBytes("b"), RedisBytes("2")]
+        )
+        do {
+            try await driver.add(key, type: .stream, values: [RedisBytes("odd")])
+            XCTFail("an entry needs field/value pairs")
+        } catch {}
+        try await driver.remove(key, type: .stream, elements: [RedisBytes("1-0"), RedisBytes("9999999999999-0")])
+        let length = try await driver.send("XLEN", "events")
+        XCTAssertEqual(length, .integer(Int(Defaults.Redis.pageSize) + 5))
+        do {
+            try await driver.update(
+                key,
+                type: .stream,
+                element: RedisBytes("2-0"),
+                column: 1,
+                to: RedisBytes("x"),
+                row: []
+            )
+            XCTFail("stream entries can't be edited in place")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This value can't be edited in place.")
+        }
+        _ = try await driver.send("FLUSHDB")
+        await driver.close()
+    }
+}
