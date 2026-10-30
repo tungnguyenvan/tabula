@@ -51,6 +51,33 @@ public enum SQLFormatter {
         var clause = ""
     }
 
+    /// Operator characters, which the lexer reads as one operator when they touch.
+    static func isOperator(_ token: SQLToken) -> Bool {
+        token.kind == .punctuation
+            && token.text.unicodeScalars.allSatisfy { "+-*/<>=~!@#%^&|?:".unicodeScalars.contains($0) }
+    }
+
+    /// Whether the token at `index` prefixes a name or number: @v, @@x, ?1, :name. A ":" written right after a
+    /// value is a separator instead (a[1:2]).
+    static func isPrefix(at index: Int, in tokens: [SQLToken]) -> Bool {
+        guard tokens.indices.contains(index), tokens[index].kind == .punctuation else {
+            return false
+        }
+        let token = tokens[index]
+        if ["@", "@@", "?"].contains(token.text) {
+            return true
+        }
+        guard token.text == ":" else {
+            return false
+        }
+        guard index > 0 else {
+            return true
+        }
+        let before = tokens[index - 1]
+        let isValue = [.number, .word, .quotedIdentifier].contains(before.kind) || [")", "]"].contains(before.text)
+        return !(isValue && NSMaxRange(before.range) == token.range.location)
+    }
+
     public static func format(_ sql: String, flavor: SQLFlavor) -> String {
         let tokens = SQLLexer.tokens(sql, flavor: flavor).filter { $0.kind != .whitespace }
         var out = ""
@@ -83,8 +110,32 @@ public enum SQLFormatter {
         }
         func needsSpace(before token: SQLToken) -> Bool {
             guard let previous else { return false }
-            if [",", ")", ".", ";", "::"].contains(token.text) { return false }
-            if ["(", ".", "::"].contains(previous.text) { return false }
+            // Two operators written together would read as one (":: <=" as "::<=").
+            if SQLFormatter.isOperator(previous), SQLFormatter.isOperator(token) {
+                return true
+            }
+            // "1 ." would read as the number "1.".
+            if token.text == ".", previous.kind == .number {
+                return true
+            }
+            if [",", ")", ".", ";", "::", "]"].contains(token.text) { return false }
+            if ["(", ".", "::", "["].contains(previous.text) { return false }
+            // Written together, these are one thing to the server: a prefixed literal (b'01', x'ff', N'…',
+            // _utf8mb4'a'), a parameter or variable (:name, @v, @@global.x, ?1), or a subscript (a[1]).
+            if NSMaxRange(previous.range) == token.range.location {
+                if previous.kind == .word || previous.kind == .number, token.kind == .string {
+                    return false
+                }
+                if previous.kind == .number, token.kind == .word {
+                    return false
+                }
+                if SQLFormatter.isPrefix(at: index - 1, in: tokens), token.kind != .punctuation {
+                    return false
+                }
+                if token.text == "[" {
+                    return false
+                }
+            }
             if token.text == "(" {
                 // Function calls and table(column) lists hug their parenthesis; keywords like IN and VALUES don't.
                 if previous.kind == .quotedIdentifier {
@@ -114,6 +165,10 @@ public enum SQLFormatter {
             var frame = frames[frames.count - 1]
 
             if token.text == ";" {
+                // After a line comment the ";" needs a line of its own, or the comment would take it in.
+                if forceBreak {
+                    newline(frames[frames.count - 1].level)
+                }
                 // The next statement's first clause adds the second newline, leaving one blank line.
                 out += ";\n"
                 lineHasContent = false

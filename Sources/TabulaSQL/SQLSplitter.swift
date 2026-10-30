@@ -50,6 +50,13 @@ public enum SQLSplitter {
         var escapePrefixEnd: Int?
 
         func isWordCharacter(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "_" }
+        /// MySQL's -- is a comment only before whitespace.
+        func startsDashDashComment(at index: Int) -> Bool {
+            guard rules.dashDashNeedsSpace, index + 2 < chars.count else {
+                return true
+            }
+            return chars[index + 2].isWhitespace || chars[index + 2].unicodeScalars.allSatisfy { $0.value < 0x20 }
+        }
 
         /// Tracks BEGIN / CASE ... END nesting, only inside CREATE TRIGGER / PROCEDURE / FUNCTION / EVENT.
         func note(_ word: String) {
@@ -138,7 +145,9 @@ public enum SQLSplitter {
             let c = chars[i]
             let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
 
-            if c == "-" && next == "-" || (c == "#" && flavor.lexicalRules.hashComments) {
+            if (c == "-" && next == "-" && startsDashDashComment(at: i))
+                || (c == "#" && flavor.lexicalRules.hashComments)
+            {
                 while i < chars.count && chars[i] != "\n" {
                     current.append(chars[i])
                     i += 1

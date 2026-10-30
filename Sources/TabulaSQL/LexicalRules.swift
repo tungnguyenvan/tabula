@@ -4,8 +4,23 @@ import TabulaFoundation
 /// What starts a comment, a string or a quoted name in a query language. The lexer reads every language Tabula
 /// highlights with these rules instead of asking which database it is for.
 public struct LexicalRules: Sendable, Equatable {
+    /// Whether `--` at `index` of `units` starts a comment under these rules.
+    public func startsDashDashComment(_ units: [UInt16], at index: Int) -> Bool {
+        let dash = UInt16(UInt8(ascii: "-"))
+        guard dashDashComments, index + 1 < units.count, units[index] == dash, units[index + 1] == dash else {
+            return false
+        }
+        guard dashDashNeedsSpace, index + 2 < units.count else {
+            return true
+        }
+        // MySQL: a space, a tab, a line break or another control character.
+        return units[index + 2] <= 0x20
+    }
+
     /// `-- comment` to the end of the line.
     public var dashDashComments: Bool
+    /// `--` starts a comment only before a space, tab or line break (MySQL; `a--b` is a minus minus b).
+    public var dashDashNeedsSpace: Bool
     /// `# comment` to the end of the line (MySQL).
     public var hashComments: Bool
     /// `// comment` to the end of the line (the MongoDB shell).
@@ -21,6 +36,8 @@ public struct LexicalRules: Sendable, Equatable {
     public var dollarQuotes: Bool
     /// `"name"` and `` `name` `` are names rather than strings (SQL).
     public var quotedIdentifiers: Bool
+    /// `[name]` is a name (SQLite, as in SQL Server).
+    public var bracketIdentifiers: Bool
 
     public init(
         dashDashComments: Bool,
@@ -30,9 +47,12 @@ public struct LexicalRules: Sendable, Equatable {
         escapeStrings: Bool,
         doubledQuotes: Bool,
         dollarQuotes: Bool,
-        quotedIdentifiers: Bool
+        quotedIdentifiers: Bool,
+        bracketIdentifiers: Bool = false,
+        dashDashNeedsSpace: Bool = false
     ) {
         self.dashDashComments = dashDashComments
+        self.dashDashNeedsSpace = dashDashNeedsSpace
         self.hashComments = hashComments
         self.slashSlashComments = slashSlashComments
         self.backslashEscapes = backslashEscapes
@@ -40,6 +60,7 @@ public struct LexicalRules: Sendable, Equatable {
         self.doubledQuotes = doubledQuotes
         self.dollarQuotes = dollarQuotes
         self.quotedIdentifiers = quotedIdentifiers
+        self.bracketIdentifiers = bracketIdentifiers
     }
 }
 
@@ -57,7 +78,9 @@ public enum SQLFlavor: Sendable, Equatable, CaseIterable {
             escapeStrings: self == .postgres,
             doubledQuotes: true,
             dollarQuotes: self == .postgres,
-            quotedIdentifiers: true
+            quotedIdentifiers: true,
+            bracketIdentifiers: self == .sqlite,
+            dashDashNeedsSpace: self == .mysql
         )
     }
 
