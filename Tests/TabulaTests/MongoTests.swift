@@ -400,7 +400,7 @@ final class MongoIntegrationTests: XCTestCase {
         let dialect = MongoQueryDialect()
         try await runThenClean(driver, cleanup: ["\(collection).drop()"]) {
             _ = try await driver.execute(
-                #"\#(collection).insertMany([{ _id: 1, "a.b": 1, a: { b: 5 }, "$p": "x" }, { _id: 2, "a.b": 5, a: { b: 1 }, "$p": "y" }, { _id: 3 }, { _id: 4, "a.b": [5, 6] }])"#
+                #"\#(collection).insertMany([{ _id: 1, "a.b": 1, a: { b: 5 }, "$p": "x" }, { _id: 2, "a.b": 5, a: { b: 1 }, "$p": "y" }, { _id: 3 }, { _id: 4, "a.b": [5, 6] }, { _id: 5, "a.b": [0, "x"] }])"#
             )
             func ids(_ rule: FilterRule) async throws -> [String?] {
                 let filter = dialect.condition([rule])
@@ -410,16 +410,18 @@ final class MongoIntegrationTests: XCTestCase {
             let cases: [(FilterRule, [String?])] = [
                 // An array matches when one of its elements does, as in a query (#276).
                 (FilterRule(column: "a.b", op: .equals, value: "5"), ["2", "4"]),
-                (FilterRule(column: "a.b", op: .notEquals, value: "1"), ["2", "3", "4"]),
-                (FilterRule(column: "a.b", op: .notEquals, value: "6"), ["1", "2", "3"]),
-                (FilterRule(column: "a.b", op: .greater, value: "2"), ["2"]),
-                (FilterRule(column: "a.b", op: .lessOrEqual, value: "1"), ["1"]),
+                (FilterRule(column: "a.b", op: .notEquals, value: "1"), ["2", "3", "4", "5"]),
+                (FilterRule(column: "a.b", op: .notEquals, value: "6"), ["1", "2", "3", "5"]),
+                // Ranges too: an element in range is enough, and only elements of the same type compare (#284).
+                (FilterRule(column: "a.b", op: .greater, value: "2"), ["2", "4"]),
+                (FilterRule(column: "a.b", op: .lessOrEqual, value: "1"), ["1", "5"]),
+                (FilterRule(column: "a.b", op: .greater, value: "5"), ["4"]),
                 (FilterRule(column: "a.b", op: .contains, value: "5"), ["2"]),
                 (FilterRule(column: "a.b", op: .inList, value: "6, 7"), ["4"]),
                 (FilterRule(column: "a.b", op: .isNull), ["3"]),
                 (FilterRule(column: "$p", op: .equals, value: "x"), ["1"]),
                 (FilterRule(column: "$p", op: .greater, value: "x"), ["2"]),
-                (FilterRule(column: "$p", op: .notContains, value: "x"), ["2", "3", "4"]),
+                (FilterRule(column: "$p", op: .notContains, value: "x"), ["2", "3", "4", "5"]),
                 (FilterRule(column: "$p", op: .isNotNull), ["1", "2"]),
             ]
             for (rule, expected) in cases {

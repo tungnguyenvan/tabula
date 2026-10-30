@@ -279,12 +279,29 @@ enum MongoDialect {
             let operand = candidates.first ?? rule.value
             // A query's range compares within one type (numbers of any type together); $expr compares across types.
             let isNumber = operand is Int32 || operand is Int || operand is Double || operand is Decimal128
-            let sameType: Document =
-                isNumber
-                ? ["$isNumber": value]
-                : ["$eq": MongoDriver.array([["$type": value] as Document, ["$type": literal(operand)] as Document])]
-            let comparison: Document = [op: MongoDriver.array([value, literal(operand)])]
-            return expression(["$and": MongoDriver.array([sameType, comparison])])
+            func matches(_ item: Primitive) -> Document {
+                let sameType: Document =
+                    isNumber
+                    ? ["$isNumber": item]
+                    : [
+                        "$eq": MongoDriver.array([["$type": item] as Document, ["$type": literal(operand)] as Document])
+                    ]
+                let comparison: Document = [op: MongoDriver.array([item, literal(operand)])]
+                return ["$and": MongoDriver.array([sameType, comparison])]
+            }
+            // As a query compares an array: true when any element matches.
+            let anyElement: Document = [
+                "$and": MongoDriver.array([
+                    ["$isArray": value] as Document,
+                    [
+                        "$anyElementTrue": MongoDriver.array([
+                            ["$map": ["input": value, "as": "element", "in": matches("$$element")] as Document]
+                                as Document
+                        ])
+                    ] as Document,
+                ])
+            ]
+            return expression(["$or": MongoDriver.array([matches(value), anyElement])])
         }
         func textMatch(_ regex: String) -> Document {
             let asText: Document = [
