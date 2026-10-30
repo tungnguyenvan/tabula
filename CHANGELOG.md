@@ -5,6 +5,7 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 ## [Unreleased]
 
 ### Added
+- **Edit SQLite query results**, as on PostgreSQL and MySQL: double-click a cell in a result from one table that includes its primary key, then Commit (⌘S). A row changed since the query ran is reported, not overwritten, and nothing is saved.
 - **Stop a running MySQL / MariaDB, SQLite or MongoDB query, or a Redis script** with **Stop** or ⌘., as on PostgreSQL. A statement that never ends, such as a recursive query without a stop condition, no longer leaves quitting Tabula as the only way out ([#141](https://github.com/tungnguyenvan/tabula/issues/141)). The Redis console stops a running script or function (`SCRIPT KILL`, `FUNCTION KILL`, once Redis has let it run 5 seconds) and unblocks a waiting `BLPOP` or `XREAD BLOCK`. On MySQL, Stop sends `KILL QUERY` for that statement only, and on MongoDB `killOp` for that command's operations, each from a short-lived second connection.
 
 ### Fixed

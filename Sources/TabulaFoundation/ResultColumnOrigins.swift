@@ -10,6 +10,19 @@ public struct QueryColumnOrigin: Sendable, Equatable {
     }
 }
 
+/// SQLite's column metadata: the database (schema), table and column a result column reads, past any alias.
+public struct SQLiteColumnOrigin: Sendable, Equatable {
+    public var database: String
+    public var table: String
+    public var column: String
+
+    public init(database: String, table: String, column: String) {
+        self.database = database
+        self.table = table
+        self.column = column
+    }
+}
+
 /// MySQL's wire metadata distinguishes display aliases from physical table and column names.
 public struct MySQLQueryColumnOrigin: Sendable, Equatable {
     public var schema: String
