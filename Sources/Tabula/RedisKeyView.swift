@@ -32,7 +32,7 @@ struct RedisKeyView: View {
                             return .value(model.rows[row][column].display)
                         },
                         isEditable: { row in model.canEditCells && model.rows.indices.contains(row) },
-                        copyText: { model.copyText($0) }
+                        copyRows: { model.copyRows($0) }
                     ),
                     selection: $selection,
                     onEdit: model.canEditCells

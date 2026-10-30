@@ -270,15 +270,13 @@ struct QueryTabView: View {
                                 editor?.target.columns.indices.contains(column) == true
                                     && editor?.target.columns[column].editable == true
                             },
-                            copyText: { rows in
+                            copyRows: { rows in
                                 rows.map { row in
                                     result.columns.indices
                                         .map { column in
                                             resultValue(result, editor: editor, row: row, column: column) ?? "NULL"
                                         }
-                                        .joined(separator: "\t")
                                 }
-                                .joined(separator: "\n")
                             }
                         ),
                         selection: $selection,

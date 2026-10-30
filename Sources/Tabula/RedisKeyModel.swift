@@ -174,8 +174,7 @@ final class RedisKeyModel {
         await perform { try await driver.add(key, type: type, values: values.map(RedisBytes.init)) }
     }
 
-    func copyText(_ indices: IndexSet) -> String {
-        indices.filter { rows.indices.contains($0) }.map { rows[$0].map(\.display).joined(separator: "\t") }
-            .joined(separator: "\n")
+    func copyRows(_ indices: IndexSet) -> [[String]] {
+        indices.filter { rows.indices.contains($0) }.map { rows[$0].map(\.display) }
     }
 }

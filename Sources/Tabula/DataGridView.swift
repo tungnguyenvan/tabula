@@ -10,6 +10,21 @@ enum GridCellState {
     case normal, edited, deleted, inserted
 }
 
+/// Rows as tab-separated text, as Excel puts them on the pasteboard and spreadsheets read them back: a field with a
+/// tab or a line break, or starting with a quote, goes in quotes with its quotes doubled.
+enum TabSeparated {
+    static func text(_ rows: [[String]]) -> String {
+        rows.map { $0.map(field).joined(separator: "\t") }.joined(separator: "\n")
+    }
+
+    static func field(_ value: String) -> String {
+        guard value.contains(where: { $0 == "\t" || $0.isNewline }) || value.hasPrefix("\"") else {
+            return value
+        }
+        return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+}
+
 /// Everything the grid needs to draw; closures read straight from the owning model.
 struct GridSource {
     var columns: [String]
@@ -21,7 +36,8 @@ struct GridSource {
     var isEditable: (_ row: Int) -> Bool = { _ in false }
     /// Columns that can never be edited (e.g. computed ones) return false.
     var isColumnEditable: (_ column: Int) -> Bool = { _ in true }
-    var copyText: (IndexSet) -> String
+    /// The selected rows' cells as text, for Copy; the grid writes them as a spreadsheet reads them.
+    var copyRows: (IndexSet) -> [[String]]
     /// Added to the row index for the row-number gutter (the page offset).
     var rowNumberOffset = 0
     /// Rows at or after this index are new and numbered "+".
@@ -449,11 +465,11 @@ struct DataGridView: NSViewRepresentable {
             guard let tableView else { return }
             let rows = tableView.selectedRowIndexes
             guard !rows.isEmpty else { return }
-            var text = parent.source.copyText(rows)
+            var lines = parent.source.copyRows(rows)
             if withHeader {
-                text = parent.source.columns.joined(separator: "\t") + "\n" + text
+                lines.insert(parent.source.columns, at: 0)
             }
-            Clipboard.copy(text, to: pasteboard)
+            Clipboard.copy(TabSeparated.text(lines), to: pasteboard)
         }
 
         func copyFocusedCell() {

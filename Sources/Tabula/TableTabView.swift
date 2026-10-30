@@ -32,7 +32,7 @@ struct TableTabView: View {
                         cell: { model.cell(row: $0, column: $1) },
                         state: { model.state(row: $0, column: $1) },
                         isEditable: { model.isEditable(row: $0) },
-                        copyText: { model.copyText(rows: $0) },
+                        copyRows: { model.copyRows($0) },
                         rowNumberOffset: model.offset,
                         insertedFrom: model.rows.count
                     ),

@@ -29,16 +29,14 @@ final class DataGridTests: XCTestCase {
             cell: { rows[$0][$1] },
             isEditable: { $0 != 2 },
             isColumnEditable: { $0 != 0 },
-            copyText: { indices in
+            copyRows: { indices in
                 indices.map { row in
                     rows[row]
                         .map { cell -> String in
                             if case .value(let text) = cell { return text }
                             return cell == .null ? "NULL" : ""
                         }
-                        .joined(separator: "\t")
                 }
-                .joined(separator: "\n")
             }
         )
         let grid = DataGridView(
@@ -95,6 +93,22 @@ final class DataGridTests: XCTestCase {
         coordinator.focus(row: 0, tableColumn: 3, edit: false)
         coordinator.copyFocusedCell()
         XCTAssertEqual(pasteboard.string(forType: .string), "NULL")
+    }
+
+    /// A value with a tab or a line break, or starting with a quote, is quoted as spreadsheets read pasted rows;
+    /// others, JSON included, are copied as they are (#256).
+    func testCopiedRowsKeepTheirCellsInASpreadsheet() {
+        let text = TabSeparated.text([
+            ["4", "line one\nline \"two\"", "a\tb"],
+            ["5", "\"quoted\" start", "ends \"here\"", "{\"b\":1}"],
+        ])
+        XCTAssertEqual(
+            text,
+            "4\t\"line one\nline \"\"two\"\"\"\t\"a\tb\"\n5\t\"\"\"quoted\"\" start\"\tends \"here\"\t{\"b\":1}"
+        )
+        tableView.selectRowIndexes([1], byExtendingSelection: false)
+        coordinator.copySelection()
+        XCTAssertEqual(pasteboard.string(forType: .string), "2\tBình\t{\"b\":1,\"a\":[2]}")
     }
 
     func testDeleteAndSetNullFollowWhatCanBeEdited() {
