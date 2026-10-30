@@ -41,6 +41,8 @@ public struct LexicalRules: Sendable, Equatable {
     /// Characters that start a parameter or variable written against its name: `:name` (psql, SQLite), `@v`
     /// (MySQL, SQLite), `?1` (SQLite). After an operator (`id=:id`) they begin the name, not the operator.
     public var prefixes: String
+    /// `/pattern/flags` where a value can start (the MongoDB shell, as JavaScript reads it).
+    public var regexLiterals: Bool
 
     public init(
         dashDashComments: Bool,
@@ -53,7 +55,8 @@ public struct LexicalRules: Sendable, Equatable {
         quotedIdentifiers: Bool,
         bracketIdentifiers: Bool = false,
         dashDashNeedsSpace: Bool = false,
-        prefixes: String = ""
+        prefixes: String = "",
+        regexLiterals: Bool = false
     ) {
         self.dashDashComments = dashDashComments
         self.dashDashNeedsSpace = dashDashNeedsSpace
@@ -66,6 +69,7 @@ public struct LexicalRules: Sendable, Equatable {
         self.quotedIdentifiers = quotedIdentifiers
         self.bracketIdentifiers = bracketIdentifiers
         self.prefixes = prefixes
+        self.regexLiterals = regexLiterals
     }
 }
 

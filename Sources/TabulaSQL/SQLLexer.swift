@@ -51,11 +51,43 @@ public enum SQLLexer {
             tokens.append(SQLToken(kind: kind, text: text, range: NSRange(location: start, length: i - start)))
         }
 
+        /// A "/" starts a regex where a value can: first, or after an opening bracket, a separator or an operator.
+        func startsRegex(at index: Int) -> Bool {
+            guard rules.regexLiterals, chars[index] == unit("/"), let next = at(index + 1), next != unit("/"),
+                next != unit("*"), next != unit("\n")
+            else { return false }
+            guard let previous = tokens.last(where: { $0.kind != .whitespace && $0.kind != .comment }) else {
+                return true
+            }
+            return previous.kind == .punctuation && previous.text != ")" && previous.text != "]"
+        }
+
         while i < chars.count {
             let start = i
             let c = chars[i]
             let next = at(i + 1)
-            if rules.startsDashDashComment(chars, at: i) || (c == unit("#") && rules.hashComments)
+            if startsRegex(at: i) {
+                // To the closing "/" that isn't escaped or inside [...], then the flags; a line break ends it.
+                i += 1
+                var inClass = false
+                while let u = at(i), u != unit("\n") {
+                    i += 1
+                    if u == unit("\\") {
+                        i += 1
+                    } else if u == unit("[") {
+                        inClass = true
+                    } else if u == unit("]") {
+                        inClass = false
+                    } else if u == unit("/") && !inClass {
+                        while let flag = at(i), let s = Unicode.Scalar(flag), CharacterSet.letters.contains(s) {
+                            i += 1
+                        }
+                        break
+                    }
+                }
+                i = min(i, chars.count)
+                emit(.string, from: start)
+            } else if rules.startsDashDashComment(chars, at: i) || (c == unit("#") && rules.hashComments)
                 || (c == unit("/") && next == unit("/") && rules.slashSlashComments)
             {
                 while let u = at(i), u != unit("\n") { i += 1 }
