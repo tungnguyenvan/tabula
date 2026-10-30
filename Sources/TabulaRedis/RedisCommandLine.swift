@@ -291,6 +291,9 @@ public indirect enum RedisReply: Equatable, Sendable {
 }
 
 public enum RedisTTL {
+    /// The longest expiry Redis takes: it keeps the deadline in milliseconds since 1970 in a signed 64-bit number.
+    static let maxSeconds = Int(Int64.max / 1000) - Int(Date().timeIntervalSince1970) - 1
+
     /// Parses an expiry typed by the user: "3600", "90s", "1h 30m", "2d"; empty, "none", "-" or "no expiry" removes it (nil).
     public static func parse(_ text: String) throws -> Int? {
         let trimmed = text.trimmingCharacters(in: .whitespaces).lowercased()
@@ -298,6 +301,9 @@ public enum RedisTTL {
         if let seconds = Int(trimmed) {
             guard seconds > 0 else {
                 throw DatabaseError("TTL must be at least 1 second.")
+            }
+            guard seconds <= maxSeconds else {
+                throw DatabaseError("That TTL is too long.")
             }
             return seconds
         }
@@ -309,7 +315,13 @@ public enum RedisTTL {
             if character.isNumber {
                 number.append(character)
             } else if let unit = units[character], let value = Int(number) {
-                total += value * unit
+                // Checked: a long string of digits would overflow and stop the app.
+                let (part, overflowed) = value.multipliedReportingOverflow(by: unit)
+                let (sum, overflowedSum) = total.addingReportingOverflow(part)
+                guard !overflowed, !overflowedSum, sum <= maxSeconds else {
+                    throw DatabaseError("That TTL is too long.")
+                }
+                total = sum
                 number = ""
                 sawUnit = true
             } else {

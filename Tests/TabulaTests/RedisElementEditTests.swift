@@ -74,3 +74,45 @@ final class RedisElementEditTests: XCTestCase {
         await driver.close()
     }
 }
+
+/// List edits address elements by position; deleting rows must remove exactly those positions, duplicates
+/// included, and the longest TTL the parser accepts must be one Redis accepts.
+final class RedisListAndTTLTests: XCTestCase {
+    func testDeletingListRowsRemovesThosePositions() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TABULA_TEST_REDIS_PORT"].flatMap(Int.init) else {
+            throw XCTSkip("TABULA_TEST_REDIS_PORT not set")
+        }
+        let driver = try await RedisDriver.connect(
+            ConnectionConfig(kind: .redis, port: port, user: "tabula", database: "13"),
+            password: "tabula"
+        )
+        _ = try await driver.send("FLUSHDB")
+        _ = try await driver.send("RPUSH", "l", "a", "dup", "b", "dup", "c", "dup")
+        // Rows 1 and 5 hold "dup", as does row 3, which stays.
+        try await driver.remove(
+            RedisBytes("l"),
+            type: .list,
+            elements: [RedisBytes("1"), RedisBytes("5"), RedisBytes("0")]
+        )
+        let left = try await driver.send("LRANGE", "l", "0", "-1")
+        XCTAssertEqual(left.array.compactMap(\.string), ["b", "dup", "c"])
+        try await driver.update(
+            RedisBytes("l"),
+            type: .list,
+            element: RedisBytes("2"),
+            column: 1,
+            to: RedisBytes("C"),
+            row: [RedisBytes("2"), RedisBytes("c")]
+        )
+        let edited = try await driver.send("LRANGE", "l", "0", "-1")
+        XCTAssertEqual(edited.array.compactMap(\.string), ["b", "dup", "C"])
+
+        _ = try await driver.send("SET", "k", "v")
+        try await driver.setTTL(RedisBytes("k"), seconds: RedisTTL.maxSeconds)
+        let ttl = try await driver.send("TTL", "k")
+        guard case .integer(let seconds) = ttl else { return XCTFail("TTL: \(ttl)") }
+        XCTAssertGreaterThan(seconds, 0, "Redis took the longest TTL the parser accepts")
+        _ = try await driver.send("FLUSHDB")
+        await driver.close()
+    }
+}
