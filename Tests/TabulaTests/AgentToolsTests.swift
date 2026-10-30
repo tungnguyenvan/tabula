@@ -119,6 +119,10 @@ final class AgentReadOnlyTests: XCTestCase {
             SQLDialect(flavor: .postgres).readOnlyViolation("SELECT E'\\'', set_config('a', 'b', false), ''")
         )
         XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 'a\\'' , SLEEP(5) -- '"))
+        // PostgreSQL reads this name as pg_sleep and runs it (#214).
+        XCTAssertNotNil(
+            SQLDialect(flavor: .postgres).readOnlyViolation("SELECT U&\"pg_sl!0065ep\" UESCAPE '!' (0)")
+        )
     }
 
     /// Found by running them on PostgreSQL inside BEGIN READ ONLY: they act anyway, or run SQL kept in a string.
@@ -130,6 +134,9 @@ final class AgentReadOnlyTests: XCTestCase {
             "SELECT pg_advisory_lock_shared(42)", "SELECT pg_stat_reset()", "SELECT pg_switch_wal()",
             "SELECT pg_create_restore_point('x')", "SELECT pg_logical_emit_message(false, 'p', 'x')",
             "SELECT pg_drop_replication_slot('s')", "SELECT * FROM crosstab('select 1')",
+            // They change an index or write WAL (#214).
+            "SELECT brin_summarize_new_values('i')", "SELECT brin_desummarize_range('i', 0)",
+            "SELECT gin_clean_pending_list('i')", "SELECT pg_log_standby_snapshot()",
         ] {
             XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
         }
