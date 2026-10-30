@@ -178,7 +178,7 @@ public struct SQLDialect: QueryDialect, Equatable {
     }
 
     /// Adds `LIMIT n` to a plain SELECT that has no LIMIT of its own. Writes, an existing LIMIT / FETCH and locking
-    /// clauses are left alone.
+    /// clauses (`FOR UPDATE`, MySQL's `LOCK IN SHARE MODE`, which LIMIT would have to precede) are left alone.
     public func applyingRowLimit(_ statement: String, limit: Int) -> String {
         let tokens = SQLLexer.tokens(statement, flavor: flavor)
         let significant = tokens.filter { $0.kind != .whitespace && $0.kind != .comment }
@@ -189,7 +189,7 @@ public struct SQLDialect: QueryDialect, Equatable {
         for token in significant {
             if token.text == "(" { depth += 1 } else if token.text == ")" { depth -= 1 }
             guard depth == 0 else { continue }
-            if ["LIMIT", "FETCH", "FOR", "INTO", "INSERT", "UPDATE", "DELETE", "TOP", "OFFSET"].contains(token.keyword)
+            if ["LIMIT", "FETCH", "FOR", "LOCK", "INTO", "INSERT", "UPDATE", "DELETE", "OFFSET"].contains(token.keyword)
             {
                 return statement
             }
