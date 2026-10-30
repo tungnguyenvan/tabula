@@ -692,6 +692,15 @@ final class MongoCompletionTests: XCTestCase {
         XCTAssertEqual(items("show c|"), ["collections"])
         XCTAssertTrue(items("db.users.find({ _id: Obj|").contains("ObjectId"))
     }
+
+    /// Nothing inside a comment; a collection written db["name"] has the methods db.name has (#246).
+    func testCommentsAndQuotedCollections() {
+        XCTAssertEqual(items("db.users.find({}) // see db.|"), [])
+        XCTAssertEqual(items("db.users.find({ /* db.|"), [])
+        XCTAssertTrue(items("// old\ndb.|").contains("users"), "a comment on an earlier line has ended")
+        XCTAssertTrue(items("db.users.find({ /* note */ n|").starts(with: ["name", "nickname"]))
+        XCTAssertTrue(items("db[\"odd.name\"].f|").starts(with: ["find", "findOne"]))
+    }
 }
 
 final class MongoReviewFixTests: XCTestCase {

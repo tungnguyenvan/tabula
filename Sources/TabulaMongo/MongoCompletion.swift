@@ -23,7 +23,7 @@ public enum MongoCompletion {
         let partial = string.substring(with: range)
         let before = string.substring(to: start)
         let statement = currentStatement(before)
-        if isInsideString(statement) {
+        if isInsideString(statement) || isInsideComment(statement) {
             return (range, [])
         }
 
@@ -45,8 +45,10 @@ public enum MongoCompletion {
         } else {
             let known = collection(in: statement).flatMap(fields) ?? []
             // At a key position (after `{` or `,`) fields matter most; elsewhere values come first.
-            let atKey =
-                statement.trimmingCharacters(in: .whitespacesAndNewlines).last.map { "{,".contains($0) } ?? false
+            // Comments don't count: `{ /* note */ n` is at a key.
+            let lastCode = SQLLexer.tokens(statement, rules: MongoQueryDialect().lexicalRules)
+                .last { $0.kind != .whitespace && $0.kind != .comment }
+            let atKey = lastCode.map { $0.text == "{" || $0.text == "," } ?? false
             candidates =
                 atKey
                 ? [known, MongoVocabulary.constructors]
@@ -66,6 +68,10 @@ public enum MongoCompletion {
                 if call == "getSiblingDB" { return nil }
             }
             return MongoVocabulary.cursorMethods
+        }
+        // db["odd.name"]: a collection whose name needs quoting.
+        if trimmed.hasSuffix("]"), trimmed.contains("db[") {
+            return MongoVocabulary.collectionMethods
         }
         var end = trimmed.endIndex
         while end > trimmed.startIndex, isWordCharacter(trimmed[trimmed.index(before: end)]) {
@@ -134,6 +140,15 @@ public enum MongoCompletion {
             return ""
         }
         return String(last.dropLast())
+    }
+
+    /// A `//` comment the caret is still on, or a `/*` comment not yet closed.
+    private static func isInsideComment(_ text: String) -> Bool {
+        guard let last = SQLLexer.tokens(text, rules: MongoQueryDialect().lexicalRules).last, last.kind == .comment
+        else {
+            return false
+        }
+        return last.text.hasPrefix("//") || !last.text.hasSuffix("*/") || last.text.count < 4
     }
 
     private static func isInsideString(_ text: String) -> Bool {
