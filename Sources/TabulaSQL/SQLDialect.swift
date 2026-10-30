@@ -42,6 +42,10 @@ public struct SQLDialect: QueryDialect, Equatable {
         if flavor == .mysql, value.contains("\\") {
             return "_utf8mb4 X'" + BinaryText.hex(value.utf8) + "'"
         }
+        // SQLite reads SQL text only up to a NUL; as hex the value keeps it.
+        if flavor == .sqlite, value.contains("\u{0}") {
+            return "CAST(X'" + BinaryText.hex(value.utf8) + "' AS TEXT)"
+        }
         return "'" + value.replacingOccurrences(of: "'", with: "''") + "'"
     }
 

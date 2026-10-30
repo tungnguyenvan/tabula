@@ -100,6 +100,26 @@ final class FilterOperatorsLiveTests: XCTestCase {
         try await check(driver, schema: "tabula")
     }
 
+    /// SQLite reads SQL only up to a NUL, so a value holding one is written in hex; it is stored and found whole
+    /// (#286).
+    func testSQLiteTextWithANulCharacter() async throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-nul-\(UUID()).sqlite").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let driver = try SQLiteDriver(path: path)
+        let d = SQLDialect(flavor: .sqlite)
+        let table = TableRef(schema: "main", name: "t")
+        _ = try await driver.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+        _ = try await driver.execute(d.insert(table, values: [("v", "a\u{0}b")], binaryColumns: []))
+        let stored = try await driver.execute("SELECT hex(v), typeof(v) FROM t").rows
+        XCTAssertEqual(stored, [["610062", "text"]])
+        for op in [FilterRule.Operator.equals, .contains] {
+            let condition = d.condition([FilterRule(column: "v", op: op, value: op == .equals ? "a\u{0}b" : "\u{0}")])
+            let count = try await driver.execute("SELECT count(*) FROM t WHERE \(condition)").rows
+            XCTAssertEqual(count, [["1"]], condition)
+        }
+        await driver.close()
+    }
+
     func testSQLite() async throws {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("tabula-filters-\(UUID()).sqlite").path
         defer { try? FileManager.default.removeItem(atPath: path) }
