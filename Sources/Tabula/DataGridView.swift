@@ -161,8 +161,18 @@ struct DataGridView: NSViewRepresentable {
         private var handledFocusRequest: UUID?
         /// Table-view column index of the focused cell; 0 is the row-number gutter, so data starts at 1.
         private(set) var focusedColumn = 1
-        /// Where Copy writes: the system pasteboard, except in tests.
-        var pasteboard = NSPasteboard.general
+        /// Where Copy writes and Paste reads: the system pasteboard, except in tests and in debug runs that name
+        /// their own (TABULA_DEBUG_PASTEBOARD), so a scripted check never touches the user's clipboard.
+        var pasteboard = Coordinator.defaultPasteboard
+
+        private static var defaultPasteboard: NSPasteboard {
+            #if DEBUG
+            if let name = ProcessInfo.processInfo.environment["TABULA_DEBUG_PASTEBOARD"] {
+                return NSPasteboard(name: NSPasteboard.Name(name))
+            }
+            #endif
+            return .general
+        }
         private var focusedRow = -1
         private var popover: NSPopover?
         /// The binding value seen last; a different value means SwiftUI changed the selection itself.
