@@ -219,26 +219,39 @@ enum PostgresValueFormatter {
             digits.append(buffer.readInteger(as: Int16.self) ?? 0)
         }
 
-        var integerPart = ""
+        // Base-10000 groups, written straight into UTF-8 digits (String(format:) per group made pages slow).
+        var text: [UInt8] = []
+        text.reserveCapacity(Int(count) * 4 + Int(max(scale, 0)) + 3)
+        func append(_ group: Int, digits width: Int) {
+            for divisor in [1000, 100, 10, 1].suffix(width) {
+                text.append(UInt8(ascii: "0") + UInt8(group / divisor % 10))
+            }
+        }
+        if sign == 0x4000 {
+            text.append(UInt8(ascii: "-"))
+        }
         if weight < 0 {
-            integerPart = "0"
+            text.append(UInt8(ascii: "0"))
         } else {
             for index in 0...Int(weight) {
-                let group = index < digits.count ? digits[index] : 0
-                integerPart += index == 0 ? String(group) : String(format: "%04d", group)
+                let group = Int(index < digits.count ? digits[index] : 0)
+                // The first group has no leading zeros.
+                append(group, digits: index == 0 ? (group >= 1000 ? 4 : group >= 100 ? 3 : group >= 10 ? 2 : 1) : 4)
             }
         }
-        var fraction = ""
         if scale > 0 {
+            text.append(UInt8(ascii: "."))
+            var written = 0
             var groupIndex = Int(weight) + 1
-            while fraction.count < Int(scale) {
-                let group: Int16 = groupIndex >= 0 && groupIndex < digits.count ? digits[groupIndex] : 0
-                fraction += String(format: "%04d", group)
+            while written < Int(scale) {
+                let group = Int(groupIndex >= 0 && groupIndex < digits.count ? digits[groupIndex] : 0)
+                let take = min(4, Int(scale) - written)
+                append(group / [1, 1000, 100, 10, 1][take], digits: take)
+                written += take
                 groupIndex += 1
             }
-            fraction = "." + fraction.prefix(Int(scale))
         }
-        return (sign == 0x4000 ? "-" : "") + integerPart + fraction
+        return String(decoding: text, as: UTF8.self)
     }
 
     /// `bit` and `varbit`: the length in bits, then the bits, eight to a byte.
@@ -303,13 +316,19 @@ enum PostgresValueFormatter {
 
     private static func timeOfDay(_ micros: Int64) -> String {
         let (seconds, remainder) = floorDivide(micros, 1_000_000)
-        return String(format: "%02lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60)
-            + fractional(remainder)
+        var text = ""
+        CivilTime.appendPadded(seconds / 3600, width: 2, to: &text)
+        text.append(":")
+        CivilTime.appendPadded(seconds / 60 % 60, width: 2, to: &text)
+        text.append(":")
+        CivilTime.appendPadded(seconds % 60, width: 2, to: &text)
+        return text + fractional(remainder)
     }
 
     private static func fractional(_ micros: Int64) -> String {
         guard micros != 0 else { return "" }
-        var text = String(format: "%06lld", micros)
+        var text = ""
+        CivilTime.appendPadded(micros, width: 6, to: &text)
         while text.hasSuffix("0") { text.removeLast() }
         return "." + text
     }
