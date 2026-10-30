@@ -50,6 +50,41 @@ extension DatabaseDriver {
 
     /// Applies statements in one transaction, rolling back if one fails. Where the dialect has no transactions
     /// (MongoDB without a replica set), they run in order and the error says which were already applied.
+    /// Runs `planned` in one transaction, failing (and rolling everything back) when an update or delete doesn't
+    /// reach exactly its row.
+    public func applyInTransaction(_ planned: [PlannedStatement]) async throws {
+        guard !planned.isEmpty else { return }
+        guard let begin = dialect.beginTransaction else {
+            throw DatabaseError("This database has no transactions for checked changes.")
+        }
+        _ = try await execute(begin)
+        do {
+            for statement in planned {
+                if let check = statement.check {
+                    let count = try await execute(check).rows.first?.first ?? nil
+                    guard count == "1" else {
+                        throw Self.rowNotFound(statement.row)
+                    }
+                }
+                let result = try await execute(statement.sql)
+                if statement.mustAffectOne, result.affectedRows != 1 {
+                    throw Self.rowNotFound(statement.row)
+                }
+            }
+            _ = try await execute("COMMIT")
+        } catch {
+            _ = try? await execute("ROLLBACK")
+            throw error
+        }
+    }
+
+    private static func rowNotFound(_ row: Int?) -> DatabaseError {
+        let which = row.map { "Row \($0 + 1)" } ?? "A row"
+        return DatabaseError(
+            "\(which) wasn't found as it was loaded: it was deleted or its key changed since, or its key can't be matched exactly (such as a FLOAT). Nothing was saved."
+        )
+    }
+
     public func applyInTransaction(_ statements: [String]) async throws {
         guard !statements.isEmpty else { return }
         guard let begin = dialect.beginTransaction else {

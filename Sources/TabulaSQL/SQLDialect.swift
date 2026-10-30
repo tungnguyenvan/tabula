@@ -120,6 +120,14 @@ public struct SQLDialect: QueryDialect, Equatable {
 
     /// Rows are matched by primary key; a table without one can only gain rows.
     public func statements(for changes: TableChanges) throws -> [String] {
+        try plannedStatements(for: changes).map(\.sql)
+    }
+
+    /// The statements with what proves each update or delete reached its one row, so a row deleted meanwhile, or a
+    /// key whose shown text doesn't equal the stored value (a MySQL FLOAT), fails the commit instead of saving
+    /// nothing. PostgreSQL and SQLite count the rows a statement matched; MySQL counts only rows it changed, so
+    /// there the row is counted first.
+    public func plannedStatements(for changes: TableChanges) throws -> [PlannedStatement] {
         func key(_ row: Int) -> [(column: String, value: String?)] {
             changes.keyColumns.map { (changes.columns[$0], changes.rows[row][$0]) }
         }
@@ -129,9 +137,22 @@ public struct SQLDialect: QueryDialect, Equatable {
         let binary = Set(
             changes.binaryColumns.compactMap { changes.columns.indices.contains($0) ? changes.columns[$0] : nil }
         )
-        return changes.deleted.sorted().map { delete(changes.table, key: key($0), binaryColumns: binary) }
-            + changes.updates.map { update(changes.table, set: $0.values, key: key($0.row), binaryColumns: binary) }
-            + changes.insertions.map { insert(changes.table, values: $0, binaryColumns: binary) }
+        func keyed(_ sql: String, row: Int) -> PlannedStatement {
+            let match = matchPrimaryKey(key(row), binaryColumns: binary)
+            return flavor == .mysql
+                ? PlannedStatement(
+                    sql: sql,
+                    row: row,
+                    check: "SELECT COUNT(*) FROM \(qualified(changes.table)) WHERE \(match)"
+                )
+                : PlannedStatement(sql: sql, row: row, mustAffectOne: true)
+        }
+        return changes.deleted.sorted()
+            .map { keyed(delete(changes.table, key: key($0), binaryColumns: binary), row: $0) }
+            + changes.updates.map {
+                keyed(update(changes.table, set: $0.values, key: key($0.row), binaryColumns: binary), row: $0.row)
+            }
+            + changes.insertions.map { PlannedStatement(sql: insert(changes.table, values: $0, binaryColumns: binary)) }
     }
 
     public func selectSample(_ table: TableRef, limit: Int) -> String {
