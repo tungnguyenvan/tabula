@@ -8,6 +8,45 @@ import XCTest
 @testable import TabulaSQL
 
 final class MongoShellTests: XCTestCase {
+    /// Every value the formatter writes reads back byte for byte, compact and pretty: edge numbers and dates,
+    /// control characters, odd keys, every binary kind, and regexes no literal can write (#228).
+    func testEdgeValuesReadBackAsWritten() throws {
+        var keys = Document()
+        keys["a.b"] = 1
+        keys["$p"] = "x"
+        keys[""] = 2
+        keys["sp ace"] = MongoDriver.array([1, MongoDriver.array([2, MongoDriver.array([3])])])
+        let values: [(String, Primitive)] = [
+            ("negative zero", -0.0), ("NaN", Double.nan), ("infinity", -Double.infinity), ("tiny", 5e-324),
+            ("huge", 1.7976931348623157e308), ("1e21", 1e21), ("int32 min", Int32.min), ("int64 max", Int.max),
+            ("int64 min", Int.min), ("date before 1970", Date(timeIntervalSince1970: -1.5)),
+            ("date year 10000", Date(timeIntervalSince1970: 253_402_300_800)),
+            ("control characters", "a\u{0}b\u{1}c\u{7F}\u{2028}\u{2029}"), ("quotes", "\"'`\\/"), ("emoji", "😀👍🏽"),
+            ("regex", RegularExpression(pattern: "a/b", options: "i")),
+            ("regex with an escaped slash", RegularExpression(pattern: "a/b\\/c", options: "im")),
+            ("empty regex", RegularExpression(pattern: "", options: "")),
+            ("regex with a line break", RegularExpression(pattern: "a\nb", options: "s")),
+            ("regex ending in a backslash", RegularExpression(pattern: "a\\", options: "")),
+            ("regex with an open class", RegularExpression(pattern: "[a/", options: "")),
+            ("binary", Binary(subType: .generic, buffer: .init(bytes: [0, 255, 1]))),
+            ("uuid", Binary(subType: .uuid, buffer: .init(bytes: Array(repeating: 7, count: 16)))),
+            ("user binary", Binary(subType: .userDefined(0x80), buffer: .init(bytes: [1]))),
+            ("empty binary", Binary(subType: .generic, buffer: .init(bytes: []))),
+            ("decimal", MongoDecimal.parse("-0.000100E+3")!), ("decimal NaN", MongoDecimal.parse("NaN")!),
+            ("timestamp", Timestamp(increment: 7, timestamp: 1_700_000_000)), ("odd keys", keys),
+            ("array", MongoDriver.array([Null(), 1, "x"])),
+        ]
+        for (label, value) in values {
+            var document = Document()
+            document["v"] = value
+            for text in [MongoShell.format(document), MongoShell.format(document, pretty: true)] {
+                XCTAssertEqual(try MongoShell.parseDocument(text).makeData(), document.makeData(), "\(label): \(text)")
+            }
+        }
+        XCTAssertEqual(MongoShell.format(RegularExpression(pattern: "a/b", options: "i")), "/a\\/b/i")
+        XCTAssertEqual(MongoShell.format(RegularExpression(pattern: "", options: "")), #"RegExp("", "")"#)
+    }
+
     func testRoundTripKeepsTypes() throws {
         let text = """
             { _id: ObjectId("65f1a2b3c4d5e6f708091a2b"), name: "Hà Nội \\"x\\"", age: 42, big: NumberLong(9007199254740993),
