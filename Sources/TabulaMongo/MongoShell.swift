@@ -99,9 +99,7 @@ public enum MongoShell {
         case .objectId: output += "ObjectId(\"\((value as! ObjectId).hexString)\")"
         case .date: output += dateText(value as! Date)
         case .binary: output += binaryText(value as! Binary)
-        case .regex:
-            let regex = value as! RegularExpression
-            output += "/" + regex.pattern.replacingOccurrences(of: "/", with: "\\/") + "/" + regex.options
+        case .regex: output += regexText(value as! RegularExpression)
         case .timestamp:
             let timestamp = value as! Timestamp
             output +=
@@ -236,6 +234,18 @@ public enum MongoShell {
         case .code, .codeWithScope: "javascript"
         case .other: "unknown"
         }
+    }
+
+    /// `/pattern/flags`, or `RegExp("pattern", "flags")` where the literal wouldn't read back as the same pattern:
+    /// an empty one (`//` starts a comment), one with a line break, `\/` or a lone `[` or `\` at the end.
+    static func regexText(_ regex: RegularExpression) -> String {
+        let literal = "/" + regex.pattern.replacingOccurrences(of: "/", with: "\\/") + "/" + regex.options
+        if !regex.pattern.isEmpty, let back = try? parseValue(literal) as? RegularExpression,
+            back.pattern == regex.pattern, back.options == regex.options
+        {
+            return literal
+        }
+        return "RegExp(\(quoted(regex.pattern)), \(quoted(regex.options)))"
     }
 
     // MARK: Reading
