@@ -487,6 +487,49 @@ final class TableTabModel {
         focusRequest = FocusRequest(row: displayRowCount - 1, column: 0, edit: false)
     }
 
+    /// Paste (⌘V): one value goes into the focused cell when it can be edited; rows (tab-separated, as Copy and
+    /// spreadsheets write them) become new rows, matched to the columns by a header line when the first line is
+    /// one, otherwise in order. "NULL" is NULL, as Copy writes it; generated columns are left to the server.
+    func paste(_ text: String, row: Int?, column: Int?) {
+        let lines = TabSeparated.rows(text)
+        guard !lines.isEmpty else { return }
+        if lines.count == 1, lines[0].count == 1, let row, let column, isEditable(row: row),
+            resultColumns.indices.contains(column)
+        {
+            let value = lines[0][0]
+            setValue(value == "NULL" ? nil : value, row: row, column: column)
+            return
+        }
+        guard canInsert else {
+            error = "Rows can't be added to \(table.name). Paste one value into a cell instead."
+            return
+        }
+        let header = lines[0]
+        let named = header.count > 1 && Set(header).count == header.count && header.allSatisfy(resultColumns.contains)
+        let targets: [Int?] =
+            named
+            ? header.map { resultColumns.firstIndex(of: $0) } : resultColumns.indices.map { Optional($0) }
+        let generated = Set(columns.filter(\.isGenerated).map(\.name))
+        var added: [[Int: String?]] = []
+        for line in named ? Array(lines.dropFirst()) : lines {
+            var values: [Int: String?] = [:]
+            for (index, field) in line.enumerated() {
+                guard targets.indices.contains(index), let column = targets[index],
+                    !generated.contains(resultColumns[column])
+                else { continue }
+                values[column] = .some(field == "NULL" ? nil : field)
+            }
+            added.append(values)
+        }
+        guard !added.isEmpty else { return }
+        registerUndo(added.count > 1 ? "Paste Rows" : "Paste Row")
+        for values in added {
+            changes.appendRow(values)
+        }
+        version += 1
+        focusRequest = FocusRequest(row: displayRowCount - 1, column: 0, edit: false)
+    }
+
     func deleteRows(_ indices: IndexSet) {
         guard !indices.isEmpty else { return }
         registerUndo(indices.count > 1 ? "Delete Rows" : "Delete Row")

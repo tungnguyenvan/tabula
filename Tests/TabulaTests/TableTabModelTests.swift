@@ -48,6 +48,34 @@ final class TableTabModelTests: XCTestCase {
         return model
     }
 
+    /// ⌘V: rows become new rows, by header names when the first line is Copy's header, else in order; "NULL" is
+    /// NULL; one value goes into the focused cell.
+    func testPastingRowsAndAValue() async throws {
+        let model = try await open()
+        let name = try XCTUnwrap(model.resultColumns.firstIndex(of: "name"))
+        model.paste("city\tname\nĐà Lạt\tPasted 1\nNULL\tPasted 2", row: nil, column: nil)
+        model.paste("999\tPasted 3\tHuế", row: nil, column: nil)
+        XCTAssertEqual(model.displayRowCount, model.rows.count + 3)
+        model.paste("Renamed", row: 0, column: name)
+        await model.commit()
+        XCTAssertNil(model.error)
+        let check = try SQLiteDriver(path: path)
+        let added =
+            try await check.execute(
+                "SELECT id, name, city FROM people WHERE name LIKE 'Pasted%' OR name = 'Renamed' ORDER BY name"
+            )
+            .rows
+        XCTAssertEqual(
+            added,
+            [
+                ["999", "Pasted 3", "Huế"], ["26", "Pasted 1", "Đà Lạt"], ["27", "Pasted 2", nil],
+                ["1", "Renamed", nil],
+            ]
+            .sorted { ($0[1] ?? "") < ($1[1] ?? "") }
+        )
+        await check.close()
+    }
+
     func testPagesAndSorting() async throws {
         let model = try await open()
         XCTAssertEqual(model.rows.count, 10)

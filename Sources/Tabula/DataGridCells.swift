@@ -12,6 +12,17 @@ final class GridTableView: NSTableView {
         coordinator?.copySelection()
     }
 
+    @objc func paste(_ sender: Any?) {
+        coordinator?.paste()
+    }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(paste(_:)) {
+            return coordinator?.canPaste ?? false
+        }
+        return super.validateUserInterfaceItem(item)
+    }
+
     /// A double-click in the empty space below the rows adds a row. Table views send no double action
     /// there, so it is caught here.
     override func mouseDown(with event: NSEvent) {
