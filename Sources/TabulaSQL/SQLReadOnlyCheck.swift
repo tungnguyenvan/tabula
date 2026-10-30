@@ -106,7 +106,12 @@ public enum SQLReadOnlyCheck {
         let names = tokens.compactMap { token -> String? in
             switch token.kind {
             case .word: return token.keyword
-            case .quotedIdentifier: return String(token.text.dropFirst().dropLast()).uppercased()
+            case .quotedIdentifier:
+                // U&"pg_read_file" names the same function: the lexer keeps U& with the quoted name.
+                let quoted =
+                    token.text.hasPrefix("U&") || token.text.hasPrefix("u&")
+                    ? token.text.dropFirst(2) : Substring(token.text)
+                return String(quoted.dropFirst().dropLast()).uppercased()
             default: return nil
             }
         }

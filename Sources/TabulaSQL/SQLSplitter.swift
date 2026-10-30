@@ -55,7 +55,9 @@ public enum SQLSplitter {
             guard rules.dashDashNeedsSpace, index + 2 < chars.count else {
                 return true
             }
-            return chars[index + 2].isWhitespace || chars[index + 2].unicodeScalars.allSatisfy { $0.value < 0x20 }
+            // As the lexer reads it (LexicalRules.startsDashDashComment): a space or a control character, never a
+            // no-break space, so the two can't disagree about where a statement ends.
+            return chars[index + 2].unicodeScalars.first.map { $0.value <= 0x20 } ?? false
         }
 
         /// Tracks BEGIN / CASE ... END nesting, only inside CREATE TRIGGER / PROCEDURE / FUNCTION / EVENT.

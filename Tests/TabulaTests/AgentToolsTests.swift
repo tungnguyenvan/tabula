@@ -138,6 +138,12 @@ final class AgentReadOnlyTests: XCTestCase {
             SQLDialect(flavor: .postgres).readOnlyViolation("SELECT E'\\'', set_config('a', 'b', false), ''")
         )
         XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 'a\\'' , SLEEP(5) -- '"))
+        // U&"…" is one quoted name to the lexer; it still names the blocked function (found in review of #245).
+        for sql in ["SELECT U&\"pg_read_file\"('/etc/passwd')", "SELECT u&\"set_config\"('a', 'b', false)"] {
+            XCTAssertNotNil(SQLDialect(flavor: .postgres).readOnlyViolation(sql), sql)
+        }
+        // A no-break space after MySQL's -- isn't a comment to the lexer or the splitter: two statements.
+        XCTAssertNotNil(SQLDialect(flavor: .mysql).readOnlyViolation("SELECT 1 --\u{A0}x; FLUSH TABLES"))
         // PostgreSQL reads this name as pg_sleep and runs it (#214).
         XCTAssertNotNil(
             SQLDialect(flavor: .postgres).readOnlyViolation("SELECT U&\"pg_sl!0065ep\" UESCAPE '!' (0)")
