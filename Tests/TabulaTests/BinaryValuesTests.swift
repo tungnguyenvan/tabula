@@ -23,7 +23,11 @@ final class BinaryValuesTests: XCTestCase {
         XCTAssertEqual(mysql.literal("\\xdead00", binary: true), "X'DEAD00'")
         XCTAssertEqual(mysql.literal("\\x", binary: true), "X''")
         XCTAssertEqual(mysql.literal("typed text", binary: true), "'typed text'", "text typed into a binary column")
-        XCTAssertEqual(mysql.literal("\\xdead00", binary: false), "'\\\\xdead00'", "text that only looks like bytes")
+        XCTAssertEqual(
+            mysql.literal("\\xdead00", binary: false),
+            "_utf8mb4 X'5c78646561643030'",
+            "text that only looks like bytes"
+        )
         XCTAssertEqual(SQLDialect(flavor: .sqlite).literal("\\xff", binary: true), "X'FF'")
         XCTAssertEqual(SQLDialect(flavor: .postgres).literal("\\xff", binary: true), "'\\xff'", "bytea reads this")
         XCTAssertEqual(mysql.literal(nil, binary: true), "NULL")

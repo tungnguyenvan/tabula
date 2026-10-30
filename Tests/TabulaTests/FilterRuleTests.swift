@@ -20,7 +20,7 @@ final class FilterRuleTests: XCTestCase {
         )
         XCTAssertEqual(
             SQLDialect(flavor: .mysql).condition(FilterRule(column: "n", op: .startsWith, value: "x")),
-            "`n` LIKE 'x%'"
+            "`n` LIKE 'x%' ESCAPE '!'"
         )
     }
 
