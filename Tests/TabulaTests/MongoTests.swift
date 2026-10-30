@@ -313,6 +313,34 @@ final class MongoIntegrationTests: XCTestCase {
         )
     }
 
+    /// Fields named "a.b" or "$p" are their own columns; an edit sets that field, not the path a → b (#224).
+    func testEditingDottedAndDollarFields() async throws {
+        let driver = try await connect()
+        let table = TableRef(schema: "tabula_test", name: "dotted_" + UUID().uuidString.prefix(8).lowercased())
+        let collection = MongoDialect.collection(table)
+        try await runThenClean(driver, cleanup: ["\(collection).drop()"]) {
+            _ = try await driver.execute(#"\#(collection).insertOne({ _id: 1, "a.b": 1, a: { b: 5 }, "$p": 2, n: 3 })"#)
+            let page = try await driver.execute("\(collection).find({})")
+            let row = try XCTUnwrap(page.documents?.first)
+            let update = try MongoChanges.update(
+                table,
+                row: .init(document: row, changes: ["a.b": "10", "$p": #""$n""#, "n": "30"])
+            )
+            try await driver.applyInTransaction([update])
+            let after = try await driver.execute("\(collection).find({})")
+            let columns = after.columns
+            let values = try XCTUnwrap(after.rows.first)
+            func value(_ column: String) -> String? { values[columns.firstIndex(of: column)!] }
+            XCTAssertEqual(value("a.b"), "10")
+            XCTAssertEqual(value("a"), "{ b: 5 }", "the nested a.b is left alone")
+            XCTAssertEqual(value("$p"), "$n", "a string that looks like a field path is kept as text")
+            XCTAssertEqual(value("n"), "30")
+        }
+        // Plain fields keep the simple $set, which servers before MongoDB 5 read too.
+        let plain = try MongoChanges.update(table, row: .init(document: "{ _id: 1, n: 3 }", changes: ["n": "4"]))
+        XCTAssertTrue(plain.hasSuffix("updateOne({ _id: 1 }, { $set: { n: 4 } })"), plain)
+    }
+
     func testWrongPasswordFails() async throws {
         do {
             let driver = try await connect(password: "wrong")
