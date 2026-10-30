@@ -11,6 +11,11 @@ final class HostWhitespaceTests: XCTestCase {
         XCTAssertEqual(ConnectionConfig(kind: .postgres, host: "   ").resolvedHost, Defaults.host, "blank is local")
         // A user name may hold spaces; it stays as typed.
         XCTAssertEqual(ConnectionConfig(kind: .postgres, user: " app user ").user, " app user ")
+        // The SSH server too: "bastion " is valid, and ssh is given "bastion".
+        let ssh = SSHConfig(host: "bastion \n", user: "app")
+        XCTAssertNil(ssh.problem)
+        let arguments = SSHTunnel.arguments(ssh, localPort: 5000, targetHost: "db", targetPort: 5432, timeout: 5)
+        XCTAssertEqual(Array(arguments.suffix(2)), ["--", "bastion"])
     }
 
     func testConnectsDespiteSpacesAroundTheHost() async throws {

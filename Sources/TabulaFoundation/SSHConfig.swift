@@ -9,6 +9,9 @@ public struct SSHConfig: Codable, Hashable, Sendable {
     /// A private key file; nil uses ssh-agent and the default keys.
     public var identityFile: String?
 
+    /// The host without the spaces or line breaks a paste can bring, which are no part of a host name.
+    public var resolvedHost: String { host.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     public init(host: String = "", port: Int = 22, user: String = "", identityFile: String? = nil) {
         self.host = host
         self.port = port
@@ -19,6 +22,7 @@ public struct SSHConfig: Codable, Hashable, Sendable {
     /// What's wrong with these settings, or nil when they can be used. Checked again before every connection, since
     /// saved files can be edited by hand.
     public var problem: String? {
+        let host = resolvedHost
         if host.isEmpty {
             return "Enter the SSH host."
         }

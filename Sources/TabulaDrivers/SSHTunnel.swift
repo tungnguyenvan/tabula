@@ -131,7 +131,7 @@ public actor SSHTunnel {
             arguments += ["-i", (identityFile as NSString).expandingTildeInPath, "-o", "IdentitiesOnly=yes"]
         }
         // "--" ends the options, so the host can't be read as one.
-        return arguments + ["--", ssh.host]
+        return arguments + ["--", ssh.resolvedHost]
     }
 
     private static func start(
@@ -194,7 +194,7 @@ public actor SSHTunnel {
                 try await Task.sleep(for: .milliseconds(100))
             }
             throw TunnelError(
-                message: "The SSH server \(ssh.host) didn't answer within \(Int(timeout)) seconds.",
+                message: "The SSH server \(ssh.resolvedHost) didn't answer within \(Int(timeout)) seconds.",
                 retryable: false
             )
         } catch {
@@ -208,11 +208,11 @@ public actor SSHTunnel {
         let text = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.contains("Host key verification failed") || text.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") {
             return
-                "SSH: the host key of \(ssh.host) isn't trusted. Connect once with ssh in Terminal to check and save it, then try again."
+                "SSH: the host key of \(ssh.resolvedHost) isn't trusted. Connect once with ssh in Terminal to check and save it, then try again."
         }
         if text.contains("Permission denied") {
             return
-                "SSH: \(ssh.user)@\(ssh.host) refused the key. Add the key to ssh-agent (ssh-add) or choose the key file."
+                "SSH: \(ssh.user)@\(ssh.resolvedHost) refused the key. Add the key to ssh-agent (ssh-add) or choose the key file."
         }
         let last = text.split(whereSeparator: \.isNewline).last.map(String.init) ?? "ssh exited."
         return "SSH: \(last.prefix(Defaults.toolErrorLength))"
