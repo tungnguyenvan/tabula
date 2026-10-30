@@ -42,5 +42,10 @@ final class ConnectionURLRoundTripTests: XCTestCase {
         XCTAssertEqual(parsed.config.port, 5433)
         let config = ConnectionConfig(kind: .postgres, host: "fe80::1%en0", port: 5432, user: "u", database: "d")
         XCTAssertEqual(config.url(), "postgresql://u@[fe80::1%25en0]:5432/d")
+        // A zone with characters a host can't hold is encoded too, rather than stopping the app.
+        for host in ["fe80::1%en 0", "fe80::1%zoneé", "fe80::1%a/b"] {
+            let url = ConnectionConfig(kind: .postgres, host: host, port: 5432, user: "u", database: "d").url()
+            XCTAssertEqual(ConnectionConfig.parse(connectionString: url)?.config.host, host, url)
+        }
     }
 }
