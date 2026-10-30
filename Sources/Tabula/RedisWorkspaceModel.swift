@@ -272,9 +272,9 @@ final class RedisWorkspaceModel {
         switch column {
         case .key: return keys[row].key.isText
         case .ttl: return true
+        // Only where the cell shows the whole value as it is; others are edited in the key's pane.
         case .value:
-            return keys[row].type == .string && keys[row].length <= RedisDriver.maxEditableStringBytes
-                && keys[row].length < 200
+            return keys[row].type == .string && keys[row].previewIsValue
         case .type, .size: return false
         }
     }
