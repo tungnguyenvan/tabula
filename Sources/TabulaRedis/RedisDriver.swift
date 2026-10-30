@@ -671,6 +671,10 @@ public actor RedisDriver {
             }
             try await run([.text("LSET"), k, .text(index), .bytes(newValue.bytes)])
         case (.set, 0):
+            // Renaming onto a member that exists would silently merge the two.
+            if (try await run([.text("SISMEMBER"), k, .bytes(newValue.bytes)]).int ?? 0) == 1 {
+                throw DatabaseError("Member “\(newValue.display)” already exists.")
+            }
             try await transaction([[.text("SREM"), k, .bytes(old.bytes)], [.text("SADD"), k, .bytes(newValue.bytes)]])
         case (.zset, 1):
             guard let score = newValue.text, Double(score) != nil else {
@@ -678,6 +682,10 @@ public actor RedisDriver {
             }
             try await run([.text("ZADD"), k, .text("XX"), .text(score), .bytes(old.bytes)])
         case (.zset, 0):
+            // Renaming onto a member that exists would silently replace its score.
+            if case .bulk = try await run([.text("ZSCORE"), k, .bytes(newValue.bytes)]) {
+                throw DatabaseError("Member “\(newValue.display)” already exists.")
+            }
             try await transaction([
                 [.text("ZREM"), k, .bytes(old.bytes)],
                 [.text("ZADD"), k, .bytes(row[1].bytes), .bytes(newValue.bytes)],
