@@ -274,11 +274,24 @@ public enum MongoChanges {
         guard let id = document["_id"] else {
             throw DatabaseError("This document has no _id, so it can't be edited here.")
         }
+        let changes = row.changes.sorted(by: { $0.key < $1.key })
         var set = Document()
-        for (field, text) in row.changes.sorted(by: { $0.key < $1.key }) {
-            set.appendValue(try value(text, original: document[field], field: field), forKey: field)
+        // $set reads "a.b" as a path and refuses "$a": fields named like that are set by name, with $setField
+        // (MongoDB 5), one pipeline stage each.
+        var stages = Document(isArray: true)
+        for (field, text) in changes {
+            let value = try value(text, original: document[field], field: field)
+            set.appendValue(value, forKey: field)
+            // $literal, so neither a "$p" name nor a "$x" string value reads as a field path.
+            let named: Document = [
+                "field": ["$literal": field] as Document,
+                "input": "$$ROOT",
+                "value": ["$literal": value] as Document,
+            ]
+            stages.append(["$replaceWith": ["$setField": named] as Document] as Document)
         }
-        let update: Document = ["$set": set]
+        let byName = changes.contains { $0.key.contains(".") || $0.key.hasPrefix("$") }
+        let update: Document = byName ? stages : ["$set": set]
         return MongoDialect.collection(table)
             + ".updateOne(\(MongoShell.format(["_id": id] as Document)), \(MongoShell.format(update)))"
     }
