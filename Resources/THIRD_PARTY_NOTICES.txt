@@ -2449,7 +2449,7 @@ This product contains a derivation of the lock implementation and various script
     * https://github.com/apple/swift-nio
 
 ==============================================================================
-swift-nio 2.104.0
+swift-nio 2.103.0
 https://github.com/apple/swift-nio.git
 ==============================================================================
 --- LICENSE.txt ---
