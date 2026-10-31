@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-31
+
+### Changed
+- **A shorter README that starts with the AI features**, with every feature listed in a line or two and the details in guides under [docs/](docs/): AI assistant, AI agents (MCP), connections, editing, queries, schema, MongoDB, Redis, install and keyboard shortcuts.
+
+### Fixed
+- **Light Mode is light again**: the tab strip, editor toolbars, filter bar and bottom bars used a mid gray meant for the area behind pages, which looked dark next to the white grid. They now use the window color a shade darker, as Safari's tab bar does; Dark Mode is unchanged ([#312](https://github.com/tungnguyenvan/tabula/issues/312)).
+- The filter bar's **SQL**, **Apply** and **Clear** buttons keep their full titles when the window is narrow or a side panel is open; the value field gives up the room ([#312](https://github.com/tungnguyenvan/tabula/issues/312)).
+
 ## [0.14.0] - 2026-10-31
 
 ### Added
