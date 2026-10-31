@@ -28,6 +28,7 @@
 - A row **Limit** (100 to 5,000, or none; 300 by default) is added to SELECTs that have none, so an accidental full-table query stays small. It leaves statements that already limit themselves, writes and `FOR UPDATE` alone.
 - **MySQL / MariaDB:** `CALL` of a procedure shows the rows it returns (the first result set when it returns several), and `DELIMITER` scripts run as in the mysql client.
 - Results from one table that include its primary key can be edited: see [Editing query results](editing.md#editing-query-results).
+- With AI on, **Fix with AI** under an error proposes a corrected statement above the editor, next to the failed one with the changes marked, for **Accept** (↩), **Reject** (⎋) or **Accept and Run** (⌘↩); nothing changes until you accept, and ⌘Z undoes it. See [Reviewing a change](ai.md#in-the-editor).
 
 ## Checks before a statement runs
 

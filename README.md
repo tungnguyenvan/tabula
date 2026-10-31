@@ -45,7 +45,7 @@ New in 0.16: <a href="https://github.com/tungnguyenvan/tabula/releases/download/
 Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 - **Chat** (⌥⌘A) that knows your tables and keys, looks things up with read-only queries, shows every step and saves conversations per connection.
-- **Queries you can use:** **Insert**, **Run** or copy what it writes; it can also search your saved queries.
+- **Queries you can use:** **Run** shows the result right in the chat (or the error, with **Fix**), **Insert** puts the query in the editor, and every read-only query in an answer is checked with EXPLAIN first; it can also search your saved queries.
 - **Proposed data changes** (opt-in): "mark order 42 as shipped" becomes uncommitted edits in the table's tab, for you to preview and commit.
 - **Visual answers:** charts, result grids, metric cards, query forms, clickable choices and table diagrams, drawn from queries Tabula runs itself, so a chart can't show made-up numbers.
 - **Dashboard** (⌥⌘5): pin charts, metric cards and grids from the chat to a per-connection dashboard that refreshes them read-only, on demand or every few minutes. [Dashboard](docs/ai.md#dashboard).
@@ -53,7 +53,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Filter by description:** "customers in London who joined this month" becomes ordinary filter conditions, each checked against the table.
 - **Generate test rows:** "customers in Europe, half of them VIP" becomes up to 500 new rows, each value checked against its column's type, keys and constraints, to preview and commit.
 - **Data dictionary:** **Describe with AI** proposes what each table and column means (units, what `status = 3` is) for you to review; the descriptions show in Structure and column tooltips and go to every AI prompt. [Data dictionary](docs/ai.md#data-dictionary).
-- **Ask AI** (⌘K) writes or changes SQL in the editor, **Fix with AI** repairs a failed statement, and **inline suggestions** appear in grey as you type.
+- **Ask AI** (⌘K) writes or changes SQL in the editor, **Fix with AI** proposes a fix for a failed statement to accept or reject, and **inline suggestions** appear in grey as you type.
 - **Ask AI about This Plan** explains a query plan and suggests `CREATE INDEX` statements, without running anything.
 - **Any model**, with its reasoning shown as it thinks: on-device in Tabula (nothing to install), Apple Intelligence, Claude, OpenAI-compatible, Ollama, Claude Code or Codex. [Providers](docs/ai.md#providers).
 

@@ -4,6 +4,18 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-11-01
+
+### Changed
+- **AI chat: Run runs a query right in the chat.** A query that only reads runs under its block on the chat's read-only path (read-only check, the assistant's separate connection, 15 seconds, the console log, and a question first on Production), with **Running…** and **Stop** while it runs, then "✓ 12 rows · 34 ms" and the result grid with **Open in Query Tab**, or the error in red with **Fix**, which asks the AI for a corrected query. The result is saved with the answer, and the button becomes **Run Again**. A statement that may change data shows **Open in Query Tab** instead and opens there unrun, where the statement checks apply. **Insert** puts the query on lines of its own and never joins or replaces the text in the editor ([#320](https://github.com/tungnguyenvan/tabula/issues/320)).
+
+### Fixed
+- **AI chat: queries in answers that don't run are caught.** Once an answer is complete, Tabula checks each read-only query with a plain EXPLAIN (never ANALYZE) on the read-only connection; one that fails is marked with the error and sent back to the model once, and a correction that passes replaces it, with the first version under **Original**. Not on Production, MongoDB or Redis; **Check queries in answers before showing them** in Settings › AI turns it off. The model is also told never to answer with a placeholder query such as `SELECT 'ok' AS status`, and to look a table up before using columns it hasn't seen ([#321](https://github.com/tungnguyenvan/tabula/issues/321)).
+- **AI chat: follow-up questions stay in context.** "And last month?" or "only the paid ones" is read with the conversation: the tables sent with it come from the whole conversation, not only the new message, the history keeps your last 8 questions with their answers however many tool steps those took, and the assistant is told the new message continues the conversation ([#330](https://github.com/tungnguyenvan/tabula/issues/330)).
+- **Fix with AI no longer changes your SQL without asking.** The corrected statement shows above the editor while the model writes it, under the failed one with removed words struck through in red and added ones in green, and a one-line reason when the model gives one. Nothing in the editor changes until **Accept** (↩), which replaces just the failed statement as one step for ⌘Z and clears the error; **Reject** (⎋) leaves it as it was, and **Accept and Run** (⌘↩) runs it after the usual checks, so Production still asks first. **Ask AI** (⌘K) on a selection is reviewed the same way; inserting at the cursor stays direct, with an **Inserted by AI · Undo** note ([#322](https://github.com/tungnguyenvan/tabula/issues/322)).
+- **AI chat: code you write in ``` fences shows as code**, in a block with Copy, as in the assistant's answers; it used to show as plain text with the backticks ([#323](https://github.com/tungnguyenvan/tabula/issues/323)).
+- **AI chat: clicking the "Thought for N s" title opens the reasoning**, and clicking a step's title opens the step; only the small arrow used to ([#324](https://github.com/tungnguyenvan/tabula/issues/324)).
+
 ## [0.16.1] - 2026-11-01
 
 ### Fixed
