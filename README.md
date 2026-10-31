@@ -5,14 +5,14 @@
 <p align="center">A fast, native macOS database client with an AI assistant that works on your real data, safely.<br>
 <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b> and <b>Redis</b>. Free, no usage limits, keyboard-first.</p>
 
-<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest"><b>Download</b></a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.15.0/Tabula-whats-new-0.15.mp4">What's new in 0.15</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest"><b>Download</b></a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.16.0/Tabula-whats-new-0.16.mp4">What's new in 0.16</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
 <div align="center">
 
 https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 
 <sub>The demo (44 s): Tabula driven by real clicks and keys. <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Full quality, 1080p at 60 fps</a>.<br>
-New in 0.15: <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.15.0/Tabula-whats-new-0.15.mp4">a short video of what's new</a>.</sub>
+New in 0.16: <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.16.0/Tabula-whats-new-0.16.mp4">a short video of what's new</a>.</sub>
 
 </div>
 
@@ -21,8 +21,9 @@ New in 0.15: <a href="https://github.com/tungnguyenvan/tabula/releases/download/
 ## Why Tabula
 
 - **AI that works on your real database, safely.** The assistant answers from read-only queries on its own read-only connection, proposes data changes as edits you review and commit, and asks before each query on Production.
-- **Answers you can use.** Charts, grids and forms in the chat that you can pin to a live dashboard, filters written from a description, realistic test rows that respect your constraints, and Explain plans with index advice.
+- **Answers you can use.** Multi-step analysis notebooks you can rerun and export, charts, grids and forms in the chat that you can pin to a live dashboard, filters written from a description, realistic test rows that respect your constraints, and Explain plans with index advice.
 - **Your coding agents, connected.** Claude Code, Codex and Cursor can use the connections you allow through MCP, without ever seeing a password.
+- **AI that knows your schema's meaning.** Describe tables and columns once, with AI help you review, and every AI feature uses what each column really means.
 - **Your choice of model.** One running inside Tabula, offline; Apple Intelligence; Claude; any OpenAI-compatible API; Ollama; or Claude Code and Codex.
 - **Native and fast.** A real Mac app: under 100 MB of memory with a table open, no CPU when idle, a 5,000-row page in under 50 ms ([benchmarks](docs/benchmarks.md)).
 - **Safe, private and free.** Edits wait until you preview and commit them in one transaction, and a `DELETE` without `WHERE` or a table-rewriting `ALTER` is caught before it runs, with an AI review on request. Passwords stay in the Keychain; no account, no telemetry, MIT licensed.
@@ -48,8 +49,10 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Proposed data changes** (opt-in): "mark order 42 as shipped" becomes uncommitted edits in the table's tab, for you to preview and commit.
 - **Visual answers:** charts, result grids, metric cards, query forms, clickable choices and table diagrams, drawn from queries Tabula runs itself, so a chart can't show made-up numbers.
 - **Dashboard** (⌥⌘5): pin charts, metric cards and grids from the chat to a per-connection dashboard that refreshes them read-only, on demand or every few minutes. [Dashboard](docs/ai.md#dashboard).
+- **Analysis notebooks:** a question that takes several steps is worked through in a notebook tab, one read-only query per step, each with its result as a grid or chart and a note, ending with a summary. Edit and rerun cells, add your own, and export to Markdown with chart images. [Notebooks](docs/ai.md#analysis-notebooks).
 - **Filter by description:** "customers in London who joined this month" becomes ordinary filter conditions, each checked against the table.
 - **Generate test rows:** "customers in Europe, half of them VIP" becomes up to 500 new rows, each value checked against its column's type, keys and constraints, to preview and commit.
+- **Data dictionary:** **Describe with AI** proposes what each table and column means (units, what `status = 3` is) for you to review; the descriptions show in Structure and column tooltips and go to every AI prompt. [Data dictionary](docs/ai.md#data-dictionary).
 - **Ask AI** (⌘K) writes or changes SQL in the editor, **Fix with AI** repairs a failed statement, and **inline suggestions** appear in grey as you type.
 - **Ask AI about This Plan** explains a query plan and suggests `CREATE INDEX` statements, without running anything.
 - **Any model**, with its reasoning shown as it thinks: on-device in Tabula (nothing to install), Apple Intelligence, Claude, OpenAI-compatible, Ollama, Claude Code or Codex. [Providers](docs/ai.md#providers).

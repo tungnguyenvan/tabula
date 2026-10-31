@@ -8,8 +8,11 @@
 - [Proposed data changes](#proposed-data-changes)
 - [Visual answers](#visual-answers)
 - [Dashboard](#dashboard)
+- [Analysis notebooks](#analysis-notebooks)
 - [In the editor](#in-the-editor)
 - [Filter by description](#filter-by-description)
+- [Generate test rows](#generate-test-rows)
+- [Data dictionary](#data-dictionary)
 - [Providers](#providers)
 - [What is sent](#what-is-sent)
 
@@ -73,6 +76,17 @@ Pin a chart, metric cards or a result grid from an answer with its pin button (o
 - On Production, Auto Refresh is off and can't be turned on, and Refresh or Refresh All asks once before running.
 - Dashboards are saved per connection next to its chats, and deleting the connection deletes its dashboard.
 
+## Analysis notebooks
+
+For a question that takes several steps ("why did revenue drop in October?"), a notebook tab works through it one read-only query at a time and keeps every step. Open one with **Analyze in Notebook**: the notebook button beside a question you asked in the chat (or in its context menu), **Analyze in Notebook** in the chat's ⋯ menu for the message you are writing, or the button the chat shows when the model suggests a notebook. **View › New Notebook** opens an empty one.
+
+- **Step by step:** the model runs one query per step with the chat's tools. Each query becomes a query cell with a line on why it runs and its result as a grid, a chart or metric cards (the model can ask for a chart in the same `tabula-ui` form as [visual answers](#visual-answers)); what each result showed becomes a text cell, and a **Summary** cell ends it. At most 8 steps; the bottom bar shows the step, and **Stop** (⌘.) ends it at once.
+- **Follow-ups** go in the same field: the model continues from every cell above, results included (cut to the chat's lengths).
+- **Your own cells:** edit a query cell's SQL (or MongoDB command) and run it with its play button or ⌘↩; **Run All Below** and **Run All** run the queries again in order. Add text or query cells (Markdown in text cells; double-click to edit), move them with **Move Up** / **Move Down** and delete them from each cell's ⋯ menu, which also has **Copy SQL**, **Copy Results**, **Open in Query Tab** and, for a chart, **Show Rows**.
+- **Read-only, as the chat:** every query, the model's or yours, runs through the chat's path: the read-only check, the assistant's separate read-only connection, 15 seconds, the console log. Nothing is ever written. It needs AI on (and allowed for Production) and **Let the chat run read-only queries**. On Production, each of the model's queries asks first, and Run All asks once for all of them. The model sees at most 50 rows of each result, with long values cut; the cells show up to 5,000.
+- **Saved per connection** with the results, in `Notebooks` next to the chats, and deleted with the connection. The notebook's title menu lists them to reopen, **Open Anything** (⌘P) finds them, and the ⋯ menu renames or deletes one.
+- **File › Export Notebook…** writes Markdown: text cells as they are, each query as a ```` ```sql ```` block with its result as a table of the first 50 rows, and each chart as a PNG file next to the `.md`.
+
 ## In the editor
 
 - **Ask AI** (⌘K) inserts SQL at the cursor from a description, or replaces the selection with the change you describe; ⌘Z undoes it.
@@ -102,6 +116,21 @@ The sparkles button in a table's filter bar takes a description in any language,
 - PostgreSQL, MySQL / MariaDB, SQLite, and MongoDB collections, whose documents get the fields and types seen in sampled documents (dates stay dates, longs stay longs).
 - The instructions can be changed in Settings › AI › Instructions › Test data; Restore Default brings back Tabula's.
 
+## Data dictionary
+
+A short description of each table and column, saying what it holds, its unit and what its codes mean, so the AI uses the real meaning of `status = 3` rather than a guess. Tabula keeps the descriptions per connection, in `~/Library/Application Support/Tabula/Dictionaries`, and deletes them with the connection.
+
+- **Describe with AI…** is in a table's Structure tab and its context menu in the sidebar; **Describe Tables with AI…** in the sidebar's context menu (right-click below the tables, or the schema picker) describes the whole schema.
+- The model is sent the tables' and columns' names, types, primary and foreign keys, the database's comments and the current descriptions. Tick **Include sample values** to send up to 5 distinct values of each column too, from its first 100 rows, each cut to 40 characters and read on the assistant's read-only connection. Without it no rows are sent.
+- Large schemas go 20 tables per request, with the progress shown and **Stop**, which keeps what came back.
+- The proposals are listed table by table: the current text, the proposed one, which you can change, and a checkbox. **Save** keeps the ticked ones. Names the model made up are left out.
+- Structure has a **Description** column, and a field for the table's own, to write or change them yourself. PostgreSQL and MySQL comments are the starting text: they show as the placeholder, go to the AI where there is no description, and stay marked as coming from the database when saved unchanged.
+- The grid's column headers show the description in their tooltip.
+- The chat, Ask AI, Fix with AI, Review with AI, filter by description and Generate Rows send the descriptions with the schema, at most 200 characters each and 6,000 in all. Suggestions while typing don't, to stay fast.
+- **Open as COMMENT Statements** (in Structure, or **Open Descriptions as COMMENT Statements** in the sidebar's context menu for the schema) writes them as `COMMENT ON TABLE` / `VIEW` / `COLUMN` statements on PostgreSQL, and as `ALTER TABLE … COMMENT = …` on MySQL. MySQL can change a column's comment only by restating the column's whole definition, which could change the column if Tabula got it wrong, so only table descriptions are written there; the script says what was left out. The script opens in a query tab and Tabula never runs it: run it yourself, with the usual checks before a statement runs.
+- PostgreSQL, MySQL / MariaDB, SQLite and MongoDB (collections and their sampled fields). SQLite and MongoDB have no comments to read or write.
+- The instructions can be changed in Settings › AI › Instructions › Data dictionary.
+
 ## Providers
 
 | Provider | Runs | Setup |
@@ -121,7 +150,10 @@ Claude Code and Codex run without your own coding setup (Claude Code's hooks, MC
 - For Ask AI about This Plan, the statement, plan and the tables' indexes; for Review with AI, the statements, Tabula's findings, the connection's tag and the plans; for a described filter, the table's columns, today's date and the time zone; for Fix with AI, the error message with quoted values removed (errors can quote row values, such as a duplicate key).
 - **Rows only from the chat's read-only queries**, at most 50 per query and only with that setting on. Ask AI, Fix with AI, suggestions and described filters never see rows. Rows read to draw visual answers aren't sent.
 
+- The data dictionary's descriptions of the tables and columns, with the schema (not with suggestions while typing). For Describe with AI, the tables' structure, comments and current descriptions, and sample values only when you tick Include sample values.
 - For Ask AI about This Plan, the statement, plan and the tables' indexes; for a described filter, the table's columns, today's date and the time zone; for Generate Rows, the table's schema, and existing foreign key values only when you tick Use existing ids; for Fix with AI, the error message with quoted values removed (errors can quote row values, such as a duplicate key).
-- **Rows only from the chat's read-only queries**, at most 50 per query and only with that setting on. Ask AI, Fix with AI, suggestions, described filters and Generate Rows never see rows. Rows read to draw visual answers aren't sent.
+- **Rows only from the chat's read-only queries**, at most 50 per query and only with that setting on. Ask AI, Fix with AI, suggestions, described filters and Generate Rows never see rows, and Describe with AI sees sample values only when you allow it. Rows read to draw visual answers aren't sent.
+
+- **Rows only from the chat's and notebooks' read-only queries**, at most 50 per query and only with that setting on. Ask AI, Fix with AI, suggestions, described filters and Generate Rows never see rows. Rows read to draw visual answers aren't sent.
 - **AI is off for Production connections** unless you allow it in Settings.
 - Conversations stay on this Mac in `~/Library/Application Support/Tabula/Chats` and are deleted with their connection. Prompts reach command-line agents on standard input, not as arguments other users could see. API keys are kept in the login Keychain.
