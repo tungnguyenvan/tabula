@@ -8,7 +8,7 @@ All of these are also in **Help › Keyboard Shortcuts** (⇧⌘/).
 | --- | --- |
 | Connections | ⌘N new connection · ⇧⌘N connection string, ⌘O open a SQLite file (Connections window) · ⇧⌘K connections · ⌃⌘] / ⌃⌘[ next / previous connection · ⌘, settings · ⇧⌘/ keyboard shortcuts |
 | Tabs | ⌘T new query · ⌘W close tab (or window) · ⇧⌘T reopen closed tab · ⌘O open .sql files · ⌘1…⌘8 go to tab, ⌘9 last tab · ⌃Tab or ⇧⌘] next tab · ⌃⇧Tab or ⇧⌘[ previous tab · ⌘P open anything |
-| Browsing | ⌥⌘F filter tables · ↑↓ preview a table, ↩ or double-click to keep it · ⌥⌘1 / ⌥⌘2 Data / Structure · ⌥⌘3 diagram · ⌥⌘4 metrics · ⌘F filter rows (again to focus it) · ⎋ hide the filter · ⇧⌘F find in database · ⌘R refresh · ⌘[ / ⌘] previous / next page |
+| Browsing | ⌥⌘F filter tables · ↑↓ preview a table, ↩ or double-click to keep it · ⌥⌘1 / ⌥⌘2 Data / Structure · ⌥⌘3 diagram · ⌥⌘4 metrics · ⌥⌘5 dashboard · ⌘F filter rows (again to focus it) · ⎋ hide the filter · ⇧⌘F find in database · ⌘R refresh · ⌘[ / ⌘] previous / next page |
 | Panels | ⌥⌘0 row details · ⌥⌘A AI chat · ⌥⌘L saved queries · ⇧⌘C console log |
 | Data grid | ← → ↑ ↓ move · Tab / ⇧Tab next / previous cell · ⌘← ⌘→ ⌘↑ ⌘↓ first / last column or row · ↩ or F2 edit · type to replace · Space quick look · ⌥⌫ set NULL · ⌫ delete rows · ⌘A select all · ⌘C copy rows · ⌥⇧⌘C copy with headers · ⌥⌘C copy cell · ⌘V paste rows |
 | Editing a cell | ↩ save and move down · Tab / ⇧Tab save and edit next / previous · ⌥↩ new line · ⎋ cancel |

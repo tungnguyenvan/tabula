@@ -106,3 +106,10 @@ Memory is the footprint macOS reports, as Activity Monitor shows it. A 5,000-row
 ## Reporting a problem
 
 **Help › Report a Problem…** opens a new issue on this repository in your browser, with Tabula's version and build, the macOS version and the kind of Mac filled in. Tabula sends nothing itself: you read and edit the issue before submitting it.
+
+**Crash reports.** When Tabula (or its `tabula-mcp` helper) crashed in the last 7 days, Report a Problem first shows a sheet listing the crash reports macOS saved in `~/Library/Logs/DiagnosticReports`, each with its date, version and exception, and a checkbox. Below the list is the full text the ticked reports add to the issue, which you can read and copy before choosing **Continue**. Each report is cut down to the versions, the exception, the termination reason (such as "Precondition failed: …"), the crashing thread's backtrace and the binaries in it; other threads, registers and the rest of the report are left out, and paths in your home folder start with `~`. A report too long for the issue's link is named in the issue instead, with **Show in Finder** in the sheet so you can attach the file.
+
+On the first launch after a crash, Tabula asks once whether to report it (**Report…** or **Not Now**); it doesn't ask again about the same report.
+
+- Tabula looks only at its own files in that folder (`Tabula-…` and `tabula-mcp-…`). At launch it checks their names and dates; it reads a report only when that finds a new one (to make sure it is a crash of Tabula.app before asking) or when you choose Report a Problem.
+- Nothing leaves your Mac unless you submit the issue in your browser; you can edit or delete any of it there first.

@@ -78,3 +78,7 @@ Double-click a cell in a result from one table that includes its whole primary k
 - **JSON:** an array of objects. Numbers keep every digit, nested values become JSON text, `null` is NULL, and a missing field takes the column's default.
 - Up to 100,000 rows and 256 MB per file; larger files are refused. Generated columns are left to the database.
 - Files can't be imported into MongoDB collections yet.
+
+## Generating test rows
+
+With AI on, **Generate Rows…** (the **+** button's menu, the sidebar's context menu, or **Edit › Generate Rows…**) asks the model for up to 500 realistic rows from the table's schema, checks each value against its column, and adds the valid ones as new rows to preview and commit like these. See [Generate test rows](ai.md#generate-test-rows).

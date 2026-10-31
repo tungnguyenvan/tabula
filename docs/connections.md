@@ -34,6 +34,7 @@ Passwords are stored in the macOS Keychain, never in the settings file. **Copy U
 
 Tag each connection **Local**, **Development**, **Staging** or **Production**. The tag colors the sidebar strip and the toolbar pill. On a Production connection Tabula asks before:
 
+- running a statement from the editor that may change data, with what [Tabula's checks](queries.md#checks-before-a-statement-runs) found and, with AI on, **Review with AI**. Development, Staging and untagged connections ask only before a statement that changes every row or drops a table, unless you choose **Don't ask again for this connection**;
 - committing changes (from a table tab, a query result, a document, or the preview sheet and ⌘S);
 - destructive actions, such as restoring a dump (you type the database name) and Redis commands not known to only read;
 - each read-only query the [AI chat](ai.md#read-only-queries) or an [AI agent](mcp.md) wants to run, and searching with [Find in Database](queries.md#find-in-database).

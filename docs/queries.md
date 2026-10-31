@@ -4,6 +4,7 @@
 
 - [The editor](#the-editor)
 - [Running and stopping](#running-and-stopping)
+- [Checks before a statement runs](#checks-before-a-statement-runs)
 - [Saved queries and .sql files](#saved-queries-and-sql-files)
 - [Console log](#console-log)
 - [Query plans](#query-plans)
@@ -27,6 +28,31 @@
 - A row **Limit** (100 to 5,000, or none; 300 by default) is added to SELECTs that have none, so an accidental full-table query stays small. It leaves statements that already limit themselves, writes and `FOR UPDATE` alone.
 - **MySQL / MariaDB:** `CALL` of a procedure shows the rows it returns (the first result set when it returns several), and `DELIMITER` scripts run as in the mysql client.
 - Results from one table that include its primary key can be edited: see [Editing query results](editing.md#editing-query-results).
+
+## Checks before a statement runs
+
+Before **Run** or **Run All** sends anything, Tabula reads the statements (outside comments and strings) and looks for well-known mistakes. These checks need no AI and always run:
+
+| Finding | Severity |
+| --- | --- |
+| `UPDATE` or `DELETE` without `WHERE` (with only a `LIMIT`: a warning; MySQL joins count as a condition) | Danger |
+| A `WHERE` that is always true: `1 = 1`, `TRUE`, `x = x`, or an `OR` with such a branch | Danger |
+| `TRUNCATE`; `DROP TABLE`, `DROP DATABASE`, `DROP SCHEMA`; `ALTER TABLE … DROP COLUMN` or `DROP PARTITION` | Danger |
+| MongoDB `deleteMany({})`, `updateMany({}, …)`, `remove({})`, `drop()` and `dropDatabase()` | Danger |
+| PostgreSQL `ALTER TABLE` that rewrites the table: a new column with a volatile default (`random()`, `gen_random_uuid()`, `clock_timestamp()`), a serial, identity or stored generated column, or a column type change | Warning |
+| MySQL `ALTER TABLE … MODIFY`, `CHANGE`, `CONVERT TO CHARACTER SET` or `DROP PRIMARY KEY` without `ALGORITHM=INPLACE` / `INSTANT` or `LOCK=NONE`, which may copy the table | Warning |
+| On Production: an `UPDATE` or `DELETE` the plan expects to change 10,000 rows or more, or 10% of a table of 1,000 rows or more | Warning |
+| On Production: PostgreSQL `CREATE INDEX` without `CONCURRENTLY` on a table of 10,000 rows or more | Warning |
+
+What happens next depends on the connection's [tag](connections.md#tags-and-production-safeguards):
+
+- **Production** asks before any statement that may change data, with the findings, whether there are any or not. The row estimates come from a plain `EXPLAIN` (never `ANALYZE`) and the server's table statistics, read on a separate connection while the confirmation is open; nothing is counted and no row is read.
+- **Development, Staging and untagged** connections ask only when there is a danger finding. **Don't ask again for this connection** stops that; **Ask Again** in the connection's editor turns it back on.
+- **Local** connections and **SQLite files** never ask; the findings show above the results.
+
+A danger confirmation has no default button, so Return doesn't run the statement. With AI on, **Review with AI** sends the statements, the findings, the columns of the tables they name and the plans (no rows) and shows the model's explanation, with a safer version when it has one, such as a narrower `WHERE`, a `LIMIT` or batches. **Use This** puts it in the editor in place of the reviewed statements and closes the confirmation without running anything; Copy copies it. The instructions can be changed in **Settings › AI › Instructions › Review**. AI is never needed to run a statement.
+
+Commits of edits (from a table, a query result or the preview sheet) are Tabula's own statements, each matching one row by its key; the Production commit confirmation lists any findings, and they aren't sent to the AI, since they hold row values.
 
 ## Saved queries and .sql files
 
