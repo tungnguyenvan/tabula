@@ -4,6 +4,7 @@
 
 - [Creating a connection](#creating-a-connection)
 - [Tags and Production safeguards](#tags-and-production-safeguards)
+- [Read-only connections](#read-only-connections)
 - [Several connections in one window](#several-connections-in-one-window)
 - [Picking up where you left off](#picking-up-where-you-left-off)
 - [TLS](#tls)
@@ -41,11 +42,40 @@ Tag each connection **Local**, **Development**, **Staging** or **Production**. T
 
 AI is off for Production connections unless you allow it in Settings.
 
+## Read-only connections
+
+Turn on **Read-only** in a connection's form to make Tabula refuse anything that writes on it. The form suggests it for Production connections. A read-only connection shows a lock in the toolbar pill ("Read-only"), in the column of open connections and in the Connections window.
+
+While it is locked:
+
+- the grid's cells can't be edited, and **+**, **−**, **Duplicate**, **Paste**, **Import…** and **Generate Rows…** are off ("Read-only connection" on hover); query results can't be edited either;
+- **Run**, **Run All** and **Explain Analyze** refuse a script with a statement that [the checks](queries.md#checks-before-a-statement-runs) say may change data or the schema, or one that would make the session read-write again (`SET … READ WRITE`, `default_transaction_read_only`, `query_only`, `RESET ALL`). Nothing of the script runs; the message names the statement and offers **Allow Changes…**. Reads run as usual;
+- commits, saving a document, saving or deleting a routine, **Truncate** and **Drop** in the sidebar, and **Restore from Dump…** are refused;
+- the AI chat's [proposed changes](ai.md) are refused, and the model is told why. The chat and [AI agents](mcp.md) only read anyway;
+- Redis: the console sends only commands known to only read (`GET` runs, `SET` is refused), and keys can't be created, edited, renamed, expired or deleted.
+
+On the server, Tabula also makes the connection's sessions read-only where the database supports it: PostgreSQL with `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`, MySQL / MariaDB with `SET SESSION TRANSACTION READ ONLY`, SQLite with `PRAGMA query_only`. A statement that got past Tabula's checks is still refused by the server. MongoDB and Redis have no read-only session, so Tabula's checks are all there is; for a guarantee, connect with a database user that may only read.
+
+**Allow Changes…** (the toolbar's lock button, or **Database › Allow Changes for 10 Minutes…**) asks first, naming the connection, then lifts both for 10 minutes: Tabula lets edits and statements through and the session becomes read-write. The toolbar shows **Lock Again** with the time left, and the pill says "Changes allowed". When the time runs out, or you choose **Lock Again**, the connection locks again. Changes still pending in a table tab or a query result stay pending, marked "Locked: allow changes to commit", and can be committed after the next **Allow Changes…**.
+
+Turning **Read-only** on or off in the form of an open connection takes effect at once.
+
 ## Several connections in one window
 
 Opening another connection, from the toolbar's database button, adds it to the current window. With two or more, a column left of the sidebar lists them: hover for details, click or press ⌃⌘] / ⌃⌘[ to switch. The connection pill in the toolbar shows details on click.
 
 On PostgreSQL, the sidebar's **Database** picker, above the schema picker, lists the databases your login may connect to and opens any of them from the same connection. Query tabs keep their SQL, tabs of the old database's tables close (Tabula asks first if they hold unsaved edits), and the toolbar shows `database.schema`. The saved connection keeps its database. The new database is connected first: if it can't be opened, nothing in the window changes and the sidebar says why. The AI chat starts over in the new database.
+
+## Reconnecting by itself
+
+After the Mac sleeps, or Wi-Fi or a VPN changes, a connection may have been dropped. Tabula notices three ways: the Mac waking up, the network changing, and a statement failing because the connection is gone (the server closed it, the connection was reset, MySQL's "server has gone away", a Redis connection that closed, an SSH tunnel that ended). It then checks the connection with a cheap ping (`SELECT 1`, `PING`) and, if the server doesn't answer, opens a new one quietly. The connection pill shows **Reconnecting…** meanwhile, and the console log notes it. Tabs stay as they are.
+
+- **The new connection is set up as the old one was:** a new SSH tunnel where there is one, the schema or database selected in the sidebar (`search_path`, `USE`, the Redis database), a read-only connection's read-only session, and the read-only settings of the AI assistant's connection. The AI assistant's and AI agents' (MCP) connections reconnect the same way.
+- **Reads run again by themselves.** Page loads, row counts, the sidebar's lists and SELECTs run from the editor are retried once on the new connection.
+- **Nothing that may have changed data is run again.** A commit, an `INSERT`, `UPDATE`, `DELETE`, DDL, a procedure call, or the rest of a script stops with "The connection was lost while this ran; it may or may not have been applied." Check the data before running it again.
+- **An open transaction is reported as lost.** When you ran `BEGIN` in a query tab and the connection was lost, the server rolled back what wasn't committed. Your next statement says so instead of running on its own outside the transaction; start again from `BEGIN`. Settings you made yourself with `SET` or `USE` aren't put back, so a read that depended on them isn't retried either.
+- **Tabula doesn't hammer the server.** Each notice makes one reconnect of a few tries, waiting longer before each one; if they all fail, the window shows why with **Try Again**, as when connecting fails, and the next wake or network change tries once more. A connection you closed is never reopened.
+- Production connections behave the same way: reconnecting is safe, and only reads are retried.
 
 ## Picking up where you left off
 

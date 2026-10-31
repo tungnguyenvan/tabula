@@ -5,14 +5,14 @@
 <p align="center">A fast, native macOS database client with an AI assistant that works on your real data, safely.<br>
 <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b> and <b>Redis</b>. Free, no usage limits, keyboard-first.</p>
 
-<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest"><b>Download</b></a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.16.0/Tabula-whats-new-0.16.mp4">What's new in 0.16</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest"><b>Download</b></a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.17.0/Tabula-whats-new-0.17.mp4">What's new in 0.17</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
 <div align="center">
 
 https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 
 <sub>The demo (44 s): Tabula driven by real clicks and keys. <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Full quality, 1080p at 60 fps</a>.<br>
-New in 0.16: <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.16.0/Tabula-whats-new-0.16.mp4">a short video of what's new</a>.</sub>
+New in 0.17: <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.17.0/Tabula-whats-new-0.17.mp4">a short video of what's new</a>.</sub>
 
 </div>
 
@@ -80,10 +80,12 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 - PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB and Redis. **Test** before saving; connecting gives up after 15 seconds.
 - Tag connections **Local**, **Development**, **Staging** or **Production**; Production asks before commits and destructive actions.
+- **Read-only connections:** Tabula refuses edits, commits, imports, restores and statements that change data, and the session is read-only on the server (PostgreSQL, MySQL, SQLite); **Allow Changes…** unlocks it for 10 minutes. [Read-only connections](docs/connections.md#read-only-connections).
 - Passwords in the macOS Keychain; TLS off, required, or required with certificate verification.
 - **SSH tunnels** for PostgreSQL and MySQL, with key authentication.
 - **Connection strings:** paste a URL, JDBC, libpq or .NET string to fill in the form; copy a connection back as a URL.
 - **Several connections in one window** (⌃⌘] / ⌃⌘[); on PostgreSQL, open any database on the server from one connection.
+- **Reconnects by itself** after the Mac wakes, the network changes or the server drops the connection: reads are retried, anything that may have changed data never is.
 - **Picks up where you left off:** tabs, unsaved SQL, filters and history come back; Tabula never reconnects at launch by itself.
 - **Dump and restore** PostgreSQL and MySQL databases with the client tools on your Mac.
 - [Connections in detail](docs/connections.md).
@@ -92,13 +94,16 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 - A schema switcher that also sets the default for queries, and a table list you can filter; search ignores accents ("cafe" finds "café").
 - Arrow keys preview tables in one reusable tab; drag tabs to reorder; ⌘P opens any table, tab or action.
-- A paged grid (100 to 5,000 rows) with a total count, server-side sorting, spreadsheet keys and quick look.
+- A paged grid (100 to 5,000 rows) with a total count, server-side sorting and spreadsheet keys.
+- **Value editor** (Space): JSON laid out, colored and checked as you type, long text with find, and bytes as hex with an image preview; saved as a pending change.
 - **Filter** with a builder (AND / OR, untick a condition), a `WHERE` clause or **Filter by This Value**; each table remembers its filter.
 - **Edit** in the grid or Row Details (⌥⌘0): NULL or empty, add, duplicate and delete rows, undo and redo per tab.
 - **Nothing is written until you commit:** ⇧⌘S previews the SQL, ⌘S runs it all in one transaction and rolls back on failure.
 - **Paste rows** (⌘V) from Tabula, Numbers, Excel or Google Sheets.
+- **Follow foreign keys:** ⌘-click a `customer_id` (or its arrow) to open that customer, see the rows that reference a row with a count, and go Back (⌃⌘←). [Foreign keys](docs/editing.md#following-foreign-keys).
 - **Tables without a primary key** can be edited too, through a unique index, `rowid` or `ctid`.
 - **Copy** rows as TSV, with or without headers; **export** CSV, TSV, JSON or SQL `INSERT`. Binary values round-trip as bytes.
+- **Copy As** JSON (⌃⌘C), SQL `INSERT`, CSV or a Markdown table, from Edit › Copy As or the grid's context menu: typed JSON values, INSERTs into the table's real name.
 - [Editing in detail](docs/editing.md).
 
 <p align="center"><img src="docs/screenshots/data.png" width="820" alt="Filtering a table, with the row details panel open"></p>
@@ -197,6 +202,7 @@ The ten you'll use most. [All shortcuts](docs/shortcuts.md), also in **Help › 
 - **No account, no telemetry.** Tabula connects to your databases, to GitHub for updates and, with AI on, to the provider you chose.
 - **AI is off until you turn it on.** Rows reach a model only from the chat's read-only queries, at most 50 per query. [What is sent](docs/ai.md#what-is-sent).
 - **Production safeguards:** Production connections ask before commits, destructive actions, restores and each AI or agent query.
+- **Read-only connections** refuse every change in Tabula and, on PostgreSQL, MySQL and SQLite, on the server too, until you allow changes for 10 minutes.
 - **Report a Problem** opens an issue you read and edit first; Tabula itself sends nothing.
 - **Crash reports** of Tabula's are read only after a new crash or when you report a problem, and only the ones you tick are added to the issue, shortened, with your home folder written as `~`.
 

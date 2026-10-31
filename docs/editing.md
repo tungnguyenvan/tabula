@@ -4,7 +4,9 @@
 
 - [Browsing](#browsing)
 - [Filtering](#filtering)
+- [Following foreign keys](#following-foreign-keys)
 - [Editing and committing](#editing-and-committing)
+- [The value editor](#the-value-editor)
 - [Pasting rows](#pasting-rows)
 - [Copying and exporting](#copying-and-exporting)
 - [Tables without a primary key](#tables-without-a-primary-key)
@@ -18,7 +20,7 @@
 - **Schema or database switcher** in the sidebar. The one you pick also becomes the default for queries, so `transactions` finds `dev.transactions`.
 - **Table list** you can filter (⌥⌘F), with collapsible groups (Tables or Collections, Views, Functions, Triggers); Tabula remembers which are collapsed, and while the filter has text every group shows its matches. Searching tables, connections and the command palette ignores case and accents: "cafe" finds "café".
 - **Tabs:** arrow keys preview tables in one reusable tab; Return or a double-click keeps one open. Drag tabs to reorder them, or use **Move Tab Left / Move Tab Right** in the View menu or the tab's context menu; the order is kept for the next time the connection opens. ⌘P jumps to any table, tab or action.
-- **Grid:** pages of 100 to 5,000 rows with a total count, server-side sorting, row numbers and spreadsheet-style keys. Space opens a quick look at a long or JSON value. Double-click the empty space below the rows to add a row.
+- **Grid:** pages of 100 to 5,000 rows with a total count, server-side sorting, row numbers and spreadsheet-style keys. Space opens the [value editor](#the-value-editor) on a cell. Double-click the empty space below the rows to add a row.
 
 ## Filtering
 
@@ -28,6 +30,22 @@
 - Each table remembers its filter, applied again when you open the table again, even after closing the tab, the connection or Tabula.
 - With AI on, [describe the rows](ai.md#filter-by-description) in words instead.
 
+## Following foreign keys
+
+On PostgreSQL, MySQL / MariaDB and SQLite, a value in a foreign key column (such as `orders.customer_id`) leads to the row it refers to, in table tabs and in [query results from one table](#editing-query-results):
+
+- **⌘-click** the value: it shows as a link while ⌘ is held over it, as in Xcode.
+- The **arrow** at the end of the cell, shown while the pointer is over it.
+- **Open Referenced Row** in the cell's context menu, or ⌥⌘→ (**Database › Open Referenced Row**) on the selected cell.
+
+The referenced table opens in a tab (or in its tab, if it is open) filtered to that key with ordinary filter conditions, one per column of a composite key, and the row is selected. **Back** (⌃⌘←) returns to where you were: the tab, its filter, page and sort, and the row; **Forward** (⌃⌘→) goes again, as in a browser. Following a key in a table to itself (an employee's `manager_id`) filters the same tab, and Back puts it back.
+
+- A NULL key refers to no row and can't be followed; neither can a key with an uncommitted change, nor one in a new row. The context menu item is disabled and its tooltip says why.
+- A table in another schema is named with its schema (`sales.invoices`).
+- SQLite keys that leave out the referenced columns refer to the other table's primary key.
+
+**Rows Referencing This Row**, in a row's context menu and at the bottom of Row Details (⌥⌘0), lists each table whose foreign key points at the row's table, with how many rows refer to this one (for a customer: its orders). Choosing one opens that table filtered to them. The counts are read-only `COUNT` queries that stop at 1,000 ("1,000+"), on the window's connection, so they show in the console log. Tables are looked for in the row's schema and the other schemas the sidebar lists, up to 20. MongoDB and Redis have no foreign keys.
+
 ## Editing and committing
 
 Edit in the grid or in the row details panel (⌥⌘0): set NULL or empty text, add, duplicate and delete rows. Undo and redo work per tab.
@@ -36,6 +54,22 @@ Edit in the grid or in the row details panel (⌥⌘0): set NULL or empty text, 
 - A commit that can't reach one of its rows, such as a row someone else deleted meanwhile, names the row and rolls back.
 - Sorting, filtering, paging or closing a tab asks first if it would throw away uncommitted edits.
 - Duplicating a row leaves its primary key, and generated columns, to the server.
+
+## The value editor
+
+A cell shows one line. To see or change a whole value (a JSON document, a long text, bytes) open it in the value editor, a sheet sized to the value (resize it and the next one opens at that size):
+
+- **Space** on the focused cell, or **Open Value Editor** in the cell's context menu.
+- **Double-click** a value that spans lines, is longer than 200 characters or is JSON; other values are edited in the cell. Hold ⌥ to open any value.
+- The expand button (two arrows) beside a long value, JSON or bytes in the row details panel (⌥⌘0).
+
+It shows the value one of three ways, picked from the column's type and the value, and you can switch:
+
+- **JSON:** laid out over indented lines and colored, with line numbers. It is checked as you type; a mistake tints its line and the bar below names the line and column. **Format** lays it out, **Minify** puts it on one line. Numbers keep every digit, strings keep their `\u` escapes and objects keep their key order. A `json` or `jsonb` column only saves valid JSON; text that only looks like JSON can be saved as it is.
+- **Text:** wrapped lines, the find bar (⌘F, ⌘G, ⇧⌘G) and a character and line count.
+- **Binary:** a hex view (offset, hex, ASCII), with a preview when the bytes are a PNG, JPEG, GIF or HEIC image (the first 256 KB are shown). **Save to File…** writes the bytes, **Load from File…** replaces them. Bytes aren't typed; in a text column, **Load from File…** reads a UTF-8 file as the new text.
+
+**Save** (⌘S) keeps a changed value as a pending change, like an edit in the grid: highlighted, in Preview (⇧⌘S), undone with ⌘Z, written with Commit. JSON is saved as compact or as indented as you left it. **Cancel** (⎋) leaves the cell as it was. Values that can't be changed (views, rows without a key, generated columns, read-only query results) open read-only, with the reason at the top.
 
 ## Pasting rows
 
@@ -48,6 +82,13 @@ Edit in the grid or in the row details panel (⌥⌘0): set NULL or empty text, 
 ## Copying and exporting
 
 - Copy rows as TSV (⌘C), with column names (⌥⇧⌘C), or a single cell (⌥⌘C). A value with a tab or a line break is quoted, so rows paste into Numbers and Excel cell for cell.
+- **Edit › Copy As** (and **Copy As** in the grid's context menu) copies the selected rows, every column, in another format. Nothing selected copies the row of the focused cell.
+  - **JSON** (⌃⌘C): an array of objects, keys in column order. Numbers stay numbers, NULL is `null`, booleans are `true` / `false`, JSON and JSONB columns are embedded as JSON, and bytes are base64 strings, where the column's type says so (in a table tab, or a query result that can be edited; MySQL results always); other values are strings. MongoDB documents are copied as the document editor shows them, so `ObjectId`, `NumberLong`, `NumberDecimal` and `ISODate` keep their types.
+  - **SQL INSERT**: one statement per row into the table's real name (a query result goes into the table it read, as Export picks it), with the database's quoting and literals. Generated columns and a new row's DEFAULT cells are left out, as Duplicate Row does. **Settings › General › SQL INSERT: one statement for all rows** writes one `INSERT` with a `VALUES` list instead. MongoDB writes one `insertOne` per document.
+  - **CSV**: a header line and RFC 4180 quoting, as Export writes it. Pasting it back into a table (⌘V) reads it as CSV, so NULL, empty text and the text `NULL` come back as they were.
+  - **Markdown Table**: pipes escaped, line breaks as `<br>`, values longer than 60 characters cut with an ellipsis.
+  - **Tab-Separated**: the same as ⌘C.
+- Copy As writes plain text; JSON and CSV also carry their type (`public.json`, `public.comma-separated-values-text`) so other apps can tell what they are given.
 - Export CSV, TSV, JSON or SQL `INSERT`, to a file or the clipboard. CSV and TSV exports quote empty text and the text `NULL`, so they can be told from NULL (an empty field) when imported again.
 - Binary values show as `\x` and hex, as psql shows them, on every database, and are saved back as bytes by edits, Duplicate Row and SQL export.
 
