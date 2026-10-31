@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-10-31
+
+### Fixed
+- **Clicking a tab selects it again on macOS 14 and 15**; since 0.13.0, when tabs became draggable, clicks there did nothing. A tab is now selected as the button goes down, as in Safari and Finder ([#298](https://github.com/tungnguyenvan/tabula/issues/298)).
+
 ## [0.13.2] - 2026-10-31
 
 ### Fixed
