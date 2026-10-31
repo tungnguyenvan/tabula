@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-01
+
+### Fixed
+- The toolbar's **Console**, **AI Chat** and **Row Details** buttons look pressed while their panel is shown, as toolbar toggles do in Mail and Xcode, so you can see what is open ([#319](https://github.com/tungnguyenvan/tabula/issues/319)).
+
 ## [0.16.0] - 2026-11-01
 
 ### Added
