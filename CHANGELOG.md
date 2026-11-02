@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-02
+
+### Fixed
+- **AI chat: questions about numbers get charts and metric cards, not only a query.** Charts, result grids, metric cards and forms no longer need **Let the chat run read-only queries**, which stays off for anyone who used AI before the chat could run queries: Tabula runs their queries itself, read-only, and their rows are never sent to the AI, so they work with it off (Production still asks before each one, and dashboard cards refresh the same way). The model is also told to answer a question about counts, totals, a breakdown, a comparison or a trend with metric cards, a chart or a grid rather than a ```` ```sql ```` block alone, keeping the block when you ask for the query, and to offer a notebook for a question that takes several steps when read-only queries are on ([#333](https://github.com/tungnguyenvan/tabula/issues/333)).
+- **AI chat: new answers stay in view.** While you're at the end of the conversation, it keeps the newest content on screen as the answer streams in, as tool steps appear, and when a chart, grid or metric card finishes loading and grows; a big block arriving at once no longer leaves the end below the panel. Once you scroll up to read, it stays where you are until you scroll back to the end, and sending a message always brings you to it, as in Messages ([#336](https://github.com/tungnguyenvan/tabula/issues/336)).
+- **A middle-click on a tab closes it**, as in browsers, whether or not it is the selected tab; the others stay as they are. It asks first, as the close button and ⌘W do, when the tab has unsaved SQL or uncommitted edits. Left and right clicks and dragging tabs are unchanged ([#335](https://github.com/tungnguyenvan/tabula/issues/335)).
+- **Charts show the exact values under the pointer.** Pointing at a chart in an AI answer, a notebook or the dashboard shows a line at the nearest value along the bottom with a panel listing that value and each series' number in its color, formatted as in the grid; the panel stays inside the chart, beside the line on the side with more room. The bar under the pointer stands out from the others, and a pie shows the slice's name, number and share in its middle. Server metrics charts show the time and value of the sample under the pointer. Exported chart images show no pointer ([#334](https://github.com/tungnguyenvan/tabula/issues/334)).
+
 ## [0.17.0] - 2026-11-01
 
 ### Added

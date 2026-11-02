@@ -80,7 +80,7 @@ Explain uses PostgreSQL `EXPLAIN (VERBOSE, FORMAT JSON)`, MySQL `EXPLAIN FORMAT=
 
 ## Server metrics
 
-**Server metrics** (⌥⌘4) shows live charts of reads, writes, transactions, connections and active queries, refreshed every 1 to 30 seconds, plus the cache hit ratio and the largest tables. MongoDB's come from `serverStatus` and `dbStats`, including the largest collections; Redis's from `INFO` (see [Redis metrics](redis.md#metrics)). Polling isn't written to the console log.
+**Server metrics** (⌥⌘4) shows live charts of reads, writes, transactions, connections and active queries, refreshed every 1 to 30 seconds, plus the cache hit ratio and the largest tables. Point at a chart to read the time and value of the sample under the pointer. MongoDB's come from `serverStatus` and `dbStats`, including the largest collections; Redis's from `INFO` (see [Redis metrics](redis.md#metrics)). Polling isn't written to the console log.
 
 <p align="center"><img src="screenshots/metrics.png" width="820" alt="Server metrics"></p>
 

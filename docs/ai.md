@@ -39,7 +39,7 @@ AI is off until you turn it on in **Settings › AI** (⌘,), and off for Produc
 
 - It knows your tables, keys and schema: the model is told table names as SQL needs them (`dev.transactions`), column types, primary and foreign keys and the default schema, and the editor's SQL.
 - It looks things up with [read-only queries](#read-only-queries) to answer from the real data, and shows every step.
-- Answers stream in, with the model's reasoning shown while it thinks, then folded into "Thought for N s". For models that reason, an **Effort** menu sets how long.
+- Answers stream in, with the model's reasoning shown while it thinks, then folded into "Thought for N s". For models that reason, an **Effort** menu sets how long. While you're at the end of the conversation, it keeps the newest part of the answer in view, charts and grids included; scroll up and it stays where you are until you scroll back down or send a message.
 - A model menu under the message field switches models.
 - Conversations are saved per connection. The panel's title lists earlier ones to open again or delete, and the pencil starts a new one.
 
@@ -51,7 +51,7 @@ To answer, the chat can list and describe tables (columns, indexes, foreign keys
 - **On their own connection:** they run on a separate connection, each in a read-only transaction (PostgreSQL, MySQL) or with SQLite's `query_only`, stopped after 15 seconds on every database, so they can't change data or touch your transactions. They appear in the console log.
 - **Limited:** at most 50 rows of each result, with long values cut, go to the model.
 - **Production asks:** on Production connections the chat asks before each query (**Allow** / **Don't Allow**).
-- **You can turn them off:** **Let the chat run read-only queries** in Settings › AI. The assistant then sees only the structure. It is on for new setups, and stays off if you used AI before the chat could run queries, until you turn it on.
+- **You can turn them off:** **Let the chat run read-only queries** in Settings › AI. The assistant then sees only the structure, while [visual answers](#visual-answers) still show the data. It is on for new setups, and stays off if you used AI before the chat could run queries, until you turn it on.
 
 <p align="center"><img src="screenshots/ai-tools.png" width="820" alt="The chat answering from the real data: it ran an aggregate on MongoDB, shown as a step above the answer"></p>
 
@@ -68,8 +68,11 @@ Off by default (**Let the chat propose data changes** in Settings › AI). Askin
 Answers can show charts (bar, line, area, point, pie), result grids with **Open in Query Tab**, metric cards, forms for queries with placeholders (filled in as quoted values and run read-only), choices you click to reply, and diagrams of the tables involved, drawn natively.
 
 - The model can only describe components from this fixed set.
-- Charts, grids and cards carry a query, not data. Tabula runs it with the chat's rules (read-only check, separate connection, 15 seconds, **Allow** on Production, console log) and reads up to 5,000 rows for drawing, which aren't sent to the model. So a chart can't show numbers the model made up.
+- Charts, grids, cards and forms carry a query, not data. Tabula runs it with the chat's rules (read-only check, separate connection, 15 seconds, **Allow** on Production, console log) and reads up to 5,000 rows for drawing, which aren't sent to the model. So a chart can't show numbers the model made up.
+- They don't need **Let the chat run read-only queries**: the model never sees their data, so they work with it off. Only the offer to work through a question in a [notebook](#analysis-notebooks) needs it, as a notebook sends results to the model.
+- A question about counts, totals, a breakdown, a comparison or a trend is answered with metric cards, a chart or a grid rather than a query alone; ask for the query and it comes as a ```` ```sql ```` block too.
 - Results are saved with the conversation, and the refresh button runs the query again.
+- Point at a chart to read its exact values: a line at the nearest value along the bottom, with that value and each series' number in its color, formatted as in the grid. The bar under the pointer stands out from the others, and on a pie the slice's name, number and share of the whole show in the middle. The same works in notebooks and on the dashboard; exported chart images show no pointer.
 - **Visual answers** in Settings › AI turns them off.
 
 ## Dashboard
@@ -79,7 +82,7 @@ Pin a chart, metric cards or a result grid from an answer with its pin button (o
 - Cards sit in a grid, each the same component as in the chat, with the result it had when pinned; opening the dashboard shows the saved results without running anything.
 - Each card's menu (the ⋯ button, or right-click) has **Refresh**, **Open in Query Tab**, **Rename…**, **Move Left** / **Move Right**, **Copy SQL**, **Copy Results** and **Remove from Dashboard**. Drag a card by its title to put it elsewhere.
 - **Refresh All** runs every card's query; **Auto Refresh** runs them every 1, 5 or 15 minutes while the dashboard is shown. Each card shows when it last ran, a spinner while it runs and the error if it fails.
-- Queries run exactly as the chat's components do: read-only check, the assistant's separate read-only connection, 15 seconds, console log, and the chat's settings (AI on, **Let the chat run read-only queries**). The AI isn't involved: Tabula runs the saved SQL.
+- Queries run exactly as the chat's components do: read-only check, the assistant's separate read-only connection, 15 seconds, console log, and AI on (and allowed on Production). The AI isn't involved: Tabula runs the saved SQL, so **Let the chat run read-only queries** doesn't need to be on.
 - On Production, Auto Refresh is off and can't be turned on, and Refresh or Refresh All asks once before running.
 - Dashboards are saved per connection next to its chats, and deleting the connection deletes its dashboard.
 

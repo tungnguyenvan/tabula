@@ -19,7 +19,7 @@
 
 - **Schema or database switcher** in the sidebar. The one you pick also becomes the default for queries, so `transactions` finds `dev.transactions`.
 - **Table list** you can filter (⌥⌘F), with collapsible groups (Tables or Collections, Views, Functions, Triggers); Tabula remembers which are collapsed, and while the filter has text every group shows its matches. Searching tables, connections and the command palette ignores case and accents: "cafe" finds "café".
-- **Tabs:** arrow keys preview tables in one reusable tab; Return or a double-click keeps one open. Drag tabs to reorder them, or use **Move Tab Left / Move Tab Right** in the View menu or the tab's context menu; the order is kept for the next time the connection opens. ⌘P jumps to any table, tab or action.
+- **Tabs:** arrow keys preview tables in one reusable tab; Return or a double-click keeps one open. Drag tabs to reorder them, or use **Move Tab Left / Move Tab Right** in the View menu or the tab's context menu; the order is kept for the next time the connection opens. A middle-click closes a tab, as its close button and ⌘W do. ⌘P jumps to any table, tab or action.
 - **Grid:** pages of 100 to 5,000 rows with a total count, server-side sorting, row numbers and spreadsheet-style keys. Space opens the [value editor](#the-value-editor) on a cell. Double-click the empty space below the rows to add a row.
 
 ## Filtering

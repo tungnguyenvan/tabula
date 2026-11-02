@@ -47,7 +47,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Chat** (⌥⌘A) that knows your tables and keys, looks things up with read-only queries, shows every step and saves conversations per connection.
 - **Queries you can use:** **Run** shows the result right in the chat (or the error, with **Fix**), **Insert** puts the query in the editor, and every read-only query in an answer is checked with EXPLAIN first; it can also search your saved queries.
 - **Proposed data changes** (opt-in): "mark order 42 as shipped" becomes uncommitted edits in the table's tab, for you to preview and commit.
-- **Visual answers:** charts, result grids, metric cards, query forms, clickable choices and table diagrams, drawn from queries Tabula runs itself, so a chart can't show made-up numbers.
+- **Visual answers:** charts that show exact values under the pointer, result grids, metric cards, query forms, clickable choices and table diagrams, drawn from queries Tabula runs itself, so a chart can't show made-up numbers.
 - **Dashboard** (⌥⌘5): pin charts, metric cards and grids from the chat to a per-connection dashboard that refreshes them read-only, on demand or every few minutes. [Dashboard](docs/ai.md#dashboard).
 - **Analysis notebooks:** a question that takes several steps is worked through in a notebook tab, one read-only query per step, each with its result as a grid or chart and a note, ending with a summary. Edit and rerun cells, add your own, and export to Markdown with chart images. [Notebooks](docs/ai.md#analysis-notebooks).
 - **Filter by description:** "customers in London who joined this month" becomes ordinary filter conditions, each checked against the table.
