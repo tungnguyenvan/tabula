@@ -77,14 +77,17 @@ Answers can show charts (bar, line, area, point, pie), result grids with **Open 
 
 ## Dashboard
 
-Pin a chart, metric cards or a result grid from an answer with its pin button (or **Pin to Dashboard** in its context menu), and it joins the connection's dashboard: **View › Dashboard** (⌥⌘5), or **Open Dashboard** under the card you pinned.
+Pin a chart, metric cards or a result grid from an answer with its pin button, and it joins the connection's dashboard you used last (the button's help says which): **View › Dashboard** (⌥⌘5) opens that one, and **Open Dashboard** under the card you pinned opens the one it went to.
 
-- Cards sit in a grid, each the same component as in the chat, with the result it had when pinned; opening the dashboard shows the saved results without running anything.
-- Each card's menu (the ⋯ button, or right-click) has **Refresh**, **Open in Query Tab**, **Rename…**, **Move Left** / **Move Right**, **Copy SQL**, **Copy Results** and **Remove from Dashboard**. Drag a card by its title to put it elsewhere.
+- **Several dashboards.** A connection can have as many dashboards as you like, each with a name ("Revenue", "Operations", "Failed transactions"). The dashboard's title is a menu listing them, with **New Dashboard…**, **Rename…** and **Delete Dashboard…** (it asks first). Each opens in its own tab, titled with its name, and several can be open at once; open dashboard tabs come back with the window. ⌘P lists each as "Dashboard: *name*".
+- **Pin to ›** in a component's context menu lists every dashboard (the ones it is already on are ticked) and **New Dashboard…**, which asks for a name and pins it there. A component is pinned at most once to each dashboard.
+- Cards sit in rows, each the same component as in the chat, with the result it had when pinned; opening a dashboard shows the saved results without running anything.
+- **Sizes**, as macOS widgets: **Size › Small** takes one column, **Medium** two and **Large** the whole row. The dashboard has as many columns as fit at 320 points or more, so on a narrow window every card takes the full width. Charts are taller on bigger cards. New charts start Medium, metrics Small and grids Large. A card that doesn't fit in what is left of a row starts the next one.
+- Each card's menu (the ⋯ button, or right-click) has **Refresh**, **Open in Query Tab**, **Rename…**, **Size**, **Move Left** / **Move Right**, **Move to ›** another dashboard (with its name, size and result), **Copy SQL**, **Copy Results** and **Remove from Dashboard**. Drag a card by its title to put it elsewhere; the others make room as it moves.
 - **Refresh All** runs every card's query; **Auto Refresh** runs them every 1, 5 or 15 minutes while the dashboard is shown. Each card shows when it last ran, a spinner while it runs and the error if it fails.
 - Queries run exactly as the chat's components do: read-only check, the assistant's separate read-only connection, 15 seconds, console log, and AI on (and allowed on Production). The AI isn't involved: Tabula runs the saved SQL, so **Let the chat run read-only queries** doesn't need to be on.
 - On Production, Auto Refresh is off and can't be turned on, and Refresh or Refresh All asks once before running.
-- Dashboards are saved per connection next to its chats, and deleting the connection deletes its dashboard.
+- Dashboards are saved per connection next to its chats, and deleting the connection deletes its dashboards. A dashboard made before 0.18 is kept as one named "Dashboard", with its cards (each Small, so it looks as it did), their order and its auto refresh.
 
 ## Analysis notebooks
 

@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-02
+
+### Added
+- **Several named dashboards per connection, and card sizes.** The dashboard's title is a menu of the connection's dashboards ("Revenue", "Operations"…) with **New Dashboard…**, **Rename…** and **Delete Dashboard…** (which asks first). Each dashboard opens in its own tab, titled with its name, and several can be open at once; **View › Dashboard** (⌥⌘5) opens the one used last, and ⌘P lists each as "Dashboard: Revenue". The pin button pins to the dashboard used last and says which; **Pin to ›** in a component's context menu lists every dashboard plus **New Dashboard…**, and a card's menu has **Move to ›** another dashboard. A component is still pinned at most once to each dashboard. Cards come in **Size › Small / Medium / Large**, as macOS widgets: one column, two, or the whole row, never wider than the dashboard (columns are at least 320 pt wide), with charts taller on bigger cards; new charts start Medium, metrics Small and grids Large. Dragging a card by its title still reorders it, whatever the sizes, and open dashboard tabs come back with the window. **Existing dashboards are kept**: each connection's dashboard becomes one named "Dashboard", with its cards, their order, names and results and its auto refresh, every card Small so it looks as before ([#337](https://github.com/tungnguyenvan/tabula/issues/337)).
+
 ## [0.17.1] - 2026-11-02
 
 ### Fixed
