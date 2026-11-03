@@ -5,7 +5,7 @@
 <p align="center">A fast, native macOS database client with an AI assistant that works on your real data, safely.<br>
 <b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b> and <b>Redis</b>. Free, no usage limits, keyboard-first.</p>
 
-<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest"><b>Download</b></a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.18.0/Tabula-intelligent-ui.mp4">Intelligent UI video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.18.0/Tabula-whats-new-0.18.mp4">What's new in 0.18</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
+<p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest"><b>Download</b></a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.18.0/Tabula-intelligent-ui.mp4">Intelligent UI video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.19.0/Tabula-whats-new-0.19.mp4">What's new in 0.19</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
 <div align="center">
 
@@ -13,7 +13,7 @@ https://github.com/user-attachments/assets/24917ff7-76bb-482f-a36c-bfc87224b393
 
 <sub>The demo (44 s): Tabula driven by real clicks and keys. <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Full quality, 1080p at 60 fps</a>.<br>
 <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.18.0/Tabula-intelligent-ui.mp4">Tabula Intelligent UI</a> (71 s): charts, metric cards, grids, forms and choices that the AI chat draws from your real data.<br>
-New in 0.18: <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.18.0/Tabula-whats-new-0.18.mp4">a short video of what's new</a>.</sub>
+New in 0.19: <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.19.0/Tabula-whats-new-0.19.mp4">a short video of what's new</a>.</sub>
 
 </div>
 
@@ -45,11 +45,12 @@ New in 0.18: <a href="https://github.com/tungnguyenvan/tabula/releases/download/
 
 Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
-- **Chat** (⌥⌘A) that knows your tables and keys, looks things up with read-only queries, shows every step and saves conversations per connection.
+- **Chat** (⌥⌘A) that knows your tables and keys, looks things up with read-only queries, shows every step and saves conversations per connection. On messy legacy schemas it spots backup copies, soft-deleted rows and keys no foreign key declares, and asks which reading you mean when the numbers depend on it. [Messy schemas](docs/ai.md#chat).
 - **Queries you can use:** **Run** shows the result right in the chat (or the error, with **Fix**), **Insert** puts the query in the editor, and every read-only query in an answer is checked with EXPLAIN first; it can also search your saved queries.
 - **Proposed data changes** (opt-in): "mark order 42 as shipped" becomes uncommitted edits in the table's tab, for you to preview and commit.
 - **Visual answers:** charts that show exact values under the pointer, result grids, metric cards, query forms, clickable choices and table diagrams, drawn from queries Tabula runs itself, so a chart can't show made-up numbers.
-- **Dashboards** (⌥⌘5): pin charts, metric cards and grids from the chat to named dashboards per connection, sized Small, Medium or Large like widgets, that refresh them read-only, on demand or every few minutes. [Dashboard](docs/ai.md#dashboard).
+- **Dashboards** (⌥⌘5): charts, metric cards and grids of your own queries (**Add to Dashboard…** from a query tab, or **Add Widget…**) and pinned from the chat, on named dashboards per connection, sized Small, Medium or Large like widgets, that refresh them read-only, on demand or every few minutes, with AI on or off, and export as one image (PNG or PDF) or copy to the pasteboard. [Dashboard](docs/ai.md#dashboard).
+- **Show Query** on every chart, grid and metric card shows the exact statement Tabula ran, and **Chart Type ›** redraws a chart as bars, lines, areas, points or a pie.
 - **Analysis notebooks:** a question that takes several steps is worked through in a notebook tab, one read-only query per step, each with its result as a grid or chart and a note, ending with a summary. Edit and rerun cells, add your own, and export to Markdown with chart images. [Notebooks](docs/ai.md#analysis-notebooks).
 - **Filter by description:** "customers in London who joined this month" becomes ordinary filter conditions, each checked against the table.
 - **Generate test rows:** "customers in Europe, half of them VIP" becomes up to 500 new rows, each value checked against its column's type, keys and constraints, to preview and commit.

@@ -6,6 +6,7 @@
 - [Running and stopping](#running-and-stopping)
 - [Checks before a statement runs](#checks-before-a-statement-runs)
 - [Saved queries and .sql files](#saved-queries-and-sql-files)
+- [Dashboard widgets](#dashboard-widgets)
 - [Console log](#console-log)
 - [Query plans](#query-plans)
 - [Server metrics](#server-metrics)
@@ -62,6 +63,10 @@ Commits of edits (from a table, a query result or the preview sheet) are Tabula'
 - Type a keyword in the editor and press ⌃Space: the saved query is in the completion list, and choosing it inserts its SQL. The AI chat can search the library too, so "find my revenue query" works.
 - **Open** (⌘O) one or more `.sql` files, each in its own query tab, or open them from Finder (Open With, or dropped on the Dock icon); Tabula never makes itself their default app. **Save** (⌘S) and **Save As…** (⇧⌘S) write them, in the encoding they were read in. A tab tied to a file shows a dot while it has unsaved edits, and closing it asks first.
 - In a table tab, or a query tab with edited result cells, ⌘S commits and ⇧⌘S previews the changes instead.
+
+## Dashboard widgets
+
+After a query that only reads, **Add to Dashboard…** (in the bar under the results, the Query menu or the results' context menu) makes a chart, metric cards or a grid of it on one of the connection's dashboards, previewed from the result on screen. On a dashboard, **Add Widget…** starts from a query you write there, and **Edit Widget…** changes any card. Widgets refresh read-only on the assistant's separate connection and don't need the AI. See [Dashboard](ai.md#dashboard).
 
 ## Console log
 
