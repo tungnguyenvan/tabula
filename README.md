@@ -46,6 +46,7 @@ New in 0.19: <a href="https://github.com/tungnguyenvan/tabula/releases/download/
 Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 - **Chat** (⌥⌘A) that knows your tables and keys, looks things up with read-only queries, shows every step and saves conversations per connection. On messy legacy schemas it spots backup copies, soft-deleted rows and keys no foreign key declares, and asks which reading you mean when the numbers depend on it. [Messy schemas](docs/ai.md#chat).
+- **Usage you can see:** a small line under each answer with its model calls, tool steps, time and the tokens the provider reported (never a guessed quota), and rate-limit, quota and billing errors that name the provider, keep its message and say when to try again. [Usage and limits](docs/ai.md#usage-and-limits).
 - **Queries you can use:** **Run** shows the result right in the chat (or the error, with **Fix**), **Insert** puts the query in the editor, and every read-only query in an answer is checked with EXPLAIN first; it can also search your saved queries.
 - **Proposed data changes** (opt-in): "mark order 42 as shipped" becomes uncommitted edits in the table's tab, for you to preview and commit.
 - **Visual answers:** charts that show exact values under the pointer, result grids, metric cards, query forms, clickable choices and table diagrams, drawn from queries Tabula runs itself, so a chart can't show made-up numbers.

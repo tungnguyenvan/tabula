@@ -44,6 +44,26 @@ AI is off until you turn it on in **Settings › AI** (⌘,), and off for Produc
 - A model menu under the message field switches models.
 - Conversations are saved per connection. The panel's title lists earlier ones to open again or delete, and the pencil starts a new one.
 
+### Usage and limits
+
+Under each complete answer, a small grey line says what it took ([#344](https://github.com/tungnguyenvan/tabula/issues/344)), for example "2 model calls · 1 tool step · 4.2 s · Tokens: 2,400 in, 67 out, 1,800 cache read, 1,800 cache write". Point at it for where the numbers come from.
+
+- **Model calls, tool steps and time** are Tabula's own counts for that answer: one call per step of the answer, plus one when a query's [check](#chat) asks the model for a correction, and the time from your question to the complete answer.
+- **Tokens** appear only when the provider reports them for those calls, added up over the answer's calls; Tabula never estimates them. When only some calls reported tokens, the line says so ("Tokens (1 of 2 calls)"). Claude counts cached tokens apart from the input; OpenAI-compatible servers and Codex include them in it.
+- The line is saved with the conversation; answers from before this version, and answers that failed or were stopped, have none.
+- **This is not your account's quota.** Tabula shows no remaining quota, percentage, reset time or price: providers don't report them for an answer, and Tabula doesn't guess. Look at your provider's console or plan for those.
+
+| Provider | What the line shows |
+| --- | --- |
+| Claude API | Input, output, cache read and cache write tokens, from the Messages API's `usage` |
+| OpenAI-compatible API, Ollama | Input, output and cached tokens when the server sends a `usage` object in its stream without being asked. Tabula doesn't ask for it with `stream_options`, which not every server takes, so servers that send it only when asked (OpenAI and Ollama among them) show calls and time only |
+| Claude Code | The tokens in its `result` line (input, output, cache read and write); an older version without them shows calls and time |
+| Codex | Input, output and cached input tokens from `turn.completed` |
+| Model on this Mac | The tokens the model read and wrote, as Tabula counted them |
+| Apple Intelligence | Calls and time; it reports no tokens |
+
+**Rate limits, quotas and billing.** When a provider refuses a request for a rate limit (HTTP 429, `rate_limit_error`), a used-up quota or plan limit (`insufficient_quota`, "usage limit reached") or billing ("credit balance is too low", HTTP 402), the chat says so plainly: which provider refused, its own message unchanged, the time to try again when the provider sent a `retry-after`, and where to look (the Claude Console, your Claude or ChatGPT plan, or the API key's provider). Ask AI, Fix with AI and the other AI features show the same text. Nothing is retried on its own; send the question again when you're ready. Other errors, such as an overloaded server, show as before.
+
 ## Read-only queries
 
 To answer, the chat can list and describe tables (columns, indexes, foreign keys), search [saved queries](queries.md#saved-queries-and-sql-files) and run a read-only query; each step shows in the conversation. Tabula runs the steps itself, for every provider, so no MCP setup is needed (Claude Code and Codex keep their own tools off).

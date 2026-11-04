@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-11-04
+
+### Added
+- **AI chat: what each answer took.** A small grey line under every complete answer shows its model calls, tool steps and time, and the input, output and cache tokens when the provider reports them, added up over the answer's calls (Claude API, Claude Code, Codex, OpenAI-compatible servers that send usage, and the model on this Mac, whose tokens Tabula counts); its help tag says where the numbers come from. It is saved with the conversation. These are the answer's own numbers, not your account's quota: Tabula never shows a remaining quota, percentage, reset time or price ([#344](https://github.com/tungnguyenvan/tabula/issues/344)).
+
+### Changed
+- **Clear rate-limit, quota and billing errors.** When a provider refuses for a rate limit, a used-up quota or plan limit, or billing, the chat names the provider and the kind of limit, keeps the provider's own message, shows when to try again if the provider sent a `retry-after`, and says where to check your quota or billing; Ask AI and the other AI features show the same text. Nothing is retried on its own ([#344](https://github.com/tungnguyenvan/tabula/issues/344)).
+
 ## [0.19.0] - 2026-11-03
 
 ### Added
