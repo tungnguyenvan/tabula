@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-11-05
+
+### Added
+- **Sort result grids in the chat, notebooks and dashboards.** Click a column's title in a result grid of an AI chat answer (including what **Run** shows under a query), a notebook cell or a dashboard grid card to sort its rows by that column, ascending, and click it again for descending, with the system's sort indicator, as in Finder. The rows already loaded are sorted on this Mac, without running the query again: numbers compare as numbers and dates as dates when the whole column holds them, other text as Finder sorts names ("item 2" before "item 10"), NULLs last either way, and equal values keep the order the query gave them. The order is kept with the conversation, the notebook cell or the card, also when the query runs again; **Copy Results** copies the rows in that order, a notebook's export writes its tables in it, and a grid card's exported image shows its rows sorted, with the indicator. A table tab still sorts on the server, as before ([#347](https://github.com/tungnguyenvan/tabula/issues/347)).
+- **Notebooks: Hide SQL.** **Hide SQL** in a notebook's title menu, **View › Hide SQL** and Open Anything (⌘P) hide the statement of every query cell, so the notes, grids and charts read as a report; each cell keeps a one-line "Query hidden" with **Show** to open its statement, and **Show SQL** brings them all back. The SQL badge in a query cell's title row now shows or hides that cell's statement (it used to show the statement as it ran under the result). The choice is saved with the notebook; hidden statements still run, Run All runs them, and a query cell you add opens with its editor. **Export Notebook…** leaves out the statements of hidden cells, and its save panel has an **Include SQL** checkbox that starts as the notebook shows them (mixed when only some show) and can put them all in or leave them all out; chart images never had the statement in them. On MongoDB the menu says **Hide Commands** ([#346](https://github.com/tungnguyenvan/tabula/issues/346)).
+
+### Fixed
+- **Smooth live window resize with a long notebook open.** A notebook now builds only the cells in view, so dragging the window's edge no longer lays out every cell's editor and grid at each step: with a notebook of 14 query cells (grids and charts) and a 12-answer AI chat open, a release build went from about 2 frames a second (420 ms each) to about 20 (47 ms each) during the drag. A text cell being edited that scrolls far out of view keeps its text ([#345](https://github.com/tungnguyenvan/tabula/issues/345)).
+
 ## [0.19.1] - 2026-11-04
 
 ### Added
