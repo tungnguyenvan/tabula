@@ -129,7 +129,9 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Explain** (⌥⌘E) shows the plan without running it; **Explain Analyze** (⌥⇧⌘E) adds actual rows and time, rolling back or refusing changes.
 - The slowest operations are tinted, and full scans of tables with 10,000 rows or more are flagged.
 - **Server metrics** (⌥⌘4): live charts of reads, writes, transactions, connections and active queries, the cache hit ratio and the largest tables.
-- [Query plans](docs/queries.md#query-plans) · [Server metrics](docs/queries.md#server-metrics).
+- **Top Queries:** the statements that cost the server the most (PostgreSQL `pg_stat_statements`, MySQL digests), sortable and searchable, with Explain (example values for placeholders) and AI index advice.
+- **Activity** (⌥⌘6): the server's sessions, who blocks whom, and Cancel Query and Kill Session (PostgreSQL, MySQL, MariaDB).
+- [Query plans](docs/queries.md#query-plans) · [Server metrics](docs/queries.md#server-metrics) · [Top Queries](docs/queries.md#top-queries) · [Activity](docs/queries.md#activity-sessions-and-locks).
 
 ### Find & import
 
@@ -143,6 +145,8 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Relationship diagram** (⌥⌘3) from foreign keys: drag, zoom, show key columns only, export a PNG.
 - **Functions, procedures and triggers:** view, create, edit and save without ever losing the original.
 - **Compare Schemas:** writes the SQL script that makes one schema match another, such as Production and Development; Tabula never runs it.
+- **Schema Health:** unused, duplicate and redundant indexes, foreign keys without an index, tables without a primary key, dead rows (PostgreSQL), full scans of large tables and the largest tables and indexes, each with why, the numbers behind it and a statement to review; export as Markdown or ask AI. [Schema health](docs/schema.md#schema-health).
+- **Users & Roles** (PostgreSQL, MySQL / MariaDB): roles and users with their attributes and memberships, who can do what on each table, view, sequence and function, and creating, changing, granting and revoking as pending SQL you preview (⇧⌘S) and commit (⌘S); passwords are typed in secure fields and shown as `'•••'` in the console log and the preview. [Users, roles and privileges](docs/schema.md#users-roles-and-privileges).
 - [Structure and schema in detail](docs/schema.md).
 
 ### MongoDB

@@ -50,7 +50,7 @@ While it is locked:
 
 - the grid's cells can't be edited, and **+**, **−**, **Duplicate**, **Paste**, **Import…** and **Generate Rows…** are off ("Read-only connection" on hover); query results can't be edited either;
 - **Run**, **Run All** and **Explain Analyze** refuse a script with a statement that [the checks](queries.md#checks-before-a-statement-runs) say may change data or the schema, or one that would make the session read-write again (`SET … READ WRITE`, `default_transaction_read_only`, `query_only`, `RESET ALL`). Nothing of the script runs; the message names the statement and offers **Allow Changes…**. Reads run as usual;
-- commits, saving a document, saving or deleting a routine, **Truncate** and **Drop** in the sidebar, and **Restore from Dump…** are refused;
+- commits, saving a document, saving or deleting a routine, **Truncate** and **Drop** in the sidebar, **Restore from Dump…**, and [Activity](queries.md#activity-sessions-and-locks)'s **Cancel Query…** and **Kill Session…** are refused;
 - the AI chat's [proposed changes](ai.md) are refused, and the model is told why. The chat and [AI agents](mcp.md) only read anyway;
 - Redis: the console sends only commands known to only read (`GET` runs, `SET` is refused), and keys can't be created, edited, renamed, expired or deleted.
 

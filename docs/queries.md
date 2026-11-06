@@ -10,6 +10,8 @@
 - [Console log](#console-log)
 - [Query plans](#query-plans)
 - [Server metrics](#server-metrics)
+- [Top Queries](#top-queries)
+- [Activity: sessions and locks](#activity-sessions-and-locks)
 - [Find in Database](#find-in-database)
 
 <p align="center"><img src="screenshots/query.png" width="820" alt="SQL editor with results and the console log"></p>
@@ -88,6 +90,32 @@ Explain uses PostgreSQL `EXPLAIN (VERBOSE, FORMAT JSON)`, MySQL `EXPLAIN FORMAT=
 **Server metrics** (⌥⌘4) shows live charts of reads, writes, transactions, connections and active queries, refreshed every 1 to 30 seconds, plus the cache hit ratio and the largest tables. Point at a chart to read the time and value of the sample under the pointer. MongoDB's come from `serverStatus` and `dbStats`, including the largest collections; Redis's from `INFO` (see [Redis metrics](redis.md#metrics)). Polling isn't written to the console log.
 
 <p align="center"><img src="screenshots/metrics.png" width="820" alt="Server metrics"></p>
+
+## Top Queries
+
+**View › Top Queries** (or Open Anything, ⌘P) lists the statements that cost the server the most, from PostgreSQL's `pg_stat_statements` or MySQL and MariaDB's `performance_schema.events_statements_summary_by_digest`. The server counts each statement with its constants replaced by placeholders (`$1` on PostgreSQL, `?` on MySQL), so every run of one shape is one row. The statistics are read when the tab opens and on **Refresh**, never on a timer.
+
+- The table shows the statement, calls, total, mean and longest time and rows; on PostgreSQL also the shared blocks found in the cache (**Shared Hit**) and read (**Shared Read**) and the temporary blocks, on MySQL the rows examined, the temporary tables on disk and the calls that used no index. Click a column's title to sort; the 500 statements with the most total time are read. **Search** filters by statement, user (PostgreSQL) or schema (MySQL). Tabula's own background statements (its catalog and metadata reads, metrics, the assistant's and agents' queries, dashboard refreshes, Find in Database) are left out until you tick **Show Tabula's Statements**, which is remembered for every connection; the header says how many are hidden. What you run from a query or table tab is always listed. Tabula starts each statement it sends with a comment, `/* tabula-run:<id> */` for yours and `/* tabula-run:bg:<id> */` for its own, which is how it tells them apart; statements are shown, copied and explained without it.
+- The header says since when they were counted: on PostgreSQL 14 and later when they were last reset (`pg_stat_statements_info`); on MySQL, which doesn't record resets, when the oldest statement listed was first seen. On PostgreSQL the list is of the database the window is in.
+- Select a statement to see it in full with all its figures (MySQL 8 also keeps one run of it with its values). **Copy** copies it, **Open in Query Tab** opens it in a new query tab without running it, and double-clicking a row does the same.
+- **Explain…** shows its plan in a new query tab, without running it. A statement with placeholders asks for an example value for each first, written as SQL (`42`, `'paid'`, `NULL`, or `1, 2, 3` for MySQL's `(...)` list), with the statement filled in as you type; **Open in Query Tab** opens it with the values given so far to finish there, and on MySQL 8 **Use Sample** explains the run the server kept. Explain Analyze is never run from Top Queries: choose it in the query tab if you want the statement run. A MySQL statement cut short when it was counted (`performance_schema_max_digest_length`) can only be opened in a query tab.
+- With AI allowed for the connection, **AI about This Query** explains why the statement is costly (slow on each call, or quick but run very often) and suggests `CREATE INDEX` statements to open in a query tab or copy; nothing is run. It sends the statement, its figures, the plan (estimated, of the statement with your example values) and the tables' names, column types and indexes, never rows. Without values it can ask without a plan.
+- **Reset Statistics…** runs `pg_stat_statements_reset()` (every database on the server) or empties MySQL's digest table, after asking, and asks again on a Production connection. A read-only connection refuses it until **Allow Changes…**. The reset shows in the console log; reading the statistics doesn't.
+
+When the database doesn't count statements, the tab says why and how to turn it on; Tabula never changes the server's settings or creates the extension itself:
+
+- **PostgreSQL:** add `pg_stat_statements` to `shared_preload_libraries` in `postgresql.conf` (or the parameter group of a managed service), restart the server, then run `CREATE EXTENSION pg_stat_statements;` in the database as a user who may create extensions. A login that may not read other users' statements (without `pg_read_all_stats`) sees them as `<insufficient privilege>`.
+- **MySQL and MariaDB:** `performance_schema = ON` in the server's configuration and a restart (MariaDB starts with it off), the `statements_digest` consumer on, and a login with `SELECT` on `performance_schema` (and `DROP` on the digest table to reset it).
+
+## Activity: sessions and locks
+
+**View › Activity** (⌥⌘6) lists what runs on a PostgreSQL, MySQL or MariaDB server right now, one row per session: its process ID, user, database, client address, application (PostgreSQL), state, what it waits on, when its transaction and its query began, how long it has been in its state, and the query. Click a column's title to sort by it. **Show** keeps only active sessions, those idle in a transaction, or those waiting for a lock; **Hide Idle** (on at first) hides idle sessions except ones others wait for, and **Hide Tabula** hides this window's own connections, which are marked **Tabula** (its queries' and the assistant's). The list refreshes every 2, 5 or 10 seconds while the tab is shown, or only with the refresh button when **Refresh** is Off, and it doesn't change while a menu is open. SQLite, MongoDB and Redis have no Activity: their tab says it isn't available.
+
+- **Blocking** shows who waits for whom as an outline: each session that holds others up, with the sessions waiting for it below it and the lock each one wants ("ShareLock on transaction 754", "RECORD X on shop.orders (PRIMARY)"). PostgreSQL's comes from `pg_blocking_pids`; MySQL 8's from `performance_schema.data_lock_waits`; MySQL 5.7's and MariaDB's from `information_schema.INNODB_LOCK_WAITS`.
+- Select a session to see all of its query, with **Copy**, **Explain** (its plan in a new query tab; of several statements sent together, the last) and **Open in Query Tab**.
+- **Cancel Query…** stops the session's running query (`pg_cancel_backend`, `KILL QUERY`) and **Kill Session…** disconnects it, rolling back its transaction (`pg_terminate_backend`, `KILL CONNECTION`). Both are in the detail pane and the session's context menu. Each asks first, showing the session, its user and the start of its query, and on a Production connection asks again. A [read-only connection](connections.md#read-only-connections) refuses both until **Allow Changes…**. Neither is offered for Tabula's own sessions: stop their query with Stop in their tab. On PostgreSQL they only reach the session you chose, never a later one that got its process ID. Both show in the console log; the polling doesn't.
+- Activity lists sessions over a connection of its own, so it still answers while your query waits for a lock; that connection isn't listed.
+- **Privileges.** When the login can't see or end other users' sessions, Activity says so: PostgreSQL shows other users' queries only to `pg_read_all_stats` (and lets `pg_signal_backend` cancel or kill them); MySQL lists other users' sessions only with `PROCESS`, tells who blocks whom only with `SELECT` on `performance_schema`, and lets `CONNECTION_ADMIN` (or `SUPER`) end them. A refused Cancel or Kill says which privilege is missing.
 
 ## Find in Database
 
