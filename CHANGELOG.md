@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-06
+
+### Added
+- **Always Allow for AI's reads on Production.** The question before a read-only AI query on a Production connection now offers **Don't Allow**, **Allow Once** (as before) and **Always Allow**, as macOS asks for permissions. Always Allow runs the query and lets later read-only queries on that connection run without asking. It is saved per connection and separately for **AI in Tabula** (the chat's queries, its code blocks, charts and forms, notebooks and dashboards) and **agents over MCP**, whose alert gets the same three buttons, so allowing one doesn't allow the other. Nothing else changes: each query still passes the read-only check and runs read-only with the time limit and row limits, in the console log, and writes and schema changes are refused. While it is on, the chat's description says so with **Ask Before Each Query**, the toolbar pill's details list it, and `list_connections` tells agents. Turn either off (or on) in the connection's form, **Let AI in Tabula read without asking** and **Let agents read without asking**; the next query asks again without reconnecting. Tagging the connection anything but Production drops both ([#358](https://github.com/tungnguyenvan/tabula/issues/358)).
+
 ## [0.21.0] - 2026-11-06
 
 ### Added

@@ -64,7 +64,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 **What the AI sees**
 
 - Table and column names, and the SQL you're working on. **No rows**, except the results of the chat's read-only queries: at most 50 rows each, and you can turn them off.
-- **Production asks first:** before each query from the chat or an agent. AI is off for Production connections unless you allow it.
+- **Production asks first:** before each query from the chat or an agent, unless you choose **Always Allow** for that connection (separately for AI in Tabula and for agents; it still only reads, and you can take it back in the connection's form). AI is off for Production connections unless you allow it.
 - **Off until you turn it on**, and you choose the provider. [Exactly what is sent](docs/ai.md#what-is-sent).
 
 <p align="center"><img src="docs/screenshots/ai.png" width="900" alt="The AI chat answering with a query, and a model-written suggestion in grey in the SQL editor"></p>

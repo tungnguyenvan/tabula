@@ -38,9 +38,17 @@ Tag each connection **Local**, **Development**, **Staging** or **Production**. T
 - running a statement from the editor that may change data, with what [Tabula's checks](queries.md#checks-before-a-statement-runs) found and, with AI on, **Review with AI**. Development, Staging and untagged connections ask only before a statement that changes every row or drops a table, unless you choose **Don't ask again for this connection**;
 - committing changes (from a table tab, a query result, a document, or the preview sheet and ⌘S);
 - destructive actions, such as restoring a dump (you type the database name) and Redis commands not known to only read;
-- each read-only query the [AI chat](ai.md#read-only-queries) or an [AI agent](mcp.md) wants to run, and searching with [Find in Database](queries.md#find-in-database).
+- each read-only query the [AI chat](ai.md#read-only-queries) or an [AI agent](mcp.md) wants to run (unless you chose **Always Allow**, below), and searching with [Find in Database](queries.md#find-in-database).
 
 AI is off for Production connections unless you allow it in Settings.
+
+### Always Allow for AI's reads
+
+The question before an AI query offers **Don't Allow**, **Allow Once** and **Always Allow**, as macOS asks for permissions. **Always Allow** runs the query and stops the questions for read-only AI queries on that connection. It is saved per connection, and separately for **AI in Tabula** (the chat, its code blocks, charts and forms, notebooks and dashboards) and **agents over MCP**, so allowing one doesn't allow the other.
+
+- Only the question goes away: each query still has to pass the read-only check, runs on the assistant's read-only connection in a read-only transaction with the time limit and row limits, and shows in the console log. Writes and schema changes are refused as before, and a dashboard still refreshes only when you ask.
+- While it is on, the AI chat's description says the connection lets AI read without asking, with **Ask Before Each Query** to take it back, and the toolbar pill's details list it. Agents are told in `list_connections`.
+- Take it back at any time in the connection's form: **Let AI in Tabula read without asking**, and, under **Allow AI agents (MCP)**, **Let agents read without asking**. The next query asks again; nothing needs to reconnect. Tagging the connection anything but Production drops both.
 
 ## Read-only connections
 

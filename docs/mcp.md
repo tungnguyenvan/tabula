@@ -22,7 +22,7 @@ The agent gets four tools:
 - `describe_table`;
 - `run_read_only_query`.
 
-They have the [chat's limits](ai.md#read-only-queries): only reads, on a separate read-only connection, in a read-only transaction where the database has one, 15 seconds, at most 50 rows with long values cut. On **Production** connections Tabula asks before each query. Every statement an agent runs appears in the console log, marked with a sparkles symbol and the agent's name.
+They have the [chat's limits](ai.md#read-only-queries): only reads, on a separate read-only connection, in a read-only transaction where the database has one, 15 seconds, at most 50 rows with long values cut. On **Production** connections Tabula asks before each query, with **Don't Allow**, **Allow Once** and **Always Allow**; Always Allow lets agents read that connection without asking until you turn **Let agents read without asking** off in its form, and doesn't apply to the AI in Tabula ([Always Allow](connections.md#always-allow-for-ais-reads)). Every statement an agent runs appears in the console log, marked with a sparkles symbol and the agent's name.
 
 ## How it works
 

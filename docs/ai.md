@@ -72,7 +72,7 @@ To answer, the chat can list and describe tables (columns, indexes, foreign keys
 - **Only reads run:** one `SELECT`, `WITH … SELECT`, `EXPLAIN`, `SHOW` or `DESCRIBE`, without comments, backslashes or server functions such as `pg_terminate_backend` and `query_to_xml`; on MongoDB `find`, `aggregate` (without `$out` / `$merge`), `countDocuments` and `distinct`, without `$where` / `$function`. Anything else is refused, and the assistant writes it as SQL for you to run.
 - **On their own connection:** they run on a separate connection, each in a read-only transaction (PostgreSQL, MySQL) or with SQLite's `query_only`, stopped after 15 seconds on every database, so they can't change data or touch your transactions. They appear in the console log.
 - **Limited:** at most 50 rows of each result, with long values cut, go to the model.
-- **Production asks:** on Production connections the chat asks before each query (**Allow** / **Don't Allow**).
+- **Production asks:** on Production connections the chat asks before each query: **Don't Allow**, **Allow Once** or **Always Allow**, which stops the questions for AI in Tabula on that connection until you turn it off in the connection's form ([Always Allow](connections.md#always-allow-for-ais-reads)); the queries stay read-only.
 - **You can turn them off:** **Let the chat run read-only queries** in Settings › AI. The assistant then sees only the structure, while [visual answers](#visual-answers) still show the data. It is on for new setups, and stays off if you used AI before the chat could run queries, until you turn it on.
 
 <p align="center"><img src="screenshots/ai-tools.png" width="820" alt="The chat answering from the real data: it ran an aggregate on MongoDB, shown as a step above the answer"></p>
