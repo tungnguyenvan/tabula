@@ -32,12 +32,13 @@ New in 0.19: <a href="https://github.com/tungnguyenvan/tabula/releases/download/
 ## Contents
 
 - [Features](#features): [AI assistant](#ai-assistant) · [AI agents (MCP)](#ai-agents-mcp) · [Connect](#connect) · [Browse & edit](#browse--edit) · [Query](#query) · [Performance](#performance) · [Find & import](#find--import) · [Schema](#schema) · [MongoDB](#mongodb) · [Redis](#redis) · [Updates & help](#updates--help)
+- [Feature support by database](docs/features-by-database.md): what works on PostgreSQL, MySQL / MariaDB, SQLite, MongoDB and Redis
 - [Install](#install)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Your data & privacy](#your-data--privacy)
 - [Known limitations](#known-limitations)
 - [License](#license)
-- Guides: [connections](docs/connections.md) · [editing](docs/editing.md) · [queries](docs/queries.md) · [schema](docs/schema.md) · [AI assistant](docs/ai.md) · [AI agents](docs/mcp.md) · [MongoDB](docs/mongodb.md) · [Redis](docs/redis.md) · [install](docs/install.md) · [shortcuts](docs/shortcuts.md)
+- Guides: [connections](docs/connections.md) · [editing](docs/editing.md) · [queries](docs/queries.md) · [schema](docs/schema.md) · [AI assistant](docs/ai.md) · [AI agents](docs/mcp.md) · [MongoDB](docs/mongodb.md) · [Redis](docs/redis.md) · [features by database](docs/features-by-database.md) · [install](docs/install.md) · [shortcuts](docs/shortcuts.md)
 
 ## Features
 
@@ -129,8 +130,8 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Explain** (⌥⌘E) shows the plan without running it; **Explain Analyze** (⌥⇧⌘E) adds actual rows and time, rolling back or refusing changes.
 - The slowest operations are tinted, and full scans of tables with 10,000 rows or more are flagged.
 - **Server metrics** (⌥⌘4): live charts of reads, writes, transactions, connections and active queries, the cache hit ratio and the largest tables.
-- **Top Queries:** the statements that cost the server the most (PostgreSQL `pg_stat_statements`, MySQL digests), sortable and searchable, with Explain (example values for placeholders) and AI index advice.
-- **Activity** (⌥⌘6): the server's sessions, who blocks whom, and Cancel Query and Kill Session (PostgreSQL, MySQL, MariaDB).
+- **Top Queries:** the statements that cost the server the most (PostgreSQL `pg_stat_statements`, MySQL digests, MongoDB's profiler), sortable and searchable, with Explain (example values for placeholders) and AI index advice.
+- **Activity** (⌥⌘6): the server's sessions, who blocks whom, and Cancel Query and Kill Session (PostgreSQL, MySQL, MariaDB); MongoDB's operations with Kill Op.
 - [Query plans](docs/queries.md#query-plans) · [Server metrics](docs/queries.md#server-metrics) · [Top Queries](docs/queries.md#top-queries) · [Activity](docs/queries.md#activity-sessions-and-locks).
 
 ### Find & import
@@ -146,7 +147,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Functions, procedures and triggers:** view, create, edit and save without ever losing the original.
 - **Compare Schemas:** writes the SQL script that makes one schema match another, such as Production and Development; Tabula never runs it.
 - **Schema Health:** unused, duplicate and redundant indexes, foreign keys without an index, tables without a primary key, dead rows (PostgreSQL), full scans of large tables and the largest tables and indexes, each with why, the numbers behind it and a statement to review; export as Markdown or ask AI. [Schema health](docs/schema.md#schema-health).
-- **Users & Roles** (PostgreSQL, MySQL / MariaDB): roles and users with their attributes and memberships, who can do what on each table, view, sequence and function, and creating, changing, granting and revoking as pending SQL you preview (⇧⌘S) and commit (⌘S); passwords are typed in secure fields and shown as `'•••'` in the console log and the preview. [Users, roles and privileges](docs/schema.md#users-roles-and-privileges).
+- **Users & Roles** (PostgreSQL, MySQL / MariaDB, MongoDB): roles and users with their attributes and memberships, who can do what on each table, view, sequence and function, and creating, changing, granting and revoking as pending SQL you preview (⇧⌘S) and commit (⌘S); passwords are typed in secure fields and shown as `'•••'` in the console log and the preview. [Users, roles and privileges](docs/schema.md#users-roles-and-privileges).
 - [Structure and schema in detail](docs/schema.md).
 
 ### MongoDB
@@ -154,6 +155,8 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - Collections in the grid, with nested values inline and BSON types in Row Details; filter with the builder or a query document.
 - Edits keep their types (a `NumberLong` stays a long); edit a whole document as JSON and preview the commands first.
 - The query editor runs shell statements: `find`, `aggregate`, `updateMany`, `createIndex`, `show dbs`, `use`, `db.runCommand(…)`.
+- Explain plans of stages (COLLSCAN, IXSCAN, keys and documents examined) with `createIndex` advice, and AI document changes you review and commit.
+- Activity (`$currentOp`, Kill Op), Top Queries from the database profiler, Health from `$indexStats`, and Users & Roles with masked passwords. [In detail](docs/mongodb.md#activity-top-queries-health-users--roles).
 - Atlas (`mongodb+srv`), replica sets, TLS and SCRAM. [MongoDB in detail](docs/mongodb.md).
 
 ### Redis
@@ -162,7 +165,8 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - Strings, hashes, lists, sets, sorted sets and streams, edited in place. **Changes are written to Redis immediately.**
 - Key details: size, memory, encoding and TTL; set an expiry, rename, create and delete keys.
 - **Console** (⌘T) like `redis-cli`, which refuses commands that would freeze the connection and asks before destructive ones.
-- Metrics from `INFO`. [Redis in detail](docs/redis.md).
+- Metrics from `INFO`; **Activity** (⌥⌘6) with Kill Client, the **Slow Log**, **Health** (memory, eviction and the biggest keys from a sample) and **ACL users** with pending changes. [Redis in detail](docs/redis.md).
+- **AI** (⌥⌘A): a chat that knows your key patterns, types and TTLs and reads values only with bounded read-only commands Tabula checks first, charts and grids pinned to a dashboard, and **Ask AI** (⌘K) and **Fix with AI** in the console, whose commands you run yourself. [AI on Redis](docs/ai.md#redis).
 
 ### Updates & help
 

@@ -78,12 +78,21 @@ After a query that only reads, **Add to Dashboard…** (in the bar under the res
 
 **Explain** (⌥⌘E, or the Explain button) shows how the database would run the selected statement, or the one at the cursor, without running it: an outline of each operation with its table, index, estimated rows and cost. **Explain Analyze** (⌥⇧⌘E) runs it and adds actual rows and time.
 
-Explain uses PostgreSQL `EXPLAIN (VERBOSE, FORMAT JSON)`, MySQL `EXPLAIN FORMAT=JSON` and SQLite `EXPLAIN QUERY PLAN` (no estimates). Explain Analyze uses PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)`, MySQL 8.0.18+ `EXPLAIN ANALYZE` and MariaDB `ANALYZE FORMAT=JSON`; SQLite has no Analyze.
+Explain uses PostgreSQL `EXPLAIN (VERBOSE, FORMAT JSON)`, MySQL `EXPLAIN FORMAT=JSON` and SQLite `EXPLAIN QUERY PLAN` (no estimates). Explain Analyze uses PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)`, MySQL 8.0.18+ `EXPLAIN ANALYZE` and MariaDB `ANALYZE FORMAT=JSON`; SQLite has no Analyze. On MongoDB, see [below](#mongodb-plans).
 
 - A statement that only reads runs as Run would. On PostgreSQL, any other statement runs on a separate connection in a transaction that is rolled back, after Tabula asks, since sequences and other effects outside the transaction stay. MySQL, which commits some statements on its own, analyzes only statements that read.
 - The **Share** column is each operation's own part of the time (or, without Analyze, the cost): a quarter or more is orange, half or more red. Full scans of tables with 10,000 rows or more are flagged.
 - **Copy Plan** copies the plan as the server returned it.
 - With AI on, **Ask AI about This Plan** explains it and suggests `CREATE INDEX` statements to insert or copy. Nothing is run. It sends the statement, the plan, and the tables' names, column types and indexes, never rows.
+
+### MongoDB plans
+
+On MongoDB, Explain shows the plan of a `find` or an `aggregate` with `explain("queryPlanner")`, without running it; **Explain Analyze** uses `explain("executionStats")`, which runs it [#353](https://github.com/tungnguyenvan/tabula/issues/353).
+
+- The plan is a tree of the winning plan's stages: `COLLSCAN`, `IXSCAN`, `FETCH`, `SORT`, `PROJECTION_…`, `GROUP`, an aggregation's `$…` stages fed by its `$cursor`, and one branch per shard on a sharded cluster. Each shows its collection, index name and filter, sort or key pattern; analyzed, also the documents it returned, the index keys and documents it examined, and its time. The bar under it gives the statement's `executionTimeMillis`, documents returned and `totalKeysExamined` / `totalDocsExamined`. Plans of the slot-based engine show its query plan, with the totals on the first stage.
+- A `COLLSCAN` of a collection with 10,000 documents or more is flagged; the size comes from `estimatedDocumentCount`.
+- Analyze only runs statements that read (no `$out` or `$merge`), and on a Production connection it asks first. Other commands, and statements that already end with `.explain()` or `.count()`, aren't explained.
+- With AI on, **Ask AI about This Plan** explains it and suggests `createIndex` commands to insert or copy, never run. It sends the statement, the plan, the collection's indexes and the field names and types sampled from its documents, never documents.
 
 ## Server metrics
 

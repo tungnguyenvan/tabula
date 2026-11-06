@@ -15,4 +15,4 @@ All of these are also in **Help › Keyboard Shortcuts** (⇧⌘/).
 | Value editor | ⌘S save as a pending change · ⎋ cancel · ⌘F find · ⌘G / ⇧⌘G next / previous match · ⌘Z / ⇧⌘Z undo / redo |
 | Changes | ⌘I add row · ⌘D duplicate row · ⌘Z / ⇧⌘Z undo / redo · ⌘S commit · ⇧⌘S preview SQL · ⌥⌘Z discard all |
 | SQL editor | ⌘↩ run selection or statement · ⇧⌘↩ run all · ⌘. stop query or search · ⌥⌘E explain · ⌥⇧⌘E explain analyze · ⌘S commit result edits, otherwise save · ⇧⌘S save as · ⌥⌘S save to library · Tab accept suggestion · ⎋ or ⌃Space suggestions · ⌘K ask AI · ⇧⌘I beautify · ⌘/ toggle comment · ⌘F find · ⌘Z / ⇧⌘Z undo / redo |
-| Redis | ⌘T console · ↑↓ console history · ⌘. stop a script or blocking command · ⌘F key pattern · ⌘R refresh · ⌘N new key · ⌘I add element · ⌘S save string · ⌫ delete key or elements |
+| Redis | ⌘T console · ↑↓ console history · ⌥↩ new line in the console · ⌘K ask AI to write commands · ⌘. stop a script or blocking command · ⌘F key pattern · ⌘R refresh · ⌘N new key · ⌘I add element · ⌘S save string · ⌫ delete key or elements · ⌥⌘A AI chat · ⌥⌘5 dashboard |
