@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-11-07
+
+### Added
+- **Performance measurements before each release.** `scripts/perf.sh` plays the same scenarios on an optimized build every time (a window with nine tabs: switching, scrolling, typing, resizing and Row Details; a 100,000-row result: loading, scrolling, sorting and filtering; an AI answer with a long Markdown table streamed by a fake model; five idle connections; launch to the first rows on PostgreSQL) and reads from inside the app the CPU time, main-thread time, hitches (frames held up past 16.7 ms), memory footprint, threads and SwiftUI body evaluations of each phase. It reports the median and spread of 3 runs and compares them with a baseline kept in the repository, `docs/perf-baseline.json`; `scripts/release.sh` runs it after the tests and stops when a figure got worse than its margin (`SKIP_PERF=1` skips it). The measuring code is in debug builds only, so the app you install doesn't carry it. [How it measures](docs/performance.md) ([#359](https://github.com/tungnguyenvan/tabula/issues/359)).
+
+### Fixed
+- **Resizing a window with many tabs is smooth again.** On macOS 26 every grid and editor of every tab in the background stayed known to the window's toolbar, which checked again where each one lay at every step of a resize, so each step took longer the more tabs were open. Tabs in the background now leave the window when its size changes (resizing it, showing the sidebar or Row Details) and come back as they were, with their text, Undo, selection, scroll position and keyboard focus, and a query running in one still finishes and shows. Switching back and forth between tabs without resizing doesn't draw them again. The tab bar also stops working out every tab again at each step. Resizing a window with nine tabs takes 2.8 s of main thread instead of 13.5 s (120 steps), with 0.7 s of late frames instead of 11.1 s; opening and closing Row Details takes 1.3 s instead of 2.2 s ([#360](https://github.com/tungnguyenvan/tabula/issues/360)).
+
 ## [0.22.0] - 2026-11-06
 
 ### Added

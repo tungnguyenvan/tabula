@@ -1,0 +1,877 @@
+{
+  "machine": {
+    "chip": "Apple M2",
+    "display": "Built-in Retina Display 1680x1050 @2x 60 Hz",
+    "macos": "26.1",
+    "memory_gb": 16,
+    "model": "Mac14,7",
+    "window": "1280x800"
+  },
+  "recorded": "2026-11-07",
+  "scenarios": {
+    "ai-chat": {
+      "phases": {
+        "scroll": {
+          "bodies": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 612.72,
+            "median": 590.38,
+            "min": 569.95,
+            "spread": 0.072
+          },
+          "hitch_ms": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "hitches": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 597.56,
+            "median": 574.8,
+            "min": 555.17,
+            "spread": 0.074
+          },
+          "main_cpu_ms": {
+            "max": 600.46,
+            "median": 577.35,
+            "min": 557.43,
+            "spread": 0.075
+          },
+          "peak_footprint_mb": {
+            "max": 129.41,
+            "median": 129.28,
+            "min": 129.28,
+            "spread": 0.001
+          },
+          "threads": {
+            "max": 8,
+            "median": 8,
+            "min": 8,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 162.45,
+            "median": 162.0,
+            "min": 158.05,
+            "spread": 0.027
+          },
+          "wall_ms": {
+            "max": 1822.26,
+            "median": 1815.92,
+            "min": 1796.32,
+            "spread": 0.014
+          }
+        },
+        "stream": {
+          "bodies": {
+            "max": 388,
+            "median": 384,
+            "min": 383,
+            "spread": 0.013
+          },
+          "cpu_ms": {
+            "max": 4418.49,
+            "median": 4399.22,
+            "min": 4387.62,
+            "spread": 0.007
+          },
+          "hitch_ms": {
+            "max": 2360.25,
+            "median": 2265.46,
+            "min": 2232.27,
+            "spread": 0.056
+          },
+          "hitches": {
+            "max": 99,
+            "median": 96,
+            "min": 96,
+            "spread": 0.031
+          },
+          "main_busy_ms": {
+            "max": 4211.62,
+            "median": 4190.25,
+            "min": 4189.63,
+            "spread": 0.005
+          },
+          "main_cpu_ms": {
+            "max": 4213.02,
+            "median": 4191.7,
+            "min": 4188.63,
+            "spread": 0.006
+          },
+          "peak_footprint_mb": {
+            "max": 131.09,
+            "median": 130.94,
+            "min": 130.74,
+            "spread": 0.003
+          },
+          "threads": {
+            "max": 8,
+            "median": 8,
+            "min": 8,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 22.89,
+            "median": 20.82,
+            "min": 20.49,
+            "spread": 0.115
+          },
+          "wall_ms": {
+            "max": 6578.87,
+            "median": 6554.25,
+            "min": 6540.8,
+            "spread": 0.006
+          }
+        }
+      },
+      "runs": 3
+    },
+    "idle": {
+      "phases": {
+        "idle": {
+          "bodies": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 65.88,
+            "median": 64.66,
+            "min": 62.68,
+            "spread": 0.049
+          },
+          "hitch_ms": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "hitches": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 47.29,
+            "median": 46.56,
+            "min": 44.17,
+            "spread": 0.067
+          },
+          "main_cpu_ms": {
+            "max": 50.46,
+            "median": 49.56,
+            "min": 47.64,
+            "spread": 0.057
+          },
+          "peak_footprint_mb": {
+            "max": 88.27,
+            "median": 88.14,
+            "min": 87.89,
+            "spread": 0.004
+          },
+          "threads": {
+            "max": 15,
+            "median": 14,
+            "min": 14,
+            "spread": 0.071
+          },
+          "wakeups_per_second": {
+            "max": 4.17,
+            "median": 4.1,
+            "min": 3.97,
+            "spread": 0.049
+          },
+          "wall_ms": {
+            "max": 20495.22,
+            "median": 20401.38,
+            "min": 20381.42,
+            "spread": 0.006
+          }
+        }
+      },
+      "runs": 3
+    },
+    "large-result": {
+      "phases": {
+        "filter": {
+          "bodies": {
+            "max": 26,
+            "median": 26,
+            "min": 26,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 522.26,
+            "median": 518.76,
+            "min": 515.44,
+            "spread": 0.013
+          },
+          "hitch_ms": {
+            "max": 282.75,
+            "median": 279.86,
+            "min": 276.67,
+            "spread": 0.022
+          },
+          "hitches": {
+            "max": 8,
+            "median": 8,
+            "min": 8,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 430.71,
+            "median": 429.04,
+            "min": 424.86,
+            "spread": 0.014
+          },
+          "main_cpu_ms": {
+            "max": 429.26,
+            "median": 428.15,
+            "min": 423.82,
+            "spread": 0.013
+          },
+          "peak_footprint_mb": {
+            "max": 140.5,
+            "median": 140.19,
+            "min": 138.72,
+            "spread": 0.013
+          },
+          "threads": {
+            "max": 7,
+            "median": 7,
+            "min": 7,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 10.76,
+            "median": 8.97,
+            "min": 8.0,
+            "spread": 0.307
+          },
+          "wall_ms": {
+            "max": 1124.43,
+            "median": 1115.71,
+            "min": 1114.37,
+            "spread": 0.009
+          }
+        },
+        "load": {
+          "bodies": {
+            "max": 11,
+            "median": 11,
+            "min": 11,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 328.95,
+            "median": 316.36,
+            "min": 302.09,
+            "spread": 0.085
+          },
+          "hitch_ms": {
+            "max": 166.0,
+            "median": 153.23,
+            "min": 152.02,
+            "spread": 0.091
+          },
+          "hitches": {
+            "max": 3,
+            "median": 3,
+            "min": 3,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 226.85,
+            "median": 225.33,
+            "min": 213.68,
+            "spread": 0.058
+          },
+          "main_cpu_ms": {
+            "max": 225.96,
+            "median": 224.05,
+            "min": 211.6,
+            "spread": 0.064
+          },
+          "peak_footprint_mb": {
+            "max": 117.72,
+            "median": 115.77,
+            "min": 114.45,
+            "spread": 0.028
+          },
+          "threads": {
+            "max": 11,
+            "median": 10,
+            "min": 9,
+            "spread": 0.2
+          },
+          "wakeups_per_second": {
+            "max": 31.8,
+            "median": 29.36,
+            "min": 27.03,
+            "spread": 0.162
+          },
+          "wall_ms": {
+            "max": 628.88,
+            "median": 613.12,
+            "min": 597.51,
+            "spread": 0.051
+          }
+        },
+        "scroll": {
+          "bodies": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 1875.99,
+            "median": 1756.08,
+            "min": 1713.24,
+            "spread": 0.093
+          },
+          "hitch_ms": {
+            "max": 97.61,
+            "median": 31.41,
+            "min": 27.8,
+            "spread": 2.222
+          },
+          "hitches": {
+            "max": 19,
+            "median": 5,
+            "min": 4,
+            "spread": 3.0
+          },
+          "main_busy_ms": {
+            "max": 1871.95,
+            "median": 1744.38,
+            "min": 1706.54,
+            "spread": 0.095
+          },
+          "main_cpu_ms": {
+            "max": 1858.34,
+            "median": 1739.27,
+            "min": 1697.49,
+            "spread": 0.092
+          },
+          "peak_footprint_mb": {
+            "max": 140.09,
+            "median": 139.61,
+            "min": 136.97,
+            "spread": 0.022
+          },
+          "threads": {
+            "max": 10,
+            "median": 9,
+            "min": 8,
+            "spread": 0.222
+          },
+          "wakeups_per_second": {
+            "max": 57.33,
+            "median": 56.52,
+            "min": 55.36,
+            "spread": 0.035
+          },
+          "wall_ms": {
+            "max": 2727.84,
+            "median": 2706.98,
+            "min": 2703.63,
+            "spread": 0.009
+          }
+        },
+        "sort": {
+          "bodies": {
+            "max": 24,
+            "median": 24,
+            "min": 24,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 594.61,
+            "median": 592.53,
+            "min": 581.95,
+            "spread": 0.021
+          },
+          "hitch_ms": {
+            "max": 364.48,
+            "median": 361.79,
+            "min": 358.55,
+            "spread": 0.016
+          },
+          "hitches": {
+            "max": 6,
+            "median": 6,
+            "min": 5,
+            "spread": 0.167
+          },
+          "main_busy_ms": {
+            "max": 513.17,
+            "median": 512.68,
+            "min": 507.37,
+            "spread": 0.011
+          },
+          "main_cpu_ms": {
+            "max": 512.82,
+            "median": 512.15,
+            "min": 505.92,
+            "spread": 0.013
+          },
+          "peak_footprint_mb": {
+            "max": 135.25,
+            "median": 135.16,
+            "min": 133.5,
+            "spread": 0.013
+          },
+          "threads": {
+            "max": 7,
+            "median": 7,
+            "min": 7,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 12.28,
+            "median": 11.22,
+            "min": 11.04,
+            "spread": 0.111
+          },
+          "wall_ms": {
+            "max": 1087.12,
+            "median": 1069.08,
+            "min": 1058.23,
+            "spread": 0.027
+          }
+        }
+      },
+      "runs": 3
+    },
+    "launch": {
+      "phases": {
+        "launch": {
+          "bodies": {
+            "max": 38,
+            "median": 38,
+            "min": 38,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 970.21,
+            "median": 961.59,
+            "min": 869.64,
+            "spread": 0.105
+          },
+          "hitch_ms": {
+            "max": 595.28,
+            "median": 577.98,
+            "min": 478.84,
+            "spread": 0.201
+          },
+          "hitches": {
+            "max": 7,
+            "median": 7,
+            "min": 7,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 774.76,
+            "median": 757.04,
+            "min": 664.58,
+            "spread": 0.146
+          },
+          "main_cpu_ms": {
+            "max": 848.53,
+            "median": 840.6,
+            "min": 748.54,
+            "spread": 0.119
+          },
+          "peak_footprint_mb": {
+            "max": 91.3,
+            "median": 90.78,
+            "min": 85.66,
+            "spread": 0.062
+          },
+          "threads": {
+            "max": 11,
+            "median": 10,
+            "min": 9,
+            "spread": 0.2
+          },
+          "wakeups_per_second": {
+            "max": 103.76,
+            "median": 92.42,
+            "min": 89.15,
+            "spread": 0.158
+          },
+          "wall_ms": {
+            "max": 964.71,
+            "median": 930.52,
+            "min": 848.1,
+            "spread": 0.125
+          }
+        },
+        "marks": {
+          "connect_start_ms": {
+            "max": 307.49,
+            "median": 295.49,
+            "min": 279.11,
+            "spread": 0.096
+          },
+          "connect_to_rows_ms": {
+            "max": 657.22,
+            "median": 651.41,
+            "min": 552.61,
+            "spread": 0.161
+          },
+          "connected_ms": {
+            "max": 651.9,
+            "median": 639.39,
+            "min": 615.32,
+            "spread": 0.057
+          },
+          "first_rows_ms": {
+            "max": 964.7,
+            "median": 930.52,
+            "min": 848.1,
+            "spread": 0.125
+          },
+          "first_window_ms": {
+            "max": 272.2,
+            "median": 250.13,
+            "min": 237.96,
+            "spread": 0.137
+          }
+        }
+      },
+      "runs": 3
+    },
+    "tabs": {
+      "phases": {
+        "inspector": {
+          "bodies": {
+            "max": 15,
+            "median": 15,
+            "min": 15,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 1455.55,
+            "median": 1227.43,
+            "min": 886.68,
+            "spread": 0.463
+          },
+          "hitch_ms": {
+            "max": 288.96,
+            "median": 270.22,
+            "min": 238.56,
+            "spread": 0.187
+          },
+          "hitches": {
+            "max": 21,
+            "median": 15,
+            "min": 14,
+            "spread": 0.467
+          },
+          "main_busy_ms": {
+            "max": 1463.54,
+            "median": 1237.85,
+            "min": 890.47,
+            "spread": 0.463
+          },
+          "main_cpu_ms": {
+            "max": 1431.48,
+            "median": 1205.29,
+            "min": 866.12,
+            "spread": 0.469
+          },
+          "peak_footprint_mb": {
+            "max": 224.77,
+            "median": 224.36,
+            "min": 223.78,
+            "spread": 0.004
+          },
+          "threads": {
+            "max": 8,
+            "median": 7,
+            "min": 7,
+            "spread": 0.143
+          },
+          "wakeups_per_second": {
+            "max": 49.73,
+            "median": 45.87,
+            "min": 27.56,
+            "spread": 0.483
+          },
+          "wall_ms": {
+            "max": 4725.11,
+            "median": 4717.4,
+            "min": 4709.03,
+            "spread": 0.003
+          }
+        },
+        "resize": {
+          "bodies": {
+            "max": 5,
+            "median": 5,
+            "min": 5,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 2881.87,
+            "median": 2879.51,
+            "min": 2859.09,
+            "spread": 0.008
+          },
+          "hitch_ms": {
+            "max": 777.57,
+            "median": 746.77,
+            "min": 743.53,
+            "spread": 0.046
+          },
+          "hitches": {
+            "max": 109,
+            "median": 108,
+            "min": 105,
+            "spread": 0.037
+          },
+          "main_busy_ms": {
+            "max": 2889.85,
+            "median": 2880.29,
+            "min": 2869.51,
+            "spread": 0.007
+          },
+          "main_cpu_ms": {
+            "max": 2831.66,
+            "median": 2830.18,
+            "min": 2810.31,
+            "spread": 0.008
+          },
+          "peak_footprint_mb": {
+            "max": 199.69,
+            "median": 199.66,
+            "min": 198.89,
+            "spread": 0.004
+          },
+          "threads": {
+            "max": 9,
+            "median": 9,
+            "min": 9,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 51.71,
+            "median": 51.38,
+            "min": 47.38,
+            "spread": 0.084
+          },
+          "wall_ms": {
+            "max": 4706.68,
+            "median": 4679.79,
+            "min": 4671.31,
+            "spread": 0.008
+          }
+        },
+        "scroll": {
+          "bodies": {
+            "max": 15,
+            "median": 15,
+            "min": 15,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 2117.97,
+            "median": 2102.04,
+            "min": 2055.58,
+            "spread": 0.03
+          },
+          "hitch_ms": {
+            "max": 182.42,
+            "median": 172.46,
+            "min": 147.13,
+            "spread": 0.205
+          },
+          "hitches": {
+            "max": 7,
+            "median": 6,
+            "min": 5,
+            "spread": 0.333
+          },
+          "main_busy_ms": {
+            "max": 2097.06,
+            "median": 2077.57,
+            "min": 2033.23,
+            "spread": 0.031
+          },
+          "main_cpu_ms": {
+            "max": 2079.12,
+            "median": 2062.11,
+            "min": 2017.5,
+            "spread": 0.03
+          },
+          "peak_footprint_mb": {
+            "max": 203.02,
+            "median": 201.92,
+            "min": 201.17,
+            "spread": 0.009
+          },
+          "threads": {
+            "max": 10,
+            "median": 9,
+            "min": 9,
+            "spread": 0.111
+          },
+          "wakeups_per_second": {
+            "max": 87.96,
+            "median": 87.53,
+            "min": 87.33,
+            "spread": 0.007
+          },
+          "wall_ms": {
+            "max": 4797.82,
+            "median": 4775.33,
+            "min": 4763.27,
+            "spread": 0.007
+          }
+        },
+        "switch": {
+          "bodies": {
+            "max": 90,
+            "median": 90,
+            "min": 90,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 1265.4,
+            "median": 1250.77,
+            "min": 1247.48,
+            "spread": 0.014
+          },
+          "hitch_ms": {
+            "max": 912.24,
+            "median": 888.47,
+            "min": 882.73,
+            "spread": 0.033
+          },
+          "hitches": {
+            "max": 21,
+            "median": 20,
+            "min": 20,
+            "spread": 0.05
+          },
+          "main_busy_ms": {
+            "max": 1354.96,
+            "median": 1340.77,
+            "min": 1340.32,
+            "spread": 0.011
+          },
+          "main_cpu_ms": {
+            "max": 1218.09,
+            "median": 1202.11,
+            "min": 1200.62,
+            "spread": 0.015
+          },
+          "peak_footprint_mb": {
+            "max": 197.03,
+            "median": 196.58,
+            "min": 195.95,
+            "spread": 0.005
+          },
+          "threads": {
+            "max": 10,
+            "median": 9,
+            "min": 9,
+            "spread": 0.111
+          },
+          "wakeups_per_second": {
+            "max": 91.4,
+            "median": 91.31,
+            "min": 88.99,
+            "spread": 0.026
+          },
+          "wall_ms": {
+            "max": 4067.93,
+            "median": 4048.0,
+            "min": 4041.04,
+            "spread": 0.007
+          }
+        },
+        "type": {
+          "bodies": {
+            "max": 5,
+            "median": 5,
+            "min": 5,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 503.61,
+            "median": 494.83,
+            "min": 472.22,
+            "spread": 0.063
+          },
+          "hitch_ms": {
+            "max": 71.31,
+            "median": 68.37,
+            "min": 58.86,
+            "spread": 0.182
+          },
+          "hitches": {
+            "max": 2,
+            "median": 2,
+            "min": 2,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 491.43,
+            "median": 483.27,
+            "min": 451.0,
+            "spread": 0.084
+          },
+          "main_cpu_ms": {
+            "max": 434.83,
+            "median": 425.77,
+            "min": 404.28,
+            "spread": 0.072
+          },
+          "peak_footprint_mb": {
+            "max": 204.74,
+            "median": 202.89,
+            "min": 202.19,
+            "spread": 0.013
+          },
+          "threads": {
+            "max": 7,
+            "median": 7,
+            "min": 6,
+            "spread": 0.143
+          },
+          "wakeups_per_second": {
+            "max": 44.94,
+            "median": 42.05,
+            "min": 41.39,
+            "spread": 0.084
+          },
+          "wall_ms": {
+            "max": 3828.79,
+            "median": 3817.71,
+            "min": 3783.07,
+            "spread": 0.012
+          }
+        }
+      },
+      "runs": 3
+    }
+  },
+  "version": "0.22.0"
+}
