@@ -46,6 +46,7 @@ refuses to start. `launch` and `idle` need the test database containers, which i
 | peak MB | the largest memory footprint (`phys_footprint`, what Activity Monitor shows as Memory) seen during the phase |
 | threads | the process's threads at the end |
 | bodies | SwiftUI body evaluations of the main views, counted by `PerfProbe.body` at the top of their `body` (debug builds only) |
+| views made | AppKit views made during the phase by the views that count themselves with `PerfProbe.made` (the grid's cells and row numbers): in a phase that only scrolls, views the table didn't reuse. Shown, not compared with the baseline |
 | wakeups/s | (idle) times the process was woken up, a second |
 
 The `launch` scenario also notes, in milliseconds since the process started: the first window on screen, the start
@@ -77,8 +78,11 @@ Figures much better than the baseline are listed too, as a hint to record a new 
 
 `scripts/perf.sh --sample tabs/resize` runs one scenario and samples the whole process with `sample` (1 ms, 5 s by
 default, `--sample-seconds N`) from the start of that phase, into `.build/perf/samples/`. `sample` takes a second or
-two to attach, so give it a few seconds more than the phase lasts. The build has its symbols, so the call tree names
-Tabula's functions. If you record an Instruments trace instead, limit it to 20 seconds, check
+two to attach, so give it a few seconds more than the phase lasts. The scroll phases last only two or three seconds,
+the start of which `sample` would miss: with `TABULA_DEBUG_PERF_SCROLL_REPEAT=4` they scroll down and back up four
+times, and `TABULA_DEBUG_PERF_SCROLL_REPEAT=4 scripts/perf.sh --sample large-result/scroll --sample-seconds 6` samples
+nothing but scrolling. The build has its symbols, so the call tree names Tabula's functions. If you record an
+Instruments trace instead, limit it to 20 seconds, check
 that there are 8 GB free first, and delete the `.trace` and the temporary files it leaves under
 `/private/var/folders/…/T` afterwards: traces can fill the disk.
 
