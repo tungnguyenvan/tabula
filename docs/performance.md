@@ -5,7 +5,8 @@ and compares them with [`docs/perf-baseline.json`](perf-baseline.json). `scripts
 and stops when a scenario got worse than the baseline by more than its margin (`SKIP_PERF=1` skips it).
 
 ```bash
-scripts/perf.sh                          # every scenario, 3 runs each, compared with the baseline (about 6 minutes)
+scripts/perf.sh                          # the release's scenarios, 3 runs each, compared with the baseline (about 10 minutes)
+scripts/perf.sh --all                    # every scenario (about 16 minutes)
 scripts/perf.sh --scenario tabs          # one scenario (or several: tabs,ai-chat)
 scripts/perf.sh --runs 5                 # more runs
 scripts/perf.sh --update-baseline        # write the medians as the new baseline (commit it with the change)
@@ -16,8 +17,22 @@ TABULA_PERF_KEEP=/tmp/perf scripts/perf.sh   # keep each run's JSON and log
 
 Leave the Mac alone while it runs: the workspace window is put in front of the others at 1280×800 on the main
 screen, and a run where another app's window covers it is run again. A locked screen draws nothing, so perf.sh
-refuses to start. `launch` and `idle` need the test database containers, which it starts and stops again as
-`scripts/test-dbs.sh` does (containers that were already running are left running).
+refuses to start. The scenarios on a server need test database containers, and only their own: `launch`, `schema`,
+`diagram` and `live` PostgreSQL, `windows` PostgreSQL and Redis, `redis` Redis, `mongo` MongoDB, and `idle` all four.
+perf.sh starts a container before the first scenario that needs it and stops it after the last (containers that were
+already running are left running), and runs the scenarios without a server first. Their data is seeded before the
+first scenario that uses it (about 7 s for the 3,000-table database) and removed after the last, also when a run
+fails: the `tabula_perf` and `tabula_perf_schema` PostgreSQL databases, Redis database 15 and the `tabula_perf`
+MongoDB database. A scenario added in #365 gets its own saved connections only in its own runs:
+every saved connection is listed in the Connections window and the toolbar's menus, which changes what the others
+measure.
+
+Without `--all` or `--scenario`, perf.sh plays what `scripts/release.sh` runs: `tabs`, `large-result`, `ai-chat`,
+`sql`, `launch`, `schema`, `diagram`, `idle`, `redis` and `mongo`. `live` and `windows` are left out of it: their
+three runs take about 5 minutes, most of it waiting by design (52 and 25 seconds of each run), so run them with
+`--all` before a release that touches live tabs, windows or connections, and after changing them. perf.sh prints how
+long each run took; on the M2 of the baseline one run of `schema` takes 12 s, `sql` 24 s, `diagram` 13 s, `redis`
+19 s, `mongo` 16 s, `live` 58 s and `windows` 61 s.
 
 ## How it measures
 
@@ -25,9 +40,10 @@ refuses to start. `launch` and `idle` need the test database containers, which i
   the debug hooks that play the scenarios (`Sources/Tabula/DebugPerf*.swift`). It is never shipped; `release.sh`
   checks that the shipped binary has no debug hooks. It runs as `TabulaPerf`, so its settings are in a defaults
   domain of its own, removed before every run.
-- **Each run** is a new process on a fresh copy of fixed data (`scripts/perf/seed-*.sql`), with a window of a fixed
-  size. Every scenario sets up first (connect, open the tabs, run their queries, show each tab once) and only then
-  measures its phases, with fixed pauses, so two runs do the same work. One unmeasured run warms the disk caches.
+- **Each run** is a new process on a fresh copy of fixed data (`scripts/perf/seed-*`, `make-script.py`), with a window
+  of a fixed size. Every scenario sets up first (connect, open the tabs, run their queries, show each tab once) and
+  only then measures its phases, with fixed pauses, so two runs do the same work. One unmeasured run warms the disk
+  caches.
 - **Input** goes through the app's event path: key presses and key equivalents sent to the window, scroll wheel
   events to the grid's scroll view one per frame, window resizes one step per frame. Tab switches call what
   View › Go to Tab (⌘1 to ⌘9) does.
@@ -44,6 +60,7 @@ refuses to start. `launch` and `idle` need the test database containers, which i
 | main busy ms | time the main run loop was awake, from waking up to going back to sleep after Core Animation's commit |
 | hitches, hitch ms | main-thread stretches longer than a frame at 60 Hz (16.7 ms), and their time past the frame: frames that were late |
 | peak MB | the largest memory footprint (`phys_footprint`, what Activity Monitor shows as Memory) seen during the phase |
+| +MB | the footprint at the end of the phase less the footprint at its start: memory it kept, or gave back when negative. Shown, not compared |
 | threads | the process's threads at the end |
 | bodies | SwiftUI body evaluations of the main views, counted by `PerfProbe.body` at the top of their `body` (debug builds only) |
 | views made | AppKit views made during the phase by the views that count themselves with `PerfProbe.made` (the grid's cells and row numbers): in a phase that only scrolls, views the table didn't reuse. Shown, not compared with the baseline |
@@ -61,6 +78,17 @@ of connecting, connected, and the first rows of the table drawn.
 | `large-result` | SQLite, `orders` with 100,000 rows | `load` (`SELECT * FROM orders` without a row limit), `scroll` (its grid), `sort` (the table tab with 5,000-row pages, by three columns), `filter` (two conditions, then none) |
 | `ai-chat` | SQLite, the fake model | `stream` (the whole answer arriving and drawn), `scroll` (the answer) |
 | `idle` | SQLite, PostgreSQL, MySQL, Redis and MongoDB, one window each | `idle` (20 s with nothing to do) |
+| `schema` | PostgreSQL `tabula_perf_schema`: 3,000 tables, 300 views and 200 functions (`seed-postgres-schema.sql`) | `open` (the window moved from `tabula_perf` to it, as picking it in the sidebar does, until its 3,300 tables and views are listed), `scroll` (the sidebar), `filter` (7 letters typed in the sidebar's filter, then ⎋), `palette` (Open Anything opened, 12 letters typed, ⎋) |
+| `sql` | SQLite, a 5,000-line SQL script (220 KB, `make-script.py`) | `open` (File › Open… after its panel, until the script is in the editor), `type-end` (12 keys at the end, then 12 deletes), `type-middle` (the same at line 2,500), `scroll` (the editor) |
+| `diagram` | PostgreSQL `tabula_perf_schema`, schema `erd`: 200 tables, 299 foreign keys | `open` (the relationship diagram, until its 200 tables are drawn), `pan` (scrolling it down, across and back), `zoom` (a pinch: the zoom changing a little each frame, out to 40% and back, twice) |
+| `live` | PostgreSQL `tabula_perf` | `metrics` (the Metrics tab refreshing every second, 20 s), `metrics-full` (the same for 10 s with the ten minutes of history the tab keeps, made up by `MetricsModel.fillHistory`), `dashboard` (a dashboard of two charts, a metrics card and a 200-row grid, refreshed every 2 s, 20 s, with the Metrics tab open behind it). Notes how many samples the hidden Metrics tab took meanwhile |
+| `redis` | Redis database 15: 100,000 keys of every type, a 10,000-field hash and a 50,000-item list (`seed-redis.py`) | `open` (the key list read from the start), `browse` (20 more pages loaded while scrolling down), `scroll` (the 10,500 keys), `filter` (`session:1*`, hashes only, then everything), `hash` (the hash opened and all its 10,000 fields loaded and scrolled), `list` (the list opened, 5,000 items loaded and scrolled) |
+| `mongo` | MongoDB `tabula_perf`: 1,000 documents of about 13 KB nested six levels deep (`seed-mongo.js`) | `load` (the collection's first 300 documents in the grid), `scroll` (down, across and back), `document` (three documents opened in the document editor and closed), `inspector` (Row Details following the selection over ten documents) |
+| `windows` | three windows, each with a SQLite, a PostgreSQL and a Redis connection of its own | `before` (5 s with only the Connections window), `open` (the windows and their 9 connections), `tabs` (a query with 500 rows and two tables in each SQL connection, a key's value in each Redis one: 18 tabs), `steady` (10 s left alone), `close` (a table tab of the first window and the PostgreSQL connection of the second closed, then the three windows), `after` (10 s left alone). It also prints the memory and threads a connection and a tab cost, and notes the workspaces, windows and connection sessions still alive after closing, whether the closed tab was still kept 5 s after closing it and the closed connection 10 s after, their window still open (`closed_tab_kept`, `closed_connection_kept`), and the footprint once the allocator has handed back its free memory. A closed tab or connection kept that long (#372), or a window, workspace, session, tab or connection still alive once its window has closed (#366), fails the run |
+
+The `idle` scenario and the windows scenario's `before`, `steady` and `after` phases compare their wake-ups a
+second and use the idle margins below; they show timers that keep running. In `windows`, `after` against `before`
+is what closing the windows didn't give back.
 
 ## The check
 
@@ -78,10 +106,18 @@ Figures much better than the baseline are listed too, as a hint to record a new 
 
 `scripts/perf.sh --sample tabs/resize` runs one scenario and samples the whole process with `sample` (1 ms, 5 s by
 default, `--sample-seconds N`) from the start of that phase, into `.build/perf/samples/`. `sample` takes a second or
-two to attach, so give it a few seconds more than the phase lasts. The scroll phases last only two or three seconds,
-the start of which `sample` would miss: with `TABULA_DEBUG_PERF_SCROLL_REPEAT=4` they scroll down and back up four
-times, and `TABULA_DEBUG_PERF_SCROLL_REPEAT=4 scripts/perf.sh --sample large-result/scroll --sample-seconds 6` samples
-nothing but scrolling. The build has its symbols, so the call tree names Tabula's functions. If you record an
+two to attach, so the sampled phase waits 2.5 s for it before it starts (TABULA_DEBUG_PERF_SAMPLED); make
+`--sample-seconds` about as long as the phase. TABULA_DEBUG_PERF_PHASES skips the phases you don't need (keep the ones
+that set the sampled one up, such as `schema`'s `open`), and TABULA_PERF_KEEP keeps the log and figures as in a normal
+run:
+
+```bash
+TABULA_DEBUG_PERF_PHASES=open,filter scripts/perf.sh --sample schema/filter --sample-seconds 5
+```
+
+The scroll phases last only two or three seconds: with `TABULA_DEBUG_PERF_SCROLL_REPEAT=4` they scroll down and back
+up four times, and `TABULA_DEBUG_PERF_SCROLL_REPEAT=4 scripts/perf.sh --sample large-result/scroll --sample-seconds 6`
+samples nothing but scrolling. The build has its symbols, so the call tree names Tabula's functions. If you record an
 Instruments trace instead, limit it to 20 seconds, check
 that there are 8 GB free first, and delete the `.trace` and the temporary files it leaves under
 `/private/var/folders/…/T` afterwards: traces can fill the disk.
@@ -94,3 +130,7 @@ which the resize shows). The variables pass through perf.sh to the app:
 ```bash
 TABULA_DEBUG_PERF_TABS=2 TABULA_DEBUG_PERF_PHASES=resize,inspector scripts/perf.sh --scenario tabs
 ```
+
+To see what stays alive after the `windows` scenario closes its windows, `TABULA_DEBUG_PERF_HOLD=90` keeps the
+process 90 seconds after its last phase (the log says `PERF holding`): `heap <pid>` counts the objects of each class,
+and `leaks <pid> --traceTree=<address>` shows what holds one of them.

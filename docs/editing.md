@@ -61,7 +61,7 @@ A cell shows one line. To see or change a whole value (a JSON document, a long t
 
 - **Space** on the focused cell, or **Open Value Editor** in the cell's context menu.
 - **Double-click** a value that spans lines, is longer than 200 characters or is JSON; other values are edited in the cell. Hold ⌥ to open any value.
-- The expand button (two arrows) beside a long value, JSON or bytes in the row details panel (⌥⌘0).
+- The expand button (two arrows) beside a long value, JSON or bytes in the row details panel (⌥⌘0). There a value longer than 1,000 bytes shows in a field eight lines tall that scrolls; it holds the whole value, to select, copy or edit in place.
 
 It shows the value one of three ways, picked from the column's type and the value, and you can switch:
 
