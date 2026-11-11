@@ -53,7 +53,7 @@ Edit in the grid or in the row details panel (⌥⌘0): set NULL or empty text, 
 - **Nothing is written until you commit.** Changes are highlighted. ⇧⌘S previews the exact SQL (the first 1,000 statements of a large change; **Copy SQL** copies them all), and ⌘S runs every change in one transaction and rolls back if any statement fails. Production connections ask before the commit.
 - A commit that can't reach one of its rows, such as a row someone else deleted meanwhile, names the row and rolls back.
 - Sorting, filtering, paging or closing a tab asks first if it would throw away uncommitted edits.
-- Duplicating a row leaves its primary key, and generated columns, to the server.
+- Duplicating rows (⌘D) adds copies of them, selected, as [pasting rows](#pasting-rows) copied from the same table does: the primary key, a column a unique index covers alone, and generated columns are left empty, for the server or you to fill.
 
 ## The value editor
 
@@ -73,11 +73,12 @@ It shows the value one of three ways, picked from the column's type and the valu
 
 ## Pasting rows
 
-⌘V pastes rows copied from Tabula, Numbers, Excel or Google Sheets as new rows, committed with ⌘S like any other change.
+⌘V pastes rows copied from Tabula, Numbers, Excel or Google Sheets as new rows, committed with ⌘S like any other change. **Edit › Paste** and **Paste** in the grid's context menu say when rows will be added, and how many ("Paste 3 Rows as New Rows"). The new rows are selected, the first scrolled into view, and one ⌘Z takes them all back.
 
-- When the first line is a header, such as the one Copy with Header writes, columns are matched by name; otherwise in order.
-- `NULL` pastes as NULL (a quoted `"NULL"` is the text), and generated columns are left to the server.
-- A single value pasted with a cell selected goes into that cell; values from a single column go into the selected column.
+- **Rows copied in Tabula and pasted into the same table** are copies, as **Duplicate Rows** makes them: every value as it is in the grid, pending edits included, with NULL and the text `NULL` told apart. The primary key, the columns that identify rows, a column a unique index covers alone, and generated columns are left empty, for the database (or you) to fill. On MongoDB every value keeps its type (`NumberLong`, `NumberDecimal`, dates, `ObjectId`, nested documents), `_id` is a new one, and a field the page has no column for comes with its document. Copy (⌘C) puts the rows on the clipboard as tab-separated text for other apps, and in Tabula's own form beside it.
+- **Rows from another table, Numbers, Excel or Google Sheets** are read from their text. When the first line is a header, such as the one Copy with Column Names writes, columns are matched by name; otherwise in order. `NULL` pastes as NULL (a quoted `"NULL"` is the text). Generated columns, and keys the database numbers itself (an `AUTO_INCREMENT`, `serial` or identity column, SQLite's `INTEGER PRIMARY KEY`, MongoDB's `_id`), are left to the database.
+- Several lines, or rows copied in Tabula, are always added as rows, whichever cell is selected. A single value pasted with a cell selected goes into that cell; values from a single column go into the selected column.
+- Read-only connections refuse, as they do Add Row, and say why; views can't take rows.
 
 ## Copying and exporting
 
