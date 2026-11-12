@@ -23,16 +23,16 @@ Leave the Mac alone while it runs: the workspace window is put in front of the o
 screen, and a run where another app's window covers it is run again. A locked screen draws nothing, so perf.sh
 refuses to start. The scenarios on a server need test database containers, and only their own: `launch`, `schema`,
 `diagram` and `live` PostgreSQL, `windows` PostgreSQL and Redis, `redis` Redis, `mongo` and `mongo-script` MongoDB,
-and `idle` all four. perf.sh starts a container before the first scenario that needs it and stops it after the last (containers that were
+`mssql` SQL Server (tabula-test-mssql), and `idle` the first four. perf.sh starts a container before the first scenario that needs it and stops it after the last (containers that were
 already running are left running), and runs the scenarios without a server first. Their data is seeded before the
 first scenario that uses it (about 7 s for the 3,000-table database) and removed after the last, also when a run
 fails: the `tabula_perf` and `tabula_perf_schema` PostgreSQL databases, Redis database 15 and the `tabula_perf`
-MongoDB database. A scenario added in #365 gets its own saved connections only in its own runs:
+MongoDB and SQL Server databases. A scenario added in #365 gets its own saved connections only in its own runs:
 every saved connection is listed in the Connections window and the toolbar's menus, which changes what the others
 measure.
 
 Without `--all` or `--scenario`, perf.sh plays what `scripts/release.sh` runs: `tabs`, `large-result`, `ai-chat`,
-`sql`, `launch`, `schema`, `diagram`, `idle`, `redis`, `mongo` and `mongo-script`. `live` and `windows` are left out
+`sql`, `launch`, `schema`, `diagram`, `idle`, `redis`, `mongo`, `mongo-script` and `mssql`. `live` and `windows` are left out
 of it: their three runs take about 5 minutes, most of it waiting by design (52 and 25 seconds of each run), so run them with
 `--all` before a release that touches live tabs, windows or connections, and after changing them. perf.sh prints how
 long each run took; on the M2 of the baseline one run of `schema` takes 12 s, `sql` 24 s, `diagram` 13 s, `redis`
@@ -89,6 +89,7 @@ of connecting, connected, and the first rows of the table drawn.
 | `redis` | Redis database 15: 100,000 keys of every type, a 10,000-field hash and a 50,000-item list (`seed-redis.py`) | `open` (the key list read from the start), `browse` (20 more pages loaded while scrolling down), `scroll` (the 10,500 keys), `filter` (`session:1*`, hashes only, then everything), `hash` (the hash opened and all its 10,000 fields loaded and scrolled), `list` (the list opened, 5,000 items loaded and scrolled) |
 | `mongo` | MongoDB `tabula_perf`: 1,000 documents of about 13 KB nested six levels deep (`seed-mongo.js`) | `load` (the collection's first 300 documents in the grid), `scroll` (down, across and back), `document` (three documents opened in the document editor and closed), `inspector` (Row Details following the selection over ten documents). Notes the main thread's busy time a selection took, as `large-result` does |
 | `mongo-script` | MongoDB `tabula` (nothing seeded), a 5,000-line shell script (225 KB, `make-mongo-script.py`) | `type-end` (`db.orders.find` typed at the end, 14 keys, then 14 deletes), `type-middle` (the same at line 2,493) |
+| `mssql` | SQL Server `tabula_perf` in the tabula-test-mssql container: `orders` with 100,000 rows, `customers` with 5,000 (`seed-mssql.sql`) | `load` (`SELECT * FROM dbo.orders ORDER BY id` without a row limit, read over TDS), `scroll` (its grid), `sort` (the table tab with 5,000-row pages read with `OFFSET … FETCH`, by three columns), `filter` (two conditions, then none), `type` (28 keys in the editor, then 28 deletes) |
 | `windows` | three windows, each with a SQLite, a PostgreSQL and a Redis connection of its own | `before` (5 s with only the Connections window), `open` (the windows and their 9 connections), `tabs` (a query with 500 rows and two tables in each SQL connection, a key's value in each Redis one: 18 tabs), `steady` (10 s left alone), `close` (a table tab of the first window and the PostgreSQL connection of the second closed, then the three windows), `after` (10 s left alone). It also prints the memory and threads a connection and a tab cost, and notes the workspaces, windows and connection sessions still alive after closing, whether the closed tab was still kept 5 s after closing it and the closed connection 10 s after, their window still open (`closed_tab_kept`, `closed_connection_kept`), and the footprint once the allocator has handed back its free memory. A closed tab or connection kept that long (#372), or a window, workspace, session, tab or connection still alive once its window has closed (#366), fails the run |
 
 The `idle` scenario and the windows scenario's `before`, `steady` and `after` phases compare their wake-ups a

@@ -7,7 +7,7 @@
     "model": "Mac14,7",
     "window": "1280x800"
   },
-  "recorded": "2026-11-11",
+  "recorded": "2026-11-12",
   "scenarios": {
     "ai-chat": {
       "phases": {
@@ -1812,6 +1812,411 @@
             "median": 2251.56,
             "min": 2208.71,
             "spread": 0.02
+          }
+        }
+      },
+      "runs": 3
+    },
+    "mssql": {
+      "phases": {
+        "filter": {
+          "bodies": {
+            "max": 22,
+            "median": 22,
+            "min": 22,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 257.4,
+            "median": 249.67,
+            "min": 249.32,
+            "spread": 0.032
+          },
+          "footprint_mb": {
+            "max": 117.2,
+            "median": 116.99,
+            "min": 114.63,
+            "spread": 0.022
+          },
+          "grown_mb": {
+            "max": 0.22,
+            "median": 0.17,
+            "min": -2.62,
+            "spread": 16.545
+          },
+          "hitch_ms": {
+            "max": 112.15,
+            "median": 105.65,
+            "min": 105.16,
+            "spread": 0.066
+          },
+          "hitches": {
+            "max": 6,
+            "median": 6,
+            "min": 5,
+            "spread": 0.167
+          },
+          "main_busy_ms": {
+            "max": 238.75,
+            "median": 231.13,
+            "min": 230.88,
+            "spread": 0.034
+          },
+          "main_cpu_ms": {
+            "max": 238.71,
+            "median": 230.73,
+            "min": 230.27,
+            "spread": 0.037
+          },
+          "peak_footprint_mb": {
+            "max": 117.28,
+            "median": 117.2,
+            "min": 116.99,
+            "spread": 0.003
+          },
+          "threads": {
+            "max": 16,
+            "median": 16,
+            "min": 15,
+            "spread": 0.062
+          },
+          "views_made": {
+            "max": 768,
+            "median": 768,
+            "min": 768,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 8.02,
+            "median": 7.92,
+            "min": 7.19,
+            "spread": 0.105
+          },
+          "wall_ms": {
+            "max": 1137.03,
+            "median": 1122.39,
+            "min": 1112.66,
+            "spread": 0.022
+          }
+        },
+        "load": {
+          "bodies": {
+            "max": 6,
+            "median": 6,
+            "min": 6,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 202.71,
+            "median": 193.59,
+            "min": 190.02,
+            "spread": 0.066
+          },
+          "footprint_mb": {
+            "max": 108.11,
+            "median": 107.7,
+            "min": 107.64,
+            "spread": 0.004
+          },
+          "grown_mb": {
+            "max": 34.13,
+            "median": 33.88,
+            "min": 33.77,
+            "spread": 0.011
+          },
+          "hitch_ms": {
+            "max": 62.47,
+            "median": 61.7,
+            "min": 56.91,
+            "spread": 0.09
+          },
+          "hitches": {
+            "max": 3,
+            "median": 3,
+            "min": 3,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 116.4,
+            "median": 114.38,
+            "min": 113.41,
+            "spread": 0.026
+          },
+          "main_cpu_ms": {
+            "max": 115.93,
+            "median": 114.14,
+            "min": 113.09,
+            "spread": 0.025
+          },
+          "peak_footprint_mb": {
+            "max": 108.11,
+            "median": 107.7,
+            "min": 107.64,
+            "spread": 0.004
+          },
+          "threads": {
+            "max": 17,
+            "median": 17,
+            "min": 17,
+            "spread": 0.0
+          },
+          "views_made": {
+            "max": 320,
+            "median": 320,
+            "min": 320,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 30.48,
+            "median": 29.29,
+            "min": 27.99,
+            "spread": 0.085
+          },
+          "wall_ms": {
+            "max": 512.09,
+            "median": 500.16,
+            "min": 492.12,
+            "spread": 0.04
+          }
+        },
+        "scroll": {
+          "bodies": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 999.45,
+            "median": 998.61,
+            "min": 973.88,
+            "spread": 0.026
+          },
+          "footprint_mb": {
+            "max": 129.44,
+            "median": 127.34,
+            "min": 126.0,
+            "spread": 0.027
+          },
+          "grown_mb": {
+            "max": 21.67,
+            "median": 19.62,
+            "min": 17.81,
+            "spread": 0.197
+          },
+          "hitch_ms": {
+            "max": 7.72,
+            "median": 7.24,
+            "min": 3.7,
+            "spread": 0.556
+          },
+          "hitches": {
+            "max": 1,
+            "median": 1,
+            "min": 1,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 989.23,
+            "median": 988.82,
+            "min": 963.27,
+            "spread": 0.026
+          },
+          "main_cpu_ms": {
+            "max": 986.93,
+            "median": 986.48,
+            "min": 961.88,
+            "spread": 0.025
+          },
+          "peak_footprint_mb": {
+            "max": 134.5,
+            "median": 134.36,
+            "min": 130.77,
+            "spread": 0.028
+          },
+          "threads": {
+            "max": 16,
+            "median": 16,
+            "min": 16,
+            "spread": 0.0
+          },
+          "views_made": {
+            "max": 16,
+            "median": 16,
+            "min": 16,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 64.62,
+            "median": 61.61,
+            "min": 59.28,
+            "spread": 0.087
+          },
+          "wall_ms": {
+            "max": 2532.25,
+            "median": 2513.47,
+            "min": 2507.05,
+            "spread": 0.01
+          }
+        },
+        "sort": {
+          "bodies": {
+            "max": 21,
+            "median": 21,
+            "min": 21,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 264.7,
+            "median": 260.16,
+            "min": 251.24,
+            "spread": 0.052
+          },
+          "footprint_mb": {
+            "max": 117.2,
+            "median": 117.0,
+            "min": 116.7,
+            "spread": 0.004
+          },
+          "grown_mb": {
+            "max": -1.39,
+            "median": -2.19,
+            "min": -3.41,
+            "spread": 0.921
+          },
+          "hitch_ms": {
+            "max": 112.95,
+            "median": 109.0,
+            "min": 85.85,
+            "spread": 0.249
+          },
+          "hitches": {
+            "max": 6,
+            "median": 6,
+            "min": 5,
+            "spread": 0.167
+          },
+          "main_busy_ms": {
+            "max": 243.64,
+            "median": 239.25,
+            "min": 232.7,
+            "spread": 0.046
+          },
+          "main_cpu_ms": {
+            "max": 243.45,
+            "median": 238.68,
+            "min": 232.58,
+            "spread": 0.046
+          },
+          "peak_footprint_mb": {
+            "max": 121.81,
+            "median": 119.95,
+            "min": 119.64,
+            "spread": 0.018
+          },
+          "threads": {
+            "max": 16,
+            "median": 16,
+            "min": 15,
+            "spread": 0.062
+          },
+          "views_made": {
+            "max": 768,
+            "median": 768,
+            "min": 768,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 10.68,
+            "median": 10.18,
+            "min": 8.83,
+            "spread": 0.181
+          },
+          "wall_ms": {
+            "max": 1131.96,
+            "median": 1123.61,
+            "min": 1080.49,
+            "spread": 0.046
+          }
+        },
+        "type": {
+          "bodies": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "cpu_ms": {
+            "max": 439.54,
+            "median": 411.85,
+            "min": 404.47,
+            "spread": 0.085
+          },
+          "footprint_mb": {
+            "max": 130.36,
+            "median": 130.24,
+            "min": 129.99,
+            "spread": 0.003
+          },
+          "grown_mb": {
+            "max": 4.58,
+            "median": 4.56,
+            "min": 4.52,
+            "spread": 0.014
+          },
+          "hitch_ms": {
+            "max": 12.45,
+            "median": 12.23,
+            "min": 12.07,
+            "spread": 0.031
+          },
+          "hitches": {
+            "max": 1,
+            "median": 1,
+            "min": 1,
+            "spread": 0.0
+          },
+          "main_busy_ms": {
+            "max": 421.88,
+            "median": 396.24,
+            "min": 386.99,
+            "spread": 0.088
+          },
+          "main_cpu_ms": {
+            "max": 355.97,
+            "median": 336.19,
+            "min": 323.5,
+            "spread": 0.097
+          },
+          "peak_footprint_mb": {
+            "max": 137.63,
+            "median": 137.42,
+            "min": 132.94,
+            "spread": 0.034
+          },
+          "threads": {
+            "max": 16,
+            "median": 15,
+            "min": 15,
+            "spread": 0.067
+          },
+          "views_made": {
+            "max": 0,
+            "median": 0,
+            "min": 0,
+            "spread": 0.0
+          },
+          "wakeups_per_second": {
+            "max": 22.61,
+            "median": 21.81,
+            "min": 20.4,
+            "spread": 0.101
+          },
+          "wall_ms": {
+            "max": 3450.42,
+            "median": 3438.52,
+            "min": 3432.18,
+            "spread": 0.005
           }
         }
       },
@@ -3821,5 +4226,5 @@
       "runs": 3
     }
   },
-  "version": "0.22.4"
+  "version": "0.23.0"
 }

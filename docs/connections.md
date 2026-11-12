@@ -16,7 +16,7 @@
 
 ## Creating a connection
 
-Tabula connects to PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB and Redis.
+Tabula connects to PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB, Redis and SQL Server.
 
 1. Click **New Connection** (⌘N) and pick a type, or paste a [connection string](#connection-strings).
    - **PostgreSQL** uses the user name when Database is empty.
@@ -24,6 +24,7 @@ Tabula connects to PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB and Redis.
    - **SQLite:** choose a file or create one (⌘O in the Connections window opens a SQLite file).
    - **Redis:** User is optional (an ACL user on Redis 6 and later; empty for `requirepass`) and Database is the index, 0 by default.
    - **MongoDB:** see [MongoDB connections](mongodb.md#connecting).
+   - **SQL Server:** a server or `server\instance`, a SQL login, and Encrypt; see [SQL Server connections](sqlserver.md#connecting).
 2. Choose a [tag](#tags-and-production-safeguards), so a Production connection is obvious at a glance.
 3. Click **Test**, then **Connect**, or double-click a saved connection. Connecting gives up after 15 seconds instead of hanging.
 
@@ -62,7 +63,7 @@ While it is locked:
 - the AI chat's [proposed changes](ai.md) are refused, and the model is told why. The chat and [AI agents](mcp.md) only read anyway;
 - Redis: the console sends only commands known to only read (`GET` runs, `SET` is refused), and keys can't be created, edited, renamed, expired or deleted.
 
-On the server, Tabula also makes the connection's sessions read-only where the database supports it: PostgreSQL with `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`, MySQL / MariaDB with `SET SESSION TRANSACTION READ ONLY`, SQLite with `PRAGMA query_only`. A statement that got past Tabula's checks is still refused by the server. MongoDB and Redis have no read-only session, so Tabula's checks are all there is; for a guarantee, connect with a database user that may only read.
+On the server, Tabula also makes the connection's sessions read-only where the database supports it: PostgreSQL with `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`, MySQL / MariaDB with `SET SESSION TRANSACTION READ ONLY`, SQLite with `PRAGMA query_only`. A statement that got past Tabula's checks is still refused by the server. MongoDB, Redis and SQL Server have no read-only session, so Tabula's checks are all there is; for a guarantee, connect with a database user that may only read.
 
 **Allow Changes…** (the toolbar's lock button, or **Database › Allow Changes for 10 Minutes…**) asks first, naming the connection, then lifts both for 10 minutes: Tabula lets edits and statements through and the session becomes read-write. The toolbar shows **Lock Again** with the time left, and the pill says "Changes allowed". When the time runs out, or you choose **Lock Again**, the connection locks again. Changes still pending in a table tab or a query result stay pending, marked "Locked: allow changes to commit", and can be committed after the next **Allow Changes…**.
 
@@ -100,9 +101,11 @@ TLS can be off, **Required**, or required with **Verify certificate**.
 - **Verify certificate** checks the server against the macOS trust store. Databases with a private CA (such as AWS RDS, or self-signed certificates) fail until that CA is added to Keychain Access and trusted.
 - **Required** encrypts without checking the certificate.
 
+SQL Server has settings of its own, as Microsoft's drivers name them: Encrypt, Trust server certificate and a certificate authority. See [SQL Server encryption](sqlserver.md#encryption).
+
 ## SSH tunnels
 
-Turn on **Connect over SSH** (PostgreSQL, MySQL) to reach a database through an SSH server (a bastion). The form takes the SSH host, port, user and, optionally, a private key file. Host is then the database as the SSH server sees it, such as `localhost`.
+Turn on **Connect over SSH** (PostgreSQL, MySQL, SQL Server) to reach a database through an SSH server (a bastion). The form takes the SSH host, port, user and, optionally, a private key file. Host is then the database as the SSH server sees it, such as `localhost`.
 
 - Tabula runs the system's `/usr/bin/ssh` with key authentication only: keys from ssh-agent, `~/.ssh`, or a key file you choose. Add a key with a passphrase to ssh-agent first (`ssh-add`). No SSH password or passphrase is stored.
 - The server's host key must already be in `~/.ssh/known_hosts`; connect once with `ssh` in Terminal to check and save it. `~/.ssh/config` isn't read, so enter the real host name, port and user. IPv6 addresses work for the SSH server and the database host.
@@ -112,7 +115,7 @@ Turn on **Connect over SSH** (PostgreSQL, MySQL) to reach a database through an 
 
 **Connection String…** (⇧⌘N) in the Connections window, paste (⌘V) into the connection list, or type one in the Host field. A summary shows what was read before **Continue** fills in the form, password included. Tabula never reads the clipboard by itself.
 
-- It accepts `postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://` and `file://` URLs (and those TablePlus copies, with their name, tag and TLS settings), JDBC URLs, libpq `key=value` strings and .NET-style `Server=…;Uid=…;Pwd=…` strings.
+- It accepts `postgresql://`, `mysql://`, `redis://`, `rediss://`, `mongodb://`, `mongodb+srv://`, `sqlserver://`, `mssql://` and `file://` URLs (and those TablePlus copies, with their name, tag and TLS settings), JDBC URLs, libpq `key=value` strings and .NET-style `Server=…;Uid=…;Pwd=…` strings (SQL Server's ADO.NET ones too, such as `Server=tcp:db,1433;Initial Catalog=shop;User ID=app`).
 - URL escapes are decoded (`p%3Fss` becomes `p?ss`). A password that still holds escapes, as some dashboards show them, gets a **Decode** button, and a failed login says when escapes are the likely cause.
 - Copy a connection back as a URL, with or without the password, from its context menu.
 

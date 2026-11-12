@@ -3,7 +3,7 @@
 <h1 align="center">Tabula</h1>
 
 <p align="center">A fast, native macOS database client with an AI assistant that works on your real data, safely.<br>
-<b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b> and <b>Redis</b>. Free, no usage limits, keyboard-first.</p>
+<b>PostgreSQL</b>, <b>MySQL / MariaDB</b>, <b>SQLite</b>, <b>MongoDB</b>, <b>Redis</b> and <b>SQL Server</b>. Free, no usage limits, keyboard-first.</p>
 
 <p align="center"><a href="https://github.com/tungnguyenvan/tabula/releases/latest"><b>Download</b></a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.5.1/Tabula-demo.mp4">Demo video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.18.0/Tabula-intelligent-ui.mp4">Intelligent UI video</a> · <a href="https://github.com/tungnguyenvan/tabula/releases/download/v0.19.0/Tabula-whats-new-0.19.mp4">What's new in 0.19</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="LICENSE">MIT License</a></p>
 
@@ -31,14 +31,14 @@ New in 0.19: <a href="https://github.com/tungnguyenvan/tabula/releases/download/
 
 ## Contents
 
-- [Features](#features): [AI assistant](#ai-assistant) · [AI agents (MCP)](#ai-agents-mcp) · [Connect](#connect) · [Browse & edit](#browse--edit) · [Query](#query) · [Performance](#performance) · [Find & import](#find--import) · [Schema](#schema) · [MongoDB](#mongodb) · [Redis](#redis) · [Updates & help](#updates--help)
-- [Feature support by database](docs/features-by-database.md): what works on PostgreSQL, MySQL / MariaDB, SQLite, MongoDB and Redis
+- [Features](#features): [AI assistant](#ai-assistant) · [AI agents (MCP)](#ai-agents-mcp) · [Connect](#connect) · [Browse & edit](#browse--edit) · [Query](#query) · [Performance](#performance) · [Find & import](#find--import) · [Schema](#schema) · [MongoDB](#mongodb) · [Redis](#redis) · [SQL Server](#sql-server) · [Updates & help](#updates--help)
+- [Feature support by database](docs/features-by-database.md): what works on PostgreSQL, MySQL / MariaDB, SQLite, MongoDB, Redis and SQL Server
 - [Install](#install)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Your data & privacy](#your-data--privacy)
 - [Known limitations](#known-limitations)
 - [License](#license)
-- Guides: [connections](docs/connections.md) · [editing](docs/editing.md) · [queries](docs/queries.md) · [schema](docs/schema.md) · [AI assistant](docs/ai.md) · [AI agents](docs/mcp.md) · [MongoDB](docs/mongodb.md) · [Redis](docs/redis.md) · [features by database](docs/features-by-database.md) · [install](docs/install.md) · [shortcuts](docs/shortcuts.md)
+- Guides: [connections](docs/connections.md) · [editing](docs/editing.md) · [queries](docs/queries.md) · [schema](docs/schema.md) · [AI assistant](docs/ai.md) · [AI agents](docs/mcp.md) · [MongoDB](docs/mongodb.md) · [Redis](docs/redis.md) · [SQL Server](docs/sqlserver.md) · [features by database](docs/features-by-database.md) · [install](docs/install.md) · [shortcuts](docs/shortcuts.md)
 
 ## Features
 
@@ -82,12 +82,12 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 ### Connect
 
-- PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB and Redis. **Test** before saving; connecting gives up after 15 seconds.
+- PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB, Redis and SQL Server. **Test** before saving; connecting gives up after 15 seconds.
 - Tag connections **Local**, **Development**, **Staging** or **Production**; Production asks before commits and destructive actions.
 - **Read-only connections:** Tabula refuses edits, commits, imports, restores and statements that change data, and the session is read-only on the server (PostgreSQL, MySQL, SQLite); **Allow Changes…** unlocks it for 10 minutes. [Read-only connections](docs/connections.md#read-only-connections).
 - Passwords in the macOS Keychain; TLS off, required, or required with certificate verification.
-- **SSH tunnels** for PostgreSQL and MySQL, with key authentication.
-- **Connection strings:** paste a URL, JDBC, libpq or .NET string to fill in the form; copy a connection back as a URL.
+- **SSH tunnels** for PostgreSQL, MySQL and SQL Server, with key authentication.
+- **Connection strings:** paste a URL, JDBC, libpq or .NET (ADO.NET) string to fill in the form; copy a connection back as a URL.
 - **Several connections in one window** (⌃⌘] / ⌃⌘[); on PostgreSQL, open any database on the server from one connection.
 - **Reconnects by itself** after the Mac wakes, the network changes or the server drops the connection: reads are retried, anything that may have changed data never is.
 - **Picks up where you left off:** tabs, unsaved SQL, filters and history come back; Tabula never reconnects at launch by itself.
@@ -168,6 +168,12 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - Metrics from `INFO`; **Activity** (⌥⌘6) with Kill Client, the **Slow Log**, **Health** (memory, eviction and the biggest keys from a sample) and **ACL users** with pending changes. [Redis in detail](docs/redis.md).
 - **AI** (⌥⌘A): a chat that knows your key patterns, types and TTLs and reads values only with bounded read-only commands Tabula checks first, charts and grids pinned to a dashboard, and **Ask AI** (⌘K) and **Fix with AI** in the console, whose commands you run yourself. [AI on Redis](docs/ai.md#redis).
 
+### SQL Server
+
+- **SQL Server 2017 and later, and Azure SQL,** with a SQL login, through Tabula's own TDS client: nothing to install. Named instances (`host\SQLEXPRESS`) through the SQL Server Browser, Encrypt **On** by default (or **Strict**, TDS 8), Trust server certificate or a certificate authority of your own, SSH tunnels, and `sqlserver://`, JDBC and ADO.NET connection strings.
+- Browse databases, schemas, tables and views with their columns, keys, indexes and foreign keys; edit rows with `IDENTITY`, computed and `rowversion` columns left to the server; run scripts batch by batch at `GO` (`GO 5` repeats one), with Stop cancelling on the server.
+- Explain, routines, the diagram and imports come in phase 2 ([#381](https://github.com/tungnguyenvan/tabula/issues/381)), Activity, Top Queries, Health and logins in phase 3 ([#382](https://github.com/tungnguyenvan/tabula/issues/382)), Windows and Entra sign-in in phase 4 ([#383](https://github.com/tungnguyenvan/tabula/issues/383)). [SQL Server in detail](docs/sqlserver.md).
+
 ### Updates & help
 
 - **Updates:** Tabula checks for a new release at most once a day, verifies its checksum and signature, and relaunches. [Updating](docs/install.md#updating).
@@ -223,6 +229,7 @@ The ten you'll use most. [All shortcuts](docs/shortcuts.md), also in **Help › 
 - MongoDB: shell statements, not JavaScript; grid edits aren't in a transaction; no X.509, LDAP or Kerberos; files can't be imported into collections yet.
 - MySQL / MariaDB: editing existing rows needs a primary key or a unique index on NOT NULL columns, and `CALL` shows only the first result set.
 - Stop ends a MongoDB command only on 4.4 or later; in the Redis console it ends scripts and blocking commands only.
+- SQL Server: a SQL login only (no Windows or Entra sign-in yet); query results aren't editable in place yet (table tabs are); Explain, routines, the diagram, Compare Schemas, imports and the server views come in later phases ([SQL Server](docs/sqlserver.md)).
 - Details: [editing](docs/editing.md#tables-without-a-primary-key), [MongoDB](docs/mongodb.md#limitations), [Redis](docs/redis.md#limitations).
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
