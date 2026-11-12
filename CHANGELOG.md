@@ -4,6 +4,12 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-11-12
+
+### Fixed
+- **Tabula no longer quits when it connects to MongoDB with a user and no password.** MongoKitten's SCRAM sign-in stopped the app on an empty password; Tabula now asks for the password instead ("Enter the password for …, or leave User empty to connect without one") ([#386](https://github.com/tungnguyenvan/tabula/issues/386)).
+- **Grid column titles no longer come out garbled on macOS 26.** The grid gave its column headers a font of its own, which macOS 26 replaces with the header's standard font once a title has been drawn. A header's first drawing used the grid's font, 1 pt lower than every later one, so where AppKit drew only part of the header again (after a layout, a resize or the pointer over it), titles showed pieces of themselves at both heights. The headers now keep the standard font, which they already showed after any redraw, and look the same as before ([#385](https://github.com/tungnguyenvan/tabula/issues/385)).
+
 ## [0.24.0] - 2026-11-12
 
 ### Added
