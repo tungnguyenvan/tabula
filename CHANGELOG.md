@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-11-13
+
+### Fixed
+- **Selecting a row no longer lays out the whole window.** A grid row showed its selection in a view it added when selected, and a view added to the window made AppKit ask every view above it to update its constraints, up to SwiftUI's hosts of the grid and of the tabs: the tab and the whole window were laid out again for each row selected, and the window's layers rebuilt. The table and query tabs also wrote each selection into their own state, and the bottom bar's − and { } buttons followed every row selected, and any update of a tab's view lays the window out again the same way. A grid row now draws its selection itself, in the system's colors, focused or not, and the buttons follow only whether rows are selected and whether one is. Row Details, ⌘D, Delete and the − and { } buttons work as before, and the window looks the same (snapshots of both builds, light and dark: identical, but for the selection's blue, a 255th lighter or darker in places). On a SQLite table of 60 columns with Row Details closed (medians of 5 runs of each build, alternated), 20 rows selected take 0.08 s of main thread instead of 0.31 s, a row 3.7 ms instead of 15 ms, with no late frame and SwiftUI updating nothing (the grid 20 times before); with Row Details open a row takes about as long as before, on SQLite and on MongoDB ([#379](https://github.com/tungnguyenvan/tabula/issues/379)).
+
 ## [0.24.1] - 2026-11-12
 
 ### Fixed
