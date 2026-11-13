@@ -29,7 +29,7 @@ AI is off until you turn it on in **Settings › AI** (⌘,), and off for Produc
 
 ## Chat
 
-**AI Chat** (⌥⌘A) opens the panel on the right. It writes queries you can **Insert**, **Run** or copy, and on MongoDB connections it writes shell commands.
+**AI Chat** (⌥⌘A) opens the panel on the right. It writes queries you can **Insert**, **Run** or copy, and on MongoDB connections it writes shell commands. Drag the panel's left edge to make it wider, up to 960 pt as the window allows; other windows and the next launch open it at the width you leave it at, as do Row Details and the Queries panel, which share it.
 
 - **Run** runs a query that only reads (`SELECT`, `WITH`, `EXPLAIN`, `SHOW`, a MongoDB read) right in the chat, under its block, on the same path as the chat's [read-only queries](#read-only-queries): the read-only check, the assistant's separate read-only connection, 15 seconds, the console log, and on Production a question first. While it runs, the block shows **Running…** with **Stop**; then "✓ 12 rows · 34 ms" and the first 200 rows in a grid with **Open in Query Tab**, or the error in red with **Fix**. The button becomes **Run Again**. The result stays with the answer, so the saved conversation shows it again, and a follow-up question is told what it got (the row count or the error, not the rows).
 - **Fix** sends the query and the server's error as your next message, asking for a corrected query, which you can run in turn.
