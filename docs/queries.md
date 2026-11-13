@@ -78,9 +78,9 @@ After a query that only reads, **Add to Dashboard…** (in the bar under the res
 
 **Explain** (⌥⌘E, or the Explain button) shows how the database would run the selected statement, or the one at the cursor, without running it: an outline of each operation with its table, index, estimated rows and cost. **Explain Analyze** (⌥⇧⌘E) runs it and adds actual rows and time.
 
-Explain uses PostgreSQL `EXPLAIN (VERBOSE, FORMAT JSON)`, MySQL `EXPLAIN FORMAT=JSON` and SQLite `EXPLAIN QUERY PLAN` (no estimates). Explain Analyze uses PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)`, MySQL 8.0.18+ `EXPLAIN ANALYZE` and MariaDB `ANALYZE FORMAT=JSON`; SQLite has no Analyze. On MongoDB, see [below](#mongodb-plans).
+Explain uses PostgreSQL `EXPLAIN (VERBOSE, FORMAT JSON)`, MySQL `EXPLAIN FORMAT=JSON`, SQLite `EXPLAIN QUERY PLAN` (no estimates) and SQL Server `SET SHOWPLAN_XML`. Explain Analyze uses PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)`, MySQL 8.0.18+ `EXPLAIN ANALYZE`, MariaDB `ANALYZE FORMAT=JSON` and SQL Server `SET STATISTICS XML` ([SQL Server's plans](sqlserver.md#query-plans)); SQLite has no Analyze. On MongoDB, see [below](#mongodb-plans).
 
-- A statement that only reads runs as Run would. On PostgreSQL, any other statement runs on a separate connection in a transaction that is rolled back, after Tabula asks, since sequences and other effects outside the transaction stay. MySQL, which commits some statements on its own, analyzes only statements that read.
+- A statement that only reads runs as Run would. On PostgreSQL and SQL Server, any other statement runs on a separate connection in a transaction that is rolled back, after Tabula asks, since sequences and other effects outside the transaction stay. MySQL, which commits some statements on its own, analyzes only statements that read.
 - The **Share** column is each operation's own part of the time (or, without Analyze, the cost): a quarter or more is orange, half or more red. Full scans of tables with 10,000 rows or more are flagged.
 - **Copy Plan** copies the plan as the server returned it.
 - With AI on, **Ask AI about This Plan** explains it and suggests `CREATE INDEX` statements to insert or copy. Nothing is run. It sends the statement, the plan, and the tables' names, column types and indexes, never rows.

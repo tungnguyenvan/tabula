@@ -172,7 +172,10 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 - **SQL Server 2017 and later, and Azure SQL,** with a SQL login, through Tabula's own TDS client: nothing to install. Named instances (`host\SQLEXPRESS`) through the SQL Server Browser, Encrypt **On** by default (or **Strict**, TDS 8), Trust server certificate or a certificate authority of your own, SSH tunnels, and `sqlserver://`, JDBC and ADO.NET connection strings.
 - Browse databases, schemas, tables and views with their columns, keys, indexes and foreign keys; edit rows with `IDENTITY`, computed and `rowversion` columns left to the server; run scripts batch by batch at `GO` (`GO 5` repeats one), with Stop cancelling on the server.
-- Explain, routines, the diagram and imports come in phase 2 ([#381](https://github.com/tungnguyenvan/tabula/issues/381)), Activity, Top Queries, Health and logins in phase 3 ([#382](https://github.com/tungnguyenvan/tabula/issues/382)), Windows and Entra sign-in in phase 4 ([#383](https://github.com/tungnguyenvan/tabula/issues/383)). [SQL Server in detail](docs/sqlserver.md).
+- **Explain** and **Explain Analyze** from showplan XML (warnings and missing indexes included), **functions, procedures and triggers** edited as `CREATE OR ALTER`, **Copy As** in T-SQL, and the AI chat, notebooks, dashboards and agents on SQL Server ([#381](https://github.com/tungnguyenvan/tabula/issues/381)).
+- The relationship diagram, Compare Schemas (with a T-SQL script, `GO` between batches), the data dictionary as `MS_Description`, Find in Database, and importing CSV, TSV and JSON files.
+- **Activity** with blocking and `KILL`, **Top Queries** from Query Store or the plan cache, **Schema Health** with the optimizer's missing indexes and heaps, and **Logins & Users** with `GRANT`, `DENY` and `REVOKE`.
+- Windows and Entra sign-in come in phase 4 ([#383](https://github.com/tungnguyenvan/tabula/issues/383)). [SQL Server in detail](docs/sqlserver.md).
 
 ### Updates & help
 
