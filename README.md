@@ -17,7 +17,7 @@ New in 0.19: <a href="https://github.com/tungnguyenvan/tabula/releases/download/
 
 </div>
 
-<p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a Redis and a PostgreSQL connection open, browsing a table with the row details panel"></p>
+<p align="center"><img src="docs/screenshots/hero.png" width="900" alt="Tabula with a dashboard of charts pinned from the AI chat, and the chat beside it answering with a chart, metric cards and a grid from the real data"></p>
 
 ## Why Tabula
 
@@ -142,7 +142,8 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 ### Schema
 
-- **Structure** (⌥⌘2): columns with type, nullability, default, comment and primary key, and indexes.
+- **Structure** (⌥⌘2): columns with type, nullability, default, comment and primary key, indexes and foreign keys.
+- **Change a table without writing `ALTER TABLE`:** add, rename, retype and drop columns, choose the primary key, add and drop indexes and foreign keys, create and rename tables, and copy a table's `CREATE` statement. Changes are pending until you preview (⇧⌘S) and commit (⌘S) them, in one transaction where the database has one. [Changing a table's structure](docs/schema.md#changing-a-tables-structure).
 - **Relationship diagram** (⌥⌘3) from foreign keys: drag, zoom, show key columns only, export a PNG.
 - **Functions, procedures and triggers:** view, create, edit and save without ever losing the original.
 - **Compare Schemas:** writes the SQL script that makes one schema match another, such as Production and Development; Tabula never runs it.

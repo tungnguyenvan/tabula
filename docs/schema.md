@@ -3,6 +3,7 @@
 [Back to the README](../README.md)
 
 - [Structure](#structure)
+- [Changing a table's structure](#changing-a-tables-structure)
 - [Relationship diagram](#relationship-diagram)
 - [Functions, procedures and triggers](#functions-procedures-and-triggers)
 - [Compare schemas](#compare-schemas)
@@ -14,6 +15,33 @@
 **Structure** (⌥⌘2) shows a table's columns with type, nullability, default, comment, description and primary key, and its indexes with their definitions. The descriptions are Tabula's [data dictionary](ai.md#data-dictionary): type one in the **Description** column (or the field above the columns for the table) and press Return; **Describe with AI…** proposes them all for you to review, and **Open as COMMENT Statements** writes them as comments to run on PostgreSQL and MySQL. PostgreSQL's Default column shows `GENERATED ALWAYS AS …` for generated columns. Indexes that can't be read show a note instead of looking like a table without indexes. On MongoDB, Structure shows the [fields sampled from the first 100 documents](mongodb.md#structure).
 
 <p align="center"><img src="screenshots/structure.png" width="820" alt="Structure view"></p>
+
+## Changing a table's structure
+
+On PostgreSQL, MySQL / MariaDB, SQLite and SQL Server, **Structure** also changes the table. Nothing is written until you commit, as with rows: a green dot marks what a pending change adds and an orange one what it changes, **Preview** (⇧⌘S) shows the statements, **Commit** (⌘S) runs them and **Discard** takes them back.
+
+- **Columns:** **Add Column…**, **Edit…** (or double-click a column) and **Drop** above the columns. The sheet takes the name, the type (typed, or from **Types**), whether it allows NULL, a default as SQL writes it (`'new'`, `0`, `CURRENT_TIMESTAMP`) and whether it is part of the primary key. A renamed column shows the name it had, and keeps its description in the data dictionary. A column the server computes or numbers (generated, identity, `AUTO_INCREMENT`) can be renamed and dropped, not redefined. Dropping a column also drops the indexes and foreign keys that use it.
+- **Indexes:** **Add Index…** takes a name (one is suggested), the columns in the order you tick them and **Unique**; **Drop** removes the selected ones. The primary key's index changes with its columns.
+- **Foreign keys:** the lower pane's **Foreign Keys** lists them. **Add Foreign Key…** takes the columns, the table and columns they reference (its primary key to start with) and what deleting or updating a referenced row does; **Drop** removes the selected ones.
+- **New Table…** (Database menu, the sidebar's context menu, or Open Anything, ⌘P) creates a table with a numbered `id` primary key and opens its Structure to add the columns. **Rename…** in a table's context menu renames it, and **Copy CREATE Statement** copies the statements that create it with its indexes and foreign keys.
+
+The statements are the ones [Compare Schemas](#compare-schemas) writes, so each database gets its own:
+
+| | How the changes are made | If a statement fails |
+|---|---|---|
+| PostgreSQL | One property at a time: `ALTER COLUMN … TYPE … USING`, `SET DEFAULT`, `SET NOT NULL` | One transaction: nothing is changed |
+| SQL Server | `ALTER COLUMN` with the type and nullability restated; a DEFAULT constraint the server named is looked up and dropped by its column | One transaction: nothing is changed |
+| SQLite | `ADD COLUMN`, `RENAME COLUMN` and `DROP COLUMN` in place. Anything else (a type, NOT NULL, a default, the primary key, a foreign key) rebuilds the table: a new table, the rows copied, the old one dropped and the new one renamed, with its indexes and triggers created again | One transaction, with the foreign keys checked before it commits: nothing is changed |
+| MySQL / MariaDB | `MODIFY COLUMN` with the whole column restated, including its collation, `ON UPDATE` and comment, which MySQL would otherwise reset. A rename is `RENAME COLUMN`, or `CHANGE COLUMN` on MySQL before 8.0 and MariaDB before 10.5.2, which have none | MySQL applies each schema change at once: the message says how many statements were applied, and the rest stay pending |
+
+- A Production connection asks before committing, and so does any connection when the [statement checks](queries.md#checks-before-a-statement-runs) find something (a dropped column, a change that rewrites the table) or a SQLite table is rebuilt. A [read-only connection](connections.md#read-only-connections) refuses until **Allow Changes…**.
+- Commit or discard the tab's changed rows first: the table is read again once its structure changes. A sort follows a renamed column, and a sort or filter that names a dropped or renamed column is cleared.
+- Commit reads the table again first. If someone changed it since Structure read it, nothing runs and Tabula says so: discard the pending changes to read the table as it is now, then make them again. Otherwise they would take the other change back.
+- A SQLite table created with `CHECK`, `COLLATE`, `AUTOINCREMENT`, generated columns, `WITHOUT ROWID` or `STRICT` isn't rebuilt from here, because SQLite's catalog doesn't tell those and the rebuilt table would lose them. The preview says so, and **Open in Query Tab** opens the statements to finish by hand.
+- On SQLite, commit a rename by itself when the table has triggers and other pending changes rebuild it: SQLite rewrites the triggers for the rename, and the rebuild would create them again with the old name.
+- **Copy CREATE Statement** on SQLite copies the statement as it was written, with its CHECK constraints and the like; on MySQL the columns keep their collation, `ON UPDATE` and comment. A renamed table keeps its remembered filter and its descriptions.
+- A primary key that other tables reference can't be changed while their foreign keys are there: drop those first.
+- CHECK constraints, collations, sequences, enum types, partitions and column comments aren't changed here; views open read-only.
 
 ## Relationship diagram
 

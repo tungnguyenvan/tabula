@@ -43,6 +43,7 @@ Which features work on which database. ✅ works, ➖ doesn't apply (the databas
 | [Checks before a statement runs](queries.md#checks-before-a-statement-runs) | ✅ | ✅ | ✅ | ✅ | ✅ [18](#n18) | ✅ [26](#n26) |
 | [Importing files](editing.md#importing-files) | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ |
 | [Dump and restore](connections.md#dump-and-restore) | ✅ | ✅ | ❌ | ❌ | ❌ | ➖ [27](#n27) |
+| [Changing a table's structure](schema.md#changing-a-tables-structure) | ✅ | ✅ [32](#n32) | ✅ [33](#n33) | ➖ | ➖ | ✅ |
 | [Relationship diagram](schema.md#relationship-diagram) | ✅ | ✅ | ✅ | ➖ | ➖ | ✅ |
 | [Compare schemas](schema.md#compare-schemas) | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ |
 | [Find in Database](queries.md#find-in-database) | ✅ | ✅ | ✅ | ✅ | ❌ [19](#n19) | ✅ |
@@ -83,3 +84,5 @@ Which features work on which database. ✅ works, ➖ doesn't apply (the databas
 29. <a id="n29"></a>The database's Query Store when it is on, otherwise the plan cache (`sys.dm_exec_query_stats`); Reset clears Query Store only.
 30. <a id="n30"></a>With missing indexes from the optimizer (`sys.dm_db_missing_index_*`) and heaps; no bloat or fragmentation.
 31. <a id="n31"></a>Logins & Users: the server's logins and the database's users, with `GRANT`, `DENY` and `REVOKE`.
+32. <a id="n32"></a>MySQL applies each schema change at once, so a commit that fails part-way keeps the statements before it; the others run in one transaction.
+33. <a id="n33"></a>What SQLite's `ALTER TABLE` can't do rebuilds the table; a table created with `CHECK`, `COLLATE`, `AUTOINCREMENT`, generated columns, `WITHOUT ROWID` or `STRICT` opens the statements in a query tab instead.

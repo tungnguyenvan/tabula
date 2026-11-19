@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-17
+
+### Added
+- **Change a table's structure from its Structure tab.** On PostgreSQL, MySQL / MariaDB, SQLite and SQL Server, Structure now adds, renames, retypes and drops columns, sets their defaults and NOT NULL, chooses the primary key's columns, and adds and drops indexes and foreign keys, which it lists in a new **Foreign Keys** pane. Nothing is written until you commit, as with rows: a dot marks what is added or changed, **Preview** (⇧⌘S) shows the statements and **Commit** (⌘S) runs them. They come from the writer Compare Schemas uses: PostgreSQL changes one property at a time, SQL Server restates the column and drops the DEFAULT constraint it named, MySQL's `MODIFY COLUMN` restates the collation, `ON UPDATE` and comment it would otherwise reset, and SQLite rebuilds the table (rows, indexes and triggers kept, foreign keys checked) when its `ALTER TABLE` can't make the change. PostgreSQL, SQL Server and SQLite apply a commit in one transaction; MySQL applies each statement at once and says how many were applied when one fails. A Production connection asks first, as does a change the statement checks flag, such as a dropped column; a read-only connection refuses. A SQLite table created with `CHECK`, `COLLATE`, `AUTOINCREMENT` and the like, which a rebuild from the catalog would lose, opens its statements in a query tab instead. **New Table…** (Database menu, sidebar, ⌘P) creates a table with a numbered `id` key, **Rename…** renames a table or view, and **Copy CREATE Statement** copies a table with its indexes and foreign keys. Commit reads the table again first and refuses when someone changed it since, rather than take their change back. A renamed column or table keeps its data dictionary descriptions, and a sort follows a renamed column ([#392](https://github.com/tungnguyenvan/tabula/issues/392)).
+
+### Fixed
+- **Compare Schemas writes a SQLite expression default in its parentheses.** SQLite reports `DEFAULT (datetime('now'))` as `datetime('now')`, and the script wrote it that way, which SQLite refuses.
+- **Compare Schemas no longer rebuilds a SQLite table to drop a column whose only index is dropped too.** With Include Drops on, a column only the target has was taken to be held by its index even when the script dropped that index first; it now drops the index and the column in place.
+
 ## [0.26.0] - 2026-11-13
 
 ### Added
