@@ -4,6 +4,7 @@
 
 - [Structure](#structure)
 - [Changing a table's structure](#changing-a-tables-structure)
+- [Migration history](#migration-history)
 - [Relationship diagram](#relationship-diagram)
 - [Functions, procedures and triggers](#functions-procedures-and-triggers)
 - [Compare schemas](#compare-schemas)
@@ -60,6 +61,40 @@ When the project keeps its schema in migration files, **Save as Migration…** i
 - **SQL files and Prisma on SQLite:** a rebuild keeps its own transaction with foreign key checks off around it, so run the file without the tool's transaction (golang-migrate's `x-no-tx-wrap`). The file lists rows whose foreign keys no longer match, and nothing stops its commit when there are some.
 - **MySQL:** the statements name the table without its database, so the file runs against whichever database the tool connects to. **SQL Server:** the file has no `GO`, and runs as one batch.
 - What the preview says Tabula won't run (a SQLite table a rebuild would lose part of) is still written, with the reason as a comment, to finish in the file.
+
+## Migration history
+
+**View › Migrations** shows what the project's migration tool has applied to the schema shown. Tabula finds the tool's history table by its name and columns, and lists its rows newest first: the migration, its version, when it was applied, how long it took, and whether it finished, failed or was rolled back. It only reads: nothing is applied, rolled back or marked from here.
+
+| Tool | Table | What the table keeps |
+|---|---|---|
+| Prisma | `_prisma_migrations` | Start and finish, the checksum, and the error log of a migration that failed |
+| TypeORM | `migrations`, or the name you gave it | The name and its timestamp, in the order they ran |
+| Knex, Laravel | `knex_migrations`, `migrations` | The name and the batch; Knex also the time |
+| Sequelize, EF Core | `SequelizeMeta`, `__EFMigrationsHistory` | The name |
+| Django | `django_migrations` | The app, the name and the time |
+| Rails, dbmate | `schema_migrations` | The version |
+| Flyway | `flyway_schema_history` | The script, the time, how long it took and whether it succeeded |
+| Liquibase | `DATABASECHANGELOG` | Each change set, the time and how it ran |
+| goose | `goose_db_version` | The version and the time |
+| Drizzle | `__drizzle_migrations` | The hash; on PostgreSQL the table is in the `drizzle` schema, so choose that schema |
+| golang-migrate, Alembic | `schema_migrations`, `alembic_version` | Only the version the database is at now, and for golang-migrate whether it is dirty |
+
+- Select a migration to see what Tabula read from it, the tool's log when it failed, and the whole history row. **Open History Table** opens the table itself.
+- A Prisma migration that started and never finished is **Failed**: Prisma applies nothing more until it is resolved. One marked with `migrate resolve --rolled-back` is **Rolled back**.
+- A time the table keeps without a time zone is shown as it is written, not converted to yours.
+- When a schema has two history tables, the header has a menu to choose between them. A table of your own that only looks like one (other columns) is left out.
+
+### Comparing with the migrations folder
+
+**Compare with Folder…** takes the project's migrations folder (`prisma/migrations`, or the folder TypeORM loads from) and adds what the history table can't say:
+
+- **Pending:** a migration in the folder that this database has no row for, or whose rows were all rolled back. That is all it means: Tabula doesn't know which branch the folder is on. A history longer than 5,000 rows is read from its newest end, and then no file is called pending.
+- **Applied, no file:** a row with no migration in the folder, from another branch or a file that was removed or renamed.
+- **Applied, file changed** (Prisma): the file's checksum isn't the one recorded when it was applied, so the file was edited afterwards.
+- The selected migration's file is shown below its row, and a SQL file opens in a query tab with **Open in Query Tab**, without running.
+
+The folder is remembered for the connection and the tool. Prisma is matched by the folder's name, TypeORM by the timestamp the file's name starts with, Knex, Sequelize, Laravel and EF Core by the file's name, Flyway by the script, and Rails, dbmate and goose by the version the file's name starts with. Files in folders inside the one you choose aren't read (except Prisma's), and there is no comparing for Django, Liquibase, Drizzle, golang-migrate and Alembic.
 
 ## Relationship diagram
 

@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-19
+
+### Added
+- **Migration history.** **View › Migrations** finds the migration tool's history table in the schema shown and lists what was applied, newest first: the migration, its version, when it ran, how long it took, and whether it finished, failed or was rolled back, with a failed Prisma migration's error log. It reads Prisma, TypeORM, Knex, Laravel, Sequelize, Django, Rails, dbmate, Flyway, Liquibase, EF Core, goose and Drizzle, and the current version of golang-migrate and Alembic. **Compare with Folder…** takes the project's migrations folder and adds the migrations this database hasn't had (pending), the applied ones with no file, and for Prisma the files edited after they were applied; the selected migration's file is shown, and its SQL opens in a query tab without running. The tab only reads: nothing is applied or rolled back from it. PostgreSQL, MySQL / MariaDB, SQLite and SQL Server ([#396](https://github.com/tungnguyenvan/tabula/issues/396)).
+
 ## [0.29.0] - 2026-11-19
 
 ### Added

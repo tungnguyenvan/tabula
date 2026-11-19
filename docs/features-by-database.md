@@ -44,6 +44,7 @@ Which features work on which database. ✅ works, ➖ doesn't apply (the databas
 | [Importing files](editing.md#importing-files) | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ |
 | [Dump and restore](connections.md#dump-and-restore) | ✅ | ✅ | ❌ | ❌ | ❌ | ➖ [27](#n27) |
 | [Changing a table's structure](schema.md#changing-a-tables-structure) | ✅ | ✅ [32](#n32) | ✅ [33](#n33) | ➖ | ➖ | ✅ |
+| [Migration history](schema.md#migration-history) | ✅ | ✅ | ✅ | ➖ | ➖ | ✅ |
 | [Relationship diagram](schema.md#relationship-diagram) | ✅ | ✅ | ✅ | ➖ | ➖ | ✅ |
 | [Compare schemas](schema.md#compare-schemas) | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ |
 | [Find in Database](queries.md#find-in-database) | ✅ | ✅ | ✅ | ✅ | ❌ [19](#n19) | ✅ |

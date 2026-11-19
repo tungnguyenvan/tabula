@@ -145,6 +145,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Structure** (⌥⌘2): columns with type, nullability, default, comment and primary key, indexes and foreign keys.
 - **Change a table without writing `ALTER TABLE`:** add, rename, retype and drop columns, choose the primary key, add and drop indexes and foreign keys, create and rename tables, and copy a table's `CREATE` statement. Changes are pending until you preview (⇧⌘S) and commit (⌘S) them, in one transaction where the database has one. [Changing a table's structure](docs/schema.md#changing-a-tables-structure).
 - **Save a change as a migration:** the preview writes the pending changes to your project as a Prisma migration, a TypeORM class or up and down SQL files, with the down migration written for you. [Saving the changes as a migration](docs/schema.md#saving-the-changes-as-a-migration).
+- **Migration history:** what Prisma, TypeORM and a dozen other migration tools have applied to the database, which migrations failed, and, compared with the project's migrations folder, which are still pending or were edited after they ran. [Migration history](docs/schema.md#migration-history).
 - **Relationship diagram** (⌥⌘3) from foreign keys: drag, zoom, show key columns only, export a PNG.
 - **Functions, procedures and triggers:** view, create, edit and save without ever losing the original.
 - **Compare Schemas:** writes the SQL script that makes one schema match another, such as Production and Development; Tabula never runs it.
