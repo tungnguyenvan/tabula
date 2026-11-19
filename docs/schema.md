@@ -18,7 +18,7 @@
 
 ## Changing a table's structure
 
-On PostgreSQL, MySQL / MariaDB, SQLite and SQL Server, **Structure** also changes the table. Nothing is written until you commit, as with rows: a green dot marks what a pending change adds and an orange one what it changes, **Preview** (⇧⌘S) shows the statements, **Commit** (⌘S) runs them and **Discard** takes them back.
+On PostgreSQL, MySQL / MariaDB, SQLite and SQL Server, **Structure** also changes the table. Nothing is written until you commit, as with rows: a green dot marks what a pending change adds and an orange one what it changes, **Preview** (⇧⌘S) shows the statements, **Commit** (⌘S) runs them and **Discard** takes them back. The preview's **Save as Migration…** writes them as a [Prisma, TypeORM or SQL migration](#saving-the-changes-as-a-migration) instead.
 
 - **Columns:** **Add Column…**, **Edit…** (or double-click a column) and **Drop** above the columns. The sheet takes the name, the type (typed, or from **Types**), whether it allows NULL, a default as SQL writes it (`'new'`, `0`, `CURRENT_TIMESTAMP`) and whether it is part of the primary key. A renamed column shows the name it had, and keeps its description in the data dictionary. A column the server computes or numbers (generated, identity, `AUTO_INCREMENT`) can be renamed and dropped, not redefined. Dropping a column also drops the indexes and foreign keys that use it.
 - **Indexes:** **Add Index…** takes a name (one is suggested), the columns in the order you tick them and **Unique**; **Drop** removes the selected ones. The primary key's index changes with its columns.
@@ -42,6 +42,24 @@ The statements are the ones [Compare Schemas](#compare-schemas) writes, so each 
 - **Copy CREATE Statement** on SQLite copies the statement as it was written, with its CHECK constraints and the like; on MySQL the columns keep their collation, `ON UPDATE` and comment. A renamed table keeps its remembered filter and its descriptions.
 - A primary key that other tables reference can't be changed while their foreign keys are there: drop those first.
 - CHECK constraints, collations, sequences, enum types, partitions and column comments aren't changed here; views open read-only.
+
+### Saving the changes as a migration
+
+When the project keeps its schema in migration files, **Save as Migration…** in the preview writes the pending changes to the project's migrations folder instead of running them. It takes a name, a format and the folder, and shows the files it will write; nothing already in the folder is replaced.
+
+| Format | Files | Down migration |
+|---|---|---|
+| Prisma | `<timestamp>_<name>/migration.sql` | `down.sql` in the same folder. Prisma doesn't run it: use `prisma db execute --file` |
+| TypeORM | `<timestamp>-<Name>.ts`, a class with `up` and `down` | The class's `down` |
+| SQL files | `<timestamp>_<name>.up.sql` | `<timestamp>_<name>.down.sql` |
+
+- The down migration is the change reversed: a renamed column gets its name back, a changed column its type, default and nullability, and what was added is dropped. A dropped column is created again without its values, which the file says. Read it before relying on it.
+- The changes stay pending after saving. Discard them and let the migration tool run the file, or commit them here too and tell the tool the migration has run (`prisma migrate resolve --applied`).
+- **Prisma:** choose `prisma/migrations`. `prisma migrate deploy` runs the file, and `prisma db pull` then brings `schema.prisma` up to date; `prisma migrate dev` before that would write a migration that takes the change back, because `schema.prisma` doesn't have it yet.
+- **TypeORM:** change the entity to match, so `migration:generate` doesn't write the same change again. A SQLite rebuild is written without its own `BEGIN`, `COMMIT` and foreign key pragmas, which TypeORM runs itself.
+- **SQL files and Prisma on SQLite:** a rebuild keeps its own transaction with foreign key checks off around it, so run the file without the tool's transaction (golang-migrate's `x-no-tx-wrap`). The file lists rows whose foreign keys no longer match, and nothing stops its commit when there are some.
+- **MySQL:** the statements name the table without its database, so the file runs against whichever database the tool connects to. **SQL Server:** the file has no `GO`, and runs as one batch.
+- What the preview says Tabula won't run (a SQLite table a rebuild would lose part of) is still written, with the reason as a comment, to finish in the file.
 
 ## Relationship diagram
 

@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-19
+
+### Added
+- **Save a table's pending changes as a migration.** Structure's preview has **Save as Migration…**, which writes the changes to your project's migrations folder instead of running them: a Prisma migration (`<timestamp>_<name>/migration.sql`, with a `down.sql` beside it), a TypeORM class with `up` and `down`, or up and down SQL files. The down migration is the change reversed (a rename taken back, a type, default and NOT NULL restored, what was added dropped), and says where it can't restore something, such as the values of a dropped column. Nothing in the folder is replaced, the format and folder are remembered, and the changes stay pending, to discard or to commit here as well ([#393](https://github.com/tungnguyenvan/tabula/issues/393)).
+
+### Fixed
+- **A SQLite column that has an index can be renamed together with a change that rebuilds the table.** SQLite reports an index's columns bare (`ON items (name)`), and the rename wasn't carried into that definition, so the rebuild created the index on the column's old name and the commit failed with "no such column", rolled back. The definition now follows the rename whether the name is quoted or not.
+- **Structure's preview no longer guesses at renames.** Dropping a column and adding one of the same type added Compare Schemas' note that the new column "may be" the old one renamed; in Structure you say which columns are renamed.
+
 ## [0.27.0] - 2026-11-17
 
 ### Added

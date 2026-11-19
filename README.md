@@ -144,6 +144,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 
 - **Structure** (⌥⌘2): columns with type, nullability, default, comment and primary key, indexes and foreign keys.
 - **Change a table without writing `ALTER TABLE`:** add, rename, retype and drop columns, choose the primary key, add and drop indexes and foreign keys, create and rename tables, and copy a table's `CREATE` statement. Changes are pending until you preview (⇧⌘S) and commit (⌘S) them, in one transaction where the database has one. [Changing a table's structure](docs/schema.md#changing-a-tables-structure).
+- **Save a change as a migration:** the preview writes the pending changes to your project as a Prisma migration, a TypeORM class or up and down SQL files, with the down migration written for you. [Saving the changes as a migration](docs/schema.md#saving-the-changes-as-a-migration).
 - **Relationship diagram** (⌥⌘3) from foreign keys: drag, zoom, show key columns only, export a PNG.
 - **Functions, procedures and triggers:** view, create, edit and save without ever losing the original.
 - **Compare Schemas:** writes the SQL script that makes one schema match another, such as Production and Development; Tabula never runs it.
@@ -233,7 +234,7 @@ The ten you'll use most. [All shortcuts](docs/shortcuts.md), also in **Help › 
 - MongoDB: shell statements, not JavaScript; grid edits aren't in a transaction; no X.509, LDAP or Kerberos; files can't be imported into collections yet.
 - MySQL / MariaDB: editing existing rows needs a primary key or a unique index on NOT NULL columns, and `CALL` shows only the first result set.
 - Stop ends a MongoDB command only on 4.4 or later; in the Redis console it ends scripts and blocking commands only.
-- SQL Server: a SQL login only (no Windows or Entra sign-in yet); query results aren't editable in place yet (table tabs are); Explain, routines, the diagram, Compare Schemas, imports and the server views come in later phases ([SQL Server](docs/sqlserver.md)).
+- SQL Server: a SQL login only (no Windows or Entra sign-in yet); query results aren't editable in place yet (table tabs are) ([SQL Server](docs/sqlserver.md)).
 - Details: [editing](docs/editing.md#tables-without-a-primary-key), [MongoDB](docs/mongodb.md#limitations), [Redis](docs/redis.md#limitations).
 
 See [CHANGELOG.md](CHANGELOG.md) for release history.
