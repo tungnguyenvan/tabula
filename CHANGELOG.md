@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-19
+
+### Added
+- **Hide and show a chart's series from its legend.** Click a series in the legend of a chart with several (lines, areas, bars, points, a pie's slices) to hide it, and click it again to show it; ⌥-click shows only that one, and ⌥-click again shows all. The vertical axis fits the series shown, so a small series is readable next to a large one, and every series keeps its color. A hidden series stays in the legend, struck through, and the last one shown can't be hidden. It works on the dashboard, in chat answers and in notebooks; a dashboard card saves the choice and uses it in the exported image. A legend with more entries than fit scrolls ([#394](https://github.com/tungnguyenvan/tabula/issues/394)).
+
+### Fixed
+- **A result grid's horizontal scroll bar no longer covers its last row.** A grid on a dashboard card, in a chat answer or in a notebook cell is as tall as its rows, so when its columns were wider than the card the scroll bar was drawn over the last row. The grid is now taller by the scroll bar's height when its columns don't fit, and one that scrolls both ways lets its last row scroll clear of the bar ([#395](https://github.com/tungnguyenvan/tabula/issues/395)).
+
 ## [0.28.0] - 2026-11-19
 
 ### Added
