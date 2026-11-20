@@ -4,6 +4,12 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-11-20
+
+### Added
+- **Sort a query's result by clicking a column title.** In a query tab, a click on a column's title sorts the rows already loaded by that column and a second click reverses the order, without running the query again; the title shows the direction. Numbers compare as numbers, dates as dates and text as Finder compares names, NULLs come last, and rows with equal values keep the query's order. Each result of a script has its own sort, the selected rows and uncommitted edits stay with their rows, and running the query again gives its own order back. Sorting forgets what Undo could take back in the result.
+- **SSH tunnels for Redis and MongoDB.** **Connect over SSH** is now in the form of every kind of connection but SQLite, with the same settings: host, user, key, jump hosts and `~/.ssh/config`. A Redis connection goes through the tunnel with its reconnects and with the connection that stops a running script. A MongoDB connection takes one standalone server through the tunnel, without TLS; a seed list (`mongodb+srv`), several members and a member of a replica set are refused with a message, because the driver would look for the other members outside the tunnel.
+
 ## [0.35.0] - 2026-11-20
 
 ### Added

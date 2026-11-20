@@ -86,7 +86,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - Tag connections **Local**, **Development**, **Staging** or **Production**; Production asks before commits and destructive actions.
 - **Read-only connections:** Tabula refuses edits, commits, imports, restores and statements that change data, and the session is read-only on the server (PostgreSQL, MySQL, SQLite); **Allow Changes…** unlocks it for 10 minutes. [Read-only connections](docs/connections.md#read-only-connections).
 - Passwords in the macOS Keychain; TLS off, required, or required with certificate verification.
-- **SSH tunnels** for PostgreSQL, MySQL and SQL Server, with key authentication.
+- **SSH tunnels** for PostgreSQL, MySQL, SQL Server, Redis and standalone MongoDB servers, with key authentication, jump hosts and hosts from `~/.ssh/config`.
 - **Connection strings:** paste a URL, JDBC, libpq or .NET (ADO.NET) string to fill in the form; copy a connection back as a URL.
 - **Several connections in one window** (⌃⌘] / ⌃⌘[); on PostgreSQL, open any database on the server from one connection.
 - **Reconnects by itself** after the Mac wakes, the network changes or the server drops the connection: reads are retried, anything that may have changed data never is.

@@ -109,8 +109,9 @@ SQL Server has settings of its own, as Microsoft's drivers name them: Encrypt, T
 
 ## SSH tunnels
 
-Turn on **Connect over SSH** (PostgreSQL, MySQL, SQL Server) to reach a database through an SSH server (a bastion). The form takes the SSH host, port, user and, optionally, a private key file. Host is then the database as the SSH server sees it, such as `localhost`.
+Turn on **Connect over SSH** (every kind but SQLite, which is a file) to reach a database through an SSH server (a bastion). The form takes the SSH host, port, user and, optionally, a private key file. Host is then the database as the SSH server sees it, such as `localhost`.
 
+- **Redis** goes through a tunnel with everything it opens: the connection, its reconnects (each opens a new tunnel) and the short connection that stops a running script, so stopping takes as long as the SSH servers take to answer. **MongoDB** takes one **standalone** server through the tunnel, without TLS (the tunnel encrypts the way to the SSH server). A seed list (`mongodb+srv`), several members, and a server that says it is a member of a replica set are refused: the driver looks for a replica set's other members by itself, outside the tunnel.
 - Tabula runs the system's `/usr/bin/ssh` with key authentication only: keys from ssh-agent, `~/.ssh`, or a key file you choose. Add a key with a passphrase to ssh-agent first (`ssh-add`). No SSH password or passphrase is stored.
 - The host key of every SSH server on the way must already be in `~/.ssh/known_hosts`; connect once with `ssh` in Terminal to check and save it. IPv6 addresses work for the SSH servers and the database host.
 - **Jump hosts** takes the SSH servers to go through first, in order, as `ssh -J` writes them: `user@bastion:22, inner.example.com`. The tunnel then opens on the SSH host, reached through them. A jump host without a user gets this Mac's user name, as with ssh. A key file you chose is used for the jump hosts too, and is then the only key offered to every server on the way.
