@@ -21,6 +21,18 @@
 
 Redis 6 and 7, including managed services: a password or an ACL user, the database index, and TLS (`rediss://` in a [connection string](connections.md#connection-strings)). User is optional (an ACL user on Redis 6 and later; empty for `requirepass`) and Database is the index, 0 by default.
 
+### Through Sentinel
+
+For a Redis that runs behind Sentinel, fill in **Sentinel master** with the name Sentinel knows the master by (`mymaster` in most setups; `SENTINEL MASTERS` lists them). Host and port are then a Sentinel's, 26379 by default. Tabula asks it where the master is and connects there with the connection's user, password, database and TLS.
+
+- When the connection is lost, reconnecting asks the Sentinel again, so after a failover the connection follows the new master. The server the Sentinel names is asked for its role: one that says it is a replica (a Sentinel that hasn't heard of the failover yet) isn't taken for the master, and the Sentinel is asked again, three times a second apart, before the connection fails with the reason.
+- A Sentinel usually takes no login, so Tabula asks it without one first, and with the connection's user and password when the Sentinel wants one (the password alone when the Sentinel doesn't know the user). The Sentinel is reached with the connection's TLS setting too.
+- The master is reached at the address the Sentinel gives, which must be one this Mac can reach. A Sentinel inside Docker or Kubernetes may give an address of that private network: the error names the address it tried. Over an [SSH tunnel](connections.md#ssh-tunnels), both the Sentinel and the master are reached through the SSH server.
+- With TLS set to **Verify certificate**, the master's certificate is checked against the address the Sentinel gives. Sentinels give an IP address unless they are set to give host names (`sentinel resolve-hostnames yes` and `sentinel announce-hostnames yes`); with an IP address the certificate must name that address, and over SSH it can't be checked at all. The error says so; **Required** encrypts without the check.
+- One Sentinel is asked, and it must answer within the connection's timeout. If it is down, enter another's host and port; pasting its `redis://` URL into Host keeps the master's name.
+- Over SSH, each connect opens a tunnel to the Sentinel and then one to the master, so an SSH server that asks for a code asks twice.
+- The console's prompt and **Copy URL** show the address entered, which is the Sentinel's.
+
 ## Keys
 
 - Keys are listed with `SCAN`, never `KEYS`, so this is safe on large production instances: type, TTL, size and a preview, filtered by a pattern such as `user:*` (⌘F) or by type, sorted naturally and loading more as you scroll.
@@ -97,6 +109,6 @@ With AI turned on in Settings › AI (and allowed for Production connections the
 
 ## Limitations
 
-- Redis Cluster and Sentinel aren't supported yet; connect to a single node.
+- Redis Cluster isn't supported yet; connect to a single node. [Sentinel](#through-sentinel) is.
 - Pub/Sub, `MONITOR`, `MULTI` and `WATCH` aren't available in the console.
 - AI agents (MCP) can't use Redis connections, and AI notebooks and dashboard widgets of your own commands aren't available for Redis.

@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-21
+
+### Added
+- **Redis through Sentinel.** A Redis connection takes a **Sentinel master** name: host and port are then a Sentinel's, which Tabula asks where the master is before connecting there with the connection's user, password, database and TLS. Reconnecting asks again, so the connection follows a failover. The errors say which part failed: the Sentinel can't be reached, it knows no master of that name, the address is a plain Redis server, or the master's address can't be reached from this Mac.
+
 ## [0.43.0] - 2026-11-20
 
 ### Added
