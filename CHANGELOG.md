@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-20
+
+### Added
+- **TLS with a client certificate (mutual TLS) and a certificate authority of your own.** PostgreSQL, MySQL / MariaDB and Redis connections take a **Client certificate** and its **Client key** (PEM files) for a server that asks every client for a certificate, and with **Verify certificate** a **Certificate authority** file to trust in place of the system's, for a server whose certificate a private authority issued. Only the files' paths are saved; a key protected by a passphrase is refused with a message saying how to make one without.
+
 ## [0.36.0] - 2026-11-20
 
 ### Added

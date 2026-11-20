@@ -102,10 +102,19 @@ Windows aren't restored at launch, so Tabula never reconnects to a database, suc
 
 TLS can be off, **Required**, or required with **Verify certificate**.
 
-- **Verify certificate** checks the server against the macOS trust store. Databases with a private CA (such as AWS RDS, or self-signed certificates) fail until that CA is added to Keychain Access and trusted.
+- **Verify certificate** checks the server against the macOS trust store. Databases with a private CA (such as AWS RDS, or self-signed certificates) fail until that CA is added to Keychain Access and trusted, or chosen as the connection's **Certificate authority** (below).
 - **Required** encrypts without checking the certificate.
 
 SQL Server has settings of its own, as Microsoft's drivers name them: Encrypt, Trust server certificate and a certificate authority. See [SQL Server encryption](sqlserver.md#encryption).
+
+### Client certificates and a certificate authority of your own
+
+For PostgreSQL, MySQL / MariaDB and Redis, once TLS is on:
+
+- **Client certificate** and **Client key** are the PEM files of the certificate this Mac shows a server that asks every client for one (mutual TLS), and of its private key. Both are needed together. A key protected by a passphrase is refused with a message: Tabula neither asks for the passphrase nor stores it, so use a key without one (`openssl pkey -in key.pem -out plain.pem`).
+- **Certificate authority**, with **Verify certificate**, is a PEM file of the authorities to trust in place of the system's, for a server whose certificate a private authority issued.
+- Only the files' paths are saved with the connection; the files are read each time it connects, so a renewed certificate is picked up by itself. They aren't part of **Copy URL**; pasting a connection string over the form keeps them, and changing the connection's type drops the ones the new type doesn't take. Dump and restore pass them to `pg_dump`, `pg_restore`, `mysqldump` and `mysql` (libpq wants the key file readable by you alone: `chmod 600`).
+- MongoDB's TLS is its driver's own and takes neither; SQL Server has its certificate authority under [Encryption](sqlserver.md).
 
 ## SSH tunnels
 
