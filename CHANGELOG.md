@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-20
+
+### Added
+- **Split view: two tabs side by side.** **Open in Split View** on a tab or on a table in the sidebar shows it to the right of the tab in front, so two tables, or a table and a query, share the window; **View › Show Split View** (⌥⌘\\) does it with the neighbouring tab. Clicking a pane makes it the active one, marked by a line in the accent colour: the tab strip, the menus, the shortcuts and the row inspector follow it, and the next tab or table you choose is shown there. ⌥⌘` moves to the other pane, **View › Swap Panes** changes their sides, and the divider drags to resize (double-click evens the panes). **Close Split View**, or closing either tab, goes back to one pane. The pair isn't remembered when the connection closes.
+- **A spinner shows that something is loading.** The connection capsule's status dot in the toolbar and a tab's icon become a spinner while the window or the tab loads or runs something: a refresh (⌘R), a page, a query, the list of tables. It stays for at least 0.4 seconds, so a refresh that takes a moment still shows that it happened, and a query left running in a background tab shows on its tab. Tabs that refresh on a timer (Activity, Metrics, dashboards) don't show it.
+
+### Changed
+- **A dashboard card's Show Query is in its menu.** The SQL button left the card's title row; the **⋯** menu and the card's context menu have **Show SQL Query**, which reads **Hide SQL Query** while the query is shown (**Show Query** and **Hide Query** on MongoDB and Redis).
+
 ## [0.30.0] - 2026-11-19
 
 ### Added
