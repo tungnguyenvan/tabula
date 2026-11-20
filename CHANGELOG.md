@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-20
+
+### Added
+- **Export to Excel.** **Excel…** in the Export menu of a table's Data tab and of a query's result saves the rows shown as an .xlsx file, written by Tabula itself: one sheet with a bold header row that stays in view. A column of numbers is numbers, shown with the decimals they were written with and never as 1.7E+12; a column with anything Excel would change stays text, whole (leading zeros, numbers longer than 15 digits, phone numbers with a plus). Text is kept in any language and NULL is an empty cell.
+
 ## [0.40.0] - 2026-11-20
 
 ### Added

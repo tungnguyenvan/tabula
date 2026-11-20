@@ -94,6 +94,7 @@ It shows the value one of three ways, picked from the column's type and the valu
 - Copy As writes plain text; JSON and CSV also carry their type (`public.json`, `public.comma-separated-values-text`) so other apps can tell what they are given.
 - Export CSV, TSV, JSON or SQL `INSERT`, to a file or the clipboard. CSV and TSV exports quote empty text and the text `NULL`, so they can be told from NULL (an empty field) when imported again.
 - Binary values show as `\x` and hex, as psql shows them, on every database, and are saved back as bytes by edits, Duplicate Row and SQL export.
+- **Excel…** in the Export menu saves the rows shown as an .xlsx file, written by Tabula itself (Excel needn't be installed): one sheet named after the table, with a bold header row that stays in view. A column is a column of numbers when every value in it is one Excel keeps as written; its cells show the decimals they were written with (`12.50` stays 12.50) and long numbers in full, not as 1.7E+12. Any other column is text, whole: one value with a leading zero (`00123`), more than 15 digits or a plus (`+84…`) keeps the column as text, so a column never mixes the two. Dates and times are text as the grid shows them, and NULL is an empty cell. A value longer than the 32,767 characters a cell takes is cut there. Hidden columns are exported too.
 
 ## Tables without a primary key
 
