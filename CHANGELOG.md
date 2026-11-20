@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-20
+
+### Added
+- **SSH tunnels through jump hosts, and hosts from `~/.ssh/config`.** A connection's SSH settings take **Jump hosts** (`user@bastion:22, …`, as `ssh -J` writes them), so a database behind two or more SSH servers can be reached. With **Read ~/.ssh/config** on, the SSH host and the jump hosts can be `Host` names from that file: their `HostName`, `User`, `Port`, `IdentityFile` and `ProxyJump` fill in what the form leaves empty, `Include` and `Host` patterns included. Tabula reads those five settings itself and writes its own configuration for ssh, so nothing in your file runs (`ProxyCommand`, `LocalCommand`, `Match exec`); a host that needs a `ProxyCommand` is refused with a message. Keys only and known host keys only, as before, for every server on the way.
+
 ## [0.34.1] - 2026-11-20
 
 ### Fixed
