@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-20
+
+### Added
+- **A split view comes back with the tabs.** When a connection is opened again, its split view is as it was left: the tabs of each pane, the tab each pane shows, the active pane and the place of the divider. A pane whose tab can't come back (its table is gone, or it was a diagram or another tab that isn't saved) shows another of its tabs; when none of a pane's tabs can come back, the window opens with one pane.
+
 ## [0.37.0] - 2026-11-20
 
 ### Added
