@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-20
+
+### Added
+- **Query parameters.** A SQL query can name its values with `:name` (`WHERE customer_id = :customer AND created_at >= :since`); running it in a query tab asks for them in a sheet, one field for each name, and Return runs. A value is Text (quoted for the database), a Number, NULL, or SQL written as it is, and the values of the tab's last run are filled in the next time. PostgreSQL's `::` cast, array slices, MySQL's `:=` and anything in a string, a quoted name or a comment are left alone. Explain asks too, and the query history keeps the query as it is written. **Settings › General › Ask for the values of :name parameters** turns it off.
+
 ## [0.38.0] - 2026-11-20
 
 ### Added
