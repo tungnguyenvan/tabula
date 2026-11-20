@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-11-20
+
+### Fixed
+- **Refresh (⌘R) asks before it drops uncommitted edits.** With edits waiting in a table's grid, **Database › Refresh** reloaded the page and the edits were gone, with their undo history. It now asks "Discard N uncommitted changes?" first, as sorting and changing page do; Cancel keeps the edits and the rows as they are, and still refreshes the list of tables. Text still being typed in a cell counts as an edit, and the Structure tab is refreshed either way. In a split view Refresh also reloads the table in the other pane, unless that one has uncommitted edits.
+
 ## [0.32.0] - 2026-11-20
 
 ### Changed
