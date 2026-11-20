@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-20
+
+### Added
+- **Drag a tab from one pane of a split view to the other.** Drag a tab out of its bar onto the other pane: over that pane's tab bar a line shows where it will go, and dropped on the pane's content it goes after the last tab. The tab is shown in its new pane, which becomes the active one, as with **Move to Other Pane**; a pane left without tabs closes the split view. Dragging within a bar reorders as before.
+
 ## [0.32.1] - 2026-11-20
 
 ### Fixed
