@@ -5,6 +5,7 @@
 - [Creating a connection](#creating-a-connection)
 - [Tags and Production safeguards](#tags-and-production-safeguards)
 - [Read-only connections](#read-only-connections)
+- [Structure changes as migrations only](#structure-changes-as-migrations-only)
 - [Several connections in one window](#several-connections-in-one-window)
 - [Picking up where you left off](#picking-up-where-you-left-off)
 - [TLS](#tls)
@@ -72,6 +73,23 @@ On the server, Tabula also makes the connection's sessions read-only where the d
 **Allow Changes…** (the toolbar's lock button, or **Database › Allow Changes for 10 Minutes…**) asks first, naming the connection, then lifts both for 10 minutes: Tabula lets edits and statements through and the session becomes read-write. The toolbar shows **Lock Again** with the time left, and the pill says "Changes allowed". When the time runs out, or you choose **Lock Again**, the connection locks again. Changes still pending in a table tab or a query result stay pending, marked "Locked: allow changes to commit", and can be committed after the next **Allow Changes…**.
 
 Turning **Read-only** on or off in the form of an open connection takes effect at once.
+
+## Structure changes as migrations only
+
+When a database's schema belongs to a migration tool (Prisma, TypeORM, SQL files run by a deploy), a column added by hand is a column the next migration doesn't know about. Turn on **Structure changes as migrations only** in the connection's form, and Tabula doesn't change the structure of that database itself. The setting is there for PostgreSQL, MySQL / MariaDB, SQLite and SQL Server.
+
+With it on:
+
+- the [Structure tab](schema.md#changing-a-tables-structure) still takes pending changes and **Preview** still shows their statements, but **Commit** is off. **Save as Migration…** in the preview [writes them to the project's migrations folder](schema.md#saving-the-changes-as-a-migration), for the migration tool to run;
+- **New Table…**, **Rename…** and **Drop…** are off, in the sidebar, the Database menu and the command palette;
+- a function, procedure or trigger can't be saved or deleted from its tab, and **Restore from Dump…** is refused: a dump drops and creates tables;
+- **Run**, **Run All** and **Explain Analyze** refuse a script with a statement that creates, alters, drops or renames something of the schema: `CREATE`, `ALTER`, `DROP` and `RENAME` statements, PostgreSQL's and SQL Server's `SELECT … INTO new_table`, and `EXPLAIN ANALYZE` of one. The refusal shows the statement, and nothing of the script runs.
+
+What isn't structure still runs: temporary tables (`CREATE TEMP TABLE …`, MySQL's `DROP TEMPORARY TABLE`, SQL Server's `#name`, PostgreSQL's `pg_temp.name`), users, roles and logins, `ALTER SYSTEM` and `ALTER SESSION`, `CREATE DATABASE`, and `ALTER SEQUENCE` (setting a counter after a data load). Tabula can't tell that a plain name is a temporary table, so `ALTER TABLE scratch …` or `CREATE INDEX … ON scratch` is refused even when `scratch` is one: on PostgreSQL write `pg_temp.scratch`.
+
+Rows are edited, imported and committed as usual, and **Truncate** still works: the setting is about the structure only. It isn't a lock, so there is nothing to unlock: on a connection that is also [read-only](#read-only-connections), **Allow Changes…** lets rows change for 10 minutes and the structure still waits for a migration; a refused structure statement says so and doesn't offer **Allow Changes…**. To change the structure from Tabula after all, turn the setting off in the form; it takes effect at once on an open connection.
+
+Tabula reads the statements as its [checks before a statement runs](queries.md#checks-before-a-statement-runs) do, so a change of structure made from inside something else (a `DO` block, a stored procedure, `EXECUTE` of a built string) isn't caught. For a guarantee, connect with a database user that has no right to change the schema.
 
 ## Several connections in one window
 

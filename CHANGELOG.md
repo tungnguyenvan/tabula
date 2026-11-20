@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-11-20
+
+### Added
+- **Structure changes as migrations only.** A new setting in the form of a PostgreSQL, MySQL / MariaDB, SQLite or SQL Server connection, for databases whose schema belongs to a migration tool. With it on, Tabula doesn't change the structure itself: a table's pending changes can still be made and previewed, and **Save as Migration…** writes them to the project, but **Commit** is off, tables can't be created, renamed or dropped, routines and triggers can't be saved or deleted, a dump can't be restored, and a query tab doesn't run a script with a statement that changes the schema (`CREATE`, `ALTER`, `DROP`, `RENAME`, `SELECT … INTO new_table`). Temporary tables, users and roles still go. Rows are edited as usual, and Allow Changes on a read-only connection doesn't lift it.
+
 ## [0.41.0] - 2026-11-20
 
 ### Added
