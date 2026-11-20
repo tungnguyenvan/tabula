@@ -14,6 +14,10 @@
 
 <p align="center"><img src="screenshots/connections.png" width="560" alt="Connections window"></p>
 
+## Opening a connection
+
+In the Connections window (⇧⌘K), double-click a connection, or use the keyboard: type in the search field to narrow the list, **↑** and **↓** move through the connections shown without leaving the field, and **Return** connects to the one chosen (the first match of a search when none is). A search keeps the connection you had chosen while it is still shown, and otherwise chooses the first match. The same keys work in the list itself, and in the picker a new, empty window tab shows.
+
 ## Creating a connection
 
 Tabula connects to PostgreSQL, MySQL / MariaDB, SQLite files, MongoDB, Redis and SQL Server.

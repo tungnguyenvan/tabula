@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-20
+
+### Added
+- **Choose a connection with the arrow keys and Return.** In the Connections window, ↑ and ↓ in the search field move through the connections shown, the list scrolls to keep the chosen one in view, and Return connects to it (to the first match of a search when none is chosen). A search keeps the connection you had chosen while it is still shown, and otherwise chooses the first match. Return also connects with the list itself focused, and the picker of a new, empty window tab takes the same keys.
+
 ## [0.33.0] - 2026-11-20
 
 ### Added
