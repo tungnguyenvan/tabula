@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-11-20
+
+### Added
+- **Drag a tab to the side to start a split view.** Drag a tab out of the tab bar to the left or right side of the content: the half it will take is marked, and letting go opens a split view with the tab in a pane of its own on that side. Dragging along the bar reorders the tabs as before.
+
 ## [0.42.0] - 2026-11-20
 
 ### Added
