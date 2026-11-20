@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-20
+
+### Changed
+- **Each pane of a split view has its own tab bar.** A tab now belongs to one pane and shows in that pane's bar, above it. A tab chosen in a bar is shown in its pane, which becomes the active one; a new tab, or a table chosen in the sidebar, opens in the active pane, and a bar's **+** opens a query tab in its pane. **Move to Other Pane** in a tab's context menu sends it across. ⌘1…⌘9, next and previous tab and Move Tab Left / Right stay among the active pane's tabs. Closing the tab a pane shows brings up its neighbour in that pane, and a pane left without tabs closes the split view. The line along the top of the active pane is gone: the coloured line on its tab says which pane is active.
+
 ## [0.31.0] - 2026-11-20
 
 ### Added
