@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-20
+
+### Added
+- **Hide and show a table's columns.** Right-click a column's title in a table's Data tab: **Hide “column”**, the table's columns to tick and untick, and **Show All Columns**. The bar under the grid says how many columns are hidden, with a click to show them all, and a table's hidden columns are remembered for that table on that connection. Hidden columns are out of sight only: filters, sorting, copying, exports and Row Details still have them, and the arrow keys and Tab step over them.
+
 ## [0.39.0] - 2026-11-20
 
 ### Added
