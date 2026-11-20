@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-11-20
+
+### Fixed
+- **Return in an empty window tab's connection picker no longer opens the first connection with nothing chosen.** With an empty search field and no connection chosen, Return in the picker of a new, empty workspace window connected to the first connection in the list. It now does nothing there, as in the Connections window: Return opens the connection you chose with ↑ and ↓, or the first match of a search.
+
 ## [0.34.0] - 2026-11-20
 
 ### Added
