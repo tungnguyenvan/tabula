@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-11-21
+
+### Added
+- **Groups of connections.** A connection can be put in a named group, from **Move to Group** in its menu in the Connections window or the **Group** field of its form. The list shows each group under its name; a group closes and opens with a click on its name and stays as you left it, and is renamed or taken apart from its own menu. A search looks through every connection, in closed groups too, and matches group names.
+
 ## [0.45.0] - 2026-11-21
 
 ### Added
