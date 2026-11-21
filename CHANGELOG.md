@@ -4,6 +4,14 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-21
+
+### Added
+- **Pin columns.** **Pin “column”** in the menu of a column's title in a table's Data tab moves the column to the left, after the row numbers, and keeps it in view while the table is scrolled sideways: the other columns go under it. Several columns can be pinned; a click on a pinned cell selects its row, a click on its title sorts, and **Unpin “column”** or **Unpin All Columns** puts them back. A table's pinned columns are remembered.
+
+### Fixed
+- On a connection that takes structure changes as migrations only, the preview of a table's pending changes said the statements run in a single transaction. It now says they are saved as a migration.
+
 ## [0.44.0] - 2026-11-21
 
 ### Added
