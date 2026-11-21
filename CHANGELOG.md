@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-11-22
+
+### Added
+- **Dump and restore MongoDB databases.** **File › Dump Database…**, **Dump Collection…** and **File › Restore from Dump…** now work on MongoDB connections, with nothing to install. A dump is one file in the format of `mongodump --archive`, with every document, each collection's options and indexes, the views and time series collections, so `mongorestore` reads it too. A restore takes such an archive, the folder `mongodump` writes, or one collection's `.bson` file, plain or compressed, into the selected database: documents whose `_id` is already there are skipped and counted, or the collections are dropped first. An archive that is cut short or damaged is refused by its checksum ([#425](https://github.com/tungnguyenvan/tabula/issues/425)).
+
 ## [0.50.0] - 2026-11-21
 
 ### Added

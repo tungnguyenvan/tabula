@@ -169,7 +169,7 @@ Turn on **Connect over SSH** (every kind but SQLite, which is a file) to reach a
 
 ## Dump and restore
 
-**File › Dump Database…** (or **Dump Table…** in the sidebar) and **File › Restore from Dump…**, for PostgreSQL, MySQL and [SQLite](#sqlite-dumps), with progress and Stop. SQL Server has no client tool like `pg_dump` that writes a database out as a script, so there the menu items say what to use instead: `BACKUP DATABASE` and `RESTORE DATABASE` on the server, or SQL Server Management Studio's Generate Scripts.
+**File › Dump Database…** (or **Dump Table…** in the sidebar) and **File › Restore from Dump…**, for PostgreSQL, MySQL, [SQLite](#sqlite-dumps) and [MongoDB](#mongodb-dumps), with progress and Stop. SQL Server has no client tool like `pg_dump` that writes a database out as a script, so there the menu items say what to use instead: `BACKUP DATABASE` and `RESTORE DATABASE` on the server, or SQL Server Management Studio's Generate Scripts.
 
 - Tabula uses the newest `pg_dump`, `pg_restore`, `psql`, `mysqldump` and `mysql` (or MariaDB's) it finds in Postgres.app, Homebrew and your PATH; pg_dump must be at least as new as the server. If one is missing, the sheet says how to install it.
 - Dumps: structure, data or both; PostgreSQL as a SQL script or a custom archive; optional DROP statements and, on PostgreSQL, owners and privileges. A failed or stopped dump leaves no file behind.
@@ -189,3 +189,16 @@ Tabula writes and runs SQLite's scripts itself, so no tool has to be installed.
 - A script can't reach another file (`ATTACH` and `DETACH` are refused), and `sqlite3`'s dot commands such as `.shell` aren't SQL: they stop the restore as an error, and nothing runs on your Mac.
 - A dump made by `sqlite3` of a database with full-text or R-tree tables creates them by writing to the schema, which the system's SQLite refuses to a script: run that one with `sqlite3` in Terminal, or dump the database with Tabula. A script is read into memory whole: one larger than 1 GB is refused, and so is a file with a zero byte in it, which isn't a SQL script.
 - **Dump Table…** is for tables of the file itself; a table of an attached database is dumped from a connection to that file.
+
+### MongoDB dumps
+
+Tabula reads and writes MongoDB's dumps itself, in the formats of `mongodump`, so neither `mongodump` nor `mongorestore` has to be installed and each tool reads what the other wrote.
+
+- **Dump Database…** writes the selected database, and **Dump Collection…** one collection, to one file: the archive `mongodump --archive` writes. It holds every document as the server stores it, each collection's options (capped, validator, collation, time series) and indexes, and the views. `mongorestore --archive=<file>` restores it.
+- **Restore from Dump…** takes an archive, the folder `mongodump` writes by default (the database's folder, or the folder around it when it holds one database), or one collection's `.bson` file, plain or compressed with `--gzip`. It restores into the database selected in the sidebar, whatever the database was called when it was dumped.
+- As with `mongorestore`, a restore adds to what is there: collections the database doesn't have are created with their options, documents are inserted, then indexes are built and views created. A document whose `_id` its collection already has is skipped, and the sheet says how many were. **Drop existing collections first** drops each collection of the dump before restoring it; collections the dump doesn't have stay.
+- A restore isn't a transaction: it stops at the first error, or at Stop, and what it wrote by then stays. Production connections ask you to type the database name.
+- Every collection's documents carry a checksum in an archive. An archive that is cut short, or whose documents don't match their checksum, stops the restore with a message saying so.
+- A dump reads each collection as it is at that moment, not the whole database at one moment: on a database being written to, collections can be a little apart, as with `mongodump` without `--oplog`.
+- Not dumped or restored: the server's own `system.` collections, so users and roles aren't part of a dump. A time series collection is dumped as the buckets the server keeps its documents in, the way `mongodump` does it.
+- An archive of several databases (`mongodump --archive` without `--db`) isn't restored: Tabula restores one database at a time, into the selected one. Dump one database with `mongodump --db`, or use `mongorestore`.
