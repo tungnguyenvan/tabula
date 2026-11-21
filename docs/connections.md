@@ -45,10 +45,10 @@ With many connections, put them in groups: one for each project, say, with its d
 - **Move to Group** in a connection's menu (right-click it in the Connections window) lists the groups to move it to, **New Group…** for a group of a new name, and **Remove from Group**. The form has the same as a field: type a group's name in **Group**, or a new name.
 - The list shows the connections of no group first, then each group under its name with the number of its connections. Click a group's name to close it, and again to open it; closed groups stay closed the next time Tabula opens.
 - Right-click a group's name for **Rename Group…** and **Ungroup**, which lists its connections without a group again. Renaming a group to the name of another puts its connections in that one, and a group's name is the same whatever its capitals: typing `shop` joins **Shop**. A group is there while a connection is in it: there are no empty groups to tidy away.
-- A search looks through every connection, in closed groups too, and matches a group's name as well as a connection's. **↑**, **↓** and **Return** go through the connections shown, so they skip a closed group; closing a group takes the choice off a connection in it, so **Delete** and **Edit** never act on one you can't see.
+- A search looks through every connection, in closed groups too, and matches a group's name as well as a connection's. The search chooses the first connection that matches by its own name or address, before one shown only for its group's name. **↑**, **↓** and **Return** go through the connections shown, so they skip a closed group; closing a group takes the choice off a connection in it, so **Delete** and **Edit** never act on one you can't see.
 - Dragging a connection changes its place among the connections of its group. Groups stand in the order their first connections were saved in. There are no groups inside groups.
 
-Groups are only where a connection is listed: moving one changes nothing about the connection, and nothing reconnects. The picker in a new, empty window tab lists the connections without their groups.
+Groups are only where a connection is listed: moving one changes nothing about the connection, and nothing reconnects. The other lists of connections show the same groups, always open: the picker of a new, empty window tab (its search matches group names too), the **Connections** toolbar menu, the rail's **Open Connection** menu, the pill's list, and the pickers of **Compare Schemas** and **Compare Data**.
 
 ## Tags and Production safeguards
 

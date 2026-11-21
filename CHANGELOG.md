@@ -4,6 +4,18 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-11-21
+
+### Added
+- **A Christmas icon.** From 1 to 26 December the icon in the Dock and Tabula's mark in its windows wear a Santa hat, with snow, a tree, a present and a snowman, then go back to normal by themselves. The icon in Finder doesn't change ([#422](https://github.com/tungnguyenvan/tabula/issues/422)).
+- **Hide and pin columns in a query's results.** The header menu of a result now has **Hide “column”**, **Pin “column”**, the list of columns to tick and untick, **Show All Columns** and **Unpin All Columns**, as a table's Data tab has. They go by column name and belong to the query tab: running the query again keeps them, and they aren't kept when the tab closes. The bar under the result says how many columns are hidden ([#421](https://github.com/tungnguyenvan/tabula/issues/421)).
+
+### Changed
+- **Groups in every list of connections.** The groups of the Connections window now show wherever connections are listed: the picker of a new, empty tab (**↑** and **↓** follow the order shown, and its search matches group names), the **Connections** toolbar menu, the rail's **Open Connection** menu, the connection pill's list, and the pickers of **Compare Schemas** and **Compare Data**. A search there and in the Connections window chooses a connection matched by its own name before one shown only for its group's name, so Return opens the one you typed ([#419](https://github.com/tungnguyenvan/tabula/issues/419)).
+
+### Fixed
+- **A short script starts at the top of its pane.** In **Compare Data** and **Compare Schemas**, a script shorter than its pane stood in the middle of it, with empty space above ([#420](https://github.com/tungnguyenvan/tabula/issues/420)).
+
 ## [0.47.0] - 2026-11-21
 
 ### Added
