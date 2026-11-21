@@ -118,12 +118,20 @@ Double-click a cell in a result from one table that includes its whole primary k
 
 ## Importing files
 
-**File › Import…** in a table tab, or **Import…** in the sidebar's context menu (PostgreSQL, MySQL, SQLite, SQL Server). Columns are matched by name (ignoring case, accents, spaces, `_` and `-`), and you can pick another or skip one; a header row is detected and can be turned off, and the first rows are previewed. The rows become new rows in the grid, committed in one transaction with ⌘S, after a preview with ⇧⌘S if you like.
+**File › Import…** in a table tab, or **Import…** in the sidebar's context menu (PostgreSQL, MySQL, SQLite, SQL Server, and MongoDB [collections](#importing-into-a-mongodb-collection)). Columns are matched by name (ignoring case, accents, spaces, `_` and `-`), and you can pick another or skip one; a header row is detected and can be turned off, and the first rows are previewed. The rows become new rows in the grid, committed in one transaction with ⌘S, after a preview with ⇧⌘S if you like.
 
 - **CSV and TSV** as RFC 4180 writes them, in UTF-8 (with or without a byte order mark), UTF-16 with one, or Windows-1252. An empty field is NULL where allowed (else the column's default, or empty text); `""` is empty text and unquoted `NULL` is NULL. Tabula's exports quote empty text and the text `NULL`, so they import back unchanged.
-- **JSON:** an array of objects. Numbers keep every digit, nested values become JSON text, `null` is NULL, and a missing field takes the column's default.
+- **JSON:** an array of objects, or one object after the other (JSON Lines, also as `.jsonl` and `.ndjson` files). Numbers keep every digit, nested values become JSON text, `null` is NULL, and a missing field takes the column's default.
 - Up to 100,000 rows and 256 MB per file; larger files are refused. Generated columns are left to the database.
-- Files can't be imported into MongoDB collections yet.
+
+### Importing into a MongoDB collection
+
+The same sheet adds each record as a new document, to preview and commit like other new documents.
+
+- Every column of the file goes in as the field of its name, exactly as written (a CSV header `address.city` is a field of that name, not a nested one); one the page shows no column for is marked **new field** and gets a column. Choose another field for it, or **Skip**. A document's fields are written in the order of the grid's columns: the page's own first, then the new ones.
+- **JSON** values keep their types: text, numbers, true and false, null, nested objects and arrays. Extended JSON is read as the value it stands for (`{"$oid": …}`, `{"$date": …}`, `{"$numberLong": …}`, `{"$numberDecimal": …}`), so a JSON file written by `mongoexport` comes back with every value and type it had, `_id` included. A field a document doesn't have isn't written, and a value the shell can't read (`{"$oid": "abc"}`) stops the import with its row.
+- **CSV and TSV** start with the field names and hold text only: a field in quotes is text; without quotes, a number is a number (`007`, `+84…` and whole numbers too long for 64 bits stay text), `true` and `false` are booleans, `NULL` is null, and an empty field is left out of the document.
+- More than 50 new documents are committed with `insertMany`, 1,000 at a time, rather than one by one. MongoDB has no transaction around them: if one is refused (a duplicate `_id`, say), the ones before it stay, the message says how many of its statement were written, and the tab reloads to show what the collection now holds.
 
 ## Generating test rows
 

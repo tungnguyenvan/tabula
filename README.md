@@ -137,7 +137,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 ### Find & import
 
 - **Find in Database** (⇧⌘F) finds a value in every table of the schema; double-click a result to open the matching rows.
-- **Import** a CSV, TSV or JSON file into a table: columns matched by name and previewed, rows committed in one transaction.
+- **Import** a CSV, TSV or JSON file into a table: columns matched by name and previewed, rows committed in one transaction. A MongoDB collection takes them as new documents, `mongoexport`'s JSON included.
 - [Find in Database](docs/queries.md#find-in-database) · [Importing files](docs/editing.md#importing-files).
 
 ### Schema
@@ -232,7 +232,7 @@ The ten you'll use most. [All shortcuts](docs/shortcuts.md), also in **Help › 
 ## Known limitations
 
 - Redis Cluster and Sentinel aren't supported yet; connect to a single node. Pub/Sub, `MONITOR`, `MULTI` and `WATCH` aren't available in the console.
-- MongoDB: shell statements, not JavaScript; grid edits aren't in a transaction; no X.509, LDAP or Kerberos; files can't be imported into collections yet.
+- MongoDB: shell statements, not JavaScript; grid edits aren't in a transaction; no X.509, LDAP or Kerberos.
 - MySQL / MariaDB: editing existing rows needs a primary key or a unique index on NOT NULL columns, and `CALL` shows only the first result set.
 - Stop ends a MongoDB command only on 4.4 or later; in the Redis console it ends scripts and blocking commands only.
 - SQL Server: a SQL login only (no Windows or Entra sign-in yet); query results aren't editable in place yet (table tabs are) ([SQL Server](docs/sqlserver.md)).

@@ -4,6 +4,15 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-11-21
+
+### Added
+- **Import files into MongoDB collections.** **File › Import…** and the sidebar's **Import…** now take a JSON, CSV or TSV file for a collection: each record becomes a new document to preview and commit. Values keep their types, Extended JSON is read as the value it stands for (`{"$oid": …}`, `{"$date": …}`), so a JSON file from `mongoexport` comes back with its values and types, and a field the page shows no column for gets one. Many new documents are committed with `insertMany` rather than one by one ([#423](https://github.com/tungnguyenvan/tabula/issues/423)).
+- **JSON Lines.** Import reads a file of one JSON object after the other, as `mongoexport` and many tools write them, under `.json`, `.jsonl` and `.ndjson`, for tables too.
+
+### Fixed
+- **MongoDB: long arrays were slow to read.** A command with an array of thousands of items, such as an `insertMany` of 4,000 documents, took time that grew with the square of the array's length before it was sent: 13 seconds for that one, now half a second. Copy As JSON of many rows had the same cost.
+
 ## [0.48.0] - 2026-11-21
 
 ### Added

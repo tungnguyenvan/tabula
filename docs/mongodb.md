@@ -106,4 +106,4 @@ Suggested commands (`db.orders.dropIndex("status_1")`, `db.orders.createIndex({ 
 - Edits from the grid aren't wrapped in a transaction.
 - X.509, LDAP and Kerberos authentication aren't supported.
 - The grid's columns come from the first 100 documents, so a field that appears only later shows up after it is seen on a page.
-- Files can't be imported into collections yet.
+- JSON, JSON Lines, CSV and TSV files are [imported into a collection](editing.md#importing-into-a-mongodb-collection) as new documents; `mongoexport`'s Extended JSON is read.
