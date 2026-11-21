@@ -8,6 +8,7 @@
 - [Relationship diagram](#relationship-diagram)
 - [Functions, procedures and triggers](#functions-procedures-and-triggers)
 - [Compare schemas](#compare-schemas)
+- [Compare data](#compare-data)
 - [Schema health](#schema-health)
 - [Users, roles and privileges](#users-roles-and-privileges)
 
@@ -123,6 +124,18 @@ PostgreSQL, MySQL and SQL Server functions, procedures and triggers, and SQLite 
 - Statements that remove what only the target has (DROP TABLE, DROP COLUMN…) are commented out unless you turn on **Include Drops**.
 - **Copy**, **Save As…** or **Open in Query Tab** on the target connection: Tabula never runs the script itself.
 - CHECK constraints, collations, sequences, enum types and permissions aren't compared.
+
+## Compare data
+
+**File › Compare Data…** (PostgreSQL, MySQL, SQLite, SQL Server) compares the rows of two tables: a table of a source connection with one of a target, or two tables of one connection. It starts from the table you have open. Typical use: the rows of a lookup or settings table in Development against the same table in Staging.
+
+- Choose a connection, schema and table for each side, then **Compare**. Choosing a table on one side chooses the table of the same name on the other when there is one. The two sides may be different kinds of database.
+- Rows are matched by the source table's primary key (the target's when the source has none); a table without one can't be compared. The columns compared are the ones both tables have, by name, whatever the capitals (`Id` in one database is `id` in another); the others are named and left out.
+- The list shows the rows only in the source (green), the rows whose values differ (orange, with each column as *target value → source value*) and the rows only in the target (red), with their keys. It shows the first 2,000 differences; the script has them all.
+- Numbers are compared by value (`1.50` is `1.5`) and true and false by meaning (`t`, `true` and `1`), since two databases print them differently. Everything else is compared as the text the database gives, so a time with a zone or a float may show as different between two kinds of database when it isn't.
+- The script, in the target's dialect and in one transaction, makes the target's rows match the source's: `DELETE` for the rows only in the target, `UPDATE` for the columns that differ, `INSERT` for the rows only in the source. The deletes are commented out unless you turn on **Include Deletes**. True and false are written the way the target's own column takes them; columns the target computes are never written. A key the target numbers itself still gets the source's values: on SQL Server inside `SET IDENTITY_INSERT … ON`, on PostgreSQL with `OVERRIDING SYSTEM VALUE` (set the sequence past the new rows afterwards).
+- **Copy**, **Save As…** or **Open in Query Tab** on the target connection: Tabula never runs the script itself. A long script shows its first 2,000 lines; the three buttons take all of it. Choosing another connection, schema or table clears the comparison, so a script is never opened on a table it wasn't written for. Both sides are read on read-only connections of their own, so comparing never asks on Production.
+- Both tables are read whole and held in memory, up to 200,000 rows each; a larger table is refused with that reason. **Filter** takes a condition, written as after `WHERE` (`id < 1000`, `updated_at >= '2026-01-01'`), that both tables are read with, to compare a part. A row the condition takes in one table only is looked up in the other by its key, so it is compared as the row it is and not written as a row to insert or delete. The condition is one condition: a clause of its own in it (`ORDER BY`, `LIMIT`) is refused. **Stop** cancels the statements reading the tables.
 
 ## Schema health
 

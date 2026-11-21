@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-11-21
+
+### Added
+- **Compare Data.** **File › Compare Data…** compares the rows of two tables, of two connections or of one, matched by primary key: it lists the rows only in the source, only in the target and the ones whose values differ, column by column, and writes the script (`INSERT`, `UPDATE`, and `DELETE` with **Include Deletes**) that makes the target's rows match the source's. Tabula doesn't run it: copy it, save it or open it in a query tab. The two sides can be different kinds of database; numbers and true/false are compared by value. For tables of up to 200,000 rows, or a part of a larger one with **Filter**.
+
 ## [0.46.0] - 2026-11-21
 
 ### Added
