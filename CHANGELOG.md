@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-11-21
+
+### Added
+- **Dump and restore SQLite databases.** **File › Dump Database…**, **Dump Table…** and **File › Restore from Dump…** now work on SQLite connections. Tabula writes the script itself, with nothing to install: structure, data or both, of the database or of chosen tables, as a `.sql` file `sqlite3` also reads. A restore runs in one transaction, so a statement that fails, or Stop, changes nothing, and its message names the line. A script can't reach other files (`ATTACH` is refused) and nothing in it runs on your Mac ([#424](https://github.com/tungnguyenvan/tabula/issues/424)).
+
 ## [0.49.0] - 2026-11-21
 
 ### Added

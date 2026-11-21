@@ -91,7 +91,7 @@ Off until you turn it on in **Settings › AI**. [How it works](docs/ai.md).
 - **Several connections in one window** (⌃⌘] / ⌃⌘[); on PostgreSQL, open any database on the server from one connection.
 - **Reconnects by itself** after the Mac wakes, the network changes or the server drops the connection: reads are retried, anything that may have changed data never is.
 - **Picks up where you left off:** tabs, unsaved SQL, filters and history come back; Tabula never reconnects at launch by itself.
-- **Dump and restore** PostgreSQL and MySQL databases with the client tools on your Mac.
+- **Dump and restore** PostgreSQL and MySQL databases with the client tools on your Mac, and SQLite databases with nothing to install.
 - [Connections in detail](docs/connections.md).
 
 ### Browse & edit

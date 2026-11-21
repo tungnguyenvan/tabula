@@ -169,7 +169,7 @@ Turn on **Connect over SSH** (every kind but SQLite, which is a file) to reach a
 
 ## Dump and restore
 
-**File › Dump Database…** (or **Dump Table…** in the sidebar) and **File › Restore from Dump…**, for PostgreSQL and MySQL, with progress and Stop. SQL Server has no client tool like `pg_dump` that writes a database out as a script, so there the menu items say what to use instead: `BACKUP DATABASE` and `RESTORE DATABASE` on the server, or SQL Server Management Studio's Generate Scripts.
+**File › Dump Database…** (or **Dump Table…** in the sidebar) and **File › Restore from Dump…**, for PostgreSQL, MySQL and [SQLite](#sqlite-dumps), with progress and Stop. SQL Server has no client tool like `pg_dump` that writes a database out as a script, so there the menu items say what to use instead: `BACKUP DATABASE` and `RESTORE DATABASE` on the server, or SQL Server Management Studio's Generate Scripts.
 
 - Tabula uses the newest `pg_dump`, `pg_restore`, `psql`, `mysqldump` and `mysql` (or MariaDB's) it finds in Postgres.app, Homebrew and your PATH; pg_dump must be at least as new as the server. If one is missing, the sheet says how to install it.
 - Dumps: structure, data or both; PostgreSQL as a SQL script or a custom archive; optional DROP statements and, on PostgreSQL, owners and privileges. A failed or stopped dump leaves no file behind.
@@ -177,3 +177,15 @@ Turn on **Connect over SSH** (every kind but SQLite, which is a file) to reach a
 - Scripts can't run commands on your Mac: PostgreSQL scripts with psql commands such as `\!` are refused (pg_dump's `\restrict` is allowed), and the mysql client's `system` command and local file loading are off. **Restore only dumps you trust:** they can contain any SQL.
 - Passwords reach the tools through the environment (PostgreSQL) or a private temporary option file (MySQL), never the command line. `~/.my.cnf`, MySQL login paths, `~/.psqlrc` and `PG*` / `MYSQL_*` variables aren't used. SSH connections go through the tunnel.
 - The `transaction_timeout` setting pg_dump 17 writes is left out when restoring into PostgreSQL 16 or older, which reject it.
+
+### SQLite dumps
+
+Tabula writes and runs SQLite's scripts itself, so no tool has to be installed.
+
+- A dump is a `.sql` script like the one `sqlite3`'s `.dump` writes, and `sqlite3` reads it: structure, data or both, of the whole database or of chosen tables (with their indexes and triggers), optionally with `DROP` statements. It is taken from one read transaction, so it is the database as it was at one moment. Unless the database is in WAL mode, other programs, and edits in Tabula, can't write to the file while the dump runs.
+- Values are written as SQLite's own `quote()` writes them: text, BLOBs as `X'…'`, NULL, numbers with every digit. Text goes into the script byte for byte, so text that isn't UTF-8 stays as it is stored. Generated columns are left to the database, and the counters of `AUTOINCREMENT` tables come along.
+- Full-text (FTS) and R-tree tables are created with their `CREATE VIRTUAL TABLE` statement and filled row by row; the tables they keep their content in aren't written, and can't be dumped by themselves. A contentless full-text table (`content=''`) has no text to read back: the script creates it and says in a comment that its rows aren't there.
+- A restore runs the script in one transaction: a statement that fails, or Stop, leaves the database as it was, and the message names the line. The script's own `BEGIN` and `COMMIT` are passed over; a `ROLLBACK` in it stops the restore.
+- A script can't reach another file (`ATTACH` and `DETACH` are refused), and `sqlite3`'s dot commands such as `.shell` aren't SQL: they stop the restore as an error, and nothing runs on your Mac.
+- A dump made by `sqlite3` of a database with full-text or R-tree tables creates them by writing to the schema, which the system's SQLite refuses to a script: run that one with `sqlite3` in Terminal, or dump the database with Tabula. A script is read into memory whole: one larger than 1 GB is refused, and so is a file with a zero byte in it, which isn't a SQL script.
+- **Dump Table…** is for tables of the file itself; a table of an attached database is dumped from a connection to that file.
