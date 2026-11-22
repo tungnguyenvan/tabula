@@ -4,6 +4,17 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-22
+
+### Added
+- **Dump and restore Redis databases.** **File › Dump Database…** and **File › Restore from Dump…** now work on Redis connections, with nothing to install. A dump holds the selected database, or the keys matching a pattern, as the Redis commands that write them again: every value byte for byte, expiry times, streams with their IDs and consumer groups. `redis-cli --pipe` reads the file too, on any server version. A restore replaces the keys the dump has and leaves the others, or empties the database first. It checks the whole file before sending anything and only runs commands that write keys, so a file can't change the server's configuration or run a script ([#426](https://github.com/tungnguyenvan/tabula/issues/426)).
+
+### Changed
+- **Redis: batches of commands are sent about three times faster.** Commands Tabula sends together, as when it lists keys with their types and sizes, are now handed to the connection and written to the server in one go rather than one at a time: 300,000 commands took 4.7 seconds and now take 1.7.
+
+### Fixed
+- **Redis: the longest TTL could be refused by the server.** The longest expiry a key can have was worked out once, when Tabula first needed it, so later the same number was a little too long and Redis answered "invalid expire time". It is now worked out each time.
+
 ## [0.51.0] - 2026-11-22
 
 ### Added

@@ -8,6 +8,7 @@
 - [Keys](#keys)
 - [Values](#values)
 - [Key details](#key-details)
+- [Dump and restore](#dump-and-restore)
 - [Console](#console)
 - [Metrics](#metrics)
 - [Activity](#activity)
@@ -50,6 +51,10 @@ For a Redis that runs behind Sentinel, fill in **Sentinel master** with the name
 ## Key details
 
 Size, memory usage, encoding and TTL. Set or remove an expiry, or rename (never over another key).
+
+## Dump and restore
+
+**File › Dump Database…** writes the selected database, or the keys matching a pattern, to a file of Redis commands, and **File › Restore from Dump…** runs such a file in the selected database. `redis-cli --pipe` reads the file too. [Redis dumps](connections.md#redis-dumps) has the details.
 
 ## Console
 

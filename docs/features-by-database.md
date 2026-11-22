@@ -42,7 +42,7 @@ Which features work on which database. ✅ works, ➖ doesn't apply (the databas
 | [Read-only connections](connections.md#read-only-connections) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [25](#n25) |
 | [Checks before a statement runs](queries.md#checks-before-a-statement-runs) | ✅ | ✅ | ✅ | ✅ | ✅ [18](#n18) | ✅ [26](#n26) |
 | [Importing files](editing.md#importing-files) | ✅ | ✅ | ✅ | ✅ [34](#n34) | ➖ | ✅ |
-| [Dump and restore](connections.md#dump-and-restore) | ✅ | ✅ | ✅ [35](#n35) | ✅ [36](#n36) | ❌ | ➖ [27](#n27) |
+| [Dump and restore](connections.md#dump-and-restore) | ✅ | ✅ | ✅ [35](#n35) | ✅ [36](#n36) | ✅ [37](#n37) | ➖ [27](#n27) |
 | [Changing a table's structure](schema.md#changing-a-tables-structure) | ✅ | ✅ [32](#n32) | ✅ [33](#n33) | ➖ | ➖ | ✅ |
 | [Migration history](schema.md#migration-history) | ✅ | ✅ | ✅ | ➖ | ➖ | ✅ |
 | [Relationship diagram](schema.md#relationship-diagram) | ✅ | ✅ | ✅ | ➖ | ➖ | ✅ |
@@ -90,3 +90,4 @@ Which features work on which database. ✅ works, ➖ doesn't apply (the databas
 34. <a id="n34"></a>Each record becomes a new document, with the types the file gives its values and Extended JSON read ([importing into a collection](editing.md#importing-into-a-mongodb-collection)).
 35. <a id="n35"></a>Written and run by Tabula itself, with no tool to install; a restore is one transaction ([SQLite dumps](connections.md#sqlite-dumps)).
 36. <a id="n36"></a>Written and read by Tabula itself in `mongodump`'s formats, with no tool to install; a restore adds to what is there and isn't a transaction ([MongoDB dumps](connections.md#mongodb-dumps)).
+37. <a id="n37"></a>Written and read by Tabula itself as a file of Redis commands, which `redis-cli --pipe` reads too; a restore replaces the keys the dump has and isn't a transaction ([Redis dumps](connections.md#redis-dumps)).

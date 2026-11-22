@@ -169,7 +169,7 @@ Turn on **Connect over SSH** (every kind but SQLite, which is a file) to reach a
 
 ## Dump and restore
 
-**File › Dump Database…** (or **Dump Table…** in the sidebar) and **File › Restore from Dump…**, for PostgreSQL, MySQL, [SQLite](#sqlite-dumps) and [MongoDB](#mongodb-dumps), with progress and Stop. SQL Server has no client tool like `pg_dump` that writes a database out as a script, so there the menu items say what to use instead: `BACKUP DATABASE` and `RESTORE DATABASE` on the server, or SQL Server Management Studio's Generate Scripts.
+**File › Dump Database…** (or **Dump Table…** in the sidebar) and **File › Restore from Dump…**, for PostgreSQL, MySQL, [SQLite](#sqlite-dumps), [MongoDB](#mongodb-dumps) and [Redis](#redis-dumps), with progress and Stop. SQL Server has no client tool like `pg_dump` that writes a database out as a script, so there the menu items say what to use instead: `BACKUP DATABASE` and `RESTORE DATABASE` on the server, or SQL Server Management Studio's Generate Scripts.
 
 - Tabula uses the newest `pg_dump`, `pg_restore`, `psql`, `mysqldump` and `mysql` (or MariaDB's) it finds in Postgres.app, Homebrew and your PATH; pg_dump must be at least as new as the server. If one is missing, the sheet says how to install it.
 - Dumps: structure, data or both; PostgreSQL as a SQL script or a custom archive; optional DROP statements and, on PostgreSQL, owners and privileges. A failed or stopped dump leaves no file behind.
@@ -202,3 +202,17 @@ Tabula reads and writes MongoDB's dumps itself, in the formats of `mongodump`, s
 - A dump reads each collection as it is at that moment, not the whole database at one moment: on a database being written to, collections can be a little apart, as with `mongodump` without `--oplog`.
 - Not dumped or restored: the server's own `system.` collections, so users and roles aren't part of a dump. A time series collection is dumped as the buckets the server keeps its documents in, the way `mongodump` does it.
 - An archive of several databases (`mongodump --archive` without `--db`) isn't restored: Tabula restores one database at a time, into the selected one. Dump one database with `mongodump --db`, or use `mongorestore`.
+
+### Redis dumps
+
+Tabula dumps and restores a Redis database itself, with nothing to install. A dump is a file of the Redis commands that write the keys again, in the protocol's own format, so `redis-cli --pipe < file` restores it too, into any server version.
+
+- A dump of no keys (an empty database, or a pattern nothing matches) saves no file and says so.
+- **Dump Database…** writes the database selected in the window (`db0`, `db1`…), or only the keys matching a pattern such as `user:*`. Every key is written with its value and its expiry time: strings with `SET`, lists with `RPUSH`, sets with `SADD`, hashes with `HSET`, sorted sets with `ZADD` and streams with `XADD`, then `PEXPIREAT`. Values are kept byte for byte, whatever they hold.
+- Streams keep their entries under their own IDs, the last ID they generated, and their consumer groups with the ID each has read up to. Which consumer has which entry pending isn't kept. Hash fields that expire on their own (Redis 7.4) keep their expiry.
+- A value of a type only a module knows, such as a RedisJSON document, is written the way the server serialises it (`DUMP`) and loaded with `RESTORE`. Unlike the rest of the file, such a value restores only into a server with that module, of the same version or newer.
+- **Restore from Dump…** runs the file's commands in the selected database. A key that is already there is replaced by the dump's, and the other keys stay; **Delete every key first** empties the database before, so it ends up with the dump's keys only.
+- The whole file is read and checked before anything is sent. A restore only runs commands that write keys: a file with any other command (`CONFIG`, `EVAL`, `FLUSHALL`, `MODULE`…), one that is cut short, or one that isn't Redis commands all the way through is refused, and nothing is changed.
+- A restore isn't a transaction: it stops at the first command the server refuses, or at Stop, and what ran by then stays. Commands go to the server in batches of up to 1,000, so those in the same batch after the refused one have run too. Production connections ask you to type the database's name, and a read-only connection doesn't restore.
+- A dump reads the keys one batch after another while the server goes on, so it isn't one moment of the database, unlike the snapshot the server writes. Big values are read and written in pages, so a list of millions of items needs no more memory than a small one.
+- Not read: the server's own snapshot (`dump.rdb`, also what `redis-cli --rdb` saves), which only a server loads from its data directory; and files of several databases (with `SELECT`), which `redis-cli --pipe` restores.
