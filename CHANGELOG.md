@@ -4,6 +4,11 @@ All notable changes to Tabula are documented here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.52.1] - 2026-11-25
+
+### Fixed
+- **Removing a filter condition no longer quits Tabula.** The minus button of a condition in a table's filter bar stopped the app. The **Remove this card** button of a dashboard widget's metric cards was written the same way and is fixed with it ([#427](https://github.com/tungnguyenvan/tabula/issues/427)).
+
 ## [0.52.0] - 2026-11-22
 
 ### Added
